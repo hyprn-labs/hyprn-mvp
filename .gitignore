@@ -1,0 +1,24 @@
+# Agents and tooling
+.claude/worktrees/
+.claude/settings.local.json
+.gsd/
+.planning/research/.cache/
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Node / UI
+ui/node_modules/
+ui/dist/
+node_modules/
+# Local stores, logs, scratch and secrets (never in the repository)
+*.sqlite3
+*.sqlite3-*
+*.log
+*.local.*
+.env
+.env.*
+credentials/
+# OS
+.DS_Store
