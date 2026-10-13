@@ -14,11 +14,17 @@ hook (hooks cannot be removed) with a BASELINE policy for the rest of the proces
   test folders and is the one place there that tests use;
 - no docker invocation that names a path inside a live root, below the data root (outside that
   scratch root) or inside a read-only location (bind mounts, build contexts, copies);
-- no connection to a ``HYPRN_MVP_LIVE_PORTS`` port or to ``HYPRN_MVP_PORT``;
+- no access at all to a user installation of the local edition: its installation configuration
+  (the path policy's per-OS default for the account's home folder, and ``HYPRN_MVP_CONFIG``)
+  and every data root and upstream cache such a configuration names, plus the per-OS default
+  data root; docker may not name them either;
+- no connection to a ``HYPRN_MVP_LIVE_PORTS`` port, to ``HYPRN_MVP_PORT`` or to the port of a
+  user installation;
 - no launchctl/kill/pkill/osascript/crontab/curl/os.system and no management entry point
   present in the repository (modeling_runtime.py, dispatch_runtime.py, manage.py, ...) as a child;
-- docker may not name an installation container, network or compose project (the ``hyprn-mvp``
-  installation names and every ``HYPRN_MVP_LIVE_NAMES`` entry);
+- docker may not name an installation container, network or compose project (the development
+  installation's fixed names, every name of an installation, which starts with
+  ``hyprn-mvp-<edition>-``, and every ``HYPRN_MVP_LIVE_NAMES`` entry);
 - signals only to processes this test process started.
 
 A module whose tests need no container or signal declares the stricter UNIT policy for
@@ -28,13 +34,14 @@ LiveRuntimeAccess (not OSError, so product error handling cannot absorb it) and 
 recorded; the fixtures fail the test that caused it even if the exception was caught.
 
 Children started by product code with a scoped clean environment are not hooked; they
-are bound by the scoped-fixture guard instead (documented limitation). No installation
-configuration file exists yet (deployment/local_paths.py, resolution step 3), so the fence
-names none.
+are bound by the scoped-fixture guard instead (documented limitation). A user installation's
+configuration is read once, leniently, when this module is imported: a configuration that the
+loader would refuse still names a real installation.
 
 The locations come from deployment/local_paths.py; importing this module refuses while
 HYPRN_MVP_DATA_ROOT is unset.
 """
+import json
 import os
 from pathlib import Path
 import re
@@ -47,6 +54,8 @@ if _DEPLOYMENT not in sys.path:
     sys.path.append(_DEPLOYMENT)
 import local_paths  # noqa: E402
 
+_REPO = os.path.dirname(_DEPLOYMENT)
+
 
 def _strs(paths):
     return tuple(sorted({str(p) for p in paths if p is not None}))
@@ -57,13 +66,85 @@ def _environment(path):
     return None if path is None else Path(path).parents[1]
 
 
+def _path_policy():
+    """The local edition's path policy (``editions/local``) of this checkout."""
+    source = os.path.join(_REPO, 'editions', 'local', 'src')
+    if source not in sys.path:
+        sys.path.append(source)
+    from hyprn_mvp_local import paths
+
+    return paths
+
+
+def _configured(path):
+    """The data root, upstream cache and port that the configuration file at ``path`` names,
+    read leniently (any JSON object); nothing when it is absent or unreadable."""
+    try:
+        with open(path, 'rb') as stream:
+            document = json.loads(stream.read(65536))
+    except (OSError, ValueError):
+        return (), ()
+    if not isinstance(document, dict):
+        return (), ()
+    upstream, ports = document.get('upstream'), document.get('ports')
+    cache = upstream.get('cache') if isinstance(upstream, dict) else None
+    port = ports.get('app') if isinstance(ports, dict) else None
+    roots = tuple(
+        os.path.normpath(value)
+        for value in (document.get('data_root'), cache)
+        if isinstance(value, str) and value.startswith('/')
+    )
+    valid = isinstance(port, int) and not isinstance(port, bool)
+    return roots, (port,) if valid else ()
+
+
+def installations(environ=None, *, defaults=True):
+    """(configuration files, data roots, ports) of the user installations of the local edition:
+    the path policy's per-OS default configuration and data root for the account's home folder
+    (never a scope's ``HOME``; ``defaults=False`` leaves them out), the configuration named by
+    ``HYPRN_MVP_CONFIG``, and the data root, upstream cache and port each readable configuration
+    names."""
+    environ = dict(os.environ if environ is None else environ)
+    environ['HOME'] = str(local_paths.account_home())
+    policy = _path_policy()
+    configs, roots, ports = set(), set(), set()
+    for name, found in (('config', configs), ('data_root', roots)) if defaults else ():
+        try:
+            found.add(str(policy.default(name, environ=environ)))
+        except policy.LocationUnresolved:
+            pass
+    named = environ.get(local_paths.CONFIG, '')
+    if named.startswith('/'):
+        configs.add(os.path.normpath(named))
+    for config in sorted(configs):
+        configured_roots, configured_ports = _configured(config)
+        roots.update(configured_roots)
+        ports.update(configured_ports)
+    return tuple(sorted(configs)), tuple(sorted(roots)), frozenset(ports)
+
+
 # Fail closed: a fence that does not know the data root refuses to load, so no guarded test
 # runs without it.
 DATA_ROOT = str(local_paths.data_root())
 LIVE_ROOTS = _strs(local_paths.live_roots())
-# Never read or written: everything below the data root (its stores included) and the
-# evidence folder wherever it is configured, except the read-only locations below.
-PROTECTED_ROOTS = _strs((DATA_ROOT, *local_paths.store_roots(), local_paths.evidence_root()))
+# User installations of the local edition on this host (their configuration files, data roots
+# and upstream caches, and ports); the development data root is protected below in any case.
+INSTALLATION_CONFIGS, _INSTALLATION_ROOTS, INSTALLATION_PORTS = installations()
+INSTALLATION_ROOTS = tuple(
+    root for root in _INSTALLATION_ROOTS if root != os.path.normpath(DATA_ROOT)
+)
+# Never read or written: everything below the data root (its stores included), the evidence
+# folder wherever it is configured and every user installation, except the read-only
+# locations below.
+PROTECTED_ROOTS = _strs(
+    (
+        DATA_ROOT,
+        *local_paths.store_roots(),
+        local_paths.evidence_root(),
+        *INSTALLATION_CONFIGS,
+        *INSTALLATION_ROOTS,
+    )
+)
 
 
 def _read_only(paths):
@@ -109,9 +190,25 @@ def _test_areas(scratch, data_root, blocked):
 
 # Scoped test folders (<scratch root>/hyprn-mvp-test-<uuid>) are read and written by the tests
 # that own them, also when the scratch root is configured below the data root.
-TEST_AREAS = _test_areas(str(local_paths.scratch_root()), DATA_ROOT,
-                         (*local_paths.store_roots(), local_paths.evidence_root(), *READ_ONLY_ROOTS, *LIVE_ROOTS))
-LIVE_PORTS = frozenset({*local_paths.live_ports(), *((local_paths.port(),) if os.environ.get(local_paths.PORT) else ())})
+TEST_AREAS = _test_areas(
+    str(local_paths.scratch_root()),
+    DATA_ROOT,
+    (
+        *local_paths.store_roots(),
+        local_paths.evidence_root(),
+        *READ_ONLY_ROOTS,
+        *LIVE_ROOTS,
+        *INSTALLATION_CONFIGS,
+        *INSTALLATION_ROOTS,
+    ),
+)
+LIVE_PORTS = frozenset(
+    {
+        *local_paths.live_ports(),
+        *((local_paths.port(),) if os.environ.get(local_paths.PORT) else ()),
+        *INSTALLATION_PORTS,
+    }
+)
 ALWAYS_BLOCKED_PROGRAMS = frozenset({'launchctl', 'kill', 'pkill', 'killall', 'osascript', 'crontab', 'curl'})
 # Installation containers, networks and the compose project of a hyprn-mvp installation, plus
 # the names of any other installation on this host (HYPRN_MVP_LIVE_NAMES).
@@ -119,6 +216,9 @@ INSTALLATION_DOCKER_NAMES = frozenset({
     'hyprn-mvp', 'hyprn-mvp-application', 'hyprn-mvp-modeling', 'hyprn-mvp-private', 'hyprn-mvp-public',
     'hyprn-mvp-execution'})
 LIVE_DOCKER_NAMES = INSTALLATION_DOCKER_NAMES | frozenset(local_paths.live_names())
+# Every Docker name of an installation (container, network, compose project, owner label value)
+# starts with one of these prefixes: ``hyprn-mvp-<edition>-``.
+INSTALLATION_NAME_PREFIXES = tuple(local_paths.installation_name_prefixes())
 # Management entry points present in the repository: never spawned by a guarded test,
 # whatever the root argument.
 LIVE_ENTRYPOINTS = frozenset({'modeling_runtime.py', 'dispatch_runtime.py', 'manage.py', 'application_runtime.py',
@@ -215,6 +315,14 @@ def _live_reason(event, args):
     return None
 
 
+def _installation_name(token):
+    """A docker argument naming an installation's resource or owner (``--label k=<name>``,
+    ``--filter label=k=<name>``, ``--network=<name>`` included)."""
+    return any(
+        token.startswith(prefix) or '=' + prefix in token for prefix in INSTALLATION_NAME_PREFIXES
+    )
+
+
 def _program(argv):
     first = argv[0] if isinstance(argv, (list, tuple)) and argv else argv
     return os.path.basename(os.fsdecode(first)) if isinstance(first, (str, bytes, os.PathLike)) else ''
@@ -248,6 +356,8 @@ def decide(event, args, policy):
             if policy == 'unit':
                 reason = 'docker under the unit policy'
             elif tokens & LIVE_DOCKER_NAMES or 'compose' in tokens:
+                reason = 'docker names a live resource'
+            elif any(map(_installation_name, tokens)):
                 reason = 'docker names a live resource'
             elif any(_mentions(t, (*LIVE_ROOTS, *READ_ONLY_ROOTS)) or _mentions(_without(t, TEST_AREAS), PROTECTED_ROOTS)
                      for t in tokens):

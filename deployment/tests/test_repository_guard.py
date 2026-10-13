@@ -1484,6 +1484,57 @@ class LiveFenceTests(unittest.TestCase):
         self.assertIsNotNone(fence.decide('socket.connect', (None, socket_path), 'unit'))
         self.assertIsNotNone(fence.decide('os.system', ('true',), 'baseline'))
 
+    def test_user_installations_are_never_read_written_mounted_or_named(self):
+        fence = live_fence
+        popen = lambda *argv: (None, list(argv), None, None)  # noqa: E731
+        policy = fence._path_policy()
+        environ = {**os.environ, 'HOME': str(fixture.local_paths.account_home())}
+        config = str(policy.default('config', environ=environ))
+        data = str(policy.default('data_root', environ=environ))
+        self.assertIn(config, fence.INSTALLATION_CONFIGS)
+        mount = 'type=bind,src=' + data + '/modeling,dst=/x'
+        refused = [
+            ('open', (config, 'rb', os.O_RDONLY)),
+            ('open', (config, 'w', os.O_WRONLY | os.O_CREAT)),
+            ('os.listdir', (data,)),
+            ('sqlite3.connect', (data + '/application/application/application.sqlite',)),
+            ('subprocess.Popen', popen('docker', 'run', '--mount', mount, 'i')),
+        ]
+        prefix = 'hyprn-mvp-local-0123abcd'
+        owner = 'org.hyprn-mvp.owner=hyprn-mvp-local-' + str(uuid4())
+        for argv in (
+            ('docker', 'stop', prefix + '-modeling'),
+            ('docker', 'network', 'rm', prefix + '-public'),
+            ('docker', 'ps', '--filter', 'label=' + owner),
+            ('docker', 'run', '--label', owner, 'image'),
+        ):
+            refused.append(('subprocess.Popen', popen(*argv)))
+        for event, args in refused:
+            for policy_name in ('baseline', 'unit'):
+                with self.subTest(event=event, args=args, policy=policy_name):
+                    self.assertIsNotNone(fence.decide(event, args, policy_name))
+        # A test scope's own names stay usable.
+        scoped = popen('docker', 'stop', fixture.SCOPE_PREFIX + '0123abcd-modeling')
+        self.assertIsNone(fence.decide('subprocess.Popen', scoped, 'baseline'))
+
+    def test_a_configured_installation_adds_its_data_root_cache_and_port(self):
+        folder = fixture.scope_from_environment().root / 'tmp' / ('installation-' + uuid4().hex)
+        folder.mkdir(parents=True)
+        data = str(folder / 'data')
+        config = folder / 'installation.json'
+        named = {'data_root': data, 'upstream': {'cache': data + '/cache'}, 'ports': {'app': 19999}}
+        config.write_text(json.dumps(named))
+        named_only = {'HYPRN_MVP_CONFIG': str(config)}
+        configs, roots, ports = live_fence.installations(named_only, defaults=False)
+        self.assertIn(str(config), configs)
+        self.assertTrue({data, data + '/cache'} <= set(roots))
+        self.assertIn(19999, ports)
+        # A configuration that cannot be read as JSON still protects its own file.
+        config.write_text('{')
+        configs, roots, ports = live_fence.installations(named_only, defaults=False)
+        self.assertIn(str(config), configs)
+        self.assertNotIn(data, roots)
+
     def test_entry_points_named_by_the_fence_exist_in_the_repository(self):
         present = {p.name for p in (runner.REPO / 'deployment').rglob('*') if p.is_file()}
         self.assertEqual(sorted(live_fence.LIVE_ENTRYPOINTS - present), [])
