@@ -96,5 +96,5 @@ Progress: [██████████] 100% (Phase 1)
 ## Session Continuity
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
-Stopped at: tasks 2.1a, 2.2, 2.3 and 3.3a merged on the continuation branch; findings-native harness fixes merged and the findings chain passes (Phase 1 complete); 3.3c in its task worktree; 2.4 not started
-Resume: merge the finished commits of those task worktrees (only those not yet on this branch; compare commit subjects, `git cherry` is unreliable across the two histories), then 2.4, 3.3c, then Phase 3 3.3b, 3.8, 3.4, 3.3d and Phase 2 2.5–2.7 per the phase plans; regenerate `ui/dependency-audit.json` for the prettier addition
+Stopped at: Phase 1 complete; tasks 2.1a, 2.2, 2.3, 3.3a and 3.3c merged on the continuation branch (`native-a` passes through `./hyprn-mvp`, confirming the worker build fix); `style-ratchet` fails only on long lines 3.3c added before the ratchet existed (being wrapped, no behaviour change); 2.4 not started
+Resume: make `style-ratchet` green (wrap 3.3c's long lines), then 2.4, then Phase 3 3.3b, 3.8, 3.4, 3.3d and Phase 2 2.5–2.7 per the phase plans; regenerate `ui/dependency-audit.json` for the prettier addition
