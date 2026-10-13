@@ -966,3 +966,51 @@ def test_relative_imports_resolve_from_the_module_location(module, is_package, l
 def test_relative_import_above_the_project_package_fails_closed():
     with pytest.raises(AssertionError):
         resolve_relative('hyprn_mvp_app.api', False, 2, 'x')
+
+
+# ---- API edge and per-owner routers ------------------------------------------------------
+# ``api`` is the HTTP edge (middleware, exception handlers, session and actor dependencies,
+# router composition) and the only importer of a route module. Each ``routes/<owner>.py``
+# reaches only the edge helpers (``edge``), ``contracts`` and the domain owners whose public
+# functions it calls: never ``api``, another route module or an agent module. ``edge`` reaches
+# no project module but ``contracts`` and serves only ``api`` and the route modules. Each row
+# scans at least one module, so it is never vacuous.
+
+API, EDGE, ROUTES = 'hyprn_mvp_app.api', 'hyprn_mvp_app.edge', 'hyprn_mvp_app.routes'
+ROUTE_OWNERS = frozenset('hyprn_mvp_app.' + m for m in (
+    'store', 'auth', 'readiness', 'modeling', 'configuration', 'approach', 'execution', 'history',
+    'result_bindings', 'modified_runs', 'computational_export'))
+
+
+def route_modules():
+    modules = package_modules('routes') - {ROUTES}
+    assert modules, 'no route module scanned'
+    return modules
+
+
+def production_importers(predicate):
+    """Production modules whose own imports include a module satisfying ``predicate``."""
+    return {module_name(path) for root in PRODUCTION for path in sorted(root.rglob('*.py'))
+            if any(predicate(m) for m in project_imports(module_name(path)))}
+
+
+def test_only_the_api_edge_imports_a_route_module():
+    routes = route_modules()
+    importers = production_importers(lambda m: within(m, ROUTES)) - routes - {ROUTES}
+    assert importers == {API}, sorted(importers)
+
+
+def test_route_modules_reach_only_the_edge_contracts_and_domain_owners():
+    for module in sorted(route_modules()):
+        reach = project_imports(module) - set(package_roots())
+        forbidden = sorted(m for m in reach if m == API or within(m, ROUTES) or is_agent_module(m))
+        assert forbidden == [], (module, forbidden)
+        outside = sorted(m for m in reach if m not in ROUTE_OWNERS | {EDGE, CONTRACTS})
+        assert outside == [], (module, outside)
+
+
+def test_edge_helpers_reach_only_contracts_and_serve_only_the_edge_and_route_modules():
+    assert module_path(EDGE) is not None
+    assert project_imports(EDGE) - set(package_roots()) == {CONTRACTS}, sorted(project_imports(EDGE))
+    importers = production_importers(lambda m: m == EDGE)
+    assert API in importers and importers <= {API} | route_modules(), sorted(importers - {API} - route_modules())
