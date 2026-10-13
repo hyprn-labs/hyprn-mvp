@@ -2,8 +2,10 @@
 
 Only fixed native operations cross a private stdio channel. No listening
 socket, generic RPC, retry lease, native lifecycle manager or extra database.
-The execution store and the native interpreter come from deployment/local_paths.py;
-main() refuses while they are unset.
+The execution store and the native interpreter come from deployment/local_paths.py
+(HYPRN_MVP_DATA_ROOT, else the installation configuration named by HYPRN_MVP_CONFIG, which the
+executor and its native children inherit, so the attested launcher reads the same
+installation); main() refuses while they are unset.
 """
 import argparse
 import contextlib

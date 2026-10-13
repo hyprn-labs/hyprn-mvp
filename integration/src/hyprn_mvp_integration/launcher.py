@@ -18,16 +18,23 @@ from uuid import uuid4
 from uuid import UUID
 from hyprn_mvp_app.contracts import DomainError, canonical, check_digest, data_json, digest
 from hyprn_mvp_app.execution_bundle import safe_path, verify_files, validate_retained_bundle
+from . import installation
 
-def configured_root():
-    """Execution store: HYPRN_MVP_DATA_ROOT/execution.
-
-    HYPRN_MVP_DATA_ROOT is the absolute data root documented in deployment/local_paths.py
-    (this attested module reads it directly and imports no deployment code). None while it is
-    unset: runtime_root() then refuses the store; explicit fixture roots are unaffected.
+def configured_installation():
+    """The installation configuration (HYPRN_MVP_CONFIG, read by the attested loader) when no
+    development data root is set. HYPRN_MVP_DATA_ROOT, documented in deployment/local_paths.py,
+    comes first as in every location's resolution order (this attested module reads it directly
+    and imports no deployment code); None for the development data root and while both are unset.
     """
+    if os.environ.get('HYPRN_MVP_DATA_ROOT',''):return None
+    return installation.from_environment()
+
+def configured_root(configured=None):
+    """Execution store: <data root>/execution, the data root being HYPRN_MVP_DATA_ROOT or the
+    installation's. None while neither is set: runtime_root() then refuses the store; explicit
+    fixture roots are unaffected."""
     value=os.environ.get('HYPRN_MVP_DATA_ROOT','')
-    if not value:return None
+    if not value:return None if configured is None else Path(configured['data_root'])/'execution'
     root=Path(value)
     if not root.is_absolute() or '..' in root.parts:raise ValueError('HYPRN_MVP_DATA_ROOT must be an absolute normalized path')
     return root/'execution'
@@ -40,8 +47,14 @@ def scratch_root():
 
 SCOPE_PREFIX='hyprn-mvp-test-'
 
-ROOT=configured_root()
-OWNER='hyprn-mvp-execution'
+INSTALLATION=configured_installation()
+ROOT=configured_root(INSTALLATION)
+# Runtime owner (runtime.json, worker container label), native profile and container engine
+# endpoint of the execution store: the installation's, or the development store's fixed ones
+# with the ambient engine. The worker policy below is source, never configuration.
+OWNER=installation.owner(INSTALLATION)
+PROFILE=installation.profile_name(INSTALLATION)
+DOCKER_ENDPOINT=None if INSTALLATION is None else INSTALLATION['docker']['endpoint']
 POLICY=dict(memory='256m',cpus='0.5',pids='32',wall_seconds=20,output_bytes=65536,
             scratch_bytes=16777216,user='65534:65534',file_bytes=1048576)
 
@@ -86,16 +99,36 @@ def runtime_root(value=None):
         raise ValueError('HYPRN_MVP_DATA_ROOT is not set: the execution store is unknown')
     return ROOT if value is None or value == ROOT else fixture_runtime_root(value)
 
+def docker_environment():
+    """Process environment of docker commands: the installation's engine endpoint when one is
+    configured; otherwise the inherited environment (None)."""
+    return None if DOCKER_ENDPOINT is None else {**os.environ,'DOCKER_HOST':DOCKER_ENDPOINT}
+
 def command(args,timeout=30):
-    result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+    result=subprocess.run(args,capture_output=True,text=True,timeout=timeout,env=docker_environment())
     if result.returncode:raise RuntimeError('Owned runtime command failed: '+result.stderr[:1500])
     return result.stdout.strip()
+
+def execution_configuration(root=None):
+    """The configuration that matters for containment, recorded as a digest in runtime.json
+    when the worker is built and compared at every use: data root, native profile and container
+    engine endpoint. A scoped fixture root is its own data root and profile."""
+    root=runtime_root(root)
+    endpoint=DOCKER_ENDPOINT if DOCKER_ENDPOINT is not None else (os.environ.get('DOCKER_HOST') or None)
+    if root==ROOT:return dict(data_root=str(root.parent),aiida_profile=PROFILE,docker_endpoint=endpoint)
+    return dict(data_root=str(root),aiida_profile=root.name,docker_endpoint=endpoint)
+
+def execution_configuration_sha256(root=None):
+    return hashlib.sha256(canonical(execution_configuration(root=root))).hexdigest()
 
 def identity(root=None):
     root=runtime_root(root)
     value=json.loads((root/'runtime.json').read_bytes())
     owner=OWNER if root==ROOT else root.name
     if value.get('owner')!=owner or value.get('root')!=str(root):raise RuntimeError('Unknown execution runtime')
+    if value.get('execution_configuration_sha256')!=execution_configuration_sha256(root=root):
+        raise RuntimeError('Execution configuration changed (data root, native profile or container engine); '
+                           'rebuild and re-attest')
     return value
 
 def execution_source_hashes():
@@ -120,7 +153,9 @@ def execution_source_hashes():
         'integration/src/hyprn_mvp_integration/results.py',
         'integration/src/hyprn_mvp_integration/calculation.py',
         'integration/src/hyprn_mvp_integration/computational_export.py',
+        'integration/src/hyprn_mvp_integration/installation.py',
         'application/src/hyprn_mvp_app/__init__.py',
+        'application/src/hyprn_mvp_app/locations.py',
         'application/src/hyprn_mvp_app/scientific_configuration.py',
         'application/src/hyprn_mvp_app/units.py',
         'application/src/hyprn_mvp_app/approach_closure.py',
@@ -274,7 +309,7 @@ def isolated(input_dir,*,canary=False,wall=None,expected_digest=None,root=None):
           identity(root=root)['worker_image'],'python','-B']
     args+=['/input/canary.py'] if canary else ['-m','hyprn_mvp_integration.worker','/input',expected_digest,
         hashlib.sha256(canonical(verified['manifest'])).hexdigest()]
-    start=time.monotonic();proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    start=time.monotonic();proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=docker_environment())
     selector=selectors.DefaultSelector();selector.register(proc.stdout,selectors.EVENT_READ)
     collected=bytearray();reason='exited'
     try:
@@ -289,7 +324,7 @@ def isolated(input_dir,*,canary=False,wall=None,expected_digest=None,root=None):
         if reason!='exited':
             proc.kill();proc.wait(timeout=10)
             proc.stdout.close()
-            subprocess.run(['docker','kill',name],capture_output=True,timeout=20)
+            subprocess.run(['docker','kill',name],capture_output=True,timeout=20,env=docker_environment())
         proc.wait(timeout=10)
         state=json.loads(command(['docker','inspect','--format','{{json .State}}',name]))
         result=dict(id=name,reason=reason,exit_code=proc.returncode,seconds=time.monotonic()-start,state=state,
@@ -301,13 +336,22 @@ def isolated(input_dir,*,canary=False,wall=None,expected_digest=None,root=None):
         if proc.poll() is None:proc.kill()
         proc.wait(timeout=10)
         proc.stdout.close()
-        subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=20)
+        subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=20,env=docker_environment())
 
 def host_home():
     """The account's home folder from the password database (the probe proves it is absent
     inside the worker); not $HOME, which managers may replace with a clean folder."""
     import pwd
     return Path(pwd.getpwuid(os.getuid()).pw_dir)
+
+def probe_homes(root=None):
+    """Home folders the containment probe proves absent inside the worker: always the
+    account's, plus the installation's configured host_home, or a scoped root's scratch home."""
+    root=runtime_root(root)
+    homes=[host_home()]
+    configured=(Path(INSTALLATION['host_home']) if INSTALLATION is not None else None) if root==ROOT else root/'home'
+    if configured is not None and configured not in homes:homes.append(configured)
+    return [str(home) for home in homes]
 
 def attest(root=None):
     root=runtime_root(root)
@@ -319,7 +363,7 @@ def attest(root=None):
         (directory/'canary.py').write_text(source);(directory/'canary.py').chmod(0o444)
         return isolated(directory,canary=True,wall=wall,root=root)
     source=f'''import json,os,socket
-checks={{'nonroot':os.getuid()!=0,'socket_denied':not os.path.exists('/var/run/docker.sock'),'home_denied':not os.path.exists({str(host_home())!r}),'secret_denied':not os.path.exists({str(secret)!r}) and not any(k.startswith(('AWS_','OPENAI_','AIIDA_')) for k in os.environ)}}
+checks={{'nonroot':os.getuid()!=0,'socket_denied':not os.path.exists('/var/run/docker.sock'),'home_denied':not any(os.path.exists(p) for p in {probe_homes(root=root)!r}),'secret_denied':not os.path.exists({str(secret)!r}) and not any(k.startswith(('AWS_','OPENAI_','AIIDA_')) for k in os.environ)}}
 for name,path in [('outside_write_denied','/escape'),('input_readonly','/input/canary.py')]:
  try:open(path,'w').write('canary');checks[name]=False
  except OSError:checks[name]=True

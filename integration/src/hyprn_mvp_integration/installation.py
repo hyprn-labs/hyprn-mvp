@@ -17,6 +17,10 @@ decisions). The loader takes an explicit path and refuses, before returning anyt
 
 Never in the configuration: secrets, worker policy or limits, image ids. Every refusal is an
 ``InstallationError`` naming a reason code; the local edition reports it with exit code 2.
+
+This module belongs to the attested execution source set: the launcher takes its execution
+root, runtime owner, native profile, Docker endpoint and the home folder its containment probe
+checks from the configuration loaded here.
 """
 import json
 import os
@@ -220,3 +224,32 @@ def read(path):
 def load(path, *, edition, host=None):
     """Read, parse and validate the installation configuration at the explicit ``path``."""
     return validate(parse(read(path)), edition=edition, host=host)
+
+
+# ---- Execution identities. One definition for the launcher, the worker builder and the
+# native environment manager; the development data root (``HYPRN_MVP_DATA_ROOT``, no
+# configuration) keeps its own fixed identities.
+CONFIG = 'HYPRN_MVP_CONFIG'
+DEVELOPMENT_OWNER = 'hyprn-mvp-execution'
+DEVELOPMENT_PROFILE = 'hyprn-mvp'
+
+
+def from_environment(environ=None, *, edition='local'):
+    """The configuration named by ``HYPRN_MVP_CONFIG``, loaded and validated; None when unset."""
+    environ = os.environ if environ is None else environ
+    value = environ.get(CONFIG, '')
+    return load(value, edition=edition) if value else None
+
+
+def owner(configuration):
+    """Owner label of the execution runtime and its worker containers."""
+    if configuration is None:
+        return DEVELOPMENT_OWNER
+    return 'hyprn-mvp-' + configuration['edition'] + '-' + configuration['installation_id']
+
+
+def profile_name(configuration):
+    """Name of the native (AiiDA) profile of the execution store."""
+    if configuration is None:
+        return DEVELOPMENT_PROFILE
+    return 'hyprn-mvp-' + configuration['edition'] + '-' + configuration['installation_id'][:8]

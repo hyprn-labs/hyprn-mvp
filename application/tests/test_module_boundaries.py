@@ -8,7 +8,8 @@ uses them.
 
 Integration seam: launcher, calculation, the retained-result reader and
 integration export reach the application only through the pure modules (``contracts``,
-``units``, ``scientific_configuration``, ``approach_closure``, ``execution_bundle``), and
+``units``, ``scientific_configuration``, ``approach_closure``, ``execution_bundle`` and the
+location rule ``locations``, read by the installation loader), and
 every application module they can reach, including through function-local imports, is
 bound into ``launcher.execution_source_hashes()``.
 
@@ -82,7 +83,7 @@ ALLOWED = set()
 # The only application modules the integration seam may reach: dependency-light,
 # data-only, bound into the execution attestation.
 PURE = frozenset({'hyprn_mvp_app', CONTRACTS, UNITS, 'hyprn_mvp_app.scientific_configuration',
-                  'hyprn_mvp_app.approach_closure', BUNDLE})
+                  'hyprn_mvp_app.approach_closure', BUNDLE, 'hyprn_mvp_app.locations'})
 # Integration modules bound into the attestation whose application reach is checked.
 BOUND_INTEGRATION = ('hyprn_mvp_integration.launcher', 'hyprn_mvp_integration.calculation',
                      'hyprn_mvp_integration.results')
@@ -91,18 +92,20 @@ INTEGRATION_SEAM = BOUND_INTEGRATION + ('hyprn_mvp_integration.computational_exp
 # image and is never imported by the host-side runtime probe.
 ATTESTED_ROOTS = BOUND_INTEGRATION + ('hyprn_mvp_integration.worker',)
 PROJECT_SOURCES = ('application/src/', 'integration/src/')
-# Reviewed attested project modules (34-entry list; the other 22 entries are the
+# Reviewed attested project modules (36-entry list; the other 22 entries are the
 # deployment/generator/runtime/policy pins and the reviewed WhatsOpt patches).
 ATTESTED_PROJECT_FILES = frozenset({
     'application/src/hyprn_mvp_app/__init__.py',
     'application/src/hyprn_mvp_app/approach_closure.py',
     'application/src/hyprn_mvp_app/contracts.py',
     'application/src/hyprn_mvp_app/execution_bundle.py',
+    'application/src/hyprn_mvp_app/locations.py',
     'application/src/hyprn_mvp_app/scientific_configuration.py',
     'application/src/hyprn_mvp_app/units.py',
     'integration/src/hyprn_mvp_integration/__init__.py',
     'integration/src/hyprn_mvp_integration/calculation.py',
     'integration/src/hyprn_mvp_integration/computational_export.py',
+    'integration/src/hyprn_mvp_integration/installation.py',
     'integration/src/hyprn_mvp_integration/launcher.py',
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/worker.py',
@@ -349,7 +352,7 @@ def test_attested_project_sources_equal_the_static_launch_path_closure():
     assert not {p for p in bound if p.startswith(PROJECT_SOURCES)} - project  # no non-.py project entries
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in bound
-    assert len(bound) == 34
+    assert len(bound) == 36
 
 
 def _execution_source_list():
@@ -369,7 +372,7 @@ def test_attested_list_stays_a_reviewed_literal_in_the_launcher():
     values = assigns[0].value.elts
     assert all(isinstance(v, ast.Constant) and isinstance(v.value, str) for v in values)
     literal = [v.value for v in values]
-    assert len(literal) == len(set(literal)) == 25
+    assert len(literal) == len(set(literal)) == 27
     assert {p for p in literal if p.startswith(PROJECT_SOURCES)} == ATTESTED_PROJECT_FILES
     # The only computed addition is the reviewed WhatsOpt patch directory.
     assert len(augments) == 1
@@ -486,10 +489,10 @@ print(json.dumps(out))
 def test_a_runtime_recorded_against_a_wider_inventory_refuses_until_rebuilt_and_reattested():
     """A runtime.json recorded against a wider inventory (the current one
     plus the modules unreachable from every launch) fails closed on inventory drift before
-    any docker inspection; only the current 34-entry inventory passes that check (and then
+    any docker inspection; only the current 36-entry inventory passes that check (and then
     reaches the image check, stubbed here)."""
     result = probe(f'REPO={str(REPO)!r}\n' + FAIL_CLOSED_PROBE)
-    assert result['old'] == 36 and result['new'] == 34
+    assert result['old'] == 38 and result['new'] == 36
     assert result['old_error'] == 'RuntimeError: Execution source inventory drift; rebuild before attesting'
     assert result['new_error'] == 'LookupError: image check reached'
     assert result['docker_calls'] == 1

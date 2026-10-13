@@ -34,6 +34,10 @@ EXECUTION_SOURCES = (
     # Exactly the modules reachable from a launch; modules unreachable from every launch
     # path (execution, modeling, result_bindings, store) are never part of the inventory.
     'integration/src/hyprn_mvp_integration/computational_export.py',
+    # The installation loader and the location rule it applies: the launcher takes its root,
+    # owner, native profile, engine endpoint and probed home folder from the installation.
+    'integration/src/hyprn_mvp_integration/installation.py',
+    'application/src/hyprn_mvp_app/locations.py',
     'application/src/hyprn_mvp_app/__init__.py',
     'application/src/hyprn_mvp_app/scientific_configuration.py',
     'application/src/hyprn_mvp_app/units.py',
@@ -270,6 +274,6 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     assert inventories[2]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch']
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 34
+    assert len(inventories[2]) == 36
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]

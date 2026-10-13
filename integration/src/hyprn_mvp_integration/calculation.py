@@ -14,7 +14,7 @@ from hyprn_mvp_app.contracts import canonical, check_digest, data_json, digest
 from hyprn_mvp_app.execution_bundle import verify_files, closed, MAX_BYTES, safe_path, validate_retained_bundle
 from . import launcher
 
-PROFILE = 'hyprn-mvp'
+PROFILE = launcher.PROFILE  # the execution store's native profile (installation or development)
 REQUEST_KEYS = {'run_id', 'scope', 'command_id', 'payload_digest', 'bundle_digest'}
 
 

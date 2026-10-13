@@ -1,8 +1,11 @@
 """Build and attest the restricted worker image; no profile or service is changed.
 
-The execution store is HYPRN_MVP_DATA_ROOT/execution and the numerical engine base image is
+The execution store is <data root>/execution (HYPRN_MVP_DATA_ROOT, else the installation
+configuration named by HYPRN_MVP_CONFIG) and the numerical engine base image is
 HYPRN_MVP_ENGINE_IMAGE (deployment/local_paths.py); the operations refuse while either is
-unset, and the build refuses an engine image that differs from the reviewed pin.
+unset, and the build refuses an engine image that differs from the reviewed pin. The runtime
+owner, the container engine endpoint and the digest of the execution configuration recorded in
+runtime.json come from the attested launcher, which reads the same installation.
 """
 import argparse
 import contextlib
@@ -18,10 +21,16 @@ import local_paths
 
 REPO=Path(__file__).resolve().parents[1]
 ROOT=local_paths.execution_root(required=False)
-OWNER='hyprn-mvp-execution'
 ENGINE=local_paths.engine_image(required=False)
 
-def run(*args):return subprocess.run(args,text=True,capture_output=True,check=True).stdout.strip()
+def launcher():
+    """The attested launcher of this checkout (owner, engine endpoint, configuration digest)."""
+    for source in (str(REPO/'application/src'),str(REPO/'integration/src')):
+        if source not in sys.path:sys.path.insert(0,source)
+    from hyprn_mvp_integration import launcher as module
+    return module
+
+def run(*args):return subprocess.run(args,text=True,capture_output=True,check=True,env=launcher().docker_environment()).stdout.strip()
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 @contextlib.contextmanager
@@ -63,10 +72,15 @@ def build_worker(*, root=None, engine=None):
     worker_tag='hyprn-mvp-worker:'+hashlib.sha256(json.dumps(inputs,sort_keys=True).encode()).hexdigest()[:16]
     with tempfile.TemporaryDirectory(prefix='worker-build-',dir=root) as temp:
         temp=Path(temp)
-        for source,name in [(worker,'worker.py'),(worker.with_name('results.py'),'results.py'),(worker.with_name('__init__.py'),'__init__.py'),(REPO/'deployment/worker.Dockerfile','Dockerfile')]:shutil.copyfile(source,temp/name)
+        for source,name in [(worker,'worker.py'),(worker.with_name('results.py'),'results.py'),(worker.with_name('__init__.py'),'__init__.py'),(REPO/'deployment/worker.Dockerfile','Dockerfile')]:
+            shutil.copyfile(source,temp/name)
+            # COPY keeps the context mode: the unprivileged worker user must read the sources
+            # whatever the builder's umask (the entry point runs with umask 077).
+            (temp/name).chmod(0o444)
         with base_reference(engine) as reference:
             result=subprocess.run(['docker','build','--network=none','--pull=false',*labels,*build_args,
-                                   '--build-arg','ENGINE_IMAGE='+reference,'-t',worker_tag,str(temp)],text=True,capture_output=True)
+                                   '--build-arg','ENGINE_IMAGE='+reference,'-t',worker_tag,str(temp)],text=True,capture_output=True,
+                                  env=launcher().docker_environment())
         log_path=root/'evidence/worker-build.log'
         if log_path.exists():(root/'evidence'/('worker-build-'+sha(log_path)+'.log')).write_bytes(log_path.read_bytes())
         log_path.write_text(result.stdout+'\n'+result.stderr)
@@ -79,7 +93,9 @@ def build_worker(*, root=None, engine=None):
     layers=json.loads(run('docker','image','inspect',image))[0]['RootFS']['Layers']
     if layers[:len(base['RootFS']['Layers'])]!=base['RootFS']['Layers']:
         raise RuntimeError('Worker image does not derive from the reviewed engine image')
-    runtime=dict(source_hashes=source_hashes,owner=root.name if isolated else OWNER,root=str(root),worker_image=image,engine_image=engine,architecture=base['Architecture'],
+    runtime=dict(source_hashes=source_hashes,owner=root.name if isolated else launcher().OWNER,root=str(root),
+                 execution_configuration_sha256=launcher().execution_configuration_sha256(root=root),
+                 worker_image=image,engine_image=engine,architecture=base['Architecture'],
                  python_version=python_version,worker_sha256=sha(worker),results_sha256=sha(worker.with_name('results.py')),worker_lock_sha256=sha(lock),recipe_sha256=sha(REPO/'deployment/worker.Dockerfile'))
     path=root/'runtime.json'
     if path.exists():

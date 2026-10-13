@@ -31,7 +31,6 @@ REPO=Path(__file__).resolve().parents[1]
 ROOT=local_paths.execution_root(required=False)
 REVIEWED=local_paths.native_inventory(required=False)
 PYTHON=local_paths.native_python(required=False)
-PROFILE='hyprn-mvp'
 # Installed dependency bytes are read from the two development interpreters' environments; the
 # reviewed AiiDA wheel comes from a retired runtime that the neutral layout does not hold, so
 # prepare() refuses before any read while PRIOR is None.
@@ -298,7 +297,14 @@ print(json.dumps(out))
     write_launch_worker(ROOT,BINDING)
     print(json.dumps(dict(native_distributions=len(inventory),worker_distributions=len(workers),selected_sha256=runtime['selected_sha256'])))
 
+def profile_name():
+    """The native profile of the execution store as the attested launcher names it: the
+    installation's own profile, or the development store's."""
+    from hyprn_mvp_integration import launcher
+    return launcher.profile
+
 def initialize():
+    profile=profile_name()
     expected=str(ROOT/'aiida')
     if os.environ.get('AIIDA_PATH')!=expected:raise ValueError('Explicit new profile path required')
     import aiida
@@ -306,23 +312,24 @@ def initialize():
     from aiida.manage.configuration import get_config,create_profile
     config=get_config(create=True)
     if config.profile_names:raise ValueError('Refusing to initialize existing profile')
-    create_profile(config,name=PROFILE,email='owner@hyprn-mvp.invalid',
+    create_profile(config,name=profile,email='owner@hyprn-mvp.invalid',
         storage_backend='core.sqlite_dos',storage_config={'filepath':str(ROOT/'aiida-store')},
         broker_backend=None,broker_config={})
     config.store()
     if config.default_profile_name is not None:raise ValueError('Default profile is forbidden')
-    aiida.load_profile(PROFILE)
+    aiida.load_profile(profile)
     computer=orm.Computer(label='hyprn-mvp-local',hostname='localhost',transport_type='core.local',
         scheduler_type='core.direct',workdir=str(ROOT/'aiida-work/{username}')).store()
     computer.configure(safe_interval=0.1)
     code=orm.InstalledCode(label='hyprn-mvp-scalar',computer=computer,filepath_executable=str(ROOT/'launch-worker'),default_calc_job_plugin='hyprn_mvp.scalar').store()
     from aiida.manage import get_manager
-    emit(ROOT/'profile-identity.json',dict(profile_uuid=config.get_profile(PROFILE).uuid,
+    emit(ROOT/'profile-identity.json',dict(profile_uuid=config.get_profile(profile).uuid,
         repository_uuid=get_manager().get_profile_storage().get_repository().uuid,
-        computer_uuid=computer.uuid,code_uuid=code.uuid,profile=PROFILE))
+        computer_uuid=computer.uuid,code_uuid=code.uuid,profile=profile))
     print('Fresh isolated profile initialized without broker or daemon')
 
 def evidence():
+    profile=profile_name()
     from aiida import orm
     from hyprn_mvp_integration.calculation import NativeExecution
     native=NativeExecution.from_environment()
@@ -334,7 +341,7 @@ def evidence():
             model_revision_id=bundle['manifest']['model_revision_id'],configuration_revision_id=bundle['manifest']['configuration_revision_id'],
             file_count=len(bundle['files']),retained_manifest_digest=bundle['manifest']['bundle_digest'],
             retained_exact_match=native.matches(request)==[node.uuid]))
-    emit(ROOT/'evidence/native-records.json',dict(profile=PROFILE,store_uuid=native.store_uuid,records=records))
+    emit(ROOT/'evidence/native-records.json',dict(profile=profile,store_uuid=native.store_uuid,records=records))
     print(json.dumps(dict(records=len(records),unique_matches=all(r['retained_exact_match'] for r in records))))
 
 if __name__=='__main__':
