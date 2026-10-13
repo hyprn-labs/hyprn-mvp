@@ -645,6 +645,32 @@ def test_model_association_reads_have_one_owner():
     assert statements == ASSOCIATION_STATEMENTS, sorted(statements ^ ASSOCIATION_STATEMENTS)
 
 
+# Reviewed ``run_associations`` statements outside ``store`` (which holds the table) and
+# ``history`` (which owns every run-row read): the association writes of ``execution`` only,
+# the insert at acceptance and the update of the native identity.
+RUN_ASSOCIATION_WRITES = {
+    ('application/src/hyprn_mvp_app/execution.py',
+     'INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id) VALUES(?,?,?,?)'),
+    ('application/src/hyprn_mvp_app/execution.py', 'UPDATE run_associations SET store_uuid=?,process_uuid=? WHERE run_id=?'),
+}
+
+
+def test_run_association_reads_have_one_owner():
+    """Only ``history`` reads a run's association row (with its outbox state); ``execution``,
+    ``approach`` and ``result_bindings`` read through it, and ``execution`` keeps only the
+    reviewed association writes."""
+    statements, owners = set(), {'application/src/hyprn_mvp_app/store.py', 'application/src/hyprn_mvp_app/history.py'}
+    for root in PRODUCTION:
+        for path in sorted(root.rglob('*.py')):
+            relative = str(path.relative_to(REPO))
+            if relative in owners:
+                continue
+            statements |= {(relative, value) for value in string_constants(path) if 'run_associations' in value}
+    assert statements == RUN_ASSOCIATION_WRITES, sorted(statements ^ RUN_ASSOCIATION_WRITES)
+    owner = module_path('hyprn_mvp_app.history')
+    assert any('run_associations r JOIN outbox' in value for value in string_constants(owner))
+
+
 def test_model_integrity_check_is_a_pure_module_function():
     """``modeling.checked_model`` takes the record and its expected identity only: no
     Coordinator, Store, connection or transport, so historical replays never need them."""

@@ -9,7 +9,7 @@ import json
 from .contracts import DomainError, canonical, check_digest, uid
 from .execution_bundle import (MAX_BYTES, assemble_bundle, closed, safe_path, uses_polish_envelope,
                                validate_frozen_configuration, validate_preparation, validate_retained_bundle)
-from .history import History, association, projection, stored_request
+from .history import History, association, projection, run_association, stored_request
 from .result_bindings import ResultBindings
 from .scientific_configuration import project_scientific_configuration
 # Temporary forwarding aliases for test imports only; production code
@@ -89,9 +89,7 @@ class Submissions:
 
     def read(self,actor,sid,run_id):
         with self.store.connection() as db:
-            self.store.authorize(db,actor,sid)
-            row=db.execute('SELECT r.command_id,o.state,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id=?',(sid,run_id)).fetchone()
-            if row is None:raise DomainError('resource_not_found',404)
+            row,_=History(self.store).run_row(db,actor,sid,run_id)
             payload=json.loads(row['payload'])
             state=payload.get('preparation_state',row['state']) if row['state']=='accepted_run' else row['state']
             result=dict(run_id=run_id,command_id=row['command_id'],state=state,**payload.get('status',{}),
@@ -124,15 +122,13 @@ class Submissions:
     def hydrate(self,actor,sid,run_id):
         """Explicit authorized read/cache of an existing association; never dispatch."""
         with self.store.connection() as db:
-            self.store.authorize(db,actor,sid)
-            row=db.execute('SELECT r.*,o.state FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id=?',(sid,run_id)).fetchone()
-            if row is None:raise DomainError('resource_not_found',404)
+            row,_=History(self.store).run_row(db,actor,sid,run_id,payload=False)
             if row['state']!='recorded' or row['process_uuid'] is None:raise DomainError('history_not_recorded',409)
         self._record(run_id,association(row),actor=actor)
 
     def _record(self,run_id,record,*,actor=None):
         with self.store.connection() as db:
-            row=db.execute('SELECT r.*,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.run_id=?',(run_id,)).fetchone()
+            row=run_association(db,run_id)
             if actor is not None:self.store.authorize(db,actor,row['study_id'])
             payload=json.loads(row['payload'])
             stored_request(row,payload,self.store.command_receipt(db,row['study_id'],'run',row['command_id']))
@@ -142,7 +138,7 @@ class Submissions:
         retained=self.native.read_record(payload['request'],expected)
         saved=projection(payload,retained,expected)
         with self.store.connection(write=True) as db:
-            row=db.execute('SELECT * FROM run_associations WHERE run_id=?',(run_id,)).fetchone()
+            row=run_association(db,run_id,payload=False)
             if actor is not None:self.store.authorize(db,actor,row['study_id'])
             if row['process_uuid'] is not None and association(row)!=expected:
                 raise ValueError('Recorded process association cannot change')
@@ -180,9 +176,9 @@ class Submissions:
         try:
             fcntl.flock(fd,fcntl.LOCK_EX)
             with self.store.connection() as db:
-                row=db.execute('SELECT r.*,o.state,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.run_id=?',(run_id,)).fetchone()
+                row=run_association(db,run_id)
                 if row is None:raise DomainError('resource_not_found',404)
-                row=dict(row);payload=json.loads(row['payload'])
+                payload=json.loads(row['payload'])
                 if row['state']=='accepted_run':row['state']=payload.get('preparation_state',row['state'])
                 receipt=self.store.command_receipt(db,row['study_id'],'run',row['command_id'])
             if row['state'] in ('recorded','preparation_failed'):return

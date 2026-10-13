@@ -15,7 +15,7 @@ from .approach_closure import (
     build_closure, validate_closure, validate_saved, closure_schema, ReferenceIssue,
 )
 from .execution_bundle import validate_retained_bundle
-from .history import History, validate_binding
+from .history import History, approach_runs, validate_binding
 from .contracts import DomainError, canonical, digest, uid, validate
 from .store import evidence_snapshot, exact_evidence
 
@@ -457,25 +457,29 @@ class Approaches:
         if query['case_id'] is not None and query['case_id'] not in {c['case_id'] for c in saved['version']['content']['cases']}:
             raise DomainError('resource_not_found', 404)
         # Select only small persisted pin projections, never bundle blobs or a
-        # new backlink table. SQL pagination bounds work before deserialization.
+        # new backlink table. SQL pagination bounds work before deserialization:
+        # configurations come first in (kind, resource_id) order, then the runs that
+        # ``history`` reads for the same version (and case), each half SQL-bounded.
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid)
-            sql = '''WITH used AS (
-                SELECT 'configuration' AS kind,c.configuration_revision_id AS resource_id,c.configuration_revision_id,
+            fetch, cursor = query['limit'] + 1, query['cursor']
+            rows = []
+            if cursor is None or cursor['kind'] == 'configuration':
+                after = cursor['resource_id'] if cursor else None
+                rows = [dict(kind='configuration', resource_id=r['configuration_revision_id'],
+                             configuration_revision_id=r['configuration_revision_id'], case_id=r['case_id'])
+                        for r in db.execute('''SELECT c.configuration_revision_id,
                     json_extract(c.payload,'$.configuration.approach_binding.case_id') AS case_id
                 FROM configurations c WHERE c.study_id=? AND json_extract(c.payload,'$.configuration.approach_binding.approach_version_id')=?
-                UNION ALL
-                SELECT 'run',r.run_id,r.configuration_revision_id,
-                    json_extract(c.payload,'$.configuration.approach_binding.case_id')
-                FROM run_associations r JOIN configurations c USING(configuration_revision_id)
-                WHERE r.study_id=? AND c.study_id=? AND json_extract(c.payload,'$.configuration.approach_binding.approach_version_id')=?
-            ) SELECT * FROM used WHERE (? IS NULL OR case_id=?)'''
-            params = [sid, version, sid, sid, version, query['case_id'], query['case_id']]
-            if query['cursor']:
-                sql += ' AND (kind,resource_id)>(?,?)'
-                params += [query['cursor']['kind'], query['cursor']['resource_id']]
-            sql += ' ORDER BY kind,resource_id LIMIT ?'
-            rows = db.execute(sql, (*params, query['limit'] + 1)).fetchall()
+                    AND (? IS NULL OR json_extract(c.payload,'$.configuration.approach_binding.case_id')=?)
+                    AND (? IS NULL OR c.configuration_revision_id>?)
+                ORDER BY c.configuration_revision_id LIMIT ?''',
+                            (sid, version, query['case_id'], query['case_id'], after, after, fetch)).fetchall()]
+            if len(rows) < fetch:
+                after = cursor['resource_id'] if cursor and cursor['kind'] == 'run' else None
+                rows += [dict(kind='run', resource_id=r['run_id'], configuration_revision_id=r['configuration_revision_id'],
+                              case_id=r['case_id'])
+                         for r in approach_runs(db, sid, version, query['case_id'], after, fetch - len(rows))]
             items = []
             for row in rows[:query['limit']]:
                 item = dict(kind=row['kind'], configuration_revision_id=row['configuration_revision_id'], case_id=row['case_id'])

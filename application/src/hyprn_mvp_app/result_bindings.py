@@ -7,7 +7,7 @@ import base64
 from copy import deepcopy
 import json
 
-from .history import History, complete_outcome
+from .history import History, complete_outcome, last_run_position, runs_by_position
 from .contracts import DomainError, canonical, check_digest, digest, validate
 from .execution_bundle import finite, port_key
 # Temporary forwarding alias for test imports only; production code imports it from its owner
@@ -89,7 +89,7 @@ class ResultBindings:
             raise DomainError('invalid_request', 400)
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid)
-            maximum = db.execute('SELECT COALESCE(MAX(rowid),0) FROM run_associations WHERE study_id=?',(sid,)).fetchone()[0]
+            maximum = last_run_position(db, sid)
             high, position, offset = maximum, 0, 0
             if cursor is not None:
                 try:
@@ -102,7 +102,7 @@ class ResultBindings:
                     if any(type(n) is not int for n in (high,position,offset)) or not 0<=position<=high<=maximum or not 0<=offset<=1000:raise ValueError()
                 except (ValueError,TypeError,KeyError,UnicodeError):
                     raise DomainError('invalid_request',400) from None
-            rows=db.execute('SELECT rowid,run_id FROM run_associations WHERE study_id=? AND rowid>=? AND rowid<=? ORDER BY rowid LIMIT 100',(sid,position,high)).fetchall()
+            rows=runs_by_position(db,sid,position,high,100)
         items=[];next_cursor=None
         for row in rows:
             start=offset if row['rowid']==position else 0

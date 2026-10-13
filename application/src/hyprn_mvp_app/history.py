@@ -1,9 +1,18 @@
 """Authorized immutable projections of retained native evidence; no model access.
 
-History is the single owner of retained-run reading:
+History is the single owner of retained-run reading, and of every read of a run's
+association row: ``execution``, ``approach`` and ``result_bindings`` read run rows only
+through the functions below, and ``execution`` keeps only the association writes.
 
+- ``run_association(db, run_id, *, study_id=None, payload=True)``: in the caller's
+  transaction, the one ``run_associations JOIN outbox`` row read (association columns, outbox
+  state and, with ``payload``, the stored payload); ``None`` when absent. Without
+  ``study_id`` it reads by run id only (the trusted dispatcher path, never a public read).
+- ``last_run_position``, ``runs_by_position``: the study's run insertion positions, for
+  position-paged consumers; ``approach_runs``: the runs whose saved configuration revision is
+  bound to one approach version (and case), SQL-paged by run id.
 - ``History.run_row(db, actor, sid, rid)``: in the caller's transaction, authorize the
-  reader, then return the study-scoped ``run_associations JOIN outbox`` row and its run
+  reader, then return the study-scoped ``run_association`` row and its run
   receipt (``None`` when absent). A foreign study or absent run is ``resource_not_found``.
 - ``History.read``: the public retained projection; corruption is a partial diagnostic.
 - ``History.retained``: the authorized, integrity-checked context ``RetainedRun``.
@@ -240,6 +249,40 @@ def case_projection(raw, sid, revision_id):
     except (ValueError,KeyError,TypeError,AttributeError,StopIteration,RecursionError,DomainError):
         return None,dict(state='unavailable')
 
+def run_association(db,run_id,*,study_id=None,payload=True):
+    """The run's association row with its outbox state, read in the caller's transaction.
+
+    ``payload=False`` selects no payload bytes. The caller authorizes first, except the
+    trusted dispatcher path, which reads by run id only (``study_id=None``).
+    """
+    row=db.execute('SELECT r.*,o.state,CASE WHEN ? THEN o.payload END AS payload FROM run_associations r JOIN outbox o USING(run_id) '
+                   'WHERE r.run_id=? AND (? IS NULL OR r.study_id=?)',(bool(payload),run_id,study_id,study_id)).fetchone()
+    if row is None:return None
+    row=dict(row)
+    if not payload:del row['payload']
+    return row
+
+def last_run_position(db,sid):
+    """The highest run insertion position of the study (0 when it has no run)."""
+    return db.execute('SELECT COALESCE(MAX(rowid),0) FROM run_associations WHERE study_id=?',(sid,)).fetchone()[0]
+
+def runs_by_position(db,sid,low,high,limit):
+    """``(rowid, run_id)`` of the study's runs at positions ``low..high``, in insertion order."""
+    return db.execute('SELECT rowid,run_id FROM run_associations WHERE study_id=? AND rowid>=? AND rowid<=? ORDER BY rowid LIMIT ?',
+                      (sid,low,high,limit)).fetchall()
+
+def approach_runs(db,sid,approach_version_id,case_id,after,limit):
+    """Runs of the study whose saved configuration revision is bound to the approach version
+    (and to ``case_id`` when given), ordered by run id after ``after``, at most ``limit``:
+    ``run_id``, ``configuration_revision_id`` and the bound ``case_id``. Only the small pin
+    projection is read, never a payload."""
+    return db.execute('''SELECT r.run_id,r.configuration_revision_id,
+            json_extract(c.payload,'$.configuration.approach_binding.case_id') AS case_id
+        FROM run_associations r JOIN configurations c USING(configuration_revision_id)
+        WHERE r.study_id=? AND c.study_id=? AND json_extract(c.payload,'$.configuration.approach_binding.approach_version_id')=?
+            AND (? IS NULL OR json_extract(c.payload,'$.configuration.approach_binding.case_id')=?) AND (? IS NULL OR r.run_id>?)
+        ORDER BY r.run_id LIMIT ?''',(sid,sid,approach_version_id,case_id,case_id,after,after,limit)).fetchall()
+
 class History:
     def __init__(self,store):self.store=store
 
@@ -271,16 +314,16 @@ class History:
                      state=r['public_state'],configuration_name=contexts[r['configuration_revision_id']][0],
                      case_context=contexts[r['configuration_revision_id']][1]) for r in rows]
 
-    def run_row(self,db,actor,sid,rid):
+    def run_row(self,db,actor,sid,rid,*,payload=True):
         """Authorize, then read the study-scoped run row and its run receipt in ``db``.
 
         The caller holds the connection and therefore the transaction. The receipt is
         ``None`` when absent; the caller judges integrity, nothing is repaired here.
         """
         self.store.authorize(db,actor,sid)
-        row=db.execute('SELECT r.*,o.state,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id=?',(sid,rid)).fetchone()
+        row=run_association(db,rid,study_id=sid,payload=payload)
         if row is None:raise DomainError('resource_not_found',404)
-        return dict(row),self.store.command_receipt(db,sid,'run',row['command_id'])
+        return row,self.store.command_receipt(db,sid,'run',row['command_id'])
 
     def retained(self,actor,sid,rid,*,admit=None):
         """Authorized retained run context, verified from its own stored bytes only.
