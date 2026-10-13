@@ -596,10 +596,47 @@ def load_existing_backend():
     return backend
 
 
+def bind_scope_interpreter(group):
+    """The working copy's scope record names this checkout's approved interpreter.
+
+    The interpreter is an environment binding, not retained content: the pinned record names the
+    producer's interpreter. Only the preflight of a fresh working copy, before any continuation
+    baseline exists, rebinds it, and only while the record still holds the pinned bytes and every
+    other field equals the retained identity. A working copy baselined under another interpreter
+    is refused.
+    """
+    require_original()
+    if durable_fixture.native_scope() != ORIGINAL.root:
+        raise ValueError('Native working root differs from its identity')
+    marker=guard.no_symlinks(ORIGINAL.root/'scope.json')
+    raw=marker.read_bytes();bound=json.loads(raw)
+    expected=guard.Scope(ORIGINAL.root,ORIGINAL.run_uuid,guard.SCOPE_PREFIX+ORIGINAL.run_uuid,
+        ORIGINAL.profile_uuid,ORIGINAL.store_uuid).record()
+    if bound==expected:
+        return
+    pinned=durable_fixture.verified_file(durable_fixture.SCOPE_PREFIX+'/scope.json').read_bytes()
+    if raw!=pinned or dict(bound,interpreter=None)!=dict(expected,interpreter=None):
+        raise ValueError('Retained scope record differs beyond its interpreter binding')
+    if group!='findings-native-preflight' or os.path.lexists(CONTINUATION):
+        raise ValueError('Only the preflight of a fresh working copy rebinds its interpreter; re-materialize the working copy')
+    mode=marker.stat().st_mode&0o777
+    durable_write(marker,(json.dumps({**bound,'interpreter':expected['interpreter']},indent=2)+'\n').encode())
+    marker.chmod(mode)
+
+
+def scope_binding():
+    """Pinned and working interpreter of the scope record, recorded in the preflight attempt."""
+    pinned=durable_fixture.verified_file(durable_fixture.SCOPE_PREFIX+'/scope.json').read_bytes()
+    working=guard.no_symlinks(ORIGINAL.root/'scope.json').read_bytes()
+    return dict(pinned_interpreter=json.loads(pinned)['interpreter'],bound_interpreter=json.loads(working)['interpreter'],
+        pinned_sha256=sha(pinned),bound_sha256=sha(working),rebound=pinned!=working)
+
+
 def run_retained(group):
     if group not in {'findings-native-preflight','findings-native','findings-native-read'}:
         raise ValueError('Unknown retained group')
     require_original()
+    bind_scope_interpreter(group)
     scope=retained_scope()
     command=[scope.interpreter,'-B',str(REPO/'deployment/checks.py'),'--'+group+'-child']
     result=subprocess.run(command,cwd=REPO,env=guard.clean_environment(scope),capture_output=True,text=True)
@@ -638,6 +675,7 @@ def child(group):
         attempt=CONTINUATION/f'attempt-{number:04d}'; attempt.mkdir(mode=0o700)
         if group == 'findings-native-preflight':
             baseline=capture_baseline(attempt,before)
+            durable_write(attempt/'scope-binding.json',canonical(scope_binding()),exclusive=True)
             preserved=verify_preserved(before)
             if state is None:
                 journal.advance('baselined',baseline_sha256=sha((attempt/'baseline.json').read_bytes()),baseline_attempt=attempt.name)
@@ -1196,6 +1234,9 @@ class NativeContinuation:
             labels=info['Labels'] if kind=='network' else info['Config']['Labels']
             assert labels['org.hyprn-mvp.test-scope']==self.scope.run_uuid
             if kind=='container':
+                # A graceful stop lets the private modeling service close its copied stores, so
+                # no write-ahead log blocks the immutable read below, also after a failure.
+                self.docker('stop',name,check=False)
                 durable_write(self.attempt/(name+'.log'),(self.docker('logs',name).stdout).encode(),exclusive=True)
                 self.docker('rm','-f',name)
             else:self.docker('network','rm',name)
