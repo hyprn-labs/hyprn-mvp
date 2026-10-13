@@ -381,14 +381,24 @@ print(json.dumps(checks));assert all(checks.values())
     cases['output']=probe("import os\nwhile True:os.write(1,b'x'*8192)")
     cases['file_bound']=probe("import os\ntry:open('/output/large','wb').write(b'x'*2097152)\nexcept OSError:pass\nassert os.path.getsize('/output/large')<=1048576")
     cases['pids']=probe("import subprocess\np=[]\ntry:\n for i in range(40):p.append(subprocess.Popen(['sleep','10']))\nexcept OSError:assert len(p)<32\nelse:raise AssertionError('PID bound bypassed')\nfinally:\n for c in p:c.terminate()")
+    # The worker user imports the worker package as a launch does and reports the digests of
+    # the bytes it read: a worker that cannot read its own code, or reads other code, is never attested.
+    cases['worker_import']=probe("import hashlib,json\nimport hyprn_mvp_integration as p,hyprn_mvp_integration.worker as w,hyprn_mvp_integration.results as r\n"
+                                 "print(json.dumps({n:hashlib.sha256(open(m.__file__,'rb').read()).hexdigest() for n,m in (('package',p),('worker',w),('results',r))}))")
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures=[pool.submit(probe,f"from pathlib import Path\nimport time\np=Path('/output/owner');assert not p.exists();p.write_text('{token}');time.sleep(1);assert p.read_text()=='{token}'") for token in ('first','second')]
         for n,future in enumerate(futures):cases['concurrent_'+str(n)]=future.result()
     try:access=json.loads(cases['access']['output'])
     except ValueError:access={}
+    try:imported=json.loads(cases['worker_import']['output'])
+    except ValueError:imported={}
+    package=Path(__file__).with_name('__init__.py')
+    expected=dict(package=hashlib.sha256(package.read_bytes()).hexdigest(),worker=before['worker_sha256'],results=before['runtime']['results_sha256'])
     passed=(cases['memory']['state']['OOMKilled'] and cases['wall']['reason']=='wall_limit' and cases['output']['reason']=='output_limit'
-            and all(cases[k]['exit_code']==0 for k in ('access','file_bound','pids','concurrent_0','concurrent_1')) and before==fingerprint(root=root))
-    evidence=dict(passed=bool(passed),fingerprint=before,cases=cases,access_checks=access,measured_at=time.time(),candidate_executions=0)
+            and all(cases[k]['exit_code']==0 for k in ('access','file_bound','pids','worker_import','concurrent_0','concurrent_1'))
+            and imported==expected and before==fingerprint(root=root))
+    evidence=dict(passed=bool(passed),fingerprint=before,cases=cases,access_checks=access,worker_import=imported,
+                  measured_at=time.time(),candidate_executions=0)
     path=root/'evidence/containment.json'
     if path.exists():
         (path.parent/('containment-'+hashlib.sha256(path.read_bytes()).hexdigest()+'.json')).write_bytes(path.read_bytes())

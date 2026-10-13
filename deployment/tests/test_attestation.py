@@ -277,3 +277,43 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     assert len(inventories[2]) == 36
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
+
+
+def test_units_attestation_imports_the_worker_package_as_the_worker_user(attested):
+    scope, runtime, evidence = attested
+    package = REPO / 'integration/src/hyprn_mvp_integration/__init__.py'
+    assert evidence['cases']['worker_import']['exit_code'] == 0
+    assert evidence['worker_import'] == {
+        'package': hashlib.sha256(package.read_bytes()).hexdigest(),
+        'worker': runtime['worker_sha256'],
+        'results': runtime['results_sha256'],
+    }
+
+
+def test_units_attestation_refuses_a_worker_that_cannot_read_its_own_code(attested, monkeypatch):
+    """Package files only root can read (a umask-077 build without explicit modes) pass every
+    resource canary; the worker-user import probe alone refuses them. Runs last: it retags the
+    scope's worker image, then restores the scope's runtime and attestation records."""
+    scope, _, evidence = attested
+    records = [scope.root / 'runtime.json', scope.root / 'evidence/containment.json']
+    before = [path.read_bytes() for path in records]
+
+    class RootOnly(type(Path())):
+        def chmod(self, mode, *args, **kwargs):
+            return super().chmod(0o400 if mode == 0o444 else mode, *args, **kwargs)
+
+    monkeypatch.setattr(worker, 'Path', RootOnly)
+    try:
+        worker.build_worker(root=scope.root)
+        with pytest.raises(RuntimeError, match='Containment failed'):
+            launcher.attest(root=scope.root)
+        failed = json.loads(records[1].read_bytes())
+        cases = failed['cases']
+        assert not failed['passed'] and failed['worker_import'] == {}
+        assert cases['worker_import']['exit_code'] != 0
+        assert 'PermissionError' in cases['worker_import']['output']
+        assert all(cases[name]['exit_code'] == 0 for name in ('access', 'file_bound', 'pids'))
+    finally:
+        for path, raw in zip(records, before):
+            path.write_bytes(raw)
+    assert launcher.require_attestation(root=scope.root) == evidence
