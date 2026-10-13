@@ -93,5 +93,5 @@ Progress: [█████████░] 90%
 ## Session Continuity
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
-Stopped at: tasks 2.1a, 2.2 and 3.3a merged on the continuation branch; 2.3, 3.3c and the findings-native interpreter rebind partially done in their worktrees
-Resume: finish 2.1a (style-ratchet green), 2.3 then 2.4, 3.3c, and the findings chain (Phase 1 closes when it passes); then the next waves in the phase plans
+Stopped at: tasks 2.1a, 2.2 and 3.3a merged on the continuation branch; 2.3 (then 2.4), 3.3c and the findings-native fixture rebind partially done in their task worktrees
+Resume: merge the finished commits of those task worktrees (only those not yet on this branch), finish 2.3 then 2.4, 3.3c, and the findings chain (Phase 1 closes when it passes); then Phase 3 3.3b, 3.8, 3.4, 3.3d and Phase 2 2.5–2.7 per the phase plans; regenerate `ui/dependency-audit.json` for the prettier addition
