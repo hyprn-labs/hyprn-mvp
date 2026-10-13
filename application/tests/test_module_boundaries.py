@@ -653,8 +653,10 @@ def test_model_association_reads_have_one_owner():
 # the insert at acceptance and the update of the native identity.
 RUN_ASSOCIATION_WRITES = {
     ('application/src/hyprn_mvp_app/execution.py',
-     'INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,accepted_at) VALUES(?,?,?,?,?)'),
-    ('application/src/hyprn_mvp_app/execution.py', 'UPDATE run_associations SET store_uuid=?,process_uuid=? WHERE run_id=?'),
+     'INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,'
+     'accepted_at) VALUES(?,?,?,?,?)'),
+    ('application/src/hyprn_mvp_app/execution.py',
+     'UPDATE run_associations SET store_uuid=?,process_uuid=? WHERE run_id=?'),
 }
 
 

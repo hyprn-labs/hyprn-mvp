@@ -82,8 +82,10 @@ class Submissions:
                 receipt_url=f'/api/1/studies/{sid}/commands/{command}?category=run')
             # The acceptance time is written once, in the acceptance transaction, and never
             # changes; it stays out of the receipt and the outbox payload.
-            accepted_at=datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
-            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,accepted_at) VALUES(?,?,?,?,?)',
+            accepted_at=datetime.now(timezone.utc).isoformat(
+                timespec='microseconds').replace('+00:00','Z')
+            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                       'command_id,accepted_at) VALUES(?,?,?,?,?)',
                        (run_id,sid,revision,command,accepted_at))
             db.execute('INSERT INTO outbox VALUES(?,?,?)',(run_id,'accepted_run',json.dumps(dict(actor=actor,frozen=json.loads(row['payload'])))))
             self.fault('before_receipt')

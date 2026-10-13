@@ -17,7 +17,8 @@ if (!python || !isAbsolute(python) || !existsSync(python)) {
 // the guard compares the whole environment for equality, so nothing else may pass.
 const allowed = ['PATH', 'HOME', 'TMPDIR', 'AIIDA_PATH', 'PYTHONDONTWRITEBYTECODE', 'PYTHONNOUSERSITE',
   'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'HYPRN_MVP_TEST_SCOPE_ROOT', 'HYPRN_MVP_TEST_SCOPE_PROFILE',
-  'HYPRN_MVP_TEST_SCOPE_URL', 'HYPRN_MVP_DATA_ROOT', 'HYPRN_MVP_TOOLS_DIR', 'HYPRN_MVP_SCRATCH_ROOT', 'HYPRN_MVP_LIVE_ROOTS',
+  'HYPRN_MVP_TEST_SCOPE_URL', 'HYPRN_MVP_DATA_ROOT', 'HYPRN_MVP_TOOLS_DIR',
+  'HYPRN_MVP_SCRATCH_ROOT', 'HYPRN_MVP_LIVE_ROOTS',
   'HYPRN_MVP_NATIVE_PYTHON', 'HYPRN_MVP_CONTRACT_PYTHON', 'HYPRN_MVP_NATIVE_INVENTORY',
   'HYPRN_MVP_TEST_FIXTURES_ROOT', 'HYPRN_MVP_UPSTREAM_CACHE', 'HYPRN_MVP_EVIDENCE_ROOT', 'HYPRN_MVP_CHROMIUM'];
 const env = Object.fromEntries(allowed.flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]!]]));

@@ -298,13 +298,17 @@ def status_item(row,configuration_name):
     recorded=row['results_type'] not in (None,'null')
     def stored(key):
         text=row[key] if recorded else None
-        return dict(value=None,reason='not_recorded') if text is None else dict(value=json.loads(text),reason=None)
+        if text is None:return dict(value=None,reason='not_recorded')
+        return dict(value=json.loads(text),reason=None)
     return dict(run_id=row['run_id'],configuration_revision_id=row['configuration_revision_id'],
         configuration_name=configuration_name,state=row['public_state'],
         process_state=row['process_state'],exit_status=row['exit_status'],
         facets={k:stored(k) for k in STATUS_FACETS},criteria=stored('criteria'),
-        times=dict(submitted_at=dict(value=row['accepted_at'],reason=None) if row['accepted_at'] else dict(value=None,reason='not_recorded'),
-                   started_at=dict(value=None,reason='not_projected'),finished_at=dict(value=None,reason='not_projected')))
+        times=dict(
+            submitted_at=dict(value=row['accepted_at'],reason=None) if row['accepted_at']
+                else dict(value=None,reason='not_recorded'),
+            started_at=dict(value=None,reason='not_projected'),
+            finished_at=dict(value=None,reason='not_projected')))
 
 class History:
     def __init__(self,store):self.store=store
@@ -336,10 +340,12 @@ class History:
             revision=r['configuration_revision_id']
             if revision in contexts:continue
             config=db.execute(
-                'SELECT CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload ELSE NULL END AS payload '
+                'SELECT CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload ELSE NULL END '
+                'AS payload '
                 'FROM configurations WHERE study_id=? AND configuration_revision_id=?',
                 (MAX_BYTES,sid,revision)).fetchall()
-            contexts[revision]=case_projection(config[0]['payload'],sid,revision) if config else (None,dict(state='unavailable'))
+            contexts[revision]=(case_projection(config[0]['payload'],sid,revision) if config
+                                else (None,dict(state='unavailable')))
         return contexts
 
     def status(self,actor,sid,run_ids):
@@ -361,18 +367,23 @@ class History:
                 raise DomainError('invalid_request',400)
             rows=db.execute(
                 "SELECT r.run_id,r.configuration_revision_id,r.accepted_at,"
-                "CASE WHEN o.state='accepted_run' THEN COALESCE(json_extract(o.payload,'$.preparation_state'),o.state) ELSE o.state END AS public_state,"
+                "CASE WHEN o.state='accepted_run' THEN "
+                "COALESCE(json_extract(o.payload,'$.preparation_state'),o.state) "
+                "ELSE o.state END AS public_state,"
                 "json_extract(o.payload,'$.status.process_state') AS process_state,"
                 "json_extract(o.payload,'$.status.exit_status') AS exit_status,"
                 "json_type(o.payload,'$.history.results') AS results_type,"
-                +','.join(f"json_extract(o.payload,'$.history.results.{k}') AS {k}" for k in (*STATUS_FACETS,'criteria'))+
-                ' FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id IN ('
+                +','.join(f"json_extract(o.payload,'$.history.results.{k}') AS {k}"
+                          for k in (*STATUS_FACETS,'criteria'))+
+                ' FROM run_associations r JOIN outbox o USING(run_id) '
+                'WHERE r.study_id=? AND r.run_id IN ('
                 +','.join('?'*len(run_ids))+')',(sid,*run_ids)).fetchall()
             # Every id must be a run of this study: no partial answer.
             if len(rows)!=len(run_ids):raise DomainError('resource_not_found',404)
             contexts=self._contexts(db,sid,rows)
         by_id={r['run_id']:r for r in rows}
-        return [status_item(by_id[rid],contexts[by_id[rid]['configuration_revision_id']][0]) for rid in run_ids]
+        return [status_item(by_id[rid],contexts[by_id[rid]['configuration_revision_id']][0])
+                for rid in run_ids]
 
     def run_row(self,db,actor,sid,rid,*,payload=True):
         """Authorize, then read the study-scoped run row and its run receipt in ``db``.

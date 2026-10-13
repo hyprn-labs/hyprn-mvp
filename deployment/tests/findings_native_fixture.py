@@ -609,7 +609,8 @@ def bind_scope_interpreter(group):
     if durable_fixture.native_scope() != ORIGINAL.root:
         raise ValueError('Native working root differs from its identity')
     marker=guard.no_symlinks(ORIGINAL.root/'scope.json')
-    raw=marker.read_bytes();bound=json.loads(raw)
+    raw=marker.read_bytes()
+    bound=json.loads(raw)
     expected=guard.Scope(ORIGINAL.root,ORIGINAL.run_uuid,guard.SCOPE_PREFIX+ORIGINAL.run_uuid,
         ORIGINAL.profile_uuid,ORIGINAL.store_uuid).record()
     if bound==expected:
@@ -618,7 +619,9 @@ def bind_scope_interpreter(group):
     if raw!=pinned or dict(bound,interpreter=None)!=dict(expected,interpreter=None):
         raise ValueError('Retained scope record differs beyond its interpreter binding')
     if group!='findings-native-preflight' or os.path.lexists(CONTINUATION):
-        raise ValueError('Only the preflight of a fresh working copy rebinds its interpreter; re-materialize the working copy')
+        raise ValueError(
+            'Only the preflight of a fresh working copy rebinds its interpreter; '
+            're-materialize the working copy')
     mode=marker.stat().st_mode&0o777
     durable_write(marker,(json.dumps({**bound,'interpreter':expected['interpreter']},indent=2)+'\n').encode())
     marker.chmod(mode)
@@ -628,7 +631,8 @@ def scope_binding():
     """Pinned and working interpreter of the scope record, recorded in the preflight attempt."""
     pinned=durable_fixture.verified_file(durable_fixture.SCOPE_PREFIX+'/scope.json').read_bytes()
     working=guard.no_symlinks(ORIGINAL.root/'scope.json').read_bytes()
-    return dict(pinned_interpreter=json.loads(pinned)['interpreter'],bound_interpreter=json.loads(working)['interpreter'],
+    return dict(pinned_interpreter=json.loads(pinned)['interpreter'],
+        bound_interpreter=json.loads(working)['interpreter'],
         pinned_sha256=sha(pinned),bound_sha256=sha(working),rebound=pinned!=working)
 
 

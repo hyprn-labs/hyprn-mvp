@@ -261,8 +261,9 @@ def populate(env):
     with store.connection(write=True) as db:  # Retained configuration/run rows are bytes here.
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)', (uid(), uid(), a['study_id'], json.dumps(dict(x=1.5))))
         cfg = db.execute('SELECT configuration_revision_id FROM configurations').fetchone()[0]
-        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,store_uuid,process_uuid) '
-                   'VALUES(?,?,?,?,?,?)', (uid(), a['study_id'], cfg, uid(), None, None))
+        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                   'command_id,store_uuid,process_uuid) VALUES(?,?,?,?,?,?)',
+                   (uid(), a['study_id'], cfg, uid(), None, None))
     return a, b
 
 

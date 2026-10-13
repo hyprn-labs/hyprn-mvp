@@ -256,7 +256,9 @@ class Store:
             if 'runtime_json' not in columns:
                 db.execute('ALTER TABLE execution_observation ADD COLUMN runtime_json TEXT')
             # Runs accepted before the acceptance time was recorded keep NULL.
-            if 'accepted_at' not in {row['name'] for row in db.execute('PRAGMA table_info(run_associations)')}:
+            association_columns={
+                row['name'] for row in db.execute('PRAGMA table_info(run_associations)')}
+            if 'accepted_at' not in association_columns:
                 db.execute('ALTER TABLE run_associations ADD COLUMN accepted_at TEXT')
 
     @contextmanager
