@@ -11,10 +11,10 @@ See: `PROJECT.md` (planning directory)
 
 Phase: 1 of 5 (Repository baseline)
 Plan: `phases/01-repository-baseline/01-PLAN.md`, tasks 1.1–1.10; 1.1–1.9 done and verified
-Status: Gate run done, 102/103; findings-native root cause found (fixture bound to a removed checkout) and fixed for the launcher; interpreter rebind after the toolchain switch in progress; Phase 2 and Phase 3 batches running
+Status: Phase 1 complete — gate 102/103 on a66a1f3, and the remaining findings chain (preflight, findings-native, findings-native-read) passes through `./hyprn-mvp dev check` on the continuation branch after the harness fixes; Phase 2 and Phase 3 in progress
 Last activity: task 1.9 verified — durable native fixture recaptured from a passing producer run with a tracked capture tool and pinned; guard fixture built in its own scope; remaining failing cases repaired as test drift; every `PENDING` table empty (checkpoint `phases/01-repository-baseline/checkpoints/1.9.md`)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100% (Phase 1)
 
 ## Accumulated Context
 
@@ -96,5 +96,5 @@ Progress: [█████████░] 90%
 ## Session Continuity
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
-Stopped at: tasks 2.1a, 2.2, 2.3 and 3.3a merged on the continuation branch; findings-native harness fixes merged (interpreter rebind at preflight, worker entry rebind, teardown, browser tool-cache allowlist) — the findings chain is being verified on this branch; 3.3c in its task worktree; 2.4 not started
-Resume: merge the finished commits of those task worktrees (only those not yet on this branch; compare commit subjects, `git cherry` is unreliable across the two histories), then 2.4, 3.3c, and the findings chain (Phase 1 closes when it passes); then Phase 3 3.3b, 3.8, 3.4, 3.3d and Phase 2 2.5–2.7 per the phase plans; regenerate `ui/dependency-audit.json` for the prettier addition
+Stopped at: tasks 2.1a, 2.2, 2.3 and 3.3a merged on the continuation branch; findings-native harness fixes merged and the findings chain passes (Phase 1 complete); 3.3c in its task worktree; 2.4 not started
+Resume: merge the finished commits of those task worktrees (only those not yet on this branch; compare commit subjects, `git cherry` is unreliable across the two histories), then 2.4, 3.3c, then Phase 3 3.3b, 3.8, 3.4, 3.3d and Phase 2 2.5–2.7 per the phase plans; regenerate `ui/dependency-audit.json` for the prettier addition

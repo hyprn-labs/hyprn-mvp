@@ -6,7 +6,7 @@ The product already delivers the manual modeling workflow. This milestone turns 
 
 ## Phases
 
-- [ ] **Phase 1: Repository baseline** - One `hyprn-mvp` namespace, clean tree, every must-pass test group green through the renamed runner
+- [x] **Phase 1: Repository baseline** - One `hyprn-mvp` namespace, clean tree, every must-pass test group green through the renamed runner
 - [ ] **Phase 2: Local edition** - Clone, `./hyprn-mvp setup`, `./hyprn-mvp start` on macOS and Linux from pinned sources, with attestation at setup and no hard-coded location
 - [ ] **Phase 3: Agent tools for coding agents** - Attributed agent principal, agent-practices research, local MCP server, study folders, attributed authoring with the Agent activity page, configurations and runs, evaluation
 - [ ] **Phase 4: Documents** - Collections and annotations on AiiDA, document API routes, library, reader, search and citations from evidence in the UI
@@ -105,7 +105,7 @@ Release gate action: remove `documents` from the advertised unavailable capabili
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Repository baseline | 0/1 | In progress (9/10 tasks) | - |
+| 1. Repository baseline | 1/1 | Complete (tasks 1.1–1.11) | 2026-10-14 |
 | 2. Local edition | 0/1 | Planned | - |
 | 3. Agent tools for coding agents | 0/1 | Planned | - |
 | 4. Documents | 0/1 | Planned | - |
