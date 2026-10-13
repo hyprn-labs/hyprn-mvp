@@ -210,7 +210,7 @@ def test_shared_record_root_refuses_symlink_and_cloud(tmp_path):
     from hyprn_mvp_app.computational_export import records_for_store
     from types import SimpleNamespace
     link=tmp_path/'computational-records';link.symlink_to(tmp_path/'elsewhere')
-    for path in (tmp_path/'application.sqlite',tmp_path/'CloudStorage/app.sqlite'):
+    for path in (tmp_path/'application.sqlite',tmp_path/'Dropbox/app.sqlite'):
         with pytest.raises(ValueError):records_for_store(SimpleNamespace(path=path))
 
 

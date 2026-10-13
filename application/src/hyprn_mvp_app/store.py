@@ -15,6 +15,7 @@ from uuid import UUID
 # canonical/digest/uid/DomainError here is a temporary test-import alias; production code
 # imports them from contracts (test_module_boundaries.py).
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
+from .locations import refuse_location
 
 
 # ---- Exact evidence: one owner for the stored-version read and snapshot creation.
@@ -237,9 +238,11 @@ def agent_effects(raw):
 class Store:
     def __init__(self, path):
         original=Path(path).absolute()
+        # The one location rule (synced folders on every operating system, symbolic links in
+        # the path or a parent, Windows-mounted drives), the same the installation loader
+        # applies to the data root; refused before anything is created.
+        refuse_location(original, what='Application storage')
         self.path = original.resolve()
-        if "CloudStorage" in self.path.parts or any(p.is_symlink() for p in (original, *original.parents) if p != Path("/tmp")):
-            raise ValueError("Application storage must be off-cloud")
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd=os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.close(fd)

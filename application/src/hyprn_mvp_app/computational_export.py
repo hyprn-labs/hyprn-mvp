@@ -20,6 +20,7 @@ from datetime import datetime
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
 from .execution_bundle import validate_assumption_closure
 from .history import History, complete_outcome
+from .locations import refuse_location
 from .modified_runs import ModifiedRuns
 from .result_bindings import ResultBindings
 
@@ -79,12 +80,9 @@ def safe_path(value):
 
 
 def checked_root(path):
-    path=Path(path).absolute()
-    if '..' in path.parts or any(p.is_symlink() for p in (path,*path.parents)):
-        raise ValueError('Owned non-symlink artifact root required')
-    if any(p in path.parts for p in ('CloudStorage','Google Drive','GoogleDrive')):
-        raise ValueError('Off-cloud artifact root required')
-    return path
+    # The one location rule of the application store (synced folders, symbolic links,
+    # Windows-mounted drives) applies to the record root beside it.
+    return refuse_location(Path(path).absolute(), what='Computational record root')
 
 
 def records_for_store(store):

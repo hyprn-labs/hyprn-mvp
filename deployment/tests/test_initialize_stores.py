@@ -20,6 +20,7 @@ import modeling_runtime
 import execution_runtime
 import native_environment
 import dispatch_runtime
+from hyprn_mvp_app.locations import location_refusal
 
 
 def test_active_roots_are_persistent_separate_and_off_cloud():
@@ -27,7 +28,7 @@ def test_active_roots_are_persistent_separate_and_off_cloud():
     assert len(set(roots)) == 3
     for root in roots:
         assert root.parent == local_paths.data_root()
-        assert 'CloudStorage' not in root.parts and 'tmp' not in root.parts
+        assert location_refusal(root) is None and 'tmp' not in root.parts
     assert recovery.STORES == (application_runtime.ROOT, modeling_runtime.DEFAULT_ROOT)
     assert execution_runtime.ROOT == native_environment.ROOT == dispatch_runtime.ROOT
     assert application_runtime.UI_DIST.is_relative_to(application_runtime.ROOT)
