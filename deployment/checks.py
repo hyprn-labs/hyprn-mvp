@@ -119,7 +119,8 @@ GROUPS = {
         'integration/tests/test_results.py::test_retained_reader_rejects_corruption_or_reports_unsupported',
         'integration/tests/test_results.py::test_unknown_stored_outcome_version_is_partial_diagnostic'),
     'runtime-observation': ('application/tests/test_readiness.py', 'application/tests/test_runtime_comparison.py'),
-    'api-a': ('application/tests/test_reuse_api.py', 'application/tests/test_study_archive.py', 'application/tests/test_history.py'),
+    'api-a': ('application/tests/test_reuse_api.py', 'application/tests/test_study_archive.py', 'application/tests/test_history.py',
+              'application/tests/test_store_location.py'),
     'ui-a': ('ui/tests/result-bindings.spec.ts', 'ui/check_ui_contract.py'),
     'ui-a-retained': ('ui/tests/result-bindings.spec.ts', 'ui/check_ui_contract.py'),
     'modified': ('application/tests/test_modified_runs.py',),
@@ -194,7 +195,11 @@ GROUPS = {
     # Owner provisioning, sessions, Origin/CSRF, login throttling and recovery; study membership,
     # single-writer receipts, compare-and-swap and revocation in the application store.
     'access-control': ('application/tests/test_authorization.py', 'application/tests/test_ownership.py'),
-    'local-edition': ('editions/local/tests/test_shim.py',),
+    'local-edition': ('editions/local/tests/test_shim.py', 'editions/local/tests/test_paths.py'),
+    # The installation configuration: closed schema, stdlib loader, file safety and location refusals.
+    'installation-config': ('deployment/tests/test_installation_config.py',),
+    # Operating-system folder layout only in the path policy; no absolute home path in tracked files.
+    'portability': ('deployment/tests/test_portability_guard.py',),
     # The backend-independent modeling contract suite (authentication, atomic edits, stale replay,
     # preview purity, compatibility, preparation, portability into a fresh store) against two
     # private services owned by the scope (deployment/tests/modeling_contract_fixture.py).
@@ -631,6 +636,13 @@ GROUPS.update({group: (target,) for group, target in AGENT_DIRECTORY_TARGETS.ite
 GROUP_INTERPRETERS.update({group: fixture.APPROVED_CONTRACT_PYTHON for group in AGENT_PYTEST_GROUPS})
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | AGENT_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | AGENT_PYTEST_GROUPS
+
+# The installation configuration and the portability guard: data-only tests under the reviewed
+# application interpreter, no environment needs, no native import.
+INSTALLATION_PYTEST_GROUPS = frozenset({'installation-config', 'portability'})
+GROUP_INTERPRETERS.update({group: fixture.APPROVED_CONTRACT_PYTHON for group in INSTALLATION_PYTEST_GROUPS})
+PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | INSTALLATION_PYTEST_GROUPS
+CHILD_GROUPS = CHILD_GROUPS | INSTALLATION_PYTEST_GROUPS
 
 
 def directory_target(group, target, path):
