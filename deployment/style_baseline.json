@@ -1,5 +1,5 @@
 {
- "base": "cf11750c1eb8a7a8b828fb03f21aa3e401800140",
+ "base": "be3e31a452d40c037d51fc694ab2d04873c64c39",
  "files": {
   "application/audit_dependencies.py": {
    "E501": 3
@@ -9,11 +9,11 @@
    "E702": 12
   },
   "application/src/hyprn_mvp_app/api.py": {
-   "E501": 54,
-   "E702": 18
+   "E501": 12,
+   "E702": 5
   },
   "application/src/hyprn_mvp_app/approach.py": {
-   "E501": 42
+   "E501": 45
   },
   "application/src/hyprn_mvp_app/auth.py": {
    "E501": 18
@@ -30,13 +30,19 @@
    "E501": 22,
    "E702": 9
   },
+  "application/src/hyprn_mvp_app/edge.py": {
+   "E501": 4
+  },
   "application/src/hyprn_mvp_app/execution.py": {
-   "E501": 41,
-   "E702": 7
+   "E501": 37,
+   "E702": 6
   },
   "application/src/hyprn_mvp_app/history.py": {
-   "E501": 47,
+   "E501": 53,
    "E702": 15
+  },
+  "application/src/hyprn_mvp_app/locations.py": {
+   "E501": 5
   },
   "application/src/hyprn_mvp_app/modeling.py": {
    "E501": 60,
@@ -51,11 +57,41 @@
    "E702": 2
   },
   "application/src/hyprn_mvp_app/result_bindings.py": {
-   "E501": 29,
+   "E501": 27,
    "E702": 8
   },
+  "application/src/hyprn_mvp_app/routes/approach.py": {
+   "E501": 5,
+   "E702": 8
+  },
+  "application/src/hyprn_mvp_app/routes/capabilities.py": {
+   "E501": 4
+  },
+  "application/src/hyprn_mvp_app/routes/commands.py": {
+   "E501": 4,
+   "E702": 1
+  },
+  "application/src/hyprn_mvp_app/routes/configurations.py": {
+   "E501": 8
+  },
+  "application/src/hyprn_mvp_app/routes/evidence.py": {
+   "E501": 5
+  },
+  "application/src/hyprn_mvp_app/routes/models.py": {
+   "E501": 7,
+   "E702": 3
+  },
+  "application/src/hyprn_mvp_app/routes/runs.py": {
+   "E501": 2
+  },
+  "application/src/hyprn_mvp_app/routes/session.py": {
+   "E702": 1
+  },
+  "application/src/hyprn_mvp_app/routes/studies.py": {
+   "E501": 7
+  },
   "application/src/hyprn_mvp_app/store.py": {
-   "E501": 88,
+   "E501": 87,
    "E702": 24
   },
   "application/tests/agent/test_agent_principal.py": {
@@ -171,7 +207,7 @@
    "E702": 84
   },
   "application/tests/test_module_boundaries.py": {
-   "E501": 64
+   "E501": 70
   },
   "application/tests/test_ownership.py": {
    "E501": 1,
@@ -212,6 +248,9 @@
   "application/tests/test_security_regressions.py": {
    "E501": 4,
    "E702": 10
+  },
+  "application/tests/test_store_location.py": {
+   "E501": 11
   },
   "application/tests/test_study_archive.py": {
    "E501": 41
@@ -278,7 +317,7 @@
    "E702": 10
   },
   "deployment/checks.py": {
-   "E501": 143
+   "E501": 146
   },
   "deployment/dispatch_runtime.py": {
    "E501": 29,
@@ -289,7 +328,7 @@
    "E702": 2
   },
   "deployment/local_paths.py": {
-   "E501": 9
+   "E501": 12
   },
   "deployment/manage.py": {
    "E501": 13
@@ -397,6 +436,9 @@
    "E501": 4,
    "E702": 1
   },
+  "deployment/tests/test_installation_config.py": {
+   "E501": 21
+  },
   "deployment/tests/test_investigation_native.py": {
    "E501": 33,
    "E702": 7
@@ -410,6 +452,9 @@
   "deployment/tests/test_native_journey.py": {
    "E501": 97,
    "E702": 80
+  },
+  "deployment/tests/test_portability_guard.py": {
+   "E501": 8
   },
   "deployment/tests/test_repository_guard.py": {
    "E501": 234,
@@ -454,14 +499,23 @@
   "editions/local/src/hyprn_mvp_local/cli.py": {
    "E501": 10
   },
+  "editions/local/src/hyprn_mvp_local/paths.py": {
+   "E501": 5
+  },
   "editions/local/src/hyprn_mvp_local/toolchain.py": {
    "E501": 20
+  },
+  "editions/local/tests/test_paths.py": {
+   "E501": 28
   },
   "editions/local/tests/test_shim.py": {
    "E501": 49
   },
   "integration/src/hyprn_mvp_integration/documents.py": {
    "E501": 9
+  },
+  "integration/src/hyprn_mvp_integration/installation.py": {
+   "E501": 13
   },
   "integration/src/hyprn_mvp_integration/native.py": {
    "E501": 20,
