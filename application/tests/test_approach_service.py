@@ -348,7 +348,7 @@ def test_usage_pagination_case_filter_and_run_are_real_persisted_links(env):
     frozen=dict(schema_version='4',configuration=r,model_snapshot=m,study_revision=uid(),approach_closure=saved['closure']);rid=uid()
     with env['store'].connection(write=True) as db:
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(r['configuration_revision_id'],r['configuration_id'],env['sid'],json.dumps(frozen)))
-        db.execute('INSERT INTO run_associations VALUES(?,?,?,?,?,?)',(rid,env['sid'],r['configuration_revision_id'],uid(),None,None))
+        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,store_uuid,process_uuid) VALUES(?,?,?,?,?,?)',(rid,env['sid'],r['configuration_revision_id'],uid(),None,None))
     query=dict(limit=1,cursor=None,case_id=case['case_id']);p=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query)
     assert p['items'][0]['kind']=='configuration' and p['next_cursor']
     p=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query | {'cursor':p['next_cursor']})
