@@ -1,0 +1,220 @@
+#!/bin/sh
+# HYPRN MVP local edition entry point.
+#
+# Needs only a POSIX shell, curl, tar and a SHA-256 tool. It acquires the pinned uv from its
+# official release (deployment/locks/tools.json), verifies the archive's SHA-256 and size
+# before extraction, lets uv provision the pinned CPython and the locked contract
+# environment (uv.lock), and runs the local edition CLI there with `python -I -B`.
+# No system Python is ever executed.
+#
+# Locations: the tool cache (uv, CPython, locked environments) is HYPRN_MVP_TOOLS_DIR, else
+# the per-OS default below, the one place outside the path-policy module that computes it
+# (it runs before Python exists):
+#   macOS          ~/Library/Caches/hyprn-mvp/tools
+#   Linux and WSL2 ${XDG_CACHE_HOME:-~/.cache}/hyprn-mvp/tools
+#
+# Exit codes: 2 invalid input or location, 3 unsupported host, 5 failed download or
+# verification.
+set -eu
+umask 077
+
+fail() {
+    code=$1
+    shift
+    printf 'hyprn-mvp: %s\n' "$*" >&2
+    exit "$code"
+}
+
+case "$0" in
+    */*) entry_dir=${0%/*} ;;
+    *) entry_dir=. ;;
+esac
+ROOT=$(cd -P -- "$entry_dir" && pwd -P) || fail 2 "cannot resolve the checkout folder"
+TOOLS_JSON=$ROOT/deployment/locks/tools.json
+[ -f "$TOOLS_JSON" ] || fail 2 "deployment/locks/tools.json is missing from the checkout"
+[ -f "$ROOT/uv.lock" ] || fail 2 "uv.lock is missing from the checkout"
+
+[ -n "${HOME:-}" ] || fail 2 "HOME is not set: set it, or set HYPRN_MVP_TOOLS_DIR to an absolute folder"
+case "$HOME" in /*) ;; *) fail 2 "HOME must be an absolute path" ;; esac
+HOME_P=$(cd -P -- "$HOME" 2>/dev/null && pwd -P) || HOME_P=$HOME
+
+# --- Host -----------------------------------------------------------------------------------
+os=$(uname -s)
+arch=$(uname -m)
+wsl=0
+case "$os" in
+    Darwin)
+        # A shell translated by Rosetta reports x86_64 on Apple silicon.
+        if [ "$arch" = x86_64 ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; then
+            arch=arm64
+        fi
+        case "$arch" in
+            arm64) platform=darwin-arm64 ;;
+            *) platform=darwin-$arch ;;
+        esac
+        default_tools=$HOME/Library/Caches/hyprn-mvp/tools
+        ;;
+    Linux)
+        case "$arch" in
+            x86_64|amd64) platform=linux-x86_64 ;;
+            aarch64|arm64) platform=linux-aarch64 ;;
+            *) platform=linux-$arch ;;
+        esac
+        if ldd --version 2>&1 | grep -qi musl; then
+            fail 3 "Linux with musl libc is not supported: HYPRN MVP needs a glibc distribution"
+        fi
+        if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+            wsl=1
+        fi
+        cache=${XDG_CACHE_HOME:-}
+        case "$cache" in /*) ;; *) cache=$HOME/.cache ;; esac
+        default_tools=$cache/hyprn-mvp/tools
+        ;;
+    *)
+        fail 3 "unsupported operating system $os: use macOS on Apple silicon, Linux (glibc), or Windows through WSL2"
+        ;;
+esac
+
+# One fact per line (deployment/locks/tools.json).
+pin() {
+    sed -n "s/^  \"$1\": \"\\([^\"]*\\)\",\$/\\1/p" "$TOOLS_JSON"
+}
+
+case "$platform" in
+    darwin-arm64|linux-x86_64|linux-aarch64) ;;
+    *)
+        case "$platform" in *[!A-Za-z0-9_-]*) platform=unknown ;; esac
+        refused=$(sed -n "s/^    \"$platform\": \"\\(.*\\)\"\$/\\1/p" "$TOOLS_JSON")
+        fail 3 "${refused:-unsupported host $os $arch: use macOS on Apple silicon, Linux x86_64 or aarch64 (glibc), or Windows through WSL2}"
+        ;;
+esac
+
+# --- Synced folders -------------------------------------------------------------------------
+# A checkout or tool cache in a synced folder is refused: sync clients rewrite, delay or
+# duplicate files and may upload them.
+synced_rule() {
+    case "$1/" in
+        */Dropbox*/*) echo "it is inside a Dropbox folder"; return ;;
+        */OneDrive*/*) echo "it is inside a OneDrive folder"; return ;;
+        */Google\ Drive*/*|*/GoogleDrive*/*|*/My\ Drive/*) echo "it is inside a Google Drive folder"; return ;;
+    esac
+    if [ "$os" = Darwin ]; then
+        for home in "$HOME" "$HOME_P"; do
+            case "$1/" in
+                "$home"/Library/CloudStorage/*) echo "it is inside ~/Library/CloudStorage (a cloud storage provider)"; return ;;
+                "$home"/Library/Mobile\ Documents/*) echo "it is inside ~/Library/Mobile Documents (iCloud Drive)"; return ;;
+                "$home"/Desktop/*|"$home"/Documents/*) echo "it is inside ~/Desktop or ~/Documents, which iCloud may sync"; return ;;
+            esac
+        done
+    fi
+    if [ "$wsl" = 1 ]; then
+        case "$1/" in
+            /mnt/[A-Za-z]/*) echo "it is on a Windows-mounted drive"; return ;;
+        esac
+    fi
+}
+
+rule=$(synced_rule "$ROOT")
+[ -z "$rule" ] || fail 2 "refusing the checkout $ROOT: $rule; clone HYPRN MVP into a local folder that is not synced"
+
+# --- Tool cache -----------------------------------------------------------------------------
+TOOLS=${HYPRN_MVP_TOOLS_DIR:-$default_tools}
+case "$TOOLS" in
+    /*) ;;
+    *) fail 2 "HYPRN_MVP_TOOLS_DIR must be an absolute path" ;;
+esac
+case "$TOOLS/" in
+    */../*|*/./*) fail 2 "HYPRN_MVP_TOOLS_DIR must be a normalized absolute path" ;;
+esac
+case "$TOOLS/" in
+    "$ROOT"/*) fail 2 "the tool cache $TOOLS is inside the checkout; set HYPRN_MVP_TOOLS_DIR to a folder outside it" ;;
+esac
+rule=$(synced_rule "$TOOLS")
+[ -z "$rule" ] || fail 2 "refusing the tool cache $TOOLS: $rule; set HYPRN_MVP_TOOLS_DIR to a local folder"
+mkdir -p "$TOOLS"
+[ -d "$TOOLS" ] && [ ! -L "$TOOLS" ] || fail 2 "the tool cache $TOOLS is not a folder"
+
+sha256() {
+    if [ "$os" = Darwin ]; then
+        shasum -a 256 "$1" | cut -d ' ' -f 1
+    else
+        sha256sum "$1" | cut -d ' ' -f 1
+    fi
+}
+
+# --- Hermetic uv settings -------------------------------------------------------------------
+# Ambient uv settings (indexes, mirrors, interpreters, configuration files) never apply to any
+# uv run; only the TLS trust choice for networks that intercept TLS is kept.
+for name in $(env | sed -n 's/^\(UV_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    case "$name" in
+        UV_SYSTEM_CERTS|UV_NATIVE_TLS) ;;
+        *) unset "$name" ;;
+    esac
+done
+unset VIRTUAL_ENV CONDA_PREFIX PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+export UV_NO_CONFIG=1
+export UV_PYTHON_PREFERENCE=only-managed
+export UV_PYTHON_INSTALL_DIR="$TOOLS/python"
+export UV_PYTHON_BIN_DIR="$TOOLS/python-bin"
+export UV_CACHE_DIR="$TOOLS/uv-cache"
+export UV_PYTHON_INSTALL_MIRROR="$(pin cpython_install_mirror)"
+export UV_NO_PROGRESS=1
+export HYPRN_MVP_TOOLS_DIR="$TOOLS"
+
+# --- uv -------------------------------------------------------------------------------------
+uv_version=$(pin uv_version)
+uv_base=$(pin uv_download_base)
+line=$(sed -n "s/^    \"$platform\": {\"archive\": \"\\(uv-[A-Za-z0-9_.-]*\\.tar\\.gz\\)\", \"size\": \\([0-9]*\\), \"sha256\": \"\\([0-9a-f]\\{64\\}\\)\"}.*\$/\\1 \\2 \\3/p" "$TOOLS_JSON")
+uv_archive=
+uv_size=
+uv_sha=
+read -r uv_archive uv_size uv_sha <<EOF
+$line
+EOF
+[ -n "$uv_version" ] && [ -n "$uv_base" ] && [ -n "$uv_archive" ] && [ -n "$uv_size" ] && [ -n "$uv_sha" ] \
+    || fail 5 "deployment/locks/tools.json has no uv pin for $platform"
+case "$uv_base" in https://*) ;; *) fail 5 "the uv download base must be an https URL" ;; esac
+
+UV_DIR=$TOOLS/uv/$uv_version/$platform
+UV=$UV_DIR/uv
+if [ ! -f "$UV" ]; then
+    mkdir -p "$TOOLS/uv/$uv_version"
+    download=$(mktemp -d "$TOOLS/uv/.download.XXXXXX")
+    trap 'rm -rf "$download"' EXIT
+    trap 'rm -rf "$download"; exit 130' INT TERM
+    printf 'hyprn-mvp: downloading uv %s for %s\n' "$uv_version" "$platform" >&2
+    curl --proto '=https' --tlsv1.2 -fsSL -o "$download/$uv_archive" "$uv_base$uv_archive" \
+        || fail 5 "download of $uv_base$uv_archive failed; network access to github.com is needed on first use"
+    actual=$(sha256 "$download/$uv_archive")
+    [ "$actual" = "$uv_sha" ] || fail 5 "checksum mismatch for $uv_archive: expected $uv_sha, got $actual; refusing it"
+    size=$(wc -c < "$download/$uv_archive" | tr -d ' ')
+    [ "$size" = "$uv_size" ] || fail 5 "size mismatch for $uv_archive: expected $uv_size bytes, got $size; refusing it"
+    mkdir "$download/extract"
+    tar -xzf "$download/$uv_archive" -C "$download/extract"
+    unpacked=$download/extract/${uv_archive%.tar.gz}
+    [ -f "$unpacked/uv" ] && [ ! -L "$unpacked/uv" ] || fail 5 "$uv_archive does not contain the uv executable"
+    # The verified tree appears under its final name in one rename; a concurrent run that
+    # renamed first is equally verified.
+    mv "$unpacked" "$UV_DIR" 2>/dev/null || [ -f "$UV" ] || fail 5 "cannot place uv in $UV_DIR"
+    rm -rf "$download"
+    trap - EXIT INT TERM
+fi
+case "$("$UV" --version 2>/dev/null)" in
+    "uv $uv_version"|"uv $uv_version "*) ;;
+    *) fail 5 "$UV is not uv $uv_version; remove $UV_DIR to download it again" ;;
+esac
+
+python_version=$(pin cpython_version)
+[ -n "$python_version" ] || fail 5 "deployment/locks/tools.json has no CPython pin"
+"$UV" python install --quiet --no-bin "$python_version" \
+    || fail 5 "uv could not provision CPython $python_version from the python-build-standalone release"
+
+lock16=$(sha256 "$ROOT/uv.lock" | cut -c 1-16)
+ENVIRONMENT=$TOOLS/envs/contract-$lock16
+UV_PROJECT_ENVIRONMENT=$ENVIRONMENT "$UV" sync --quiet --project "$ROOT" --frozen --no-build --exact \
+    --no-install-project --no-default-groups --group contract --no-python-downloads --python "$python_version" \
+    || fail 5 "uv could not install the locked contract environment from uv.lock"
+
+exec "$ENVIRONMENT/bin/python" -I -B -c \
+    'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("hyprn_mvp_local", run_name="__main__", alter_sys=True)' \
+    "$ROOT/editions/local/src" "$@"

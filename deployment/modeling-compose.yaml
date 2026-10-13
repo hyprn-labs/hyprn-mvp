@@ -1,0 +1,27 @@
+{
+  "name": "hyprn-mvp",
+  "services": {
+    "modeling": {
+      "image": "${HYPRN_MVP_MODELING_IMAGE:?Use the image ID from identity.json}",
+      "container_name": "hyprn-mvp-modeling",
+      "labels": {"org.hyprn-mvp.owner": "hyprn-mvp-modeling"},
+      "user": "10001:10001", "read_only": true, "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "pids_limit": 128, "mem_limit": "768m", "cpus": 1,
+      "restart": "no", "networks": ["model_private"],
+      "tmpfs": ["/tmp:rw,noexec,nosuid,size=192m,mode=1777", "/native/tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001"],
+      "volumes": [
+        {"type":"bind", "source":"${HYPRN_MVP_MODELING_ROOT}/modeling", "target":"/store"},
+        {"type":"bind", "source":"${HYPRN_MVP_MODELING_ROOT}/credentials/model.key", "target":"/run/model.key", "read_only":true},
+        {"type":"bind", "source":"${HYPRN_MVP_MODELING_ROOT}/credentials/rails.key", "target":"/run/rails.key", "read_only":true}
+      ]
+    }
+  },
+  "networks": {"model_private": {"name":"hyprn-mvp-private", "internal":true, "labels":{"org.hyprn-mvp.owner":"hyprn-mvp-modeling"}}},
+  "x-hyprn-mvp-boundaries": {
+    "application": "the application owner mounts the application store and signs scoped model requests",
+    "execution": "the trusted execution process owns a separate AiiDA store and the restricted launch authority",
+    "worker": "ephemeral nonroot network-none workers; no model or application credentials",
+    "candidate_execution": "blocked_pending_plan_01_12_consumer_attestation"
+  }
+}

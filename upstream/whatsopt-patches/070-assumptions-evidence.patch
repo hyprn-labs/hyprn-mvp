@@ -1,0 +1,215 @@
+--- a/app/services/modeling_contract.rb
++++ b/app/services/modeling_contract.rb
+@@ -9,7 +9,7 @@
+ # Immutable definition/model/preparation snapshots and receipts share the same SQL DB.
+ class ModelingContract
+   UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+-  CAPABILITIES = {'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
++  CAPABILITIES = {'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
+   SCHEMA = JSON.parse(File.read(Rails.root.join('config/modeling.schema.json'))).fetch('$defs')
+   UNITS = JSON.parse(File.read(Rails.root.join('config/modeling.units.json')))
+   def compatible_units?(a,b) = UNITS['linear_pairs'].any? { |x| x[0]==a && x[1]==b }
+@@ -77,10 +77,12 @@
+       return false if s['additionalProperties']==false && (v.keys-s.fetch('properties',{}).keys).any?
+       return false if s.fetch('dependentRequired',{}).any? { |key,required| v.key?(key) && (required-v.keys).any? }
+       return v.all? { |k,x| valid?(s.fetch('properties').fetch(k),x) }
+-    when 'array' then return v.is_a?(Array) && v.length<=s.fetch('maxItems',1000) && v.all? { |x| valid?(s['items'],x) }
++    when 'array' then return v.is_a?(Array) && v.length>=s.fetch('minItems',0) && v.length<=s.fetch('maxItems',1000) && (!s['uniqueItems'] || v.uniq.size==v.size) && v.all? { |x| valid?(s['items'],x) }
+     when 'string'
+       return false unless v.is_a?(String) && v.length>=s.fetch('minLength',0) && v.length<=s.fetch('maxLength',1000000)
+-      return false if s['pattern'] && !Regexp.new(s['pattern']).match?(v)
++      # JSON Schema anchors span the whole string, unlike Ruby's line anchors.
++      pattern=s['pattern']&.sub(/\A\^/,'\\A')&.sub(/\$\z/,'\\z')
++      return false if pattern && !Regexp.new(pattern).match?(v)
+     when 'integer' then return false unless v.is_a?(Integer)
+     when 'number' then return false unless v.is_a?(Numeric) && v.finite?
+     when 'boolean' then return false unless [true,false].include?(v)
+@@ -125,7 +127,7 @@
+     readonly=method=='GET' || path.end_with?('/preview','/validate','/configuration-compatibility')
+     authorize(readonly ? 'read' : 'write')
+     if path=='/capabilities' && method=='GET'
+-      return [200,{'data'=>{'contract_versions'=>['1','1.1'],'schema_versions'=>['1'],'service_build'=>'whatsopt-597f5abf/modeling-1.1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '2' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2'],'schema_versions'=>['1','2'],'service_build'=>'whatsopt-597f5abf/modeling-1.2','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2','3','4'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
+     end
+     if path=='/models' && method=='POST'
+       check('Create',body);raise Failure.new(403,'forbidden') unless body['study_id']==@study
+@@ -165,7 +167,7 @@
+     if action=='preview'
+       @projected=true
+       state=draft(model);expect(state,body)
+-      state,created=project(state,body['edits'])
++      state,created=project(edit_state(state,body),body['edits'])
+       return [200,{'data'=>state,'created_ids'=>created,'diagnostics'=>[]}]
+     elsif action=='configuration-compatibility'
+       return [200,{'data'=>compatible(revision(body['model_revision_id'],resource),body['configuration_candidate'])}]
+@@ -181,7 +183,7 @@
+       expect(state,body) unless action=='prepare-execution'
+       case action
+       when 'edits'
+-        projected,created=project(state,body['edits']);persist(model,projected)
++        projected,created=project(edit_state(state,body),body['edits']);persist(model,projected)
+         [200,{'data'=>draft(model.reload),'created_ids'=>created,'diagnostics'=>[]}]
+       when 'commits'
+         validate_model(state);pin=commit(model,state);[200,{'data'=>pin}]
+@@ -238,7 +240,7 @@
+   def create(body)
+     model_id=id;root=id
+     native=Analysis.create!(name:body['name'],public:false)
+-    row=map(model_id,model_id,'model',native.id,{'name'=>body['name'],'root_instance_id'=>root,'draft_revision'=>id,'head_revision'=>nil,'annotations'=>[]})
++    row=map(model_id,model_id,'model',native.id,{'name'=>body['name'],'root_instance_id'=>root,'draft_revision'=>id,'head_revision'=>nil,'annotations'=>[],'schema_version'=>'2','assumptions'=>[]})
+     if body['template']=='two_component_example'
+       # Ordinary typed definitions; no special execution path.
+       p=lambda { |k,d| {'temp_key'=>k,'direction'=>d,'name'=>k,'code_symbol'=>k,'value_type'=>'real_scalar','units'=>''} }
+@@ -258,7 +260,14 @@
+       c=Connection.find(r.native_id)
+       {'connection_id'=>r.public_id,'source_ref'=>ports_by_native.fetch(c.from_id),'target_ref'=>ports_by_native.fetch(c.to_id)}
+     end
+-    {'schema_version'=>'1','study_id'=>@study,'model_id'=>model.public_id,'name'=>model.metadata['name'],'draft_revision'=>model.metadata['draft_revision'],'root_instance_id'=>model.metadata['root_instance_id'],'definitions'=>definitions,'instances'=>instances,'ports'=>definitions.flat_map { |d| d['ports'] },'connections'=>connections,'boundary_mappings'=>[],'annotations'=>model.metadata['annotations'],'source_files'=>versions.map { |v| v.fetch('source') }.uniq,'required_capabilities'=>['flat_explicit_scalar']}
++    state={'schema_version'=>model.metadata.fetch('schema_version','1'),'study_id'=>@study,'model_id'=>model.public_id,'name'=>model.metadata['name'],'draft_revision'=>model.metadata['draft_revision'],'root_instance_id'=>model.metadata['root_instance_id'],'definitions'=>definitions,'instances'=>instances,'ports'=>definitions.flat_map { |d| d['ports'] },'connections'=>connections,'boundary_mappings'=>[],'annotations'=>model.metadata['annotations'],'source_files'=>versions.map { |v| v.fetch('source') }.uniq,'required_capabilities'=>['flat_explicit_scalar']}
++    state['assumptions']=model.metadata.fetch('assumptions') if state['schema_version']=='2'
++    state
++  end
++  def edit_state(state,body)
++    # Preview upgrades only its in-memory projection. Apply persists on success.
++    return state unless body['schema_version']=='2' && state['schema_version']=='1'
++    state.merge('schema_version'=>'2','assumptions'=>[])
+   end
+   def project(state,edits)
+     s=JSON.parse(JSON.generate(state));created={}
+@@ -323,10 +332,26 @@
+       when 'disconnect'
+         c=s['connections'].find { |c| c['connection_id']==e['connection_id'] };raise Failure.new(409,'reference_conflict') unless c
+         s['connections'].delete(c)
++      when 'add_assumption'
++        raise Failure.new(422,'unsupported_capability') unless s['schema_version']=='2'
++        owner=e['owner'].dup
++        if owner.key?('instance_temp_key')
++          instance=created.fetch(owner.delete('instance_temp_key'),{})['instance_id']
++          raise Failure.new(409,'reference_conflict') unless instance
++          owner['instance_id']=instance
++        end
++        assumption=e.slice('statement','evidence_links').merge('assumption_id'=>id,'owner'=>owner)
++        s['assumptions'] << assumption
++        created[e['temp_key']]={'assumption_id'=>assumption['assumption_id']}
++      when 'update_assumption','remove_assumption'
++        assumption=s.fetch('assumptions',[]).find { |a| a['assumption_id']==e['assumption_id'] }
++        raise Failure.new(409,'reference_conflict') unless assumption
++        e['kind']=='remove_assumption' ? s['assumptions'].delete(assumption) : assumption.merge!(e.slice('statement','evidence_links'))
+       when 'rename_model'
+         s['name']=e['name']
+       when 'rename_instance','remove_instance'
+         i=s['instances'].find { |i| i['instance_id']==e['instance_id'] };raise Failure.new(409,'reference_conflict') unless i
++        raise Failure.new(409,'reference_conflict') if e['kind']=='remove_instance' && s.fetch('assumptions',[]).any? { |a| a['owner']=={'kind'=>'instance','instance_id'=>i['instance_id']} }
+         e['kind']=='rename_instance' ? i['name']=e['name'] : s['instances'].delete(i)
+       when 'set_annotation'
+         raise Failure.new(409,'reference_conflict') unless [s['model_id'],s['root_instance_id'],*s['instances'].map { |i| i['instance_id'] },*s['definitions'].map { |d| d['definition_id'] },*s['ports'].map { |p| p['port_id'] }].include?(e['element_ref'])
+@@ -353,6 +378,18 @@
+     p
+   end
+   def validate_model(s)
++    check(s.key?('model_revision_id') ? 'ModelRevision' : 'ModelDraft',s)
++    if s['schema_version']=='2'
++      assumptions=s.fetch('assumptions')
++      raise Failure.new(422,'invalid_model') unless assumptions.map { |a| a['assumption_id'] }.uniq.size==assumptions.size
++      assumptions.each do |a|
++        owner=a['owner']
++        if owner['kind']=='instance'
++          raise Failure.new(409,'reference_conflict') unless owner['instance_id']!=s['root_instance_id'] && s['instances'].any? { |i| i['instance_id']==owner['instance_id'] }
++        end
++      end
++      raise Failure.new(413,'limit_exceeded') if assumptions.flat_map { |a| a['evidence_links'].map { |l| l['evidence_version_id'] } }.uniq.size>1000
++    end
+     raise Failure.new(413,'limit_exceeded') if %w[definitions instances ports connections annotations].sum { |k| s[k].size }>1000
+     {'definitions'=>'definition_version_id','instances'=>'instance_id','connections'=>'connection_id','source_files'=>'sha256'}.each do |collection,key|
+       ids=s[collection].map { |x| x[key] }
+@@ -386,6 +423,7 @@
+   end
+   def persist(model,s)
+     # Revision records are append-only. Projection validation precedes every write.
++    validate_model(s)
+     s['definitions'].each do |d|
+       next if ModelingRevision.exists?(public_id:d['definition_version_id'])
+       store_revision(d['definition_version_id'],model.public_id,'definition',{'definition'=>d,'source'=>s['source_files'].find { |f| f['sha256']==d['source_refs'][0] }})
+@@ -432,7 +470,7 @@
+     rescue ActiveRecord::RecordInvalid
+       raise Failure.new(422,'invalid_model')
+     end
+-    model.update!(metadata:model.metadata.merge('name'=>name,'draft_revision'=>s['draft_revision'],'annotations'=>s['annotations']))
++    model.update!(metadata:model.metadata.merge('name'=>name,'draft_revision'=>s['draft_revision'],'annotations'=>s['annotations']).merge(s.slice('schema_version','assumptions')))
+   end
+   def commit(model,s)
+     pin=s.reject { |k,_| %w[study_id name draft_revision].include?(k) }.merge('model_revision_id'=>id,'parent_model_revision_id'=>model.metadata['head_revision'],'originating_draft_revision'=>s['draft_revision'])
+@@ -441,11 +479,24 @@
+     model.update!(metadata:model.metadata.merge('head_revision'=>pin['model_revision_id']))
+     pin
+   end
++  def configuration_type(c)
++    case c['schema_version']
++    when '1' then c.key?('configuration_revision_id') ? 'ConfigurationRevision1' : 'ConfigurationCandidate1'
++    when '2','3' then (c.key?('configuration_revision_id') ? 'ModelingConfigurationRevision' : 'ModelingConfiguration')+c['schema_version']
++    else raise Failure.new(422,'unsupported_capability')
++    end
++  end
+   def compatible(m,c)
+-    type=c['schema_version']=='2' ? (c.key?('configuration_revision_id') ? 'ModelingConfigurationRevision2' : 'ModelingConfiguration2') : (c.key?('configuration_revision_id') ? 'ConfigurationRevision1' : 'ConfigurationCandidate1')
++    type=configuration_type(c)
+     check(type,c)
++    if c['schema_version']=='3'
++      # Full app projection equality/closure is checked by its owner. Here only
++      # frozen opaque data is admitted; no evidence-library lookup is possible.
++      evidence=c['evidence_snapshots'];ids=evidence.map { |e| e['evidence_version_id'] }
++      raise Failure.new(422,'invalid_configuration') unless ids.uniq.size==ids.size && evidence.all? { |e| !e.key?('study_id') || e['study_id']==@study }
++    end
+     result=compatible_literal(m,c)
+-    return result unless c['schema_version']=='2'
++    return result unless %w[2 3].include?(c['schema_version'])
+     interpretations=[]
+     c['inputs'].each do |input|
+       begin
+@@ -499,7 +550,7 @@
+       raise Failure.new(413,'limit_exceeded') if ancestry.size>=1000
+       ancestry << revision(ancestry.last['parent_model_revision_id'],model.public_id)
+     end
+-    package={'schema_version'=>'1','source_service'=>'whatsopt-597f5abf/modeling-1','model_id'=>model.public_id,'model_revision_id'=>revision_id,'revisions'=>ancestry.reverse,'files'=>[],'required_capabilities'=>['flat_explicit_scalar'],'license_notices'=>['WhatsOpt and in-process adapter: AGPL-3.0-only; source offer required for distribution. Authored source retains author license.']}
++    package={'schema_version'=>m['schema_version'],'source_service'=>'whatsopt-597f5abf/modeling-1','model_id'=>model.public_id,'model_revision_id'=>revision_id,'revisions'=>ancestry.reverse,'files'=>[],'required_capabilities'=>['flat_explicit_scalar'],'license_notices'=>['WhatsOpt and in-process adapter: AGPL-3.0-only; source offer required for distribution. Authored source retains author license.']}
+     package['files']=package_files(package['revisions'])
+     # Preserve imported origin and license declarations across a lossless roundtrip.
+     origin=model.metadata['package_origin']
+@@ -524,6 +575,7 @@
+     files.values.sort_by { |f| f['path'] }
+   end
+   def import_package(package)
++    check('ModelPackage',package)
+     raise Failure.new(422,'invalid_model') unless package['digest']==self.class.digest(package.reject { |k,_| k=='digest' })
+     raise Failure.new(422,'unsupported_capability') unless (package['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys).empty?
+     raise Failure.new(409,'identity_collision') if ModelingIdentity.exists?(public_id:package['model_id'])
+@@ -539,7 +591,7 @@
+       end
+     end
+     current=pins.find { |p| p['model_revision_id']==package['model_revision_id'] }
+-    raise Failure.new(422,'invalid_model') unless current && current==pins.last && package['files']==package_files(pins)
++    raise Failure.new(422,'invalid_model') unless current && current==pins.last && package['schema_version']==current['schema_version'] && package['files']==package_files(pins)
+     ids=[package['model_id'],*pins.map { |p| p['model_revision_id'] },*definitions.keys,*definitions.values.map { |d| d['definition_id'] },*pins.flat_map { |p| p['instances'].map { |i| i['instance_id'] } },*pins.flat_map { |p| p['connections'].map { |c| c['connection_id'] } }].uniq
+     raise Failure.new(409,'identity_collision') if ModelingIdentity.where(public_id:ids).exists? || ModelingRevision.where(public_id:ids).exists?
+     native=Analysis.create!(name:'Imported model',public:false)
+@@ -554,7 +606,8 @@
+       end
+       store_revision(pin['model_revision_id'],row.public_id,'model',pin)
+     end
+-    persist(row,current.merge('draft_revision'=>row.metadata['draft_revision']))
++    imported=current.except('model_revision_id','parent_model_revision_id','originating_draft_revision','digest').merge('study_id'=>@study,'name'=>row.metadata['name'],'draft_revision'=>row.metadata['draft_revision'])
++    persist(row,imported)
+     draft(row.reload)
+   end
+   def prepare(model,body)
+--- a/app/services/native_materializer.rb
++++ b/app/services/native_materializer.rb
+@@ -7,7 +7,7 @@
+   def self.render(model, configuration, directory)
+     validator = ModelingContract.new({'study_id'=>configuration.fetch('study_id')})
+     validator.check('ModelRevision',model)
+-    validator.check(configuration['schema_version']=='2' ? 'ModelingConfigurationRevision2' : 'ConfigurationRevision1',configuration)
++    validator.check(validator.configuration_type(configuration),configuration)
+     validator.validate_model(model)
+     # Ruby's `$` regexp semantics differ from JSON Schema's end anchor. These
+     # identifiers become native labels; enforce whole-string UUIDs independently.

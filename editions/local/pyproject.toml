@@ -1,0 +1,12 @@
+# The local edition CLI (`hyprn_mvp_local`). Standard library only.
+#
+# ./hyprn-mvp runs it from this checkout's editions/local/src with the locked contract
+# environment's interpreter (`python -I -B`); it is never installed into an environment, so no
+# environment names a checkout and no build backend is fetched.
+
+[project]
+name = "hyprn-mvp-local"
+version = "0.1.0"
+description = "HYPRN MVP local edition command-line interface"
+requires-python = "==3.12.15"
+dependencies = []

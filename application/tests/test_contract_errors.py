@@ -1,0 +1,123 @@
+"""Field-level contract errors through the public validation entry point and API.
+
+Each failing field gets one diagnostic with a JSON-pointer path and a controlled message
+derived from the contract (never from the submitted value). The envelope, codes and
+statuses are unchanged: local input is ``invalid_request`` 400; a remote (modeling
+backend) payload stays ``backend_unavailable`` 503 with no diagnostics.
+"""
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from hyprn_mvp_app import contracts
+from hyprn_mvp_app.contracts import DomainError, validate
+from hyprn_mvp_app.api import create_app
+from hyprn_mvp_app.auth import Auth
+from hyprn_mvp_app.modeling import ModelingClient
+from hyprn_mvp_app.store import Store
+
+from conftest import LOOPBACK_ORIGIN as ORIGIN
+SECRET = 'SECRET-SUBMITTED-VALUE'
+
+
+def rejected(name, value, **kw):
+    with pytest.raises(DomainError) as caught:
+        validate(name, value, **kw)
+    return caught.value
+
+
+def test_missing_and_unknown_fields_are_reported_per_field_not_at_root():
+    error = rejected('Diagnostic', dict(path='/x', unexpected=SECRET, **{'a/b~c': 1}))
+    assert (error.code, error.status, error.outcome) == ('invalid_request', 400, 'unchanged')
+    # A wire/schema failure is distinguishable from domain failures but keeps the envelope.
+    assert isinstance(error, contracts.ContractError) and error.schema == 'Diagnostic'
+    paths = {f['path']: f['message'] for f in error.fields}
+    assert paths == {'/code': 'Required field is missing.', '/message': 'Required field is missing.',
+                     '/element_ref': 'Required field is missing.', '/unexpected': 'Field is not allowed here.',
+                     '/a~1b~0c': 'Field is not allowed here.'}
+    assert all(f['code'] == 'invalid' and f['element_ref'] is None for f in error.fields)
+    assert 'Invalid typed value' not in str(error.fields)
+
+
+def test_nested_type_bound_and_format_failures_name_the_field_and_rule():
+    error = rejected('Diagnostic', dict(path=[SECRET], code='x' * 5000, message='m', element_ref='not-a-uuid'))
+    by_path = {f['path']: f['message'] for f in error.fields}
+    assert by_path['/path'] == 'Expected string.'
+    assert by_path['/code'] == 'Must be at most 4096 characters.'
+    assert by_path['/element_ref'].startswith(('Does not match any allowed form', 'Must ', 'Expected '))
+    assert SECRET not in str(error.fields) and 'x' * 50 not in str(error.fields)
+
+
+def test_closest_allowed_form_is_reported_for_typed_unions():
+    error = rejected('UnitDeclaration1', dict(kind='physical', expression=SECRET))
+    assert error.fields and all(f['path'] != '/' or f['message'] != 'Invalid typed value' for f in error.fields)
+    assert SECRET not in str(error.fields)
+    assert any(f['path'] in ('/', '/expression') for f in error.fields)
+
+
+def test_non_canonical_value_points_at_the_offending_field():
+    error = rejected('Diagnostic', dict(path='/x', code='c', message='m', element_ref=None, extra=[1, float('nan')]))
+    assert error.fields == [dict(path='/extra/1', code='invalid', message='Number must be finite.', element_ref=None)]
+    error = rejected('Diagnostic', {'path': '\ud800'})
+    assert error.fields == [dict(path='/path', code='invalid', message='Text must be valid Unicode.', element_ref=None)]
+    error = rejected('Diagnostic', {'n': 2**53 + 1})
+    assert error.fields[0]['path'] == '/n' and 'Integer' in error.fields[0]['message']
+
+
+def test_remote_payload_failure_keeps_backend_unavailable_without_details():
+    error = rejected('Diagnostic', dict(path=SECRET), remote=True)
+    assert (error.code, error.status, error.outcome, error.fields) == ('backend_unavailable', 503, 'unknown', [])
+    assert error.data() == dict(code='backend_unavailable', status=503, current_revision=None, fields=[], outcome='unknown')
+
+
+def test_diagnostics_are_bounded_and_fit_the_public_diagnostic_schema():
+    value = {f'k{i}': i for i in range(50)}
+    error = rejected('Diagnostic', value)
+    assert len(error.fields) == 20
+    for field in error.fields:
+        validate('Diagnostic', field)
+    assert set(error.data()) == {'code', 'status', 'current_revision', 'fields', 'outcome'}
+
+
+def test_valid_value_is_returned_unchanged():
+    value = dict(path='/x', code='c', message='m', element_ref=None)
+    assert validate('Diagnostic', value) is value
+
+
+@pytest.fixture
+def client(tmp_path):
+    store = Store(tmp_path / 'app.sqlite')
+    auth = Auth(store, ORIGIN); auth.provision('owner', 'correct horse battery staple')
+    def unavailable(*args):
+        raise OSError('No modeling service in this test')
+    app = create_app(store, auth, ModelingClient('http://modeling.invalid', b'k' * 32, transport=unavailable))
+    client = TestClient(app, base_url=ORIGIN)
+    session = client.post('/api/1/session', json={'username': 'owner', 'password': 'correct horse battery staple'}, headers={'Origin': ORIGIN})
+    assert session.status_code == 200, session.text
+    client.headers.update({'Origin': ORIGIN, 'X-CSRF-Token': session.json()['data']['csrf_token']})
+    return client
+
+
+def test_api_request_shape_errors_carry_field_level_detail(client):
+    response = client.post('/api/1/studies', json={'command_id': '00000000-0000-4000-8000-000000000001', 'nme': SECRET})
+    assert response.status_code == 400
+    error = response.json()['error']
+    assert error['code'] == 'invalid_request' and error['outcome'] == 'unchanged'
+    validate('Error', response.json())
+    by_path = {f['path']: f for f in error['fields']}
+    assert set(by_path) == {'/name', '/nme'}
+    assert by_path['/name']['message'] == 'Required field is missing.'
+    assert by_path['/nme']['message'] == 'Field is not allowed here.'
+    assert SECRET not in response.text
+
+
+def test_api_malformed_json_body_is_explained_without_echo(client):
+    response = client.post('/api/1/studies', content=b'{"name":"a","name":"' + SECRET.encode() + b'"}',
+                           headers={'Content-Type': 'application/json'})
+    assert response.status_code == 400
+    error = response.json()['error']
+    validate('Error', response.json())
+    assert error['code'] == 'invalid_request'
+    assert [f['path'] for f in error['fields']] == ['/']
+    assert 'JSON' in error['fields'][0]['message'] and SECRET not in response.text

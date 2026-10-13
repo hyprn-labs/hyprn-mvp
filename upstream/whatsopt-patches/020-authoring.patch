@@ -1,0 +1,468 @@
+--- a/app/controllers/analyses_controller.rb
++++ b/app/controllers/analyses_controller.rb
+@@ -53,6 +53,18 @@
+ 
+   # POST /mdas
+   def create
++    if params[:hyprn_mvp_command_id] && !params[:cancel_button]
++      begin
++        @mda = HyprnMvpWorkspace.create(current_user, params.require(:analysis).fetch(:name), params[:hyprn_mvp_command_id])
++        return redirect_to mda_url(@mda)
++      rescue HyprnMvpWorkspace::Conflict => error
++        return render plain: error.message, status: :conflict
++      rescue HyprnMvpWorkspace::Invalid, ActiveRecord::RecordInvalid => error
++        @mda = Analysis.new(name: params[:analysis][:name])
++        @mda.errors.add(:name, error.message)
++        return render :new, status: :unprocessable_entity
++      end
++    end
+     if params[:cancel_button]
+       skip_authorization
+       redirect_to mdas_url, notice: "Analysis creation cancelled."
+@@ -88,6 +100,9 @@
+ 
+   # DELETE /mdas/1
+   def destroy
++    if JSON.parse(@mda.probe_receipts).values.any? { |r| r.is_a?(Hash) && (r["process_uuid"] || r.fetch("configurations", {}).any?) }
++      return redirect_to mda_url(@mda), alert: "This study is referenced by recorded work and cannot be removed."
++    end
+     if @mda.parent
+       redirect_to mdas_url, alert: "Can not delete nested analysis (you should delete parent first)."
+     else
+--- a/app/controllers/api/v1/api_mda_updater_controller.rb
++++ b/app/controllers/api/v1/api_mda_updater_controller.rb
+@@ -2,6 +2,9 @@
+ 
+ class Api::V1::ApiMdaUpdaterController < Api::ApiController
+   def check_mda_update
++    if @mda && JSON.parse(@mda.probe_receipts).key?("_workspace")
++      raise Api::StaleObjectError.new("Use the model workspace to save this model with its exact revision.")
++    end
+     errmsg = "Analysis has been updated concurrently by another user. Please refresh and retry."
+     # Tolerance +5s: concurrent edit may be unnoticed but prevent from same user rapid updates being rejected
+     # p "COMPARE >>>>>>>>> #{current_update_time} > #{request_time + 5.seconds} "
+--- /dev/null
++++ b/app/controllers/hyprn_mvp_controller.rb
+@@ -0,0 +1,40 @@
++class HyprnMvpController < ApplicationController
++  before_action :workspace, except: [:models]
++  rescue_from HyprnMvpWorkspace::Conflict, with: :conflict
++  rescue_from HyprnMvpWorkspace::Invalid, ActiveRecord::RecordInvalid, ActionController::ParameterMissing, KeyError, ArgumentError, with: :invalid
++  rescue_from ActiveRecord::RecordNotFound, with: -> { head :not_found }
++  rescue_from ActiveRecord::StatementInvalid, with: -> { render json: {error: "Concurrent edit could not be saved. Your edits are still here; retry."}, status: :conflict }
++
++  def models
++    render json: Analysis.owned_by(current_user).roots.order(:name).map { |m| {id: m.id, name: m.name} }
++  end
++
++  def show
++    render json: @workspace.read
++  end
++
++  def save
++    render json: @workspace.save(params.require(:command_id), params.require(:expected_revision), params.require(:payload).to_unsafe_h)
++  end
++
++  def validate
++    render json: @workspace.validate(params.require(:expected_revision))
++  end
++
++  private
++  def workspace
++    @model = Analysis.find(params[:analysis_id])
++    unless current_user.has_role?(:owner, @model)
++      return render json: {error: "Only the study owner can access this workspace"}, status: :forbidden
++    end
++    return render json: {error: "This model is locked"}, status: :forbidden if @model.locked && request.post?
++    return render json: {error: "Request exceeds 262144 bytes"}, status: :payload_too_large if request.content_length.to_i > HyprnMvpWorkspace::MAX_REQUEST
++    @workspace = HyprnMvpWorkspace.new(@model, current_user)
++  end
++  def conflict(error)
++    render json: {error: error.message}, status: :conflict
++  end
++  def invalid(error)
++    render json: {error: error.message}, status: :unprocessable_entity
++  end
++end
+--- /dev/null
++++ b/app/javascript/mda_viewer/components/HyprnMvpPanel.jsx
+@@ -0,0 +1,98 @@
++import React, {useEffect, useState, useRef} from 'react';
++
++const clone = value => JSON.parse(JSON.stringify(value));
++
++export default function HyprnMvpPanel({modelId, selectedId, onSaved}) {
++  const [saved, setSaved] = useState(null), [draft, setDraft] = useState(null);
++  const [selected, setSelected] = useState(null), [pending, setPending] = useState(false);
++  const [error, setError] = useState(''), [status, setStatus] = useState('');
++  const [navigation, setNavigation] = useState(null), [newName, setNewName] = useState('');
++  const receipt = useRef(null);
++  const [models, setModels] = useState([]);
++  useEffect(()=>{fetch('/api/v1/hyprn_mvp/models').then(r=>r.json()).then(setModels).catch(()=>setError('Models could not be loaded. Reload the workspace.'));},[]);
++  const dirty = saved && draft && JSON.stringify(saved) !== JSON.stringify(draft);
++  const base = `/api/v1/analyses/${modelId}/hyprn_mvp`;
++  async function request(path, payload) {
++    const response = await fetch(base + path, {method: payload ? 'POST' : 'GET', headers: {'Content-Type':'application/json', 'X-CSRF-Token':document.querySelector('meta[name="csrf-token"]').content}, ...(payload ? {body: JSON.stringify(payload)} : {})});
++    const result = await response.json();
++    if (!response.ok) throw new Error(result.error || 'Changes could not be saved. Your edits are still here.');
++    return result;
++  }
++  async function load() {
++    setPending(true); setError('');
++    try { const value = await request(''); setSaved(value); setDraft(clone(value)); setStatus(''); }
++    catch (e) { setError(e.message); } finally {setPending(false);}
++  }
++  useEffect(() => {setSaved(null); setDraft(null); setSelected(null); load();}, [modelId]);
++  useEffect(() => {if (draft?.components.some(c => c.id === selectedId)) setSelected(selectedId);}, [selectedId]);
++  useEffect(() => {
++    const unload = e => {if(dirty) {e.preventDefault(); e.returnValue='';}};
++    const navigate = e => {const link=e.target.closest('a[href]'); if(dirty && link && !link.getAttribute('href').startsWith('#')) {e.preventDefault(); e.stopPropagation(); setNavigation(link.href);}};
++    window.addEventListener('beforeunload',unload); document.addEventListener('click',navigate,true);
++    return () => {window.removeEventListener('beforeunload',unload); document.removeEventListener('click',navigate,true);};
++  }, [dirty]);
++  function edit(field,value) {setDraft({...draft,[field]:value}); setError('');}
++  function componentEdit(field,value) {edit('components',draft.components.map(c => c.id === selected ? {...c,[field]:value} : c));}
++  async function save() {
++    setPending(true); setError('');
++    const payload = {name:draft.name,description:draft.description,boundary:draft.boundary,components:draft.components.map(c=>({...c,...(c.id < 0 ? {id:undefined}: {})})),remove_components:draft.remove_components || []};
++    const content = JSON.stringify({expected_revision:saved.revision,payload});
++    if(receipt.current?.content !== content) receipt.current={content,id:crypto.randomUUID()};
++    try {
++      const value=await request('/save',{command_id:receipt.current.id,expected_revision:saved.revision,payload});
++      setSaved(value); setDraft(clone(value)); setStatus('Changes saved. No code was executed.');
++      setSelected(value.components.find(c=>c.id===selected)?.id || value.components.at(-1)?.id || null);
++      onSaved(); return true;
++    } catch(e) {setError(e.message); return false;} finally {setPending(false);}
++  }
++  async function validate() {setPending(true); setError(''); try {await request('/validate',{expected_revision:saved.revision});setStatus('Static validation passed. Runtime behavior is checked only inside the worker.');}catch(e){setError(e.message);}finally{setPending(false);}}
++  function addComponent() {
++    const id=-Date.now(); edit('components',[...draft.components,{id,name:newName,source:"raise NotImplementedError('Declare ports, then write this compute body')\n",notes:'',ports:[]}]);setSelected(id);setNewName('');
++  }
++  function example() {
++    const port=(name,io_mode)=>({name,io_mode,units:'',shape:'1',type:'Float'});
++    edit('components', [{id:-1,name:'First',source:"outputs['u'] = 2 * inputs['x'] + inputs['z']\n",notes:'',ports:[port('x','in'),port('z','in'),port('u','out')]},{id:-2,name:'Second',source:"outputs['y'] = inputs['u'] * inputs['u']\n",notes:'',ports:[port('u','in'),port('y','out')]}]);setSelected(-1);
++  }
++  function starter() {
++    const code = selectedComponent.ports.filter(p=>p.io_mode==='in').map(p=>`# inputs[${JSON.stringify(p.name)}] in ${p.units || 'dimensionless'}`).join('\n');
++    componentEdit('source',`${code}\nraise NotImplementedError('Assign ${selectedComponent.ports.filter(p=>p.io_mode==='out').map(p=>p.name).join(', ')} in outputs')\n`);
++  }
++  const selectedComponent=draft?.components.find(c=>c.id===selected);
++  if (!draft) return <section aria-label="Model workspace"><p role="status">{pending?'Loading selected model…':'Workspace could not be loaded.'}</p><p role="alert">{error}</p><button onClick={load} disabled={pending}>Retry</button></section>;
++  return <section aria-label="Model workspace" style={{overflowWrap:'anywhere'}}>
++    <h2>Model workspace</h2>
++    <label className="form-label d-block">Model<select className="form-select" value={modelId} onChange={e=>{const target=`/analyses/${e.target.value}`; if(dirty)setNavigation(target);else window.location.href=target;}}>{models.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
++    <p role="status">{dirty?'Unsaved changes. Save the model and configuration before running.':status}</p>
++    <p id="hyprn-mvp-errors" role="alert">{error}</p>
++    <fieldset disabled={pending} aria-describedby={error?'hyprn-mvp-errors':undefined}>
++      <details><summary>Study details</summary>
++        <label className="form-label">Study name<input className="form-control" value={draft.name} onChange={e=>edit('name',e.target.value)}/></label>
++        <label className="form-label d-block">Description<textarea className="form-control" value={draft.description} onChange={e=>edit('description',e.target.value)}/></label>
++        <label className="form-label d-block">Engineering boundary<textarea className="form-control" value={draft.boundary} onChange={e=>edit('boundary',e.target.value)}/></label>
++      </details>
++      <label className="form-label d-block">Selected component<select className="form-select" value={selected || ''} onChange={e=>setSelected(Number(e.target.value))}><option value="">Select a component</option>{draft.components.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
++      {!draft.components.length && <div><p>No components yet. Add a component and declare its inputs and outputs.</p><button className="btn btn-secondary" onClick={example}>Load two-component example</button></div>}
++      <label className="form-label">Component name<input className="form-control" value={newName} onChange={e=>setNewName(e.target.value)}/></label>{' '}<button className="btn btn-secondary" onClick={addComponent} disabled={!newName.trim()}>Add component</button>
++      {!selectedComponent ? <p>Select a component to inspect its code, inputs, outputs and assumptions.</p> : <div>
++        <h3>{selectedComponent.name}</h3>
++        <label className="form-label">Rename component<input className="form-control" value={selectedComponent.name} onChange={e=>componentEdit('name',e.target.value)}/></label>
++        <details open><summary>Inputs and outputs</summary>
++          <p>Declare real scalars. Native WhatsOpt connects matching port names; saved connections retain native IDs.</p>
++          <div style={{overflowX:'auto'}}><table className="table"><thead><tr><th>Name / ID</th><th>Direction</th><th>Units</th></tr></thead><tbody>{selectedComponent.ports.map((p,i)=><tr key={p.id || i}>
++            <td><input aria-label={`Port ${i+1} name`} value={p.name} onChange={e=>componentEdit('ports',selectedComponent.ports.map((v,j)=>j===i?{...v,name:e.target.value}:v))}/><small>{p.id || 'new'}</small></td>
++            <td><select aria-label={`Port ${i+1} direction`} value={p.io_mode} onChange={e=>componentEdit('ports',selectedComponent.ports.map((v,j)=>j===i?{...v,io_mode:e.target.value}:v))}><option value="in">Input</option><option value="out">Output</option></select></td>
++            <td><input aria-label={`Port ${i+1} units`} placeholder="dimensionless" value={p.units || ''} onChange={e=>componentEdit('ports',selectedComponent.ports.map((v,j)=>j===i?{...v,units:e.target.value}:v))}/></td>
++          </tr>)}</tbody></table></div>
++          <button className="btn btn-secondary" onClick={()=>componentEdit('ports',[...selectedComponent.ports,{name:'',io_mode:'in',units:'',type:'Float',shape:'1'}])}>Add port</button>{' '}
++          <button className="btn btn-secondary" onClick={starter}>Generate Python starter</button>
++        </details>
++        <details open><summary>Code</summary><label className="d-block">Python compute body<textarea className="form-control" rows="10" spellCheck="false" style={{fontFamily:'monospace',whiteSpace:'pre',overflowX:'auto'}} value={selectedComponent.source} onChange={e=>componentEdit('source',e.target.value)}/></label></details>
++        <details><summary>Assumptions</summary><label className="d-block">Assumption notes<textarea className="form-control" rows="3" placeholder="No assumptions recorded. Add a note for this component." value={selectedComponent.notes} onChange={e=>componentEdit('notes',e.target.value)}/></label></details>
++        <button className="btn btn-outline-danger" onClick={()=>{if(window.confirm(`Remove ${selectedComponent.name} and its connections? Affected native port IDs: ${selectedComponent.ports.map(p=>p.id).filter(Boolean).join(', ')}. Earlier records remain unchanged.`)){setDraft({...draft,components:draft.components.filter(c=>c.id!==selected),remove_components:[...(draft.remove_components||[]),selected].filter(id=>id>0)});setSelected(null);}}}>Remove component</button>
++      </div>}
++      <div className="my-3"><button className="btn btn-primary" onClick={save} disabled={!dirty}>Save changes</button>{' '}<button className="btn btn-secondary" onClick={validate} disabled={dirty}>Validate model</button></div>
++      <p>Run is unavailable until a compatible configuration and verified worker are ready.</p><button className="btn btn-primary" disabled>Run model</button>
++    </fieldset>
++    {navigation && <div role="dialog" aria-modal="true" aria-label="Unsaved changes" className="alert alert-warning"><p>Discard unsaved changes? They have not been saved.</p><button autoFocus onClick={()=>setNavigation(null)}>Keep editing</button>{' '}<button onClick={()=>{window.onbeforeunload=null;setDraft(saved);setNavigation(null);setTimeout(()=>{window.location.href=navigation;},0);}}>Discard changes</button>{' '}<button onClick={async()=>{if(await save()){setNavigation(null);setTimeout(()=>{window.location.href=navigation;},0);}}}>Save changes</button></div>}
++  </section>;
++}
+--- a/app/javascript/mda_viewer/components/OpenmdaoImplEditor.jsx
++++ b/app/javascript/mda_viewer/components/OpenmdaoImplEditor.jsx
+@@ -119,7 +119,6 @@
+       // take only ids, discard use_scaling and parallel_group
+       nodes.push({
+         discipline_id: discId,
+-        python_source: openmdaoComps[discId].python_source,
+         implicit_component: openmdaoComps[discId].implicit,
+         support_derivatives: openmdaoComps[discId].derivatives,
+         egmdo_surrogate: openmdaoComps[discId].surrogate,
+@@ -204,7 +203,6 @@
+             title: 'Support derivatives',
+             default: node.support_derivatives,
+           },
+-          python_source: { type: 'string', title: 'Python compute body (probe)', maxLength: 65536 },
+           surrogate: { type: 'boolean', title: 'EGMDO surrogate', default: node.egmdo_surrogate },
+         },
+       };
+@@ -266,7 +264,6 @@
+     };
+     nodes.forEach((node) => {
+       formData.components[`${node.discipline_id}`] = {
+-        python_source: node.python_source || '',
+         implicit: node.implicit_component,
+         derivatives: node.support_derivatives,
+         surrogate: node.egmdo_surrogate,
+@@ -303,7 +300,6 @@
+             <Form
+               key={reset}
+               schema={schema}
+-              uiSchema={{ components: Object.fromEntries(nodes.map(n => [n.discipline_id, { python_source: { 'ui:widget': 'textarea', 'ui:options': { rows: 6 } } }])) }}
+               formData={formData}
+               onChange={(data) => this.handleChange(data)}
+               onSubmit={(data) => this.handleSubmit(data)}
+--- a/app/javascript/mda_viewer/index.jsx
++++ b/app/javascript/mda_viewer/index.jsx
+@@ -1,4 +1,5 @@
+ import React from 'react';
++import HyprnMvpPanel from './components/HyprnMvpPanel';
+ import PropTypes from 'prop-types';
+ import update from 'immutability-helper';
+ 
+@@ -626,7 +627,8 @@
+           </h1>
+           {warningIfUsed}
+           {breadcrumbs}
+-          <div className="mda-section">{xdsmViewer}</div>
++          <div className="row"><div className="col-lg-6" style={{overflowX: 'auto'}}>{xdsmViewer}</div>
++          <div className="col-lg-6"><HyprnMvpPanel modelId={mda.id} selectedId={filter.fr || filter.to} onSaved={this.renderXdsm} /></div></div>
+           <ul className="nav nav-tabs" id="myTab" role="tablist">
+             <li className="nav-item">
+               <a
+@@ -856,7 +858,8 @@
+     return (
+       <div>
+         {breadcrumbs}
+-        <div className="mda-section">{xdsmViewer}</div>
++        <div className="row"><div className="col-lg-6" style={{overflowX: 'auto'}}>{xdsmViewer}</div>
++          <div className="col-lg-6"><HyprnMvpPanel modelId={mda.id} selectedId={filter.fr || filter.to} onSaved={this.renderXdsm} /></div></div>
+         <div className="mda-section">
+           <ul className="nav nav-tabs" id="myTab" role="tablist">
+             <li className="nav-item">
+--- a/app/models/analysis.rb
++++ b/app/models/analysis.rb
+@@ -39,7 +39,7 @@
+   after_save :_ensure_openmdao_impl_presence
+ 
+   validates :name, presence: true, allow_blank: false
+-  validates :name, format: { with: /\A[a-zA-Z][_.a-zA-Z0-9\s]*\z/, message: "%{value} is not a valid analysis name." }
++  validates :name, length: { maximum: columns_hash.fetch("name").limit || Float::INFINITY }, if: -> { self.class.columns_hash.fetch("name").limit }
+ 
+   def journalized_attribute_names
+     ["name", "public", "locked", "note_text", "design_project_name"]
+--- /dev/null
++++ b/app/services/hyprn_mvp_workspace.rb
+@@ -0,0 +1,165 @@
++require "digest"
++require "open3"
++require "timeout"
++
++# All editable composition remains in native Analysis/Discipline/Variable/Connection.
++# The adopted receipt column holds scoped receipts, text metadata and immutable pins.
++class HyprnMvpWorkspace
++  class Conflict < StandardError; end
++  class Invalid < StandardError; end
++  MAX_REQUEST = 262144
++  attr_reader :model, :owner
++
++  def self.create(owner, name, command_id)
++    raise Invalid, "Invalid create command" unless command_id.to_s.match?(/\A[a-zA-Z0-9_-]{16,80}\z/)
++    raise Invalid, "Name exceeds request bounds" if name.to_s.bytesize > MAX_REQUEST
++    key = "create:#{owner.id}:#{command_id}"
++    digest = Digest::SHA256.hexdigest(JSON.generate(name))
++    owner.with_lock do
++      Analysis.owned_by(owner).each do |model|
++        receipt = JSON.parse(model.probe_receipts)[key]
++        next unless receipt
++        raise Conflict, "Command payload conflict" unless receipt["digest"] == digest
++        return model
++      end
++      model = Analysis.create!(name: name, public: false)
++      model.set_owner(owner)
++      model.update_columns(probe_receipts: JSON.generate({key => {"digest" => digest}}))
++      model
++    end
++  end
++
++  def initialize(model, owner)
++    @model, @owner = model, owner
++  end
++
++  def store
++    @store ||= JSON.parse(model.probe_receipts)
++  end
++
++  def records
++    store["_workspace"] ||= {"metadata" => {}, "receipts" => {}, "roots" => {}, "configurations" => {}}
++  end
++
++  def persist
++    model.update_columns(probe_receipts: JSON.generate(store))
++  end
++
++  def snapshot
++    metadata = records.fetch("metadata")
++    components = model.disciplines.nodes.order(:id).map do |d|
++      {"id" => d.id, "name" => d.name, "source" => d.openmdao_impl&.python_source.to_s,
++       "notes" => metadata.fetch("notes", {}).fetch(d.id.to_s, ""),
++       "ports" => d.variables.order(:id).map { |v| v.attributes.slice("id", "name", "io_mode", "type", "shape", "units", "desc") }}
++    end
++    connections = Connection.of_analysis(model.id).order(:id).map { |c| c.attributes.slice("id", "from_id", "to_id", "role") }
++    free = model.driver.variables.outs.order(:id).select { |v| v.outgoing_connections.exists? }.map { |v| v.attributes.slice("id", "name", "type", "shape", "units") }
++    state = {"id" => model.id, "name" => model.name, "description" => metadata.fetch("description", ""),
++      "boundary" => metadata.fetch("boundary", ""), "criteria" => metadata.fetch("criteria", []),
++      "components" => components, "connections" => connections, "free_inputs" => free,
++      "native_updated_at" => model.updated_at.iso8601(6)}
++    state["revision"] = Digest::SHA256.hexdigest(JSON.generate(state))
++    state
++  end
++
++  def read
++    model.with_lock { @store = nil; snapshot }
++  end
++
++  def command(operation, id, revision, payload)
++    raise Invalid, "command_id: use a unique command identity" unless id.to_s.match?(/\A[a-zA-Z0-9_-]{16,80}\z/)
++    encoded = JSON.generate([revision, payload])
++    raise Invalid, "request: exceeds #{MAX_REQUEST} bytes" if encoded.bytesize > MAX_REQUEST
++    digest = Digest::SHA256.hexdigest(encoded)
++    key = "#{owner.id}:#{operation}:#{id}"
++    model.with_lock do
++      @store = nil
++      old = records["receipts"][key]
++      if old
++        raise Conflict, "Command payload conflict" unless old["digest"] == digest
++        return old["result"]
++      end
++      raise Conflict, "This model changed since you opened it. Your edits are still here; reload the saved version." unless snapshot["revision"] == revision
++      result = yield
++      records["receipts"][key] = {"digest" => digest, "result" => result}
++      persist
++      result
++    end
++  end
++
++  def validate_source(state)
++    request = {"operation" => "source", "components" => state.fetch("components")}
++    raise Invalid, "Add a component before validating the model" if request["components"].empty?
++    trusted(request)
++  end
++
++  def trusted(request)
++    input = JSON.generate(request)
++    raise Invalid, "request: exceeds #{MAX_REQUEST} bytes" if input.bytesize > MAX_REQUEST
++    # Fixed trusted executable/module; candidate text travels only on bounded stdin.
++    output, status = nil
++    Timeout.timeout(10) do
++      output, _error, status = Open3.capture3({"PYTHONDONTWRITEBYTECODE" => "1", "PYTHONPATH" => "/probe/integration/src"},
++        "/usr/local/bin/python", "-m", "hyprn_mvp_integration.native", stdin_data: input)
++    end
++    raise Invalid, "Validation response exceeded bounds" if output.bytesize > 65536
++    result = JSON.parse(output)
++    raise Invalid, result.fetch("error", "Validation unavailable") unless status.success?
++    result
++  rescue Timeout::Error, JSON::ParserError
++    raise Invalid, "Validation unavailable; your edits are still here"
++  end
++
++  def save(id, revision, payload)
++    command("save", id, revision, payload) do
++      metadata = records["metadata"]
++      %w[description boundary].each do |field|
++        if payload.key?(field)
++          raise Invalid, "#{field}: text required" unless payload[field].is_a?(String)
++          metadata[field] = payload[field]
++        end
++      end
++      model.name = payload["name"] if payload.key?("name")
++      model.save!
++      Array(payload["components"]).each do |attrs|
++        discipline = attrs["id"] ? model.disciplines.nodes.find(attrs["id"]) : model.disciplines.create!(name: attrs.fetch("name"))
++        discipline.update!(name: attrs["name"]) if attrs.key?("name")
++        if attrs.key?("source")
++          raise Invalid, "source: text required" unless attrs["source"].is_a?(String)
++          discipline.openmdao_impl.update!(python_source: attrs["source"])
++        end
++        if attrs.key?("notes")
++          raise Invalid, "notes: text required" unless attrs["notes"].is_a?(String)
++          (metadata["notes"] ||= {})[discipline.id.to_s] = attrs["notes"]
++        end
++        Array(attrs["ports"]).each do |port|
++          raise Invalid, "ports: real scalars only" unless port.fetch("shape", "1") == "1" && port.fetch("type", "Float") == "Float"
++          raise Invalid, "ports: direction must be in or out" unless %w[in out].include?(port["io_mode"])
++          variable = port["id"] ? discipline.variables.find(port["id"]) : discipline.variables.build
++          variable.update!(port.slice("name", "io_mode", "units", "desc").merge("type" => "Float", "shape" => "1"))
++        end
++      end
++      # Native refresh connects matching declared names and maintains native driver ports.
++      model.refresh_connections
++      Array(payload["remove_components"]).each do |id|
++        raise Invalid, "This component is referenced by a saved configuration and cannot be removed" if records["configurations"].values.any? { |c| c["root"]["components"].any? { |d| d["id"] == id } }
++        model.disciplines.nodes.find(id).destroy!
++      end
++      model.touch(time: [Time.current, model.updated_at + 0.000001].max)
++      model.reload
++      state = snapshot
++      validate_source(state) unless state["components"].empty?
++      records["roots"][state["revision"]] ||= state
++      state
++    end
++  end
++
++  def validate(revision)
++    model.with_lock do
++      @store = nil
++      state = snapshot
++      raise Conflict, "Model revision conflict" unless state["revision"] == revision
++      validate_source(state)
++    end
++  end
++end
+--- a/app/views/analyses/_form.html.erb
++++ b/app/views/analyses/_form.html.erb
+@@ -1,5 +1,6 @@
+ <%= form_for(analysis, url: (analysis.new_record? ? mdas_path : mda_path(analysis)), :html => { :multipart => true, :role => "form" }) do |f| %>
+ 
++  <%= hidden_field_tag :hyprn_mvp_command_id, params[:hyprn_mvp_command_id].presence || SecureRandom.uuid %>
+   <%= render 'shared/alerts', object: analysis %>
+ 
+   <div class="row">
+--- a/app/views/analyses/new.html.erb
++++ b/app/views/analyses/new.html.erb
+@@ -1,3 +1,3 @@
+-<h1>New Multi Disciplinary Analysis</h1>
++<h1>Create study</h1>
+ 
+ <%= render 'form', analysis: @mda, import: @import %>
+--- a/app/views/analyses/show.html.erb
++++ b/app/views/analyses/show.html.erb
+@@ -57,6 +57,6 @@
+   var API_KEY = "<%=current_user.api_key%>"
+ </script>
+ 
+-<%= render "hyprn_mvp_probe" %>
++<div data-hyprn-mvp-workspace="<%= @mda.id %>"></div>
+ 
+ <%= append_javascript_pack_tag 'mda_viewer_application' %>
+\ No newline at end of file
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -1,6 +1,10 @@
+ # frozen_string_literal: true
+ 
+ Rails.application.routes.draw do
++  get "api/v1/hyprn_mvp/models", to: "hyprn_mvp#models"
++  get "api/v1/analyses/:analysis_id/hyprn_mvp", to: "hyprn_mvp#show"
++  post "api/v1/analyses/:analysis_id/hyprn_mvp/save", to: "hyprn_mvp#save"
++  post "api/v1/analyses/:analysis_id/hyprn_mvp/validate", to: "hyprn_mvp#validate"
+   post "hyprn_mvp_probe/:id/run", to: "hyprn_mvp_probe#run"
+   get "hyprn_mvp_probe/:id/runs/:uuid", to: "hyprn_mvp_probe#show"
+   devise_for :users

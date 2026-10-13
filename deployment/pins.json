@@ -1,0 +1,82 @@
+{
+  "status": "measured-experiment-adoption-pending",
+  "worker_image": "sha256:a2c45218391208dafdc9d62735f075d6a6cb7d547d25dca469272d298ddb17c1",
+  "base_image": "python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258",
+  "ruby_base_image": "ruby@sha256:bceec7582aaa80630bb51a04e2df3af658e64c0640c174371776928ad3bd57b4",
+  "node_base_image": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+  "modeling_source_image": "sha256:19eb22a1fe6853396faa1d9074c6d3b685d3f9a36f058ad234d825e68b2a79cb",
+  "modeling_producer": {
+    "image": "sha256:96c5a85a82afa0054d2129e3acb8722a57849d561f6ac5df6aeed825b368b073",
+    "artifact_source_hashes": {
+      "/native/app/lib/whats_opt/openmdao_generator.rb": "130210495eb2192dbbb6d1952ccf467320fcae00758e1514af4d99efa0c65ff4"
+    }
+  },
+  "docker_cli_image": "docker@sha256:35cfcf893c20f2931f4909151b5407aaaeab711277de7ce8b8f521f095d54c32",
+  "python": "3.12",
+  "ruby": "3.3.5",
+  "yarn": "4.14.1",
+  "packages": {
+    "wop": "2.6.1",
+    "openmdao": "3.45.1",
+    "aiida-core": "2.9.3"
+  },
+  "whatsopt_commit": "597f5abf18d4a6335c2f3b9174ab16acdf1de4bd",
+  "wop_inspected_commit": "6e47df2d484a7bf22ef12068c06cf8e4ac435fd3",
+  "worker_lock_sha256": "b2fb5237f3c0b3f989339dc150b24e471997574d11ccd0974aa348eef44d9d20",
+  "verified_sources": {
+    "WhatsOpt": {
+      "repository": "WhatsOpt/WhatsOpt",
+      "commit": "597f5abf18d4a6335c2f3b9174ab16acdf1de4bd",
+      "archive_sha256": "4937188df6ea12daa8a2b00767005e3649d2974ab6e634409f7756043ef0b360"
+    },
+    "WhatsOpt-CLI": {
+      "repository": "WhatsOpt/WhatsOpt-CLI",
+      "commit": "6e47df2d484a7bf22ef12068c06cf8e4ac435fd3",
+      "archive_sha256": "8b95f091cb161480ebd0bbbc8afe1060a6518e4d070f5391a041acc3731aaeb0"
+    }
+  },
+  "verified_artifacts": {
+    "wop": [
+      {
+        "filename": "wop-2.6.1.tar.gz",
+        "sha256": "3aa59f30a99c505227328e9a152c8563537318e3b98e32e45d427b67611f9d88"
+      }
+    ],
+    "openmdao": [
+      {
+        "filename": "openmdao-3.45.1-py3-none-any.whl",
+        "sha256": "2ac96fcd3ebd4f3096d527f6f792f4b5ddb8823093c2fff1f89f147159fab6da"
+      },
+      {
+        "filename": "openmdao-3.45.1.tar.gz",
+        "sha256": "314c5d796c5dbcc4334b70cd9d306cb8f8db78c84918b8406b88ede56d5cc909"
+      }
+    ],
+    "aiida-core": [
+      {
+        "filename": "aiida_core-2.9.3-py3-none-any.whl",
+        "sha256": "767e7714f3b95a17ee5c0d82c1bd2e1ea379ba3f5e1a2fa295894379296fc30c"
+      },
+      {
+        "filename": "aiida_core-2.9.3.tar.gz",
+        "sha256": "2b1de2781de5b789516da683ae82646e6708f08a6b2d2503979435b8ff1d8070"
+      }
+    ]
+  },
+  "runtime": {
+    "os": "macOS 15.6.1 arm64",
+    "docker_desktop": "4.94.0",
+    "docker_engine": "29.8.2",
+    "ruby": "3.3.5",
+    "node": "22",
+    "yarn": "4.14.1",
+    "bundler": "2.7.1",
+    "rails": "8.1.3.1"
+  },
+  "images": {
+    "worker": "sha256:a2c45218391208dafdc9d62735f075d6a6cb7d547d25dca469272d298ddb17c1",
+    "native": "sha256:a861510d56c094d6b51fc3dae896333497fab183f5afe918dcfd2da06a8e553c",
+    "control": "sha256:705035e20b788e9c32c8518d4a3998156013f59861fc5f25ebca36b4eb99b02c"
+  },
+  "native_patch_sha256": "e46c48b507d0f375560bfb33b4a0c78f81800592666e6ff7ccf602ef4e1ac192"
+}

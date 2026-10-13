@@ -1,0 +1,26 @@
+{
+  "schema": "hyprn_mvp.tools/1",
+  "format": "One fact per line: the ./hyprn-mvp shell entry point reads these lines before any Python exists. Values come from docs/operations/dependency-audit.md.",
+  "uv_version": "0.12.24",
+  "uv_licence": "MIT OR Apache-2.0",
+  "uv_release": "https://github.com/astral-sh/uv/releases/tag/0.12.24",
+  "uv_download_base": "https://github.com/astral-sh/uv/releases/download/0.12.24/",
+  "uv_archives": {
+    "darwin-arm64": {"archive": "uv-aarch64-apple-darwin.tar.gz", "size": 14650202, "sha256": "0c4346de7abdb49495b393b9ec809fe387aa43e586be20fecb972216c1e71732"},
+    "linux-x86_64": {"archive": "uv-x86_64-unknown-linux-gnu.tar.gz", "size": 17249236, "sha256": "b4dfaef47d491a7296981f8374a4595f55dbf84e8937c8ecd2983574d8bb3da6"},
+    "linux-aarch64": {"archive": "uv-aarch64-unknown-linux-gnu.tar.gz", "size": 16478994, "sha256": "5231be65f496304623895dacdbf1de8504fec90303684bdf05805aa34414dd21"}
+  },
+  "cpython_version": "3.12.15",
+  "cpython_build": "20261003",
+  "cpython_flavour": "install_only_stripped",
+  "cpython_licence": "Python-2.0 AND CNRI-Python, with bundled third-party libraries listed in docs/operations/dependency-audit.md",
+  "cpython_install_mirror": "https://github.com/astral-sh/python-build-standalone/releases/download",
+  "cpython_archives": {
+    "darwin-arm64": {"archive": "cpython-3.12.15+20261003-aarch64-apple-darwin-install_only_stripped.tar.gz", "size": 25013243, "sha256": "ad8d0c637c0a36b967b310e2c07254f4d2ca8cabaa7699e55ed6290aceb481a2"},
+    "linux-x86_64": {"archive": "cpython-3.12.15+20261003-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz", "size": 34285590, "sha256": "731af898886c5f821890dc901eca3c651cca8e51fa7308c159d12a1194aeac91"},
+    "linux-aarch64": {"archive": "cpython-3.12.15+20261003-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz", "size": 29215308, "sha256": "6541297dd1798dec8b98c3ad7492808a5b9d1c126801ceb2011e7754cd20d1ce"}
+  },
+  "refused_platforms": {
+    "darwin-x86_64": "macOS on Intel (x86_64) is not supported: the reviewed native environment has no Intel-Mac build of cryptography 50.0.2. Supported hosts: macOS on Apple silicon, Linux x86_64 and aarch64 (glibc), and Windows through WSL2."
+  }
+}

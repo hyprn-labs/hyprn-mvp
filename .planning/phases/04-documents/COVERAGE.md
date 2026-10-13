@@ -1,0 +1,1 @@
+No external API integration: the phase implements HYPRN MVP's own public document routes from `contracts/documents.md` (all contracted routes are planned in `04-PLAN.md`; deferred lifecycle routes stay advertised unavailable per PD-4.1) and uses the pinned pypdf wheel as an in-process library inside the isolated parser image, not as a service.

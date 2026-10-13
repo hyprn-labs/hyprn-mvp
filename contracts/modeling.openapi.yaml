@@ -1,0 +1,881 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Modeling Backend Contract",
+    "version": "1.3.0"
+  },
+  "x-hyprn-mvp-protocol-matrix": {
+    "envelope_version": "1",
+    "contract_versions": [
+      "1.2",
+      "1.3"
+    ],
+    "schema_versions": [
+      "1",
+      "2",
+      "3"
+    ],
+    "bundle_versions": [
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "artifact_versions": [
+      "2"
+    ],
+    "program_versions": [
+      "1"
+    ],
+    "bindings_versions": [
+      "1"
+    ],
+    "results_versions": [
+      "1"
+    ],
+    "result_dependencies_versions": [
+      "1"
+    ],
+    "archive_versions": [
+      "1"
+    ],
+    "required_capabilities": {
+      "model_assumptions": "1",
+      "evidence_revisions": "1",
+      "configuration_assumptions": "1",
+      "resolved_configuration": "3",
+      "unit_declarations": "1"
+    },
+    "capability_advertisement": "only_when_supported",
+    "description": "Declared version matrix, not a live service support claim. Query capabilities before sending a new version; fail explicitly when unsupported. Evidence revisions and configuration assumptions are application capabilities, not private family-management authority. Contract1.3 is declarative until implemented; new writes require unit_declarations/1. Old frozen/history/package readers remain pinned to model1/2. Unit catalog is data only; it does not assert executor readiness.",
+    "compatible_unit_pairing": {
+      "model": "3",
+      "configuration": "4",
+      "private_configuration": "3",
+      "frozen": "5",
+      "bundle": "6",
+      "history": "4",
+      "modified_run_seed": "4"
+    }
+  },
+  "servers": [
+    {
+      "url": "/modeling/1"
+    }
+  ],
+  "security": [
+    {
+      "scopedBearer": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "scopedBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "HS256 JWT binding method, path, body_sha256 and scope; separate service key"
+      }
+    }
+  },
+  "paths": {
+    "/capabilities": {
+      "get": {
+        "operationId": "get__capabilities",
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "HTTP/envelope major1 unchanged. Contract1.2 declares model schema2 and resolved_configuration/3 literal scientific projection alongside supported historical versions. Advertise model_assumptions/1 and each version only when implemented; callers must fail explicitly on absent support. Evidence revisions/configuration assumptions are app-owned. Artifact2/program1/bindings1/results1/result-dependencies1/archive1 remain unchanged; bundle4 support is separate. Contract1.3/model3/unit_declarations/1 are advertised only when implemented. Model3 requires Bundle6/Frozen5 with existing Config4/private3."
+      }
+    },
+    "/models": {
+      "post": {
+        "operationId": "post__models",
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/CreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}": {
+      "get": {
+        "operationId": "get__models_model_id",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/preview": {
+      "post": {
+        "operationId": "post__models_model_id_preview",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse4"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/PreviewRead4"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/edits": {
+      "post": {
+        "operationId": "post__models_model_id_edits",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse4"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/ApplyRead4"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/commits": {
+      "post": {
+        "operationId": "post__models_model_id_commits",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse4"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/Commit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/revisions/{revision_id}": {
+      "get": {
+        "operationId": "get__models_model_id_revisions_revision_id",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse4"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/validate": {
+      "post": {
+        "operationId": "post__models_model_id_validate",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ValidationResultResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/Validate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/export": {
+      "get": {
+        "operationId": "get__models_model_id_export",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelPackageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports": {
+      "post": {
+        "operationId": "post__imports",
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/Import"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/configuration-compatibility": {
+      "post": {
+        "operationId": "post__models_model_id_configuration-compatibility",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/CompatibilityResultResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/Compatibility"
+              }
+            }
+          }
+        },
+        "description": "Closed Compatibility request selects ConfigurationCandidate1, ModelingConfiguration2 or ModelingConfiguration3. Version3 requires advertised resolved_configuration/3 support; never send the full application ConfigurationRequest3. Frozen typed evidence is retained; app-owned assumptions, general attachment IDs, context source, derivation and result bindings are excluded by exact projection. CompatibilityResult2 and numerical unit interpretations are unchanged."
+      }
+    },
+    "/models/{model_id}/prepare-execution": {
+      "post": {
+        "operationId": "post__models_model_id_prepare-execution",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/model.schema.json#/$defs/Prepare"
+              }
+            }
+          }
+        },
+        "description": "Closed Prepare request selects ConfigurationRevision1, ModelingConfigurationRevision2 or ModelingConfigurationRevision3 with its exact private projection digest. Version3 requires advertised support. PreparedModelArtifact2 binds that private digest and exact ModelRevision1/2; its package pins ModelPackage1/2. Envelope1 and generated program protocol1 are unchanged. Native static generation never executes candidate code."
+      }
+    },
+    "/preparations/{preparation_id}/files/{file_id}": {
+      "get": {
+        "operationId": "get__preparations_preparation_id_files_file_id",
+        "parameters": [
+          {
+            "name": "preparation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ByteFileResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "Authenticated immutable declared raw bytes, including generated source, bindings, source line mapping, provenance/source archive and separate notices. file_id is not an arbitrary filesystem path."
+      }
+    },
+    "/commands/{command_id}": {
+      "get": {
+        "operationId": "get__commands_command_id",
+        "parameters": [
+          {
+            "name": "command_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "study_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "model"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/ReceiptResponse4"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{model_id}/revisions": {
+      "get": {
+        "operationId": "list_model_revisions",
+        "description": "Immutable revisions in stored insertion order. Cursor is a revision ID in this authorized model; foreign or missing cursors return 404. Concurrent appends do not reorder earlier pages.",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/RevisionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unit-catalog": {
+      "get": {
+        "operationId": "get__unit_catalog",
+        "parameters": [],
+        "responses": {
+          "default": {
+            "description": "Scoped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/model.schema.json#/$defs/UnitCatalogResponse1"
+                }
+              }
+            }
+          }
+        },
+        "description": "Authenticated data-only finite physical guidance; require unit_declarations/1 and contract1.3/model3 support. Closed UnitCatalog1, exactly28 nonempty spellings, pinned OpenMDAO3.45.1 source/catalog digests, zero affine conversions. Reject response over16384 bytes before parsing. Public study-scoped proxy must authorize before call, validate shape/identity/bounds, then reauthorize after call. Unsupported capability/outage is explicit, with no hardcoded fallback. Existing scoped JWT method/path/body hash and error envelope apply.",
+        "x-hyprn-mvp-max-response-bytes": 16384
+      }
+    }
+  }
+}

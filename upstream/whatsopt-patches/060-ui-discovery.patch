@@ -1,0 +1,97 @@
+--- a/app/services/modeling_contract.rb
++++ b/app/services/modeling_contract.rb
+@@ -9,7 +9,7 @@
+ # Immutable definition/model/preparation snapshots and receipts share the same SQL DB.
+ class ModelingContract
+   UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+-  CAPABILITIES = {'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
++  CAPABILITIES = {'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
+   SCHEMA = JSON.parse(File.read(Rails.root.join('config/modeling.schema.json'))).fetch('$defs')
+   UNITS = JSON.parse(File.read(Rails.root.join('config/modeling.units.json')))
+   def compatible_units?(a,b) = UNITS['linear_pairs'].any? { |x| x[0]==a && x[1]==b }
+@@ -75,6 +75,7 @@
+     when 'object'
+       return false unless v.is_a?(Hash) && (s.fetch('required',[]) - v.keys).empty?
+       return false if s['additionalProperties']==false && (v.keys-s.fetch('properties',{}).keys).any?
++      return false if s.fetch('dependentRequired',{}).any? { |key,required| v.key?(key) && (required-v.keys).any? }
+       return v.all? { |k,x| valid?(s.fetch('properties').fetch(k),x) }
+     when 'array' then return v.is_a?(Array) && v.length<=s.fetch('maxItems',1000) && v.all? { |x| valid?(s['items'],x) }
+     when 'string'
+@@ -78,7 +78,7 @@
+       return v.all? { |k,x| valid?(s.fetch('properties').fetch(k),x) }
+     when 'array' then return v.is_a?(Array) && v.length<=s.fetch('maxItems',1000) && v.all? { |x| valid?(s['items'],x) }
+     when 'string'
+-      return false unless v.is_a?(String) && v.length<=s.fetch('maxLength',1000000)
++      return false unless v.is_a?(String) && v.length>=s.fetch('minLength',0) && v.length<=s.fetch('maxLength',1000000)
+       return false if s['pattern'] && !Regexp.new(s['pattern']).match?(v)
+     when 'integer' then return false unless v.is_a?(Integer)
+     when 'number' then return false unless v.is_a?(Numeric) && v.finite?
+@@ -124,7 +124,7 @@
+     readonly=method=='GET' || path.end_with?('/preview','/validate','/configuration-compatibility')
+     authorize(readonly ? 'read' : 'write')
+     if path=='/capabilities' && method=='GET'
+-      return [200,{'data'=>{'contract_versions'=>['1'],'schema_versions'=>['1'],'service_build'=>'whatsopt-597f5abf/modeling-1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>'1','supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++      return [200,{'data'=>{'contract_versions'=>['1','1.1'],'schema_versions'=>['1'],'service_build'=>'whatsopt-597f5abf/modeling-1.1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '2' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
+     end
+     if path=='/models' && method=='POST'
+       check('Create',body);raise Failure.new(403,'forbidden') unless body['study_id']==@study
+@@ -154,6 +154,7 @@
+     model=identity(resource,'model')
+     action=path.split('/')[3]
+     return [200,{'data'=>draft(model)}] if method=='GET' && action.nil?
++    return [200,{'data'=>list_revisions(model,query)}] if method=='GET' && path=="/models/#{resource}/revisions"
+     return [200,{'data'=>revision(path.split('/')[4],resource)}] if method=='GET' && action=='revisions'
+     return [200,{'data'=>export_package(model,query['revision'])}] if method=='GET' && action=='export'
+     raise Failure.new(404,'resource_not_found') unless method=='POST'
+@@ -187,6 +188,25 @@
+         [200,{'data'=>prepare(model,body)}]
+       end
+     end
++  end
++  # Cursor is an existing public revision ID, never a native offset. Use stored
++  # insertion order so UUID randomness and concurrent appends cannot reorder a page.
++  # Scope authorization and model lookup happen in route before query inspection.
++  def list_revisions(model,query)
++    raise Failure.new(400,'invalid_request') unless (query.keys-%w[cursor limit]).empty?
++    limit=query.fetch('limit','50')
++    raise Failure.new(400,'invalid_request') unless limit.is_a?(String) && /\A(?:[1-9]|[1-9][0-9]|100)\z/.match?(limit)
++    rows=ModelingRevision.where(study_id:@study,model_id:model.public_id,kind:'model')
++    if query.key?('cursor')
++      cursor=query['cursor']
++      raise Failure.new(400,'invalid_request') unless cursor.is_a?(String) && UUID.match?(cursor)
++      previous=rows.find_by(public_id:cursor)
++      raise Failure.new(404,'resource_not_found') unless previous
++      rows=rows.where('id > ?',previous.id)
++    end
++    page=rows.order(:id).limit(limit.to_i+1).to_a
++    items=page.first(limit.to_i).map { |r| r.payload.slice('model_revision_id','parent_model_revision_id','originating_draft_revision','digest') }
++    {'items'=>items,'next_cursor'=>page.length>limit.to_i ? items.last.fetch('model_revision_id') : nil}
+   end
+   def command(operation,target,body)
+     normalized=body.reject { |k,_| k=='command_id' }
+@@ -302,6 +322,8 @@
+       when 'disconnect'
+         c=s['connections'].find { |c| c['connection_id']==e['connection_id'] };raise Failure.new(409,'reference_conflict') unless c
+         s['connections'].delete(c)
++      when 'rename_model'
++        s['name']=e['name']
+       when 'rename_instance','remove_instance'
+         i=s['instances'].find { |i| i['instance_id']==e['instance_id'] };raise Failure.new(409,'reference_conflict') unless i
+         e['kind']=='rename_instance' ? i['name']=e['name'] : s['instances'].delete(i)
+@@ -401,7 +423,15 @@
+       conn=Connection.create!(from_id:native_ports.fetch(a['instance_id']+':'+a['port_id']),to_id:native_ports.fetch(b['instance_id']+':'+b['port_id']))
+       map(c['connection_id'],model.public_id,'connection',conn.id)
+     end
+-    model.update!(metadata:model.metadata.merge('draft_revision'=>s['draft_revision'],'annotations'=>s['annotations']))
++    # The command's owner transaction covers native label, draft metadata and receipt.
++    name=s.fetch('name',model.metadata.fetch('name')) # Imported immutable pins have no display name.
++    native=Analysis.find(model.native_id)
++    begin
++      native.update!(name:name) unless native.name==name
++    rescue ActiveRecord::RecordInvalid
++      raise Failure.new(422,'invalid_model')
++    end
++    model.update!(metadata:model.metadata.merge('name'=>name,'draft_revision'=>s['draft_revision'],'annotations'=>s['annotations']))
+   end
+   def commit(model,s)
+     pin=s.reject { |k,_| %w[study_id name draft_revision].include?(k) }.merge('model_revision_id'=>id,'parent_model_revision_id'=>model.metadata['head_revision'],'originating_draft_revision'=>s['draft_revision'])

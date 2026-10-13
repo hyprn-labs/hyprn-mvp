@@ -1,0 +1,204 @@
+--- a/app/services/modeling_contract.rb
++++ b/app/services/modeling_contract.rb
+@@ -9,7 +9,7 @@
+ # Immutable definition/model/preparation snapshots and receipts share the same SQL DB.
+ class ModelingContract
+   UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+-  CAPABILITIES = {'unit_declarations'=>true,'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
++  CAPABILITIES = {'quantity_definitions'=>true,'unit_declarations'=>true,'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
+   SCHEMA = JSON.parse(File.read(Rails.root.join('config/modeling.schema.json'))).fetch('$defs')
+   UNITS = JSON.parse(File.read(Rails.root.join('config/modeling.units.json')))
+   # Explicit intent is authoritative. Incomplete read-only versions are permitted;
+@@ -117,7 +117,11 @@
+   def valid?(s,v)
+     return valid?(SCHEMA.fetch(s['$ref'].split('/').last),v) if s['$ref']
+     return s['oneOf'].count { |a| valid?(a,v) }==1 if s['oneOf']
+-    return s['anyOf'].any? { |a| valid?(a,v) } if s['anyOf']
++    return false if s['anyOf'] && !s['anyOf'].any? { |a| valid?(a,v) }
++    if v.is_a?(Hash) && s['properties']
++      return false unless s['properties'].all? { |k,rule| !v.key?(k) || valid?(rule,v[k]) }
++    end
++    return false if v.is_a?(Array) && s['items'] && !v.all? { |x| valid?(s['items'],x) }
+     return false if s['enum'] && !s['enum'].include?(v)
+     case s['type']
+     when 'object'
+@@ -140,10 +144,12 @@
+     true
+   end
+   def check(type,v)
++    # NativeMaterializer keeps its audited bytes; the adapter owns read dispatch.
++    type='ModelRevisionRead4' if type=='ModelRevision'
+     return if valid?(SCHEMA.fetch(type),v)
+     # Distinguish a well-formed unsupported spelling from a malformed request.
+     # Validate the entire normalized wrapper before assigning unit diagnostics.
+-    if %w[Preview Apply].include?(type) && v.is_a?(Hash) && v['schema_version']=='3'
++    if %w[PreviewRead4 ApplyRead4].include?(type) && v.is_a?(Hash) && %w[3 4].include?(v['schema_version'])
+       fields=[]
+       walk=lambda do |value,path|
+         case value
+@@ -200,7 +206,7 @@
+     readonly=method=='GET' || path.end_with?('/preview','/validate','/configuration-compatibility')
+     authorize(readonly ? 'read' : 'write')
+     if path=='/capabilities' && method=='GET'
+-      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2','1.3'],'schema_versions'=>['1','2','3'],'service_build'=>'whatsopt-597f5abf/modeling-1.3','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2','3','4','5','6'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2','1.3'],'schema_versions'=>['1','2','3','4'],'service_build'=>'whatsopt-597f5abf/modeling-1.3-quantity1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2','3','4','5','6','8'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
+     end
+     if path=='/unit-catalog' && method=='GET'
+       catalog={'schema_version'=>'1','catalog_digest'=>UNITS.fetch('catalog_digest'),'engine'=>UNITS.fetch('engine'),'engine_version'=>UNITS.fetch('version'),'engine_source_sha256'=>UNITS.fetch('source_sha256'),'supported_units'=>UNITS.fetch('supported_units').reject(&:empty?),'affine_conversion'=>false}
+@@ -240,7 +246,7 @@
+     return [200,{'data'=>revision(path.split('/')[4],resource)}] if method=='GET' && action=='revisions'
+     return [200,{'data'=>export_package(model,query['revision'])}] if method=='GET' && action=='export'
+     raise Failure.new(404,'resource_not_found') unless method=='POST'
+-    type={'preview'=>'Preview','edits'=>'Apply','commits'=>'Commit','validate'=>'Validate','configuration-compatibility'=>'Compatibility','prepare-execution'=>'Prepare'}[action]
++    type={'preview'=>'PreviewRead4','edits'=>'ApplyRead4','commits'=>'Commit','validate'=>'Validate','configuration-compatibility'=>'Compatibility','prepare-execution'=>'Prepare'}[action]
+     raise Failure.new(404,'resource_not_found') unless type
+     check(type,body)
+     if action=='preview'
+@@ -340,13 +346,18 @@
+       {'connection_id'=>r.public_id,'source_ref'=>ports_by_native.fetch(c.from_id),'target_ref'=>ports_by_native.fetch(c.to_id)}
+     end
+     state={'schema_version'=>model.metadata.fetch('schema_version','1'),'study_id'=>@study,'model_id'=>model.public_id,'name'=>model.metadata['name'],'draft_revision'=>model.metadata['draft_revision'],'root_instance_id'=>model.metadata['root_instance_id'],'definitions'=>definitions,'instances'=>instances,'ports'=>definitions.flat_map { |d| d['ports'] },'connections'=>connections,'boundary_mappings'=>[],'annotations'=>model.metadata['annotations'],'source_files'=>versions.map { |v| v.fetch('source') }.uniq,'required_capabilities'=>['flat_explicit_scalar']}
+-    state['assumptions']=model.metadata.fetch('assumptions') if %w[2 3].include?(state['schema_version'])
+-    state['required_capabilities'] << 'unit_declarations/1' if state['schema_version']=='3'
++    state['assumptions']=model.metadata.fetch('assumptions') if %w[2 3 4].include?(state['schema_version'])
++    state['required_capabilities'] << 'unit_declarations/1' if state['schema_version']=='3' || (state['schema_version']=='4' && definitions.any? { |d| d['ports'].any? { |p| p['units'].is_a?(Hash) } })
++    state['required_capabilities'] << 'quantity_definitions/1' if state['schema_version']=='4'
+     state
+   end
+   def edit_state(state,body)
+     # Preview upgrades only its in-memory projection. Apply persists on success.
+-    raise Failure.new(422,'unsupported_capability') if state['schema_version']=='3' && body['schema_version']!='3'
++    raise Failure.new(422,'unsupported_capability') if state['schema_version']=='4' && body['schema_version']!='4'
++    raise Failure.new(422,'unsupported_capability') if state['schema_version']=='3' && !%w[3 4].include?(body['schema_version'])
++    if body['schema_version']=='4'
++      return state.merge('schema_version'=>'4','assumptions'=>state.fetch('assumptions',[]),'required_capabilities'=>(state['required_capabilities']+['quantity_definitions/1']).uniq)
++    end
+     if body['schema_version']=='3'
+       return state.merge('schema_version'=>'3','assumptions'=>state.fetch('assumptions',[]),'required_capabilities'=>(state['required_capabilities']+['unit_declarations/1']).uniq)
+     end
+@@ -387,13 +398,23 @@
+           src=s['source_files'].find { |f| f['sha256']==old['source_refs'][0] };new_ports=[]
+           e['changes'].each do |change|
+             case change['kind']
++            when 'set_quantity_definition','clear_quantity_definition'
++              raise Failure.new(409,'reference_conflict') unless defn['ports'].any? { |p| p['port_id']==change['port_id'] }
++              defn['quantity_definitions'] ||= []
++              defn['quantity_definitions'].reject! { |q| q['port_id']==change['port_id'] }
++              defn['quantity_definitions'] << change.slice('port_id','statement') if change['kind']=='set_quantity_definition'
+             when 'set_source' then src=change['source']
+             when 'rename_definition' then defn['name']=change['name']
+             when 'create_port' then new_ports << change.reject { |k,_| k=='kind' }
+             when 'update_port','remove_port'
+               p=defn['ports'].find { |p| p['port_id']==change['port_id'] }
+               raise Failure.new(409,'reference_conflict') unless p
+-              change['kind']=='remove_port' ? defn['ports'].delete(p) : p.merge!(change['fields'])
++              if change['kind']=='remove_port'
++                defn['ports'].delete(p)
++                defn.fetch('quantity_definitions',[]).reject! { |q| q['port_id']==p['port_id'] }
++              else
++                p.merge!(change['fields'])
++              end
+             end
+           end
+         end
+@@ -407,6 +428,10 @@
+         check_source(src);defn['source_refs']=[src['sha256']]
+         s['source_files'] << src unless s['source_files'].include?(src)
+         check('Definition3',defn) if s['schema_version']=='3'
++        if s['schema_version']=='4'
++          defn['quantity_definitions'] ||= []
++          check('Definition4',defn)
++        end
+         s['definitions'] << defn
+         created[e['temp_key']]=defn.slice('definition_id','definition_version_id').merge('ports'=>port_ids)
+       when 'instantiate'
+@@ -426,7 +451,7 @@
+         c=s['connections'].find { |c| c['connection_id']==e['connection_id'] };raise Failure.new(409,'reference_conflict') unless c
+         s['connections'].delete(c)
+       when 'add_assumption'
+-        raise Failure.new(422,'unsupported_capability') unless %w[2 3].include?(s['schema_version'])
++        raise Failure.new(422,'unsupported_capability') unless %w[2 3 4].include?(s['schema_version'])
+         owner=e['owner'].dup
+         if owner.key?('instance_temp_key')
+           instance=created.fetch(owner.delete('instance_temp_key'),{})['instance_id']
+@@ -453,6 +478,7 @@
+       end
+     end
+     s['ports']=s['definitions'].flat_map { |d| d['ports'] }
++    s['required_capabilities'] << 'unit_declarations/1' if s['schema_version']=='4' && s['ports'].any? { |p| p['units'].is_a?(Hash) } && !s['required_capabilities'].include?('unit_declarations/1')
+     validate_model(s);s['draft_revision']=id
+     [s,created]
+   end
+@@ -471,8 +497,8 @@
+     p
+   end
+   def validate_model(s)
+-    check(s.key?('model_revision_id') ? 'ModelRevision' : 'ModelDraft',s)
+-    if %w[2 3].include?(s['schema_version'])
++    check(s.key?('model_revision_id') ? 'ModelRevisionRead4' : 'ModelDraftRead4',s)
++    if %w[2 3 4].include?(s['schema_version'])
+       assumptions=s.fetch('assumptions')
+       raise Failure.new(422,'invalid_model') unless assumptions.map { |a| a['assumption_id'] }.uniq.size==assumptions.size
+       assumptions.each do |a|
+@@ -484,6 +510,8 @@
+       raise Failure.new(413,'limit_exceeded') if assumptions.flat_map { |a| a['evidence_links'].map { |l| l['evidence_version_id'] } }.uniq.size>1000
+     end
+     raise Failure.new(422,'unsupported_capability') if s['schema_version']=='3' && !s['required_capabilities'].include?('unit_declarations/1')
++    raise Failure.new(422,'unsupported_capability') if s['schema_version']=='4' && !s['required_capabilities'].include?('quantity_definitions/1')
++    raise Failure.new(422,'unsupported_capability') if s['schema_version']=='4' && s['ports'].any? { |p| p['units'].is_a?(Hash) } && !s['required_capabilities'].include?('unit_declarations/1')
+     validate_unit_records!(s)
+     raise Failure.new(413,'limit_exceeded') if %w[definitions instances ports connections annotations].sum { |k| s[k].size }>1000
+     {'definitions'=>'definition_version_id','instances'=>'instance_id','connections'=>'connection_id','source_files'=>'sha256'}.each do |collection,key|
+@@ -491,8 +519,12 @@
+       raise Failure.new(422,'invalid_model') unless ids.uniq.size==ids.size
+     end
+     raise Failure.new(422,'invalid_model') unless s['ports']==s['definitions'].flat_map { |d| d['ports'] }
+-    raise Failure.new(422,'unsupported_capability') unless s['boundary_mappings'].empty? && (s['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(s['schema_version']=='3' ? ['unit_declarations/1'] : [])).empty?
++    raise Failure.new(422,'unsupported_capability') unless s['boundary_mappings'].empty? && (s['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(%w[3 4].include?(s['schema_version']) ? ['unit_declarations/1','quantity_definitions/1'] : [])).empty?
+     s['definitions'].each do |d|
++      if d.key?('quantity_definitions')
++        quantities=d.fetch('quantity_definitions'); ids=quantities.map { |q| q['port_id'] }
++        raise Failure.new(422,'invalid_model') unless ids.uniq.size==ids.size && (ids-d['ports'].map { |p| p['port_id'] }).empty? && quantities.all? { |q| q['statement'].match?(/[^[:space:]\u001c-\u001f]/) }
++      end
+       raise Failure.new(422,'invalid_model') unless d['ports'].map { |p| p['port_id'] }.uniq.size==d['ports'].size && d['ports'].all? { |p| p['definition_version_id']==d['definition_version_id'] }
+       raise Failure.new(422,'unsupported_capability') unless d['kind']=='explicit_component' && d['child_instances'].empty? && d['boundary_mappings'].empty? && d['residual_port_ids'].empty?
+       raise Failure.new(422,'invalid_model') unless d['ports'].map { |p| p['code_symbol'] }.uniq.size==d['ports'].size
+@@ -592,7 +624,7 @@
+   def compatible(m,c)
+     type=configuration_type(c)
+     check(type,c)
+-    raise Failure.new(422,'invalid_configuration') if m['schema_version']=='3' && c['schema_version']!='3'
++    raise Failure.new(422,'invalid_configuration') if %w[3 4].include?(m['schema_version']) && c['schema_version']!='3'
+     if c['schema_version']=='3'
+       # Full app projection equality/closure is checked by its owner. Here only
+       # frozen opaque data is admitted; no evidence-library lookup is possible.
+@@ -619,7 +651,7 @@
+           result['diagnostics'] << {'path'=>'configuration','code'=>'invalid_configuration','message'=>'Converted input is not finite','element_ref'=>nil}
+           next
+         end
+-        interpretations << {'target'=>input['target'],'conversion'=>{'policy'=>'openmdao-linear-catalog-1','catalog_digest'=>m['schema_version']=='3' ? UNITS.fetch('catalog_digest') : self.class.digest(UNITS),'source_units'=>input['units'],'destination_units'=>destination,'factor'=>pair[2],'destination_value'=>value}}
++        interpretations << {'target'=>input['target'],'conversion'=>{'policy'=>'openmdao-linear-catalog-1','catalog_digest'=>(m['schema_version']=='3' || (m['schema_version']=='4' && port(m,input['target'])['units'].is_a?(Hash))) ? UNITS.fetch('catalog_digest') : self.class.digest(UNITS),'source_units'=>input['units'],'destination_units'=>destination,'factor'=>pair[2],'destination_value'=>value}}
+       rescue Failure
+         # The literal compatibility result already reports the unknown target.
+       end
+@@ -629,7 +661,7 @@
+   def compatible_literal(m,c)
+     raise Failure.new(422,'invalid_configuration') unless c['model_id']==m['model_id'] && c['model_revision_id']==m['model_revision_id'] && c['study_id']==@study
+     n=c['numerical']
+-    raise Failure.new(422,'unsupported_capability') unless n['mode']=='deterministic' && %w[initialization solvers design_variables objectives constraints].all? { |k| n[k].empty? } && n['optimizer'].nil? && n['uncertainty'].nil? && n['derivatives']=={'method'=>'none','form'=>nil,'check'=>nil} && (c['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(m['schema_version']=='3' ? ['unit_declarations/1'] : [])).empty?
++    raise Failure.new(422,'unsupported_capability') unless n['mode']=='deterministic' && %w[initialization solvers design_variables objectives constraints].all? { |k| n[k].empty? } && n['optimizer'].nil? && n['uncertainty'].nil? && n['derivatives']=={'method'=>'none','form'=>nil,'check'=>nil} && (c['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(%w[3 4].include?(m['schema_version']) ? ['unit_declarations/1','quantity_definitions/1'] : [])).empty?
+     incoming=m['connections'].map { |c| c['target_ref'] }
+     free=m['instances'].flat_map { |i| m['definitions'].find { |d| d['definition_version_id']==i['definition_version_id'] }['ports'].select { |p| p['direction']=='input' }.map { |p| {'instance_id'=>i['instance_id'],'port_id'=>p['port_id']} } }-incoming
+     unit_issues=[]
+@@ -699,9 +731,10 @@
+   def import_package(package)
+     check('ModelPackage',package)
+     raise Failure.new(422,'invalid_model') unless package['digest']==self.class.digest(package.reject { |k,_| k=='digest' })
+-    raise Failure.new(422,'unsupported_capability') unless (package['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-['unit_declarations/1']).empty?
++    raise Failure.new(422,'unsupported_capability') unless (package['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-['unit_declarations/1','quantity_definitions/1']).empty?
+     raise Failure.new(409,'identity_collision') if ModelingIdentity.exists?(public_id:package['model_id'])
+     raise Failure.new(422,'unsupported_capability') if package['schema_version']=='3' && !package['required_capabilities'].include?('unit_declarations/1')
++    raise Failure.new(422,'unsupported_capability') if package['schema_version']=='4' && !package['required_capabilities'].include?('quantity_definitions/1')
+     pins=package['revisions'];seen=[];definitions={}
+     pins.each do |p|
+       validate_model(p)

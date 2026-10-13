@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "violations": {
+    "src/exports.ts": {
+      "colour|#17212b": 3,
+      "colour|#718096": 1,
+      "colour|#fff": 2
+    }
+  }
+}

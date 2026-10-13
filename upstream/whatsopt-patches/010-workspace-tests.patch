@@ -1,0 +1,133 @@
+--- /dev/null
++++ b/test/integration/hyprn_mvp_workspace_test.rb
+@@ -0,0 +1,114 @@
++require "test_helper"
++
++class HyprnMvpWorkspaceTest < ActionDispatch::IntegrationTest
++  setup do
++    @owner = users(:user1)
++    sign_in @owner
++    @model = Analysis.create!(name: "Manual model", public: false)
++    @model.set_owner(@owner)
++    @base = "/api/v1/analyses/#{@model.id}/hyprn_mvp"
++  end
++
++  def workspace
++    get @base, as: :json
++    assert_response :success
++    response.parsed_body
++  end
++
++  def save(payload, revision = workspace.fetch("revision"), command = SecureRandom.uuid)
++    post @base + "/save", params: {command_id: command, expected_revision: revision, payload: payload}, as: :json
++  end
++
++  def component(name = "First")
++    {name: name, source: "outputs['u'] = 2 * inputs['x']\n", notes: "Équilibre α <tag>\n  exact", ports: [
++      {name: "x", io_mode: "in", units: "m", shape: "1", type: "Float"},
++      {name: "u", io_mode: "out", units: "m", shape: "1", type: "Float"}]}
++  end
++
++  test "empty workspace and exact source notes Unicode roundtrip" do
++    assert_empty workspace.fetch("components")
++    save({name: "Étude 日本 α", description: "é\n<text>", boundary: "Frontière 日本", components: [component]})
++    assert_response :success
++    state = workspace
++    assert_equal "Étude 日本 α", state["name"]
++    assert_equal "é\n<text>", state["description"]
++    assert_equal component[:source], state["components"][0]["source"]
++    assert_equal component[:notes], state["components"][0]["notes"]
++  end
++
++  test "replay resolves original and changed payload conflicts" do
++    rev = workspace["revision"]; id = SecureRandom.uuid
++    save({components: [component]}, rev, id); assert_response :success
++    original = response.parsed_body
++    save({components: [component]}, rev, id); assert_response :success
++    assert_equal original, response.parsed_body
++    save({name: "Other"}, rev, id); assert_response :conflict
++  end
++
++  test "two same-second saves reject stale and rollback mixed invalid edits" do
++    rev = workspace["revision"]
++    save({components: [component]}, rev); assert_response :success
++    saved = workspace
++    save({name: "Stale"}, rev); assert_response :conflict
++    save({name: "Partial", components: [component("Second").merge(source: "if :")]}, saved["revision"])
++    assert_response :unprocessable_entity
++    assert_equal saved, workspace
++  end
++
++  test "static validation cannot execute a top-level effect" do
++    canary = "/tmp/hyprn-mvp-authoring-canary"
++    File.delete(canary) if File.exist?(canary)
++    save({components: [component.merge(source: "open('#{canary}', 'w').write('BAD')\noutputs['u'] = inputs['x']\n")]})
++    assert_response :success
++    post @base + "/validate", params: {expected_revision: workspace["revision"]}, as: :json
++    assert_response :success
++    refute File.exist?(canary)
++  end
++
++  test "owner is required even when native analysis is public" do
++    @model.update!(public: true)
++    sign_out @owner; sign_in users(:user2)
++    get @base, as: :json
++    assert_response :forbidden
++  end
++
++  test "blank names fail and native storage length is respected without truncation" do
++    save({name: "  "}); assert_response :unprocessable_entity
++    limit = Analysis.columns_hash.fetch("name").limit
++    # SQLite native strings are unbounded; assert that fact rather than inventing 255.
++    name = "É" * (limit || 4096)
++    save({name: name}); assert_response :success
++    assert_equal name, workspace["name"]
++    if limit
++      save({name: name + "É"}); assert_response :unprocessable_entity
++    end
++  end
++
++  test "configuration pins root and ID assignments and copy is a draft" do
++    save({components: [component]}); assert_response :success
++    state = workspace; port = state["free_inputs"].first
++    command = SecureRandom.uuid
++    request = {command_id: command, expected_revision: state["revision"], payload: {assignments: [{port_id: port["id"], value: 0, units: "m", provenance: "Measured"}]}}
++    post @base + "/configurations", params: request, as: :json; assert_response :success
++    config = response.parsed_body
++    post @base + "/configurations", params: request, as: :json; assert_response :success
++    assert_equal config, response.parsed_body
++    save({name: "Changed"}); assert_response :success
++    get @base + "/configurations/#{config.fetch('id')}", as: :json; assert_response :success
++    assert_equal config, response.parsed_body
++    assert_equal state["revision"], config["root"]["revision"]
++    post @base + "/configurations/#{config['id']}/copy", as: :json; assert_response :success
++    assert_equal true, response.parsed_body["draft"]
++    assert_equal 0.0, response.parsed_body["assignments"].first["value"]
++  end
++
++  test "missing configuration input and stale root never save" do
++    save({components: [component]}); assert_response :success
++    state = workspace
++    post @base + "/configurations", params: {command_id: SecureRandom.uuid, expected_revision: state['revision'], payload: {assignments: []}}, as: :json
++    assert_response :unprocessable_entity
++    save({name: "Changed"})
++    post @base + "/configurations", params: {command_id: SecureRandom.uuid, expected_revision: state['revision'], payload: {assignments: []}}, as: :json
++    assert_response :conflict
++  end
++end
+--- /dev/null
++++ b/test/system/hyprn_mvp_workspace_test.rb
+@@ -0,0 +1,13 @@
++require "test_helper"
++
++# Native server-rendered shell contract; interactive browser proof uses installed Chrome.
++class HyprnMvpWorkspaceShellTest < ActionDispatch::IntegrationTest
++  test "native viewer owns the authoring panel and authenticated shell" do
++    sign_in users(:user1)
++    model = Analysis.create!(name: "Keyboard workspace", public: false)
++    model.set_owner(users(:user1))
++    get "/analyses/#{model.id}"
++    assert_response :success
++    assert_select "[data-hyprn-mvp-workspace]"
++  end
++end

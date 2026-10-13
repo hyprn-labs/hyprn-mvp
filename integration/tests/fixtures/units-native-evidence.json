@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "purpose": "Analytical expectations, not captured runtime evidence",
+  "relative_tolerance": 1e-12,
+  "absolute_tolerance": 1e-09,
+  "families": [
+    {
+      "name": "specific_energy",
+      "source": "MJ/kg",
+      "destination": "J/kg",
+      "factor": 1000000
+    },
+    {
+      "name": "density",
+      "source": "g/cm**3",
+      "destination": "kg/m**3",
+      "factor": 1000
+    },
+    {
+      "name": "area",
+      "source": "m**2",
+      "destination": "cm**2",
+      "factor": 10000
+    }
+  ]
+}

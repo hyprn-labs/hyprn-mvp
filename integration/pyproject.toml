@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyprn-mvp-integration"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["openmdao==3.45.1", "aiida-core==2.9.3"]
+
+[project.entry-points."aiida.calculations"]
+"hyprn_mvp.scalar" = "hyprn_mvp_integration.calculation:ScalarCalculation"
+
+[project.entry-points."aiida.parsers"]
+"hyprn_mvp.scalar" = "hyprn_mvp_integration.calculation:ScalarParser"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-p no:cacheprovider"
+markers = ["quick: pure boundary and submission tests", "integration: native integration", "isolation: restricted worker boundary"]

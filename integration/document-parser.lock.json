@@ -1,0 +1,27 @@
+{
+  "format": "hyprn-mvp.document-parser-lock/1",
+  "provenance": "integration/document-parser-provenance.md",
+  "name": "pypdf",
+  "version": "6.20.0",
+  "python": "3.12",
+  "extras": [],
+  "dependencies": [],
+  "dependency_resolution": false,
+  "wheel": {
+    "filename": "pypdf-6.20.0-py3-none-any.whl",
+    "size": 401710,
+    "sha256": "f003fc2014814d264fe7dd3f9d435c158e23e1a85a2233f87a0a2d6d21c914ad",
+    "index_host": "pypi.org"
+  },
+  "licence": {
+    "expression": "BSD-3-Clause",
+    "file": "pypdf-6.20.0.dist-info/licenses/LICENSE",
+    "size": 1605,
+    "sha256": "a97ac230e5f33ef10a5367a850eb01f91f1a0b064e34742c7794d2294557f524"
+  },
+  "source": {
+    "repository": "https://github.com/py-pdf/pypdf",
+    "tag": "6.20.0",
+    "commit": "0309ab701a192fbd3228701a44dd009765a1629b"
+  }
+}

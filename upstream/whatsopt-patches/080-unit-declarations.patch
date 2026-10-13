@@ -1,0 +1,608 @@
+--- a/app/services/modeling_contract.rb
++++ b/app/services/modeling_contract.rb
+@@ -9,14 +9,62 @@
+ # Immutable definition/model/preparation snapshots and receipts share the same SQL DB.
+ class ModelingContract
+   UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+-  CAPABILITIES = {'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
++  CAPABILITIES = {'unit_declarations'=>true,'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
+   SCHEMA = JSON.parse(File.read(Rails.root.join('config/modeling.schema.json'))).fetch('$defs')
+   UNITS = JSON.parse(File.read(Rails.root.join('config/modeling.units.json')))
+-  def compatible_units?(a,b) = UNITS['linear_pairs'].any? { |x| x[0]==a && x[1]==b }
++  # Explicit intent is authoritative. Incomplete read-only versions are permitted;
++  # The finite trusted table is the only expression authority; never parse source.
++  def unit_expression(value, allow_unspecified: false)
++    if value.is_a?(String)
++      raise Failure.new(422,'invalid_model') unless UNITS['supported_units'].include?(value)
++      return value # Historical empty strings remain dimensionless.
++    end
++    raise Failure.new(422,'invalid_model') unless value.is_a?(Hash) && valid?(SCHEMA.fetch('UnitDeclaration1'),value)
++    case value['kind']
++    when 'dimensionless' then ''
++    when 'physical'
++      expression=value.fetch('expression')
++      raise Failure.new(422,'invalid_model') unless !expression.empty? && UNITS['supported_units'].include?(expression)
++      expression
++    when 'unspecified'
++      raise Failure.new(422,'invalid_model') unless allow_unspecified
++      nil
++    else raise Failure.new(422,'invalid_model')
++    end
++  end
++  def validate_unit_records!(model)
++    model.fetch('definitions').each do |definition|
++      ports=definition.fetch('ports')
++      # Retained legacy and new versions may coexist, never mix within a version.
++      raise Failure.new(422,'invalid_model') unless ports.all? { |p| p['units'].is_a?(String) } || ports.all? { |p| p['units'].is_a?(Hash) }
++      ports.each { |p| unit_expression(p.fetch('units'),allow_unspecified:true) }
++    end
++  end
++  def unit_readiness(model)
++    validate_unit_records!(model)
++    definitions=model.fetch('definitions')
++    raise Failure.new(422,'invalid_model') unless definitions.map { |d| d['definition_version_id'] }.uniq.size==definitions.size
++    by_version=definitions.to_h { |d| [d.fetch('definition_version_id'),d] }
++    issues=[]
++    model.fetch('instances').each do |instance|
++      definition=by_version[instance.fetch('definition_version_id')]
++      raise Failure.new(409,'reference_conflict') unless definition
++      definition.fetch('ports').each do |port|
++        next unless unit_expression(port.fetch('units'),allow_unspecified:true).nil?
++        issues << {'path'=>"instances/#{instance.fetch('instance_id')}/definitions/#{definition.fetch('definition_version_id')}/ports/#{port.fetch('port_id')}/units",'code'=>'unit_unspecified','message'=>'Specify units before execution','element_ref'=>port.fetch('port_id')}
++        raise Failure.new(413,'limit_exceeded') if issues.size>1000
++      end
++    end
++    issues
++  end
++  def require_resolved_units!(model)
++    raise Failure.new(422,'invalid_model') unless unit_readiness(model).empty?
++  end
++  def compatible_units?(a,b) = UNITS['linear_pairs'].any? { |x| x[0]==unit_expression(a) && x[1]==unit_expression(b) }
+   class Failure < StandardError
+-    attr_reader :status, :code, :current, :outcome
+-    def initialize(status, code, current: nil, outcome: 'unchanged')
+-      @status,@code,@current,@outcome = status,code,current,outcome
++    attr_reader :status, :code, :current, :outcome, :fields
++    def initialize(status, code, current: nil, outcome: 'unchanged', fields: [])
++      @status,@code,@current,@outcome,@fields = status,code,current,outcome,fields
+       super(code.tr('_',' '))
+     end
+   end
+@@ -62,7 +110,7 @@
+   end
+   def self.digest(x) = Digest::SHA256.hexdigest(canonical(x))
+   def self.error(e, rid, cmd=nil, resource=nil)
+-    {'error'=>{'code'=>e.code,'message'=>e.message,'request_id'=>rid || SecureRandom.uuid,'command_id'=>cmd.to_s.match?(UUID) ? cmd : nil,'resource_id'=>resource,'current_revision'=>e.current,'fields'=>[],'outcome'=>e.outcome}}
++    {'error'=>{'code'=>e.code,'message'=>e.message,'request_id'=>rid || SecureRandom.uuid,'command_id'=>cmd.to_s.match?(UUID) ? cmd : nil,'resource_id'=>resource,'current_revision'=>e.current,'fields'=>e.fields,'outcome'=>e.outcome}}
+   end
+   # Small bounded evaluator for precisely the audited schema keywords in v1.
+   # This does not claim arbitrary JSON-Schema dialect support.
+@@ -92,7 +140,32 @@
+     true
+   end
+   def check(type,v)
+-    raise Failure.new(400,'invalid_request') unless valid?(SCHEMA.fetch(type),v)
++    return if valid?(SCHEMA.fetch(type),v)
++    # Distinguish a well-formed unsupported spelling from a malformed request.
++    # Validate the entire normalized wrapper before assigning unit diagnostics.
++    if %w[Preview Apply].include?(type) && v.is_a?(Hash) && v['schema_version']=='3'
++      fields=[]
++      walk=lambda do |value,path|
++        case value
++        when Hash
++          value.to_h do |key,item|
++            location=path+[key]
++            if key=='units' && item.is_a?(Hash) && item.keys.sort==%w[expression kind] && item['kind']=='physical' && item['expression'].is_a?(String) && item['expression'].length.between?(1,64) && !UNITS['supported_units'].include?(item['expression'])
++              fields << {'path'=>location.join('/'),'code'=>'unit_unsupported','message'=>'Choose a supported physical unit','element_ref'=>nil}
++              raise Failure.new(413,'limit_exceeded') if fields.size>1000
++              [key,{'kind'=>'dimensionless'}]
++            else
++              [key,walk.call(item,location)]
++            end
++          end
++        when Array then value.each_with_index.map { |item,index| walk.call(item,path+[index.to_s]) }
++        else value
++        end
++      end
++      normalized=walk.call(v,[])
++      raise Failure.new(422,'invalid_model',fields:fields) if !fields.empty? && valid?(SCHEMA.fetch(type),normalized)
++    end
++    raise Failure.new(400,'invalid_request')
+   end
+   def initialize(scope)
+     @scope=scope;@study=scope.fetch('study_id');@projected=false;@counter=0
+@@ -127,10 +200,16 @@
+     readonly=method=='GET' || path.end_with?('/preview','/validate','/configuration-compatibility')
+     authorize(readonly ? 'read' : 'write')
+     if path=='/capabilities' && method=='GET'
+-      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2'],'schema_versions'=>['1','2'],'service_build'=>'whatsopt-597f5abf/modeling-1.2','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2','3','4'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2','1.3'],'schema_versions'=>['1','2','3'],'service_build'=>'whatsopt-597f5abf/modeling-1.3','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['2'],'bundle_versions'=>['2','3','4','5','6'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1'],'historical_bundle_versions'=>['1']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++    end
++    if path=='/unit-catalog' && method=='GET'
++      catalog={'schema_version'=>'1','catalog_digest'=>UNITS.fetch('catalog_digest'),'engine'=>UNITS.fetch('engine'),'engine_version'=>UNITS.fetch('version'),'engine_source_sha256'=>UNITS.fetch('source_sha256'),'supported_units'=>UNITS.fetch('supported_units').reject(&:empty?),'affine_conversion'=>false}
++      check('UnitCatalog1',catalog)
++      raise Failure.new(413,'limit_exceeded') if JSON.generate(catalog).bytesize>16000
++      return [200,{'data'=>catalog}]
+     end
+     if path=='/models' && method=='POST'
+-      check('Create',body);raise Failure.new(403,'forbidden') unless body['study_id']==@study
++      check('CreateRequest',body);raise Failure.new(403,'forbidden') unless body['study_id']==@study
+       return command('create',nil,body) { [201,{'data'=>create(body)}] }
+     end
+     if path=='/imports' && method=='POST'
+@@ -168,14 +247,14 @@
+       @projected=true
+       state=draft(model);expect(state,body)
+       state,created=project(edit_state(state,body),body['edits'])
+-      return [200,{'data'=>state,'created_ids'=>created,'diagnostics'=>[]}]
++      return [200,{'data'=>state,'created_ids'=>created,'diagnostics'=>unit_readiness(state)}]
+     elsif action=='configuration-compatibility'
+       return [200,{'data'=>compatible(revision(body['model_revision_id'],resource),body['configuration_candidate'])}]
+     elsif action=='validate'
+       state=body['model_revision_id'] ? revision(body['model_revision_id'],resource) : draft(model)
+       raise Failure.new(409,'stale_revision',current:state['draft_revision']) if body['draft_revision'] && state['draft_revision']!=body['draft_revision']
+       validate_model(state)
+-      return [200,{'data'=>{'checked_revision'=>body.values.first,'validation_scope'=>'static','diagnostics'=>[]}}]
++      return [200,{'data'=>{'checked_revision'=>body.values.first,'validation_scope'=>'static','diagnostics'=>unit_readiness(state)}}]
+     end
+     command(action,resource,body) do
+       model.reload
+@@ -184,7 +263,7 @@
+       case action
+       when 'edits'
+         projected,created=project(edit_state(state,body),body['edits']);persist(model,projected)
+-        [200,{'data'=>draft(model.reload),'created_ids'=>created,'diagnostics'=>[]}]
++        [200,{'data'=>draft(model.reload),'created_ids'=>created,'diagnostics'=>unit_readiness(projected)}]
+       when 'commits'
+         validate_model(state);pin=commit(model,state);[200,{'data'=>pin}]
+       when 'prepare-execution'
+@@ -240,10 +319,10 @@
+   def create(body)
+     model_id=id;root=id
+     native=Analysis.create!(name:body['name'],public:false)
+-    row=map(model_id,model_id,'model',native.id,{'name'=>body['name'],'root_instance_id'=>root,'draft_revision'=>id,'head_revision'=>nil,'annotations'=>[],'schema_version'=>'2','assumptions'=>[]})
++    row=map(model_id,model_id,'model',native.id,{'name'=>body['name'],'root_instance_id'=>root,'draft_revision'=>id,'head_revision'=>nil,'annotations'=>[],'schema_version'=>body['schema_version']=='3' ? '3' : '2','assumptions'=>[]})
+     if body['template']=='two_component_example'
+       # Ordinary typed definitions; no special execution path.
+-      p=lambda { |k,d| {'temp_key'=>k,'direction'=>d,'name'=>k,'code_symbol'=>k,'value_type'=>'real_scalar','units'=>''} }
++      p=lambda { |k,d| {'temp_key'=>k,'direction'=>d,'name'=>k,'code_symbol'=>k,'value_type'=>'real_scalar','units'=>body['schema_version']=='3' ? {'kind'=>'dimensionless'} : ''} }
+       src=lambda { |s| {'encoding'=>'base64','media_type'=>'text/x-python','bytes'=>Base64.strict_encode64(s),'sha256'=>Digest::SHA256.hexdigest(s)} }
+       edits=[{'kind'=>'create_definition','temp_key'=>'first','definition_kind'=>'explicit_component','name'=>'First','ports'=>[p.call('x','input'),p.call('z','input'),p.call('u','output')],'source'=>src.call("outputs['u'] = inputs['x'] + inputs['z']\n")},{'kind'=>'instantiate','temp_key'=>'a','version_ref'=>{'temp_key'=>'first'}},{'kind'=>'create_definition','temp_key'=>'second','definition_kind'=>'explicit_component','name'=>'Second','ports'=>[p.call('u','input'),p.call('y','output')],'source'=>src.call("outputs['y'] = inputs['u'] ** 2\n")},{'kind'=>'instantiate','temp_key'=>'b','version_ref'=>{'temp_key'=>'second'}},{'kind'=>'connect','temp_key'=>'c','source_ref'=>{'instance_temp_key'=>'a','definition_temp_key'=>'first','port_temp_key'=>'u'},'target_ref'=>{'instance_temp_key'=>'b','definition_temp_key'=>'second','port_temp_key'=>'u'}}]
+       s,_=project(draft(row),edits);persist(row,s)
+@@ -261,11 +340,16 @@
+       {'connection_id'=>r.public_id,'source_ref'=>ports_by_native.fetch(c.from_id),'target_ref'=>ports_by_native.fetch(c.to_id)}
+     end
+     state={'schema_version'=>model.metadata.fetch('schema_version','1'),'study_id'=>@study,'model_id'=>model.public_id,'name'=>model.metadata['name'],'draft_revision'=>model.metadata['draft_revision'],'root_instance_id'=>model.metadata['root_instance_id'],'definitions'=>definitions,'instances'=>instances,'ports'=>definitions.flat_map { |d| d['ports'] },'connections'=>connections,'boundary_mappings'=>[],'annotations'=>model.metadata['annotations'],'source_files'=>versions.map { |v| v.fetch('source') }.uniq,'required_capabilities'=>['flat_explicit_scalar']}
+-    state['assumptions']=model.metadata.fetch('assumptions') if state['schema_version']=='2'
++    state['assumptions']=model.metadata.fetch('assumptions') if %w[2 3].include?(state['schema_version'])
++    state['required_capabilities'] << 'unit_declarations/1' if state['schema_version']=='3'
+     state
+   end
+   def edit_state(state,body)
+     # Preview upgrades only its in-memory projection. Apply persists on success.
++    raise Failure.new(422,'unsupported_capability') if state['schema_version']=='3' && body['schema_version']!='3'
++    if body['schema_version']=='3'
++      return state.merge('schema_version'=>'3','assumptions'=>state.fetch('assumptions',[]),'required_capabilities'=>(state['required_capabilities']+['unit_declarations/1']).uniq)
++    end
+     return state unless body['schema_version']=='2' && state['schema_version']=='1'
+     state.merge('schema_version'=>'2','assumptions'=>[])
+   end
+@@ -292,6 +376,14 @@
+           old=s['definitions'].reverse.find { |d| d['definition_id']==e['definition_id'] }
+           raise Failure.new(409,'stale_revision') unless old && old['definition_version_id']==e['expected_definition_version_id']
+           defn=JSON.parse(JSON.generate(old));defn['definition_version_id']=id
++          # Only the new immutable version gains explicit declarations.
++          if s['schema_version']=='3'
++            defn['ports'].each do |p|
++              next unless p['units'].is_a?(String)
++              expression=unit_expression(p['units'])
++              p['units']=expression.empty? ? {'kind'=>'dimensionless'} : {'kind'=>'physical','expression'=>expression}
++            end
++          end
+           src=s['source_files'].find { |f| f['sha256']==old['source_refs'][0] };new_ports=[]
+           e['changes'].each do |change|
+             case change['kind']
+@@ -314,6 +406,7 @@
+         defn['ports'].each { |p| p['definition_version_id']=defn['definition_version_id'] }
+         check_source(src);defn['source_refs']=[src['sha256']]
+         s['source_files'] << src unless s['source_files'].include?(src)
++        check('Definition3',defn) if s['schema_version']=='3'
+         s['definitions'] << defn
+         created[e['temp_key']]=defn.slice('definition_id','definition_version_id').merge('ports'=>port_ids)
+       when 'instantiate'
+@@ -333,7 +426,7 @@
+         c=s['connections'].find { |c| c['connection_id']==e['connection_id'] };raise Failure.new(409,'reference_conflict') unless c
+         s['connections'].delete(c)
+       when 'add_assumption'
+-        raise Failure.new(422,'unsupported_capability') unless s['schema_version']=='2'
++        raise Failure.new(422,'unsupported_capability') unless %w[2 3].include?(s['schema_version'])
+         owner=e['owner'].dup
+         if owner.key?('instance_temp_key')
+           instance=created.fetch(owner.delete('instance_temp_key'),{})['instance_id']
+@@ -379,7 +472,7 @@
+   end
+   def validate_model(s)
+     check(s.key?('model_revision_id') ? 'ModelRevision' : 'ModelDraft',s)
+-    if s['schema_version']=='2'
++    if %w[2 3].include?(s['schema_version'])
+       assumptions=s.fetch('assumptions')
+       raise Failure.new(422,'invalid_model') unless assumptions.map { |a| a['assumption_id'] }.uniq.size==assumptions.size
+       assumptions.each do |a|
+@@ -390,15 +483,17 @@
+       end
+       raise Failure.new(413,'limit_exceeded') if assumptions.flat_map { |a| a['evidence_links'].map { |l| l['evidence_version_id'] } }.uniq.size>1000
+     end
++    raise Failure.new(422,'unsupported_capability') if s['schema_version']=='3' && !s['required_capabilities'].include?('unit_declarations/1')
++    validate_unit_records!(s)
+     raise Failure.new(413,'limit_exceeded') if %w[definitions instances ports connections annotations].sum { |k| s[k].size }>1000
+     {'definitions'=>'definition_version_id','instances'=>'instance_id','connections'=>'connection_id','source_files'=>'sha256'}.each do |collection,key|
+       ids=s[collection].map { |x| x[key] }
+       raise Failure.new(422,'invalid_model') unless ids.uniq.size==ids.size
+     end
+     raise Failure.new(422,'invalid_model') unless s['ports']==s['definitions'].flat_map { |d| d['ports'] }
+-    raise Failure.new(422,'unsupported_capability') unless s['boundary_mappings'].empty? && (s['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys).empty?
++    raise Failure.new(422,'unsupported_capability') unless s['boundary_mappings'].empty? && (s['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(s['schema_version']=='3' ? ['unit_declarations/1'] : [])).empty?
+     s['definitions'].each do |d|
+-      raise Failure.new(422,'invalid_model') unless d['ports'].map { |p| p['port_id'] }.uniq.size==d['ports'].size && d['ports'].all? { |p| p['definition_version_id']==d['definition_version_id'] && UNITS['supported_units'].include?(p['units']) }
++      raise Failure.new(422,'invalid_model') unless d['ports'].map { |p| p['port_id'] }.uniq.size==d['ports'].size && d['ports'].all? { |p| p['definition_version_id']==d['definition_version_id'] }
+       raise Failure.new(422,'unsupported_capability') unless d['kind']=='explicit_component' && d['child_instances'].empty? && d['boundary_mappings'].empty? && d['residual_port_ids'].empty?
+       raise Failure.new(422,'invalid_model') unless d['ports'].map { |p| p['code_symbol'] }.uniq.size==d['ports'].size
+       raise Failure.new(422,'unsupported_capability') if d['ports'].any? { |p| p['direction']=='residual' }
+@@ -410,7 +505,10 @@
+     s['connections'].each do |c|
+       a=port(s,c['source_ref']);b=port(s,c['target_ref'])
+       raise Failure.new(409,'reference_conflict') unless a['direction']=='output' && b['direction']=='input' && !targets.include?(c['target_ref'])
+-      raise Failure.new(422,'invalid_model') unless compatible_units?(a['units'],b['units'])
++      a_units=unit_expression(a['units'],allow_unspecified:true);b_units=unit_expression(b['units'],allow_unspecified:true)
++      if !a_units.nil? && !b_units.nil? && !compatible_units?(a_units,b_units)
++        raise Failure.new(422,'invalid_model',fields:[{'path'=>"connections/#{c['connection_id']}/target_ref",'code'=>'unit_incompatible','message'=>'Connection units are incompatible or require an unsupported affine conversion','element_ref'=>b['port_id']}])
++      end
+       targets << c['target_ref'];edges[c['source_ref']['instance_id']] << c['target_ref']['instance_id']
+     end
+     visiting=[];done=[]
+@@ -425,7 +523,12 @@
+     # Revision records are append-only. Projection validation precedes every write.
+     validate_model(s)
+     s['definitions'].each do |d|
+-      next if ModelingRevision.exists?(public_id:d['definition_version_id'])
++      retained=ModelingRevision.find_by(public_id:d['definition_version_id'])
++      if retained
++        expected={'definition'=>d,'source'=>s['source_files'].find { |f| f['sha256']==d['source_refs'][0] }}
++        raise Failure.new(409,'identity_collision') unless retained.study_id==@study && retained.model_id==model.public_id && retained.kind=='definition' && retained.payload==expected
++        next
++      end
+       store_revision(d['definition_version_id'],model.public_id,'definition',{'definition'=>d,'source'=>s['source_files'].find { |f| f['sha256']==d['source_refs'][0] }})
+       map(d['definition_id'],model.public_id,'definition') unless ModelingIdentity.exists?(public_id:d['definition_id'])
+     end
+@@ -452,7 +555,7 @@
+       src=s['source_files'].find { |f| f['sha256']==d['source_refs'][0] }
+       impl.update!(python_source:Base64.strict_decode64(src['bytes']).force_encoding('UTF-8'))
+       d['ports'].each do |p|
+-        v=Variable.create!(discipline_id:r.native_id,name:'port_'+p['port_id'].delete('-'),io_mode:p['direction']=='input' ? 'in' : 'out',type:'Float',shape:'1',units:p['units'])
++        v=Variable.create!(discipline_id:r.native_id,name:'port_'+p['port_id'].delete('-'),io_mode:p['direction']=='input' ? 'in' : 'out',type:'Float',shape:'1',units:unit_expression(p['units'],allow_unspecified:true))
+         key=i['instance_id']+':'+p['port_id'];native_ports[key]=v.id
+         map(key,model.public_id,'port',v.id,{'instance_id'=>i['instance_id'],'port_id'=>p['port_id']})
+       end
+@@ -489,18 +592,25 @@
+   def compatible(m,c)
+     type=configuration_type(c)
+     check(type,c)
++    raise Failure.new(422,'invalid_configuration') if m['schema_version']=='3' && c['schema_version']!='3'
+     if c['schema_version']=='3'
+       # Full app projection equality/closure is checked by its owner. Here only
+       # frozen opaque data is admitted; no evidence-library lookup is possible.
+       evidence=c['evidence_snapshots'];ids=evidence.map { |e| e['evidence_version_id'] }
+       raise Failure.new(422,'invalid_configuration') unless ids.uniq.size==ids.size && evidence.all? { |e| !e.key?('study_id') || e['study_id']==@study }
+     end
++    validate_model(m)
++    unresolved=unit_readiness(m)
++    unless unresolved.empty?
++      result={'schema_version'=>'1','model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'candidate_digest'=>self.class.digest(c),'compatible'=>false,'diagnostics'=>unresolved,'required_capabilities'=>m['required_capabilities'],'validator_identity'=>'modeling-contract/1-static'}
++      return %w[2 3].include?(c['schema_version']) ? result.merge('schema_version'=>'2','input_interpretations'=>[]) : result
++    end
+     result=compatible_literal(m,c)
+     return result unless %w[2 3].include?(c['schema_version'])
+     interpretations=[]
+     c['inputs'].each do |input|
+       begin
+-        destination=port(m,input['target'])['units']
++        destination=unit_expression(port(m,input['target'])['units'])
+         pair=UNITS['linear_pairs'].find { |row| row[0]==input['units'] && row[1]==destination && row[3]==0 }
+         next unless pair
+         value=input['value']*pair[2]
+@@ -509,7 +619,7 @@
+           result['diagnostics'] << {'path'=>'configuration','code'=>'invalid_configuration','message'=>'Converted input is not finite','element_ref'=>nil}
+           next
+         end
+-        interpretations << {'target'=>input['target'],'conversion'=>{'policy'=>'openmdao-linear-catalog-1','catalog_digest'=>self.class.digest(UNITS),'source_units'=>input['units'],'destination_units'=>destination,'factor'=>pair[2],'destination_value'=>value}}
++        interpretations << {'target'=>input['target'],'conversion'=>{'policy'=>'openmdao-linear-catalog-1','catalog_digest'=>m['schema_version']=='3' ? UNITS.fetch('catalog_digest') : self.class.digest(UNITS),'source_units'=>input['units'],'destination_units'=>destination,'factor'=>pair[2],'destination_value'=>value}}
+       rescue Failure
+         # The literal compatibility result already reports the unknown target.
+       end
+@@ -519,27 +629,38 @@
+   def compatible_literal(m,c)
+     raise Failure.new(422,'invalid_configuration') unless c['model_id']==m['model_id'] && c['model_revision_id']==m['model_revision_id'] && c['study_id']==@study
+     n=c['numerical']
+-    raise Failure.new(422,'unsupported_capability') unless n['mode']=='deterministic' && %w[initialization solvers design_variables objectives constraints].all? { |k| n[k].empty? } && n['optimizer'].nil? && n['uncertainty'].nil? && n['derivatives']=={'method'=>'none','form'=>nil,'check'=>nil} && (c['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys).empty?
++    raise Failure.new(422,'unsupported_capability') unless n['mode']=='deterministic' && %w[initialization solvers design_variables objectives constraints].all? { |k| n[k].empty? } && n['optimizer'].nil? && n['uncertainty'].nil? && n['derivatives']=={'method'=>'none','form'=>nil,'check'=>nil} && (c['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-(m['schema_version']=='3' ? ['unit_declarations/1'] : [])).empty?
+     incoming=m['connections'].map { |c| c['target_ref'] }
+     free=m['instances'].flat_map { |i| m['definitions'].find { |d| d['definition_version_id']==i['definition_version_id'] }['ports'].select { |p| p['direction']=='input' }.map { |p| {'instance_id'=>i['instance_id'],'port_id'=>p['port_id']} } }-incoming
++    unit_issues=[]
+     problems=[];actual=c['inputs'].map { |i| i['target'] }
+     problems << 'inputs must supply every free input exactly once' unless actual.uniq.size==actual.size && (free-actual).empty? && (actual-free).empty?
+-    c['inputs'].each do |i|
++    c['inputs'].each_with_index do |i,index|
+       begin
+-        p=port(m,i['target']);problems << 'unsupported or incompatible units (affine conversion unsupported)' unless compatible_units?(i['units'],p['units'])
++        p=port(m,i['target'])
++        issue=configuration_unit_issue(i['units'],p,"inputs/#{index}/units")
++        unit_issues << issue if issue
+         problems << 'input provenance required' if i['provenance']['statement'].strip.empty?
+       rescue Failure
+         problems << 'input target does not exist'
+       end
+     end
+-    c['criteria'].each do |criterion|
++    c['criteria'].each_with_index do |criterion,index|
+       begin
+-        p=port(m,criterion['target']);problems << 'unsupported or incompatible criterion units' unless compatible_units?(criterion['units'],p['units'])
++        p=port(m,criterion['target'])
++        issue=configuration_unit_issue(criterion['units'],p,"criteria/#{index}/units")
++        unit_issues << issue if issue
+       rescue Failure
+         problems << 'criterion target does not exist'
+       end
+     end
+-    {'schema_version'=>'1','model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'candidate_digest'=>self.class.digest(c),'compatible'=>problems.empty?,'diagnostics'=>problems.map { |p| {'path'=>'configuration','code'=>'invalid_configuration','message'=>p,'element_ref'=>nil} },'required_capabilities'=>m['required_capabilities'],'validator_identity'=>'modeling-contract/1-static'}
++    diagnostics=unit_issues+problems.map { |p| {'path'=>'configuration','code'=>'invalid_configuration','message'=>p,'element_ref'=>nil} }
++    raise Failure.new(413,'limit_exceeded') if diagnostics.size>1000
++    {'schema_version'=>'1','model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'candidate_digest'=>self.class.digest(c),'compatible'=>diagnostics.empty?,'diagnostics'=>diagnostics,'required_capabilities'=>m['required_capabilities'],'validator_identity'=>'modeling-contract/1-static'}
++  end
++  def configuration_unit_issue(units,port,path)
++    code=UNITS['supported_units'].include?(units) ? (compatible_units?(units,port['units']) ? nil : 'unit_incompatible') : 'unit_unsupported'
++    code && {'path'=>path,'code'=>code,'message'=>code=='unit_unsupported' ? 'Choose a supported unit' : 'Units are incompatible or require an unsupported affine conversion','element_ref'=>port['port_id']}
+   end
+   def generator
+     NativeProvenance.inventory.first
+@@ -550,11 +671,12 @@
+       raise Failure.new(413,'limit_exceeded') if ancestry.size>=1000
+       ancestry << revision(ancestry.last['parent_model_revision_id'],model.public_id)
+     end
+-    package={'schema_version'=>m['schema_version'],'source_service'=>'whatsopt-597f5abf/modeling-1','model_id'=>model.public_id,'model_revision_id'=>revision_id,'revisions'=>ancestry.reverse,'files'=>[],'required_capabilities'=>['flat_explicit_scalar'],'license_notices'=>['WhatsOpt and in-process adapter: AGPL-3.0-only; source offer required for distribution. Authored source retains author license.']}
++    package={'schema_version'=>m['schema_version'],'source_service'=>'whatsopt-597f5abf/modeling-1','model_id'=>model.public_id,'model_revision_id'=>revision_id,'revisions'=>ancestry.reverse,'files'=>[],'required_capabilities'=>m['required_capabilities'],'license_notices'=>['WhatsOpt and in-process adapter: AGPL-3.0-only; source offer required for distribution. Authored source retains author license.']}
+     package['files']=package_files(package['revisions'])
+     # Preserve imported origin and license declarations across a lossless roundtrip.
+     origin=model.metadata['package_origin']
+-    package.merge!(origin) if origin
++    package.merge!(origin.except('required_capabilities')) if origin
++    package['required_capabilities']=(package['required_capabilities']+origin.fetch('required_capabilities',[])).uniq if origin
+     package['digest']=self.class.digest(package);package
+   end
+   def package_files(pins)
+@@ -577,8 +699,9 @@
+   def import_package(package)
+     check('ModelPackage',package)
+     raise Failure.new(422,'invalid_model') unless package['digest']==self.class.digest(package.reject { |k,_| k=='digest' })
+-    raise Failure.new(422,'unsupported_capability') unless (package['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys).empty?
++    raise Failure.new(422,'unsupported_capability') unless (package['required_capabilities']-CAPABILITIES.select { |_,v| v }.keys-['unit_declarations/1']).empty?
+     raise Failure.new(409,'identity_collision') if ModelingIdentity.exists?(public_id:package['model_id'])
++    raise Failure.new(422,'unsupported_capability') if package['schema_version']=='3' && !package['required_capabilities'].include?('unit_declarations/1')
+     pins=package['revisions'];seen=[];definitions={}
+     pins.each do |p|
+       validate_model(p)
+@@ -612,6 +735,8 @@
+   end
+   def prepare(model,body)
+     m=revision(body['model_revision_id'],model.public_id);c=body['configuration_snapshot']
++    unresolved=unit_readiness(m)
++    raise Failure.new(422,'invalid_configuration',fields:unresolved) unless unresolved.empty?
+     cd=self.class.digest(c.reject { |k,_| k=='digest' })
+     raise Failure.new(422,'invalid_configuration') unless cd==c['digest'] && cd==body['configuration_digest'] && compatible(m,c)['compatible']
+     files=[];bytes={};preparation_id=id
+--- a/app/services/native_materializer.rb
++++ b/app/services/native_materializer.rb
+@@ -9,6 +9,7 @@
+     validator.check('ModelRevision',model)
+     validator.check(validator.configuration_type(configuration),configuration)
+     validator.validate_model(model)
++    validator.require_resolved_units!(model)
+     # Ruby's `$` regexp semantics differ from JSON Schema's end anchor. These
+     # identifiers become native labels; enforce whole-string UUIDs independently.
+     identifiers=[model['model_id'],model['model_revision_id'],model['root_instance_id']]
+@@ -45,11 +46,11 @@
+       bindings['components'] << {'component_id'=>iid,'instance_id'=>iid,'path'=>label}
+       definition['ports'].sort_by { |p| p['port_id'] }.each do |port|
+         pid=port.fetch('port_id');local=variable(pid);direction=port.fetch('direction')
+-        variables[[iid,pid]]=Variable.create!(discipline:disc,name:local,io_mode:direction=='input' ? 'in' : 'out',type:'Float',shape:'1',units:port.fetch('units'))
++        variables[[iid,pid]]=Variable.create!(discipline:disc,name:local,io_mode:direction=='input' ? 'in' : 'out',type:'Float',shape:'1',units:validator.unit_expression(port.fetch('units')))
+         maps[label][direction+'s'][port.fetch('code_symbol')]=local
+         target={'instance_id'=>iid,'port_id'=>pid}
+         unless direction=='input' && incoming.include?(target)
+-          bindings[direction+'s'] << {'target'=>target,'path'=>label+'.'+local,'units'=>port.fetch('units'),'component_id'=>iid}
++          bindings[direction+'s'] << {'target'=>target,'path'=>label+'.'+local,'units'=>validator.unit_expression(port.fetch('units')),'component_id'=>iid}
+         end
+       end
+       transforms=['indent','source_symbol_view','availability_observer']
+--- a/app/services/native_program.rb
++++ b/app/services/native_program.rb
+@@ -91,6 +91,7 @@
+     validator=ModelingContract.new({'study_id'=>configuration.fetch('study_id')})
+     bindings=ModelingContract.parse(files.fetch('generated/bindings.json'))
+     source_map=ModelingContract.parse(files.fetch('generated/source-map.json'))
++    validator.require_resolved_units!(model)
+     validator.check('ProgramBindings',bindings)
+     validator.check('ProgramSourceMap',source_map)
+     instances=model['instances'].to_h { |i| [i['instance_id'],i] }
+@@ -106,7 +107,7 @@
+       definition['ports'].each do |port|
+         target={'instance_id'=>iid,'port_id'=>port['port_id']}
+         next if port['direction']=='input' && incoming.include?(target)
+-        expected[port['direction']+'s'] << {'target'=>target,'path'=>NativeMaterializer.component(iid)+'.'+NativeMaterializer.variable(port['port_id']),'units'=>port['units'],'component_id'=>iid}
++        expected[port['direction']+'s'] << {'target'=>target,'path'=>NativeMaterializer.component(iid)+'.'+NativeMaterializer.variable(port['port_id']),'units'=>validator.unit_expression(port.fetch('units')),'component_id'=>iid}
+       end
+     end
+     expected.each { |key,value| raise 'Wrong port inventory' unless value.sort_by { |v| v['path'] }==bindings[key] }
+--- a/config/modeling.units.json
++++ b/config/modeling.units.json
+@@ -1,4 +1,5 @@
+ {
++  "catalog_digest": "f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3",
+   "engine": "OpenMDAO",
+   "linear_pairs": [
+     [
+@@ -304,6 +305,138 @@
+     [
+       "km/h",
+       "km/h",
++      1.0,
++      0.0
++    ],
++    [
++      "J/kg",
++      "J/kg",
++      1.0,
++      0.0
++    ],
++    [
++      "J/kg",
++      "kJ/kg",
++      0.001,
++      0.0
++    ],
++    [
++      "J/kg",
++      "MJ/kg",
++      1e-06,
++      0.0
++    ],
++    [
++      "kJ/kg",
++      "J/kg",
++      1000.0,
++      0.0
++    ],
++    [
++      "kJ/kg",
++      "kJ/kg",
++      1.0,
++      0.0
++    ],
++    [
++      "kJ/kg",
++      "MJ/kg",
++      0.001,
++      0.0
++    ],
++    [
++      "MJ/kg",
++      "J/kg",
++      1000000.0,
++      0.0
++    ],
++    [
++      "MJ/kg",
++      "kJ/kg",
++      1000.0,
++      0.0
++    ],
++    [
++      "MJ/kg",
++      "MJ/kg",
++      1.0,
++      0.0
++    ],
++    [
++      "kg/m**3",
++      "kg/m**3",
++      1.0,
++      0.0
++    ],
++    [
++      "kg/m**3",
++      "g/cm**3",
++      0.001,
++      0.0
++    ],
++    [
++      "g/cm**3",
++      "kg/m**3",
++      999.9999999999999,
++      0.0
++    ],
++    [
++      "g/cm**3",
++      "g/cm**3",
++      1.0,
++      0.0
++    ],
++    [
++      "m**2",
++      "m**2",
++      1.0,
++      0.0
++    ],
++    [
++      "m**2",
++      "cm**2",
++      10000.0,
++      0.0
++    ],
++    [
++      "m**2",
++      "mm**2",
++      1000000.0,
++      0.0
++    ],
++    [
++      "cm**2",
++      "m**2",
++      0.0001,
++      0.0
++    ],
++    [
++      "cm**2",
++      "cm**2",
++      1.0,
++      0.0
++    ],
++    [
++      "cm**2",
++      "mm**2",
++      100.00000000000001,
++      0.0
++    ],
++    [
++      "mm**2",
++      "m**2",
++      1e-06,
++      0.0
++    ],
++    [
++      "mm**2",
++      "cm**2",
++      0.009999999999999998,
++      0.0
++    ],
++    [
++      "mm**2",
++      "mm**2",
+       1.0,
+       0.0
+     ]
+@@ -330,7 +463,15 @@
+     "rad",
+     "deg",
+     "m/s",
+-    "km/h"
++    "km/h",
++    "J/kg",
++    "kJ/kg",
++    "MJ/kg",
++    "kg/m**3",
++    "g/cm**3",
++    "m**2",
++    "cm**2",
++    "mm**2"
+   ],
+   "version": "3.45.1"
+ }

@@ -1,0 +1,19 @@
+[project]
+name = "hyprn-mvp-app"
+version = "0.1.0"
+description = "Independent HYPRN MVP application ownership and public API"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.143.0",
+  "pydantic==2.14.0",
+  "uvicorn==0.54.0",
+  "httpx==0.28.1",
+  "jsonschema==4.26.0",
+  "rfc8785==0.1.4",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
