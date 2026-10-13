@@ -375,7 +375,8 @@ LAUNCHER_PROBE = '''
 import json, sys
 sys.path[:0] = [sys.argv[1] + '/application/src', sys.argv[1] + '/integration/src']
 from hyprn_mvp_integration import launcher
-out = dict(root=str(launcher.ROOT), owner=launcher.OWNER, profile=launcher.PROFILE, endpoint=launcher.DOCKER_ENDPOINT,
+out = dict(root=str(launcher.ROOT), owner=launcher.OWNER, profile=launcher.PROFILE,
+           endpoint=launcher.DOCKER_ENDPOINT,
            docker_host=(launcher.docker_environment() or {}).get('DOCKER_HOST'))
 if launcher.ROOT is not None:
     out['homes'] = launcher.probe_homes()
@@ -393,7 +394,8 @@ print(json.dumps(out))
 
 def launcher_run(environment):
     import subprocess
-    return subprocess.run([sys.executable, '-I', '-B', '-c', LAUNCHER_PROBE, str(REPO)], capture_output=True, text=True,
+    return subprocess.run([sys.executable, '-I', '-B', '-c', LAUNCHER_PROBE, str(REPO)],
+                          capture_output=True, text=True,
                           env={'PATH': os.environ.get('PATH', ''), **environment})
 
 
@@ -412,7 +414,8 @@ def test_the_launcher_takes_root_owner_profile_engine_and_home_from_the_installa
     assert view['owner'] == installation.owner(value) == 'hyprn-mvp-local-' + identity
     assert view['profile'] == installation.profile_name(value) == 'hyprn-mvp-local-' + identity[:8]
     assert view['endpoint'] == view['docker_host'] == value['docker']['endpoint']
-    assert view['configuration'] == dict(data_root=str(root / 'data'), aiida_profile=view['profile'],
+    assert view['configuration'] == dict(data_root=str(root / 'data'),
+                                         aiida_profile=view['profile'],
                                          docker_endpoint=value['docker']['endpoint'])
     # The containment probe keeps the account's home and adds the configured one.
     assert str(home) in view['homes'] and len(view['homes']) == 2
@@ -423,15 +426,16 @@ def test_the_development_data_root_comes_before_the_installation(scratch):
     path = write(folder, document(root, home))
     view = launcher_view({'HOME': str(home), 'HYPRN_MVP_DATA_ROOT': str(root / 'development'),
                           'HYPRN_MVP_CONFIG': str(path)})
-    assert (view['root'], view['owner'], view['profile'], view['endpoint'], view['docker_host']) == (
-        str(root / 'development' / 'execution'), installation.DEVELOPMENT_OWNER, installation.DEVELOPMENT_PROFILE,
-        None, None)
+    observed = (view['root'], view['owner'], view['profile'], view['endpoint'], view['docker_host'])
+    assert observed == (str(root / 'development' / 'execution'), installation.DEVELOPMENT_OWNER,
+                        installation.DEVELOPMENT_PROFILE, None, None)
     assert launcher_view({'HOME': str(home)})['root'] == 'None'
 
 
 def test_a_refused_installation_configuration_stops_the_launcher(scratch):
     root, home, folder = scratch
-    result = launcher_run({'HOME': str(home), 'HYPRN_MVP_CONFIG': str(write(folder, document(root, home), mode=0o644))})
+    readable = write(folder, document(root, home), mode=0o644)
+    result = launcher_run({'HOME': str(home), 'HYPRN_MVP_CONFIG': str(readable)})
     assert result.returncode != 0 and 'InstallationError' in result.stderr
 
 
@@ -445,10 +449,12 @@ def test_a_changed_execution_configuration_makes_the_recorded_runtime_unknown(sc
     execution = root / 'data' / 'execution'
     execution.mkdir(parents=True)
     (root / 'data').chmod(0o700)
-    (execution / 'runtime.json').write_text(json.dumps(dict(owner=view['owner'], root=view['root'],
-                                                            execution_configuration_sha256=view['digest'])))
+    record = dict(owner=view['owner'], root=view['root'],
+                  execution_configuration_sha256=view['digest'])
+    (execution / 'runtime.json').write_text(json.dumps(record))
     assert launcher_view(environment)['identity'] == 'accepted'
-    other = {**value, 'docker': {'endpoint': 'unix://' + str(root / 'other.sock'), 'engine': 'Docker Engine'}}
+    other_endpoint = 'unix://' + str(root / 'other.sock')
+    other = {**value, 'docker': {'endpoint': other_endpoint, 'engine': 'Docker Engine'}}
     write(folder, other)
     assert 'Execution configuration changed' in launcher_view(environment)['identity']
     write(folder, value)
