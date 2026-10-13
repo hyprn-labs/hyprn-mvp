@@ -1,3 +1,5 @@
+<!-- Generated from application/src/hyprn_mvp_app/agent_tools/playbook.py; do not edit by hand. Regenerate with `python -m hyprn_mvp_app.agent_tools.playbook --write docs/agents/playbook.md` (`--check` exits 1 when this file is stale). -->
+
 # Study agent playbook
 
 How an AI agent carries out an engineering study **as a user of HYPRN MVP**, so that the result is scientifically sound and reads clearly to an engineer reviewing it in the app.
