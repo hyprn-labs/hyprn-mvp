@@ -91,6 +91,6 @@ Progress: [█████████░] 90%
 
 ## Session Continuity
 
-Last session: Phases 1–3 execution, planning of Phases 3–4, product decisions (ADR-0003/0004/0005), toolchain (task 2.1)
-Stopped at: Phase 1 gate 102/103 with the findings-native fixture repair in progress; Phase 2 tasks 2.1a and 2.2–2.4 and Phase 3 tasks 3.3a–3.3c running in worktrees
-Resume: merge the in-flight task branches after checking their checkpoints, close Phase 1 when the findings chain passes on the current tree, then continue the waves in the phase plans (Phase 3: 3.3b, 3.8, 3.4, 3.3d; Phase 2: 2.5–2.7, then 2.8a decision)
+Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
+Stopped at: tasks 2.2 and 3.3a merged on the continuation branch; 2.1a merged except its ratchet acceptance; 2.3, 3.3c and the findings-native interpreter rebind partially done in their worktrees
+Resume: finish 2.1a (style-ratchet green), 2.3 then 2.4, 3.3c, and the findings chain (Phase 1 closes when it passes); then the next waves in the phase plans
