@@ -104,6 +104,9 @@ GROUPS = {
     'guard': ('deployment/tests/test_repository_guard.py',),
     'naming': ('deployment/tests/test_naming_guard.py',),
     'hygiene': ('deployment/tests/test_hygiene_guard.py',),
+    # Readability ratchet (deployment/style_ratchet.py): ruff and prettier at their pins, no new
+    # long or ;-chained line, every new file formatted. A missing tool or baseline fails.
+    'style-ratchet': ('deployment/tests/test_style_ratchet.py',),
     'contracts': ('contracts/tests/test_reuse_contract.py', 'contracts/tests/test_ui_discovery_contract.py',
                   'contracts/tests/test_native_program_contract.py'),
     'projection': ('application/tests/test_scientific_configuration.py', 'modeling/tests/test_resolved_configuration.py'),
@@ -508,6 +511,7 @@ UNITTEST_GUARD_MODULES = {
     'guard': 'test_repository_guard',
     'naming': 'test_naming_guard',
     'hygiene': 'test_hygiene_guard',
+    'style-ratchet': 'test_style_ratchet',
 }
 
 

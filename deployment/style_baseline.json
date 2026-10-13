@@ -1,0 +1,891 @@
+{
+ "base": "cf11750c1eb8a7a8b828fb03f21aa3e401800140",
+ "files": {
+  "application/audit_dependencies.py": {
+   "E501": 3
+  },
+  "application/generate_contract.py": {
+   "E501": 73,
+   "E702": 12
+  },
+  "application/src/hyprn_mvp_app/api.py": {
+   "E501": 54,
+   "E702": 18
+  },
+  "application/src/hyprn_mvp_app/approach.py": {
+   "E501": 42
+  },
+  "application/src/hyprn_mvp_app/auth.py": {
+   "E501": 18
+  },
+  "application/src/hyprn_mvp_app/computational_export.py": {
+   "E501": 103,
+   "E702": 61
+  },
+  "application/src/hyprn_mvp_app/configuration.py": {
+   "E501": 64,
+   "E702": 21
+  },
+  "application/src/hyprn_mvp_app/dispatcher.py": {
+   "E501": 22,
+   "E702": 9
+  },
+  "application/src/hyprn_mvp_app/execution.py": {
+   "E501": 41,
+   "E702": 7
+  },
+  "application/src/hyprn_mvp_app/history.py": {
+   "E501": 47,
+   "E702": 15
+  },
+  "application/src/hyprn_mvp_app/modeling.py": {
+   "E501": 60,
+   "E702": 4
+  },
+  "application/src/hyprn_mvp_app/modified_runs.py": {
+   "E501": 25,
+   "E702": 11
+  },
+  "application/src/hyprn_mvp_app/readiness.py": {
+   "E501": 12,
+   "E702": 2
+  },
+  "application/src/hyprn_mvp_app/result_bindings.py": {
+   "E501": 29,
+   "E702": 8
+  },
+  "application/src/hyprn_mvp_app/store.py": {
+   "E501": 88,
+   "E702": 24
+  },
+  "application/tests/agent/test_agent_principal.py": {
+   "E501": 58
+  },
+  "application/tests/conftest.py": {
+   "E501": 1
+  },
+  "application/tests/test_api.py": {
+   "E501": 18,
+   "E702": 24
+  },
+  "application/tests/test_approach_api.py": {
+   "E501": 21,
+   "E702": 51
+  },
+  "application/tests/test_approach_bundle.py": {
+   "E501": 4,
+   "E702": 37
+  },
+  "application/tests/test_approach_closure.py": {
+   "E501": 28,
+   "E702": 188
+  },
+  "application/tests/test_approach_configuration.py": {
+   "E501": 19,
+   "E702": 40
+  },
+  "application/tests/test_approach_export.py": {
+   "E501": 27,
+   "E702": 44
+  },
+  "application/tests/test_approach_history.py": {
+   "E501": 34,
+   "E702": 41
+  },
+  "application/tests/test_approach_modified_runs.py": {
+   "E501": 38,
+   "E702": 64
+  },
+  "application/tests/test_approach_service.py": {
+   "E501": 78,
+   "E702": 158
+  },
+  "application/tests/test_approach_storage.py": {
+   "E501": 9,
+   "E702": 8
+  },
+  "application/tests/test_assumption_authoring.py": {
+   "E501": 41,
+   "E702": 64
+  },
+  "application/tests/test_assumption_configuration.py": {
+   "E501": 37,
+   "E702": 64
+  },
+  "application/tests/test_assumptions_evidence_api.py": {
+   "E501": 94,
+   "E702": 12
+  },
+  "application/tests/test_assumptions_export.py": {
+   "E501": 25,
+   "E702": 31
+  },
+  "application/tests/test_assumptions_history.py": {
+   "E501": 39,
+   "E702": 49
+  },
+  "application/tests/test_authorization.py": {
+   "E501": 1
+  },
+  "application/tests/test_computational_api.py": {
+   "E501": 28,
+   "E702": 48
+  },
+  "application/tests/test_computational_records.py": {
+   "E501": 40,
+   "E702": 53
+  },
+  "application/tests/test_configuration.py": {
+   "E501": 9,
+   "E702": 20
+  },
+  "application/tests/test_contract_errors.py": {
+   "E501": 14,
+   "E702": 1
+  },
+  "application/tests/test_evidence_revisions.py": {
+   "E501": 37,
+   "E702": 20
+  },
+  "application/tests/test_findings_history.py": {
+   "E501": 57,
+   "E702": 86
+  },
+  "application/tests/test_fuel_platform.py": {
+   "E501": 8,
+   "E702": 12
+  },
+  "application/tests/test_history.py": {
+   "E501": 33,
+   "E702": 20
+  },
+  "application/tests/test_history_reuse.py": {
+   "E501": 28,
+   "E702": 23
+  },
+  "application/tests/test_identity_golden.py": {
+   "E501": 13
+  },
+  "application/tests/test_modified_runs.py": {
+   "E501": 67,
+   "E702": 84
+  },
+  "application/tests/test_module_boundaries.py": {
+   "E501": 64
+  },
+  "application/tests/test_ownership.py": {
+   "E501": 1,
+   "E702": 7
+  },
+  "application/tests/test_public_contract.py": {
+   "E501": 15,
+   "E702": 17
+  },
+  "application/tests/test_readiness.py": {
+   "E501": 41,
+   "E702": 84
+  },
+  "application/tests/test_result_bindings.py": {
+   "E501": 66,
+   "E702": 49
+  },
+  "application/tests/test_reuse_api.py": {
+   "E501": 47,
+   "E702": 37
+  },
+  "application/tests/test_run_api.py": {
+   "E501": 24,
+   "E702": 49
+  },
+  "application/tests/test_runtime_comparison.py": {
+   "E501": 18,
+   "E702": 28
+  },
+  "application/tests/test_scientific_configuration.py": {
+   "E501": 5,
+   "E702": 8
+  },
+  "application/tests/test_scoped_evidence.py": {
+   "E501": 39,
+   "E702": 40
+  },
+  "application/tests/test_security_regressions.py": {
+   "E501": 4,
+   "E702": 10
+  },
+  "application/tests/test_study_archive.py": {
+   "E501": 41
+  },
+  "application/tests/test_ui_discovery.py": {
+   "E501": 50,
+   "E702": 55
+  },
+  "application/tests/test_ui_static.py": {
+   "E702": 2
+  },
+  "application/tests/test_unit_configuration.py": {
+   "E501": 31,
+   "E702": 82
+  },
+  "application/tests/test_unit_execution_admission.py": {
+   "E501": 61,
+   "E702": 137
+  },
+  "application/tests/test_unit_guidance_api.py": {
+   "E501": 26,
+   "E702": 37
+  },
+  "application/tests/test_unit_history.py": {
+   "E501": 57,
+   "E702": 82
+  },
+  "application/tests/test_unit_resolution.py": {
+   "E501": 30,
+   "E702": 6
+  },
+  "contracts/tests/test_approach_portability.py": {
+   "E501": 4,
+   "E702": 3
+  },
+  "contracts/tests/test_contract_boundaries.py": {
+   "E501": 5,
+   "E702": 33
+  },
+  "contracts/tests/test_document_parser_adoption.py": {
+   "E501": 27
+  },
+  "contracts/tests/test_documents_contract.py": {
+   "E501": 45,
+   "E702": 9
+  },
+  "contracts/tests/test_portability.py": {
+   "E501": 8,
+   "E702": 9
+  },
+  "contracts/tests/test_reuse_contract.py": {
+   "E501": 49,
+   "E702": 1
+  },
+  "contracts/tests/test_ui_discovery_contract.py": {
+   "E501": 4
+  },
+  "contracts/tests/test_unit_declaration_contracts.py": {
+   "E501": 80,
+   "E702": 34
+  },
+  "deployment/application_runtime.py": {
+   "E501": 34,
+   "E702": 10
+  },
+  "deployment/checks.py": {
+   "E501": 143
+  },
+  "deployment/dispatch_runtime.py": {
+   "E501": 29,
+   "E702": 6
+  },
+  "deployment/initialize_stores.py": {
+   "E501": 17,
+   "E702": 2
+  },
+  "deployment/local_paths.py": {
+   "E501": 9
+  },
+  "deployment/manage.py": {
+   "E501": 13
+  },
+  "deployment/native_environment.py": {
+   "E501": 43,
+   "E702": 15
+  },
+  "deployment/release_binding.py": {
+   "E501": 82
+  },
+  "deployment/tests/ae_ui_fixture.py": {
+   "E501": 80,
+   "E702": 26
+  },
+  "deployment/tests/api_c_fixture.py": {
+   "E501": 7,
+   "E702": 8
+  },
+  "deployment/tests/approach_model_fixture.py": {
+   "E501": 32,
+   "E702": 45
+  },
+  "deployment/tests/approach_native_fixture.py": {
+   "E501": 16,
+   "E702": 8
+  },
+  "deployment/tests/approach_ui_fixture.py": {
+   "E501": 70,
+   "E702": 38
+  },
+  "deployment/tests/combined_fixture.py": {
+   "E501": 28,
+   "E702": 38
+  },
+  "deployment/tests/documents_native_fixture.py": {
+   "E501": 11
+  },
+  "deployment/tests/durable_fixture.py": {
+   "E501": 45
+  },
+  "deployment/tests/export_ui_fixture.py": {
+   "E501": 7,
+   "E702": 5
+  },
+  "deployment/tests/findings_native_fixture.py": {
+   "E501": 104,
+   "E702": 45
+  },
+  "deployment/tests/foundry_ui_fixture.py": {
+   "E501": 10
+  },
+  "deployment/tests/live_fence.py": {
+   "E501": 18
+  },
+  "deployment/tests/model_client.py": {
+   "E501": 10
+  },
+  "deployment/tests/modeling_contract_fixture.py": {
+   "E501": 1
+  },
+  "deployment/tests/modeling_deployment_fixture.py": {
+   "E501": 3
+  },
+  "deployment/tests/native_deployment_fixture.py": {
+   "E702": 1
+  },
+  "deployment/tests/scoped_fixture.py": {
+   "E501": 9,
+   "E702": 5
+  },
+  "deployment/tests/scoped_fixture_launcher.py": {
+   "E501": 5
+  },
+  "deployment/tests/test_approach_native.py": {
+   "E501": 45,
+   "E702": 37
+  },
+  "deployment/tests/test_assumptions_evidence_journey.py": {
+   "E501": 38,
+   "E702": 29
+  },
+  "deployment/tests/test_attestation.py": {
+   "E501": 19,
+   "E702": 4
+  },
+  "deployment/tests/test_bridge.py": {
+   "E501": 26,
+   "E702": 18
+  },
+  "deployment/tests/test_deployment_hardening.py": {
+   "E501": 85
+  },
+  "deployment/tests/test_findings_native.py": {
+   "E501": 6
+  },
+  "deployment/tests/test_findings_native_guards.py": {
+   "E501": 54,
+   "E702": 21
+  },
+  "deployment/tests/test_hygiene_guard.py": {
+   "E501": 13
+  },
+  "deployment/tests/test_initialize_stores.py": {
+   "E501": 4,
+   "E702": 1
+  },
+  "deployment/tests/test_investigation_native.py": {
+   "E501": 33,
+   "E702": 7
+  },
+  "deployment/tests/test_modeling_isolation.py": {
+   "E501": 25
+  },
+  "deployment/tests/test_naming_guard.py": {
+   "E501": 28
+  },
+  "deployment/tests/test_native_journey.py": {
+   "E501": 97,
+   "E702": 80
+  },
+  "deployment/tests/test_repository_guard.py": {
+   "E501": 234,
+   "E702": 2
+  },
+  "deployment/tests/test_term_scan.py": {
+   "E501": 3
+  },
+  "deployment/tests/test_topology.py": {
+   "E501": 5
+  },
+  "deployment/tests/test_units_fixture_guards.py": {
+   "E501": 60,
+   "E702": 12
+  },
+  "deployment/tests/test_units_native.py": {
+   "E501": 52,
+   "E702": 35
+  },
+  "deployment/tests/ui_fixture.py": {
+   "E501": 42,
+   "E702": 15
+  },
+  "deployment/tests/units_model_fixture.py": {
+   "E501": 20,
+   "E702": 11
+  },
+  "deployment/tests/units_native_fixture.py": {
+   "E501": 21,
+   "E702": 20
+  },
+  "deployment/tests/units_ui_fixture.py": {
+   "E501": 78,
+   "E702": 65
+  },
+  "deployment/tools/backup_immutable.py": {
+   "E501": 19
+  },
+  "deployment/tools/term_scan.py": {
+   "E501": 7
+  },
+  "editions/local/src/hyprn_mvp_local/cli.py": {
+   "E501": 10
+  },
+  "editions/local/src/hyprn_mvp_local/toolchain.py": {
+   "E501": 20
+  },
+  "editions/local/tests/test_shim.py": {
+   "E501": 49
+  },
+  "integration/src/hyprn_mvp_integration/documents.py": {
+   "E501": 9
+  },
+  "integration/src/hyprn_mvp_integration/native.py": {
+   "E501": 20,
+   "E702": 1
+  },
+  "integration/tests/capture_native_programs.py": {
+   "E501": 33
+  },
+  "integration/tests/execution_fixtures.py": {
+   "E501": 22,
+   "E702": 3
+  },
+  "integration/tests/native_origin_fixture.py": {
+   "E501": 5
+  },
+  "integration/tests/test_approach_archive.py": {
+   "E501": 2,
+   "E702": 5
+  },
+  "integration/tests/test_approach_execution.py": {
+   "E501": 18,
+   "E702": 60
+  },
+  "integration/tests/test_approach_submission.py": {
+   "E501": 6,
+   "E702": 21
+  },
+  "integration/tests/test_assumptions_execution.py": {
+   "E501": 41,
+   "E702": 64
+  },
+  "integration/tests/test_computational_archive.py": {
+   "E501": 35,
+   "E702": 50
+  },
+  "integration/tests/test_configuration.py": {
+   "E501": 8
+  },
+  "integration/tests/test_documents_collection_protocol.py": {
+   "E501": 4
+  },
+  "integration/tests/test_documents_native.py": {
+   "E501": 24
+  },
+  "integration/tests/test_execution.py": {
+   "E501": 33,
+   "E702": 43
+  },
+  "integration/tests/test_fuel_native_provenance.py": {
+   "E501": 4,
+   "E702": 1
+  },
+  "integration/tests/test_history_read.py": {
+   "E501": 7,
+   "E702": 1
+  },
+  "integration/tests/test_investigation_diagnostics.py": {
+   "E501": 2,
+   "E702": 5
+  },
+  "integration/tests/test_isolation.py": {
+   "E501": 3,
+   "E702": 2
+  },
+  "integration/tests/test_native_parser.py": {
+   "E501": 3,
+   "E702": 4
+  },
+  "integration/tests/test_native_program.py": {
+   "E501": 31,
+   "E702": 4
+  },
+  "integration/tests/test_profile_identity.py": {
+   "E501": 8
+  },
+  "integration/tests/test_result_dependencies.py": {
+   "E501": 23,
+   "E702": 37
+  },
+  "integration/tests/test_results.py": {
+   "E501": 28,
+   "E702": 21
+  },
+  "integration/tests/test_submission.py": {
+   "E501": 18,
+   "E702": 37
+  },
+  "integration/tests/test_unit_execution.py": {
+   "E501": 37,
+   "E702": 57
+  },
+  "integration/tests/test_unit_worker.py": {
+   "E501": 37,
+   "E702": 77
+  },
+  "modeling/tests/native_query.py": {
+   "E501": 4
+  },
+  "modeling/tests/test_assumptions.py": {
+   "E501": 72,
+   "E702": 10
+  },
+  "modeling/tests/test_atomic_adapter.py": {
+   "E501": 6,
+   "E702": 17
+  },
+  "modeling/tests/test_native_generation.py": {
+   "E501": 40,
+   "E702": 1
+  },
+  "modeling/tests/test_resolved_configuration.py": {
+   "E501": 31,
+   "E702": 7
+  },
+  "modeling/tests/test_ui_discovery.py": {
+   "E501": 35
+  },
+  "modeling/tests/test_unit_declarations.py": {
+   "E501": 39,
+   "E702": 66
+  },
+  "modeling/verify_rehearsal.py": {
+   "E501": 6,
+   "E702": 14
+  },
+  "ui/audit_dependencies.py": {
+   "E501": 6
+  },
+  "ui/check_design_system.py": {
+   "E501": 7
+  },
+  "ui/check_ui_contract.py": {
+   "E501": 161,
+   "E702": 3
+  },
+  "ui/design_smoke.mjs": {
+   "long-line": 68
+  },
+  "ui/design_tokens.py": {
+   "E501": 2
+  },
+  "ui/generate_types.py": {
+   "E501": 7
+  },
+  "ui/playwright.config.ts": {
+   "long-line": 6
+  },
+  "ui/playwright.isolated.config.ts": {
+   "long-line": 7
+  },
+  "ui/src/ApproachAssumptions.tsx": {
+   "long-line": 76
+  },
+  "ui/src/ApproachController.tsx": {
+   "long-line": 50
+  },
+  "ui/src/ApproachFindings.tsx": {
+   "long-line": 110
+  },
+  "ui/src/ApproachMethod.tsx": {
+   "long-line": 72
+  },
+  "ui/src/ApproachPanel.tsx": {
+   "long-line": 59
+  },
+  "ui/src/ApproachReferences.tsx": {
+   "long-line": 21
+  },
+  "ui/src/Assumptions.tsx": {
+   "long-line": 75
+  },
+  "ui/src/ChangePreview.tsx": {
+   "long-line": 66
+  },
+  "ui/src/ComparisonView.tsx": {
+   "long-line": 67
+  },
+  "ui/src/ComputationalExportDialog.tsx": {
+   "long-line": 51
+  },
+  "ui/src/ConfigurationApproach.tsx": {
+   "long-line": 24
+  },
+  "ui/src/ConfigurationPanel.tsx": {
+   "long-line": 176
+  },
+  "ui/src/ConfigurationRecord.tsx": {
+   "long-line": 27
+  },
+  "ui/src/EvidenceIndex.tsx": {
+   "long-line": 65
+  },
+  "ui/src/EvidencePanel.tsx": {
+   "long-line": 77
+  },
+  "ui/src/EvidencePicker.tsx": {
+   "long-line": 33
+  },
+  "ui/src/EvidenceView.tsx": {
+   "long-line": 32
+  },
+  "ui/src/GraphView.tsx": {
+   "long-line": 20
+  },
+  "ui/src/ModelEditor.tsx": {
+   "long-line": 124
+  },
+  "ui/src/ModelView.tsx": {
+   "long-line": 26
+  },
+  "ui/src/OverviewRecords.tsx": {
+   "long-line": 21
+  },
+  "ui/src/RecordedConfiguration.tsx": {
+   "long-line": 9
+  },
+  "ui/src/ResultPicker.tsx": {
+   "long-line": 13
+  },
+  "ui/src/RetainedFiles.tsx": {
+   "long-line": 8
+  },
+  "ui/src/RunAvailability.tsx": {
+   "long-line": 1
+  },
+  "ui/src/RunPanel.tsx": {
+   "long-line": 113
+  },
+  "ui/src/SelectionInspector.tsx": {
+   "long-line": 52
+  },
+  "ui/src/SourceEditor.tsx": {
+   "long-line": 7
+  },
+  "ui/src/UnitEditor.tsx": {
+   "long-line": 9
+  },
+  "ui/src/VariablesTable.tsx": {
+   "long-line": 58
+  },
+  "ui/src/Workspace.tsx": {
+   "long-line": 149
+  },
+  "ui/src/XdsmView.tsx": {
+   "long-line": 11
+  },
+  "ui/src/accessLoss.ts": {
+   "long-line": 2
+  },
+  "ui/src/api.ts": {
+   "long-line": 128
+  },
+  "ui/src/design/components.tsx": {
+   "long-line": 31
+  },
+  "ui/src/design/graph.tsx": {
+   "long-line": 39
+  },
+  "ui/src/design/index.ts": {
+   "long-line": 1
+  },
+  "ui/src/design/primitives.tsx": {
+   "long-line": 35
+  },
+  "ui/src/design/source.tsx": {
+   "long-line": 7
+  },
+  "ui/src/executionReadiness.ts": {
+   "long-line": 9
+  },
+  "ui/src/exports.ts": {
+   "long-line": 101
+  },
+  "ui/src/modelMethods.ts": {
+   "long-line": 15
+  },
+  "ui/src/quantityDefinitions.ts": {
+   "long-line": 8
+  },
+  "ui/src/recordLabels.ts": {
+   "long-line": 1
+  },
+  "ui/src/recordViews.ts": {
+   "long-line": 21
+  },
+  "ui/src/runStatus.tsx": {
+   "long-line": 14
+  },
+  "ui/src/unitLabels.ts": {
+   "long-line": 9
+  },
+  "ui/src/workspaceModel.ts": {
+   "long-line": 20
+  },
+  "ui/test_design_tooling.py": {
+   "E501": 8
+  },
+  "ui/tests/approach.spec.ts": {
+   "long-line": 1397
+  },
+  "ui/tests/assumptions-evidence.spec.ts": {
+   "long-line": 472
+  },
+  "ui/tests/authoring-dirty.spec.ts": {
+   "long-line": 43
+  },
+  "ui/tests/authoring-evidence-records.spec.ts": {
+   "long-line": 35
+  },
+  "ui/tests/authoring.spec.ts": {
+   "long-line": 38
+  },
+  "ui/tests/batch-authoring.spec.ts": {
+   "long-line": 68
+  },
+  "ui/tests/command-recovery.spec.ts": {
+   "long-line": 7
+  },
+  "ui/tests/computational-records.spec.ts": {
+   "long-line": 78
+  },
+  "ui/tests/configuration-evidence.spec.ts": {
+   "long-line": 68
+  },
+  "ui/tests/connected-views.spec.ts": {
+   "long-line": 34
+  },
+  "ui/tests/criterion-record.test.cjs": {
+   "long-line": 5
+  },
+  "ui/tests/evidence-workspace.spec.ts": {
+   "long-line": 39
+  },
+  "ui/tests/findings-native.spec.ts": {
+   "long-line": 26
+  },
+  "ui/tests/foundry-fixtures.ts": {
+   "long-line": 63
+  },
+  "ui/tests/foundry-zoom.spec.ts": {
+   "long-line": 34
+  },
+  "ui/tests/history-races-isolated.spec.ts": {
+   "long-line": 9
+  },
+  "ui/tests/model-configuration-run.spec.ts": {
+   "long-line": 64
+  },
+  "ui/tests/model-revision-journey.spec.ts": {
+   "long-line": 32
+  },
+  "ui/tests/modified-runs.spec.ts": {
+   "long-line": 58
+  },
+  "ui/tests/overview-states.spec.ts": {
+   "long-line": 19
+  },
+  "ui/tests/overview.spec.ts": {
+   "long-line": 9
+  },
+  "ui/tests/paste-guard.spec.ts": {
+   "long-line": 76
+  },
+  "ui/tests/prototype-fidelity.spec.ts": {
+   "long-line": 228
+  },
+  "ui/tests/record-labels.spec.ts": {
+   "long-line": 20
+  },
+  "ui/tests/result-bindings.spec.ts": {
+   "long-line": 92
+  },
+  "ui/tests/run-history.spec.ts": {
+   "long-line": 74
+  },
+  "ui/tests/screen-readability.spec.ts": {
+   "long-line": 47
+  },
+  "ui/tests/served-read-only-inspection.spec.ts": {
+   "long-line": 11
+  },
+  "ui/tests/source-editor.spec.ts": {
+   "long-line": 27
+  },
+  "ui/tests/source-import-races.spec.ts": {
+   "long-line": 33
+  },
+  "ui/tests/study-navigation.spec.ts": {
+   "long-line": 46
+  },
+  "ui/tests/submission-scope.spec.ts": {
+   "long-line": 25
+  },
+  "ui/tests/support/browser.ts": {
+   "long-line": 3
+  },
+  "ui/tests/support/served.ts": {
+   "long-line": 4
+  },
+  "ui/tests/unit-authoring.spec.ts": {
+   "long-line": 81
+  },
+  "ui/tests/unit-configuration.spec.ts": {
+   "long-line": 63
+  },
+  "ui/tests/unit-history.spec.ts": {
+   "long-line": 111
+  },
+  "ui/tests/unit-model-reading.spec.ts": {
+   "long-line": 64
+  },
+  "ui/tests/unit-native-journey.spec.ts": {
+   "long-line": 69
+  },
+  "ui/tests/variables.spec.ts": {
+   "long-line": 42
+  },
+  "ui/tests/workspace.spec.ts": {
+   "long-line": 24
+  },
+  "ui/vite.config.ts": {
+   "long-line": 1
+  }
+ },
+ "line_length": 100,
+ "schema": "hyprn_mvp.style_baseline/1"
+}
