@@ -51,6 +51,9 @@ raise 'unexpected generator' unless s.scan(needle).size==1
 File.binwrite(p,s.sub(needle,needle+"\\n      raise 'native_disabled_12_3_8b40bcd8'"))
 """
     (directory/'instrument.rb').write_text(script)
+    # COPY keeps the context mode, and the service user reads its provenance support files:
+    # an explicit mode, never the builder's umask.
+    (directory/'instrument.rb').chmod(0o644)
     assert run('docker','image','inspect',PRODUCER,'--format','{{.Id}}') == PRODUCER
     return guard.build_derived_image(
         current, PRODUCER, directory, 'origin',
