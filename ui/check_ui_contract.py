@@ -16,7 +16,9 @@ ROOT = Path(__file__).resolve().parent
 checks = {
     'src/ResultPicker.tsx': ['resultSourcesPage', 'Load more', 'Unnamed model', 'outcomes.criteria', 'outcomes.execution', '<RunOutcomes outcomes={resultOutcomes('],
     'src/ConfigurationPanel.tsx': ['previewConfiguration2', 'commitConfiguration2', 'expected_preview_digest', 'result_binding', 'Enter a value instead', 'onViewSourceResult', 'Check original configuration command', 'Review modified run', 'choice_confirmed:true', 'seed?.configuration.derivation', 'seed?.configuration.numerical', 'RuntimeComparisonView'],
-    'src/Workspace.tsx': ['onViewSourceResult', 'Return to configuration', 'onCreateModified={createModified}', 'setModified({seed,source})'],
+    'src/Workspace.tsx': ['setModified({seed,source})'],
+    'src/views/runs.tsx': ['onViewSourceResult', 'Return to configuration',
+                           'onCreateModified={createModified}'],
     'src/ConfigurationRecord.tsx': ['result_binding', 'derivation', 'onViewSourceResult', 'binding.source_output', 'Uses result from'],
     'src/RecordedConfiguration.tsx': ['<ConfigurationRecord onViewSourceResult={onViewSourceResult}'],
     'src/RunPanel.tsx': ['<ConfigurationRecord onViewSourceResult={onViewSourceResult}', 'data-source-output', 'button?.focus()', 'api.modifiedRunSeed', 'Create modified run', 'detail?.runtime_comparison'],
@@ -100,7 +102,9 @@ approach_checks['src/RunPanel.tsx']=['case_context','Run case','Case context una
 approach_checks['src/EvidenceIndex.tsx']=['modelAssumptions(model)','recordLimitations.modelAssumptionsNotInFormat','recordLimitations.modelAssumptionsUnreadable','No modeling approach is linked.']
 # Model-assumption format interpretation and its wording live in recordViews.ts.
 approach_checks['src/recordViews.ts']=['export function modelAssumptions(',"kind: 'not_in_format'","kind: 'unsupported'","kind: 'invalid'",'Model versions saved in this older format have no assumptions.','This application cannot read assumptions from this model version format.']
-approach_checks['src/workspaceModel.ts']=["query.get('case')",'This case link does not name an approach version.','CaseNavigation']
+approach_checks['src/workspaceModel.ts']=['CaseNavigation']
+approach_checks['src/views/approach.tsx']=["query.get('case')",
+                                         'This case link does not name an approach version.']
 approach_checks['src/Workspace.tsx']=['CaseNavigation.Provider value={openCase}','focusWhenReady','runFilters','requestedCase']
 approach_checks['src/contract.ts']+=['RunCaseContext1','"case_context"?: RunCaseContext1']
 for file,terms in approach_checks.items():
@@ -150,7 +154,8 @@ print('Approach wiring and eight route/type bindings present; actual browser and
 unit_checks = {
  'src/unitLabels.ts': ['Not specified', 'Dimensionless', 'resolvedUnit', 'instance.definition_version_id', 'catalog.supported_units.find'],
  'src/UnitEditor.tsx': ['api.unitCatalog', 'abort.signal', 'Retry unit guidance'],
- 'src/Workspace.tsx': ["schema_version:'3'", 'unresolvedModelUnits', 'Units incomplete', 'View quantity'],
+ 'src/views/model.tsx': ["schema_version:'3'", 'unresolvedModelUnits', 'Units incomplete',
+                         'View quantity'],
  'src/ConfigurationPanel.tsx': ['UnitEditor', 'unitDeclaration', 'resolvedUnit', 'previewConfiguration4', 'commitConfiguration4'],
  'src/contract.ts': ['UnitCatalog1', 'UnitDeclaration1', 'ModelRevision3', 'ModifiedRunSeed4', 'RunHistory4'],
  'src/exports.ts': ['unitLabel(r.port.units)', 'Not recorded', 'unit_declarations/1'],
@@ -267,7 +272,7 @@ view_text=(ROOT/'src/ModelView.tsx').read_text()
 for term in ('export function ModelView(',"const views = ['Graph', 'XDSM'] as const",'<QuantitiesTable','<SelectionInspector','aria-label="Model view"'):
  assert term in view_text,('src/ModelView.tsx','Canonical model view',term)
 assert "'Variables'" not in view_text,('src/ModelView.tsx','No Variables projection tab')
-for file in ('src/Workspace.tsx','src/ApproachMethod.tsx','src/ConfigurationRecord.tsx'):
+for file in ('src/views/model.tsx','src/ApproachMethod.tsx','src/ConfigurationRecord.tsx'):
  assert '<ModelView' in (ROOT/file).read_text(),(file,'Reuses the canonical model view')
 inspector_text=(ROOT/'src/SelectionInspector.tsx').read_text()
 for term in ('What it computes','>Why<','label="View source"','verifySource(','Shown as text; never run.','modelAssumptions(snapshot)'):
@@ -277,6 +282,9 @@ removed_view={'src/SelectionInspector.tsx':('tiny-table','Incoming quantities','
  'src/GraphView.tsx':('ConnectedViews','VariablesTable','SelectionInspector'),
  'src/Workspace.tsx':('View model assumptions','<summary>Model version record','Inspect recorded model','ConnectedViews'),
  'src/RunPanel.tsx':("'Models'",)}
+# The study views render what the shell rendered; the shell's removed elements stay removed there.
+for path in sorted((ROOT/'src'/'views').glob('*.tsx')):
+ removed_view[str(path.relative_to(ROOT))]=removed_view['src/Workspace.tsx']
 for file,terms in removed_view.items():
  text=(ROOT/file).read_text()
  for removed in terms:assert removed not in text,(file,'Removed by the canonical model view',removed)
@@ -291,7 +299,9 @@ for file in ('src/ModelView.tsx','src/modelMethods.ts','src/VariablesTable.tsx',
 methods_text=(ROOT/'src/modelMethods.ts').read_text()
 for term in ('referencedInstances(','configurationContext(','linkedApproach(','api.fence(','api.readFailed(','useAccessLoss('):
  assert term in methods_text,('src/modelMethods.ts','Exact method links, session-scoped reads',term)
-assert 'label="Record details"' in (ROOT/'src/Workspace.tsx').read_text() and 'title="Model version record"' in (ROOT/'src/Workspace.tsx').read_text(),'Model version record moved to Record details'
+model_view_text=(ROOT/'src/views/model.tsx').read_text()
+for term in ('label="Record details"','title="Model version record"'):
+ assert term in model_view_text,('src/views/model.tsx','Model version record in Record details')
 print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assumptions, one quantities table) reused in Models, Run › Model, configuration and approach; ports table, incoming/outgoing lists, Variables tab and model-assumption dialogs absent; browser gates remain separate.')
 
 
@@ -326,7 +336,11 @@ for term in ('function CaseCard(','Why this case','onStudyLimits','Create config
 for removed in ('function ResultCard(','function StudyLimits(','Study-wide limits','View case results','Back to results','Cases and recorded runs','approach-result-limits','cases?:ReactNode'):
  assert removed not in findings_s5,('src/ApproachFindings.tsx','Removed duplicate case rendering',removed)
 workspace_s5=(ROOT/'src/Workspace.tsx').read_text()
-assert '<OverviewStudyQuestion' in workspace_s5 and 'CurrentStudyConditions' not in workspace_s5,('src/Workspace.tsx','Overview question box replaces the conditions entry')
+overview_s5=(ROOT/'src/views/overview.tsx').read_text()
+assert '<OverviewStudyQuestion' in overview_s5,\
+ ('src/views/overview.tsx','Overview question box replaces the conditions entry')
+assert 'CurrentStudyConditions' not in workspace_s5+overview_s5,\
+ ('src/views/overview.tsx','Overview question box replaces the conditions entry')
 for path in sorted((ROOT/'src').rglob('*.tsx')):
  text=path.read_text()
  for removed in ('Study conditions & limits','Question in detail','StudyConditions'):
@@ -353,7 +367,9 @@ evidence_panel=(ROOT/'src/EvidencePanel.tsx').read_text()
 for term in ('useCurrentAssumptions(api, studyId, onOpen)','<EvidenceIndex framed','aria-label="Evidence library"','title="Sources"','Sources and observations used in this study.','useAccessLoss(api, studyId'):
  assert term in evidence_panel,('src/EvidencePanel.tsx','Evidence page: assumptions index then sources',term)
 assert 'Saved notes and references' not in evidence_panel and 'title="Saved evidence"' not in evidence_panel,('src/EvidencePanel.tsx','Replaced Evidence page copy')
-assert 'onOpen={target => navigate(() => void openLink(target))} />}</div>' in (ROOT/'src/Workspace.tsx').read_text(),('src/Workspace.tsx','Evidence page owner links use guarded navigation')
+assert 'onOpen={target => navigate(() => void openLink(target))} />}</div>' in \
+ (ROOT/'src/views/evidence.tsx').read_text(),\
+ ('src/views/evidence.tsx','Evidence page owner links use guarded navigation')
 assert '<Assumptions regionless' not in (ROOT/'src/RunPanel.tsx').read_text() and 'function RunEvidence(' in run_text,('src/RunPanel.tsx','Run evidence renders through the shared index')
 for file,terms in {'src/RunPanel.tsx':('api.artifact(studyId, selected, artifact, read.signal)','api.modifiedRunSeedRead(studyId, detail.run_id, read.signal)','Check modified run again'),
  'src/ComputationalExportDialog.tsx':('api.computationalRecord(studyId,record!.request_id,read.signal)','api.readFailed(failure,read)','useAccessLoss(api,studyId'),
@@ -402,7 +418,8 @@ retired=('Recorded outputs','Exact values','Exact recorded values','Exact output
  'Configuration revision','saved revision','recent revisions','Revision {','Variables CSV','Worker isolation','Bundle digest','Model digest','Configuration digest','Preview digest',
  'Package SHA256','SHA256 {','`SHA256','>SHA256<','owners loaded','Add a description of what you want to investigate.','does not record assumptions','not recorded','Not recorded<',
  'Source and ports are retained','Exact model version','exact saved version','All returned usage loaded for this review')
-for path in sorted([*(ROOT/'src').glob('*.ts'),*(ROOT/'src').glob('*.tsx'),*(ROOT/'src'/'design').glob('*.tsx')]):
+for path in sorted([*(ROOT/'src').glob('*.ts'),*(ROOT/'src').glob('*.tsx'),
+                   *(ROOT/'src'/'design').glob('*.tsx'),*(ROOT/'src'/'views').glob('*.ts*')]):
  if path.name=='contract.ts':continue
  text=re.sub(r'(^|\s)//[^\n]*',r'\1',re.sub(r'/\*.*?\*/','',path.read_text(),flags=re.S))  # reader text, not comments
  for phrase in retired:

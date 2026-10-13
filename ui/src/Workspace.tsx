@@ -1,29 +1,29 @@
-import { OverviewStudyQuestion } from './ApproachAssumptions';
-import { useUnitCatalog, UnitGuidance } from './UnitEditor';
+import { useUnitCatalog } from './UnitEditor';
 import { unresolvedModelUnits } from './unitLabels';
-import { configurationCounts } from './recordLabels';
 import type { ApproachSelection1 } from './contract';
 import type { ApproachHandoff } from './ApproachAssumptions';
-import { Button, Panel, TextInput, TextArea, Select, DialogFrame, Tabs, ActionIcon, StatusTag, RecordBar } from './design';
-import { ActionDialog, SectionHeader } from './Presentation';
-import { useEffect, useRef, useState } from 'react';
+import { Button, Panel, TextInput, DialogFrame, Tabs, ActionIcon, StatusTag } from './design';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, message } from './api';
 import type { ModelDraftRead4, ModelRevisionRead4, Study, PublicRun, PublicRunDetail, RevisionSummary, EvidenceRecord, FrozenConfigurationRead7, ConfigurationRevision, ModifiedRunSeedRead6 } from './api';
-import { CaseNavigation, cleanGuard, discardGuards, guardsBlocked, guardsDirty, guardsShown, parseWorkspaceLink, saveGuards, useGuardSlot, workspaceHash, type CaseNavigationTarget, type GuardEntry, type WorkspaceContext, type WorkspaceLink, type WorkspaceView, type Selection } from './workspaceModel';
-import { ModelView } from './ModelView';
-import { ComponentWhatWhy } from './SelectionInspector';
+import { CaseNavigation, cleanGuard, discardGuards, guardsBlocked } from './workspaceModel';
+import { guardsDirty, guardsShown, saveGuards, useGuardSlot } from './workspaceModel';
+import { workspaceHash } from './workspaceModel';
+import type { CaseNavigationTarget, GuardEntry, WorkspaceContext } from './workspaceModel';
+import type { WorkspaceLink, WorkspaceView, Selection } from './workspaceModel';
 import { retainedApproachVersion, retainedMethodLinks, useLatestMethodLinks, type MethodLink } from './modelMethods';
 
-import { ModelEditor, type EditorHandle } from './ModelEditor';
-import { ConfigurationPanel, type ConfigurationHandle, type ConfigurationInspection } from './ConfigurationPanel';
+import type { EditorHandle } from './ModelEditor';
+import type { ConfigurationHandle, ConfigurationInspection } from './ConfigurationPanel';
 import type { VariableContext } from './VariablesTable';
-import { EvidencePanel } from './EvidencePanel';
-import { RunPanel, runPending, emptyRunFilters, type RunFilters } from './RunPanel';
+import { runPending, emptyRunFilters, type RunFilters } from './RunPanel';
 import { ComparisonView } from './ComparisonView';
-import { OverviewRecords } from './OverviewRecords';
-import { RecordedConfiguration } from './RecordedConfiguration';
 import { ApproachController, useApproachController } from './ApproachController';
-import { ApproachPanel, forgetApproachReading, showMethodStep } from './ApproachPanel';
+import { forgetApproachReading, showMethodStep } from './ApproachPanel';
+import { ModelController } from './ModelController';
+import { breadcrumbOf, parseViewLink, selectedTab, studyTabs } from './views/registry';
+import { viewGuards, viewRegistry } from './views/registry';
+import type { GuardContext, ViewContext } from './views/registry';
 
 type RunOrigin = { actor: string; study: string; model: string; generation: number; link: string };
 
@@ -110,24 +110,20 @@ export function Workspace() {
   const [resolvedRuns, setResolvedRuns] = useState<Array<{ actor: string; study: string; run: string }>>([]);
   const transition = useRef<null | (() => void)>(null); const returnFocus = useRef<HTMLElement | null>(null);
   const dialog = useRef<HTMLDialogElement>(null); const generation = useRef(0);
+  const modelVersions = useRef(new ModelController(api, generation)).current;
   useEffect(() => () => { generation.current++; approach.dispose(); }, [approach]);
   useEffect(() => { if (view === 'overview' && study && returnToApproachEntry.current) { approachEntry.current?.focus(); returnToApproachEntry.current = false; } }, [view, study]);
   const metadataDirty = !!study && (metadata.name !== study.name || metadata.description !== study.description || metadata.boundary !== study.boundary);
   // One ordered unsaved-changes list. Its order is the save and discard order; it also
-  // drives the page dirty state, navigate(), the dialog and clearEditor. A new editor adds
-  // one entry here. Port paste saves authored editor edits with it, so the editor save is
-  // skipped when the paste was dirty. Metadata errors propagate and keep the dialog open.
-  const guards: GuardEntry[] = [
-    { name: 'approach-editor', blocking: true, shown: approachEditing,
-      guard: () => ({ dirty: approachEditingRef.current, save: async () => !approachEditingRef.current, discard: () => { approachEditingRef.current = false; setApproachEditing(false); setApproachEditEpoch(n => n + 1); } }),
-      reset: () => { approachEditingRef.current = false; setApproachEditing(false); } },
-    { name: 'approach', shown: approach.handle.dirty, guard: () => approach.handle, skip: () => view !== 'approach', reset: () => approach.clear() },
-    portPasteSlot.entry('port-paste'),
-    editorSlot.entry('editor', { skip: dirtyWhenSaved => dirtyWhenSaved.has('port-paste'), onRefused: () => document.querySelector<HTMLTextAreaElement>('textarea[spellcheck=false]')?.focus() }),
-    { name: 'metadata', shown: metadataDirty, guard: () => ({ dirty: metadataDirty, save: async () => { await saveMetadata(); return true; }, discard: () => { if (study) setCurrentStudy(study); } }) },
-    evidenceSlot.entry('evidence'),
-    configurationSlot.entry('configuration', { onRefused: () => document.getElementById('configuration')?.scrollIntoView() }),
-  ];
+  // drives the page dirty state, navigate(), the dialog and clearEditor. A view's editor
+  // adds its entry through the view's registry guard; the registry fixes the save order.
+  // Metadata errors propagate and keep the dialog open.
+  const guardContext: GuardContext = {
+    view, study, approach, approachEditing, approachEditingRef, setApproachEditing,
+    setApproachEditEpoch, portPasteSlot, editorSlot, metadataDirty, saveMetadata,
+    setCurrentStudy, evidenceSlot, configurationSlot,
+  };
+  const guards: GuardEntry[] = viewGuards(guardContext);
   const dirty = guardsShown(guards);
   useEffect(() => { const unload = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } }; window.addEventListener('beforeunload', unload); return () => window.removeEventListener('beforeunload', unload); }, [dirty]);
   function setCurrentStudy(value: Study) { setStudy(value); setStudies(previous => previous.some(s => s.study_id === value.study_id) ? previous.map(s => s.study_id === value.study_id ? value : s) : [value, ...previous]); setMetadata({ name: value.name, description: value.description, boundary: value.boundary }); }
@@ -301,7 +297,7 @@ export function Workspace() {
     if (!study) return;
     const sid = study.study_id;
     let origin: WorkspaceLink | null = null;
-    try { origin = parseWorkspaceLink(currentLink.current); } catch { origin = null; }
+    try { origin = parseViewLink(currentLink.current); } catch { origin = null; }
     navigate(() => {
       setCaseReturn(origin?.study === sid ? { link: origin, key: returnKey } : null);
       void openLink({ study: sid, view: 'approach', approach: target.approach_version_id, case: target.case_id ?? 'none' }, true);
@@ -366,7 +362,22 @@ export function Workspace() {
     });
   }
   useEffect(() => {
-    const changed = () => { if (!signedIn) return; const wanted = window.location.hash; window.history.replaceState(null, '', currentLink.current || window.location.pathname); navigate(() => { try { const value = parseWorkspaceLink(wanted); if (value) void openLink(value); else void openPage(wanted === '#profile' ? 'profile' : wanted === '#new-study' ? 'new-study' : 'home'); } catch (e) { setError(e); } }); };
+    const changed = () => {
+      if (!signedIn) return;
+      const wanted = window.location.hash;
+      window.history.replaceState(null, '', currentLink.current || window.location.pathname);
+      navigate(() => {
+        try {
+          const value = parseViewLink(wanted);
+          if (value) void openLink(value);
+          else {
+            const next = wanted === '#profile' ? 'profile'
+              : wanted === '#new-study' ? 'new-study' : 'home';
+            void openPage(next);
+          }
+        } catch (e) { setError(e); }
+      });
+    };
     window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed);
   });
   const homeList = homeView === 'archived' ? archivedStudies : studies;
@@ -391,14 +402,55 @@ export function Workspace() {
     const version = link.approachVersionId; if (!study || !version) return;
     navigate(() => { showMethodStep(study.study_id, version, link.stepId); void openLink({ study: study.study_id, view: 'approach', approach: version }); });
   }
-  // One canonical model view: Models, Run › Model and configuration "View model version".
-  const frozenWorkspace = study && displayedSnapshot && <div className="model-region"><ModelView key={`${api.actor}:${study.study_id}:${view}:${displayedSnapshot.model_id}:${'model_revision_id' in displayedSnapshot ? displayedSnapshot.model_revision_id : 'draft'}`} snapshot={displayedSnapshot} selection={selection} onSelect={select} values={variableContext} evidence={frozenEvidence} methods={methods} onOpenStep={openMethodStep} onPastePorts={view === 'model' && model && !revision ? async (scope, text, saveAuthoring) => { const editor = editorSlot.current(); if (!editor.pastePorts) throw new Error('Model editor is unavailable.'); return editor.pastePorts(scope, text, saveAuthoring); } : undefined} onPasteHandle={view === "model" && model && !revision ? portPasteSlot.receive : undefined} authoring={view === 'model' && model && !revision ? hosts => <ModelEditor handoff={approachHandoff?.studyId === model.study_id && approachHandoff.modelId === model.model_id ? approachHandoff : undefined} hosts={hosts} explain={(id, source) => <ComponentWhatWhy snapshot={model} instanceId={id} methods={methods} onOpenStep={openMethodStep} source={source} />} modelActionHost={modelActionHost} key={model.model_id} api={api} model={model} selection={selection} onSelect={select} onModel={currentModel} navigate={navigate} onHandle={editorSlot.receive} /> : undefined} /></div>;
+  // The values the study views render from (views/registry.ts ViewContext).
+  const ctx: ViewContext | null = study && {
+    ...guardContext, study, api, guards, dirty, busy, loading, error, notice, generation,
+    navigate, perform, openLink, link, clearEditor, select, selection, setSelection, setView,
+    setContext, metadata, setMetadata, approachEntry, approachReturn, setApproachReturn,
+    caseReturn, returnFromCase, requestedCase, setRequestedCase, requestedApproach,
+    setRequestedApproach, approachEditEpoch, approachHandoff, setApproachHandoff,
+    returnToApproachEntry, newConfiguration, models, model, setModel, revision, setRevision,
+    revisions, selectedModel, creatingModel, setCreatingModel, creationGuidance, newModel,
+    setNewModel, template, setTemplate, chooseModel, currentModel, modelVersions, setNotice,
+    setRevisions, modelActionHost, setModelActionHost, setResourceActions, displayedSnapshot,
+    variableContext, frozenEvidence, methods, openMethodStep, configuration, configurations,
+    configInspection, setConfigInspection, modified, initialConfigurationRevision,
+    initialConfigurationApproach, choosingConfiguration, setChoosingConfiguration,
+    chooseConfigurationModel, chooseView, copyRunConfiguration, pendingCopy, evidence,
+    setEvidence, submitConfiguration, viewSourceResult, sourceReturn, activeRun,
+    returnToConfiguration, runFilters, setRunFilters, runListEpoch, submitted, setActiveRun,
+    runInspection, setRunInspection, createModified,
+  };
   return <CaseNavigation.Provider value={openCase}><main ref={workspaceRoot}>
-    <header className="appbar"><p className="brand">HYPRN MVP</p>{signedIn && <><nav aria-label="Main navigation"><Button aria-current={page === 'home' ? 'page' : undefined} onClick={() => navigate(() => void openPage('home'))}>Home</Button>{study && <><span className="breadcrumb-study">/ {study.name}</span><span className="breadcrumb-section">/ {view === 'approach' ? 'Overview / Modeling approach' : view === 'model' ? 'Models' : view[0].toUpperCase() + view.slice(1)}</span></>}</nav><Button className="profile-link" aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate(() => void openPage('profile'))}>Profile</Button></>}</header>
+    <header className="appbar"><p className="brand">HYPRN MVP</p>{signedIn && <>
+      <nav aria-label="Main navigation">
+        <Button aria-current={page === 'home' ? 'page' : undefined}
+          onClick={() => navigate(() => void openPage('home'))}>Home</Button>
+        {study && <><span className="breadcrumb-study">/ {study.name}</span>
+          <span className="breadcrumb-section">/ {breadcrumbOf(view)}</span></>}
+      </nav>
+      <Button className="profile-link" aria-current={page === 'profile' ? 'page' : undefined}
+        onClick={() => navigate(() => void openPage('profile'))}>Profile</Button>
+    </>}</header>
     {error != null && <div role="alert"><p>{message(error)}</p>{study && !api.pending && <Button onClick={() => navigate(() => void chooseStudy(study.study_id))}>Retry study read</Button>}</div>}
     {notice && <p aria-live="polite">{notice}</p>}
     {busy && <p role="status" aria-live="polite"><StatusTag tone="running">Request in progress…</StatusTag></p>}
-    {!signedIn ? <Panel className="login"><h1>Sign in to HYPRN MVP</h1><form onSubmit={e => { e.preventDefault(); void perform(async () => { await api.login(username, password); setPassword(''); setSignedIn(true); const target = parseWorkspaceLink(window.location.hash); if (target) await openLink(target); else await openPage(window.location.hash === '#profile' ? 'profile' : window.location.hash === '#new-study' ? 'new-study' : 'home'); }); }}><fieldset disabled={busy}><label>Username<TextInput autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)} /></label><label>Password<TextInput type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label><Button type="submit" variant="primary">Sign in</Button></fieldset></form></Panel> : <>
+    {!signedIn ? <Panel className="login"><h1>Sign in to HYPRN MVP</h1>
+      <form onSubmit={e => { e.preventDefault(); void perform(async () => {
+        await api.login(username, password); setPassword(''); setSignedIn(true);
+        const target = parseViewLink(window.location.hash);
+        if (target) await openLink(target);
+        else await openPage(window.location.hash === '#profile' ? 'profile'
+          : window.location.hash === '#new-study' ? 'new-study' : 'home');
+      }); }}>
+        <fieldset disabled={busy}>
+          <label>Username<TextInput autoComplete="username" required value={username}
+            onChange={e => setUsername(e.target.value)} /></label>
+          <label>Password<TextInput type="password" autoComplete="current-password" required
+            value={password} onChange={e => setPassword(e.target.value)} /></label>
+          <Button type="submit" variant="primary">Sign in</Button>
+        </fieldset>
+      </form></Panel> : <>
       {api.pending && <aside><p>{api.pending.category === "run" ? "Submission outcome is uncertain. Check the original command before making more changes." : "Command outcome is uncertain. Check the original command before making more changes."}</p><Button disabled={busy} onClick={() => void perform(async () => { await reconcileCommand(); })}>Check original command</Button>{api.retryReady && <Button disabled={busy} onClick={() => void perform(async () => { if (view === 'approach' && approach.ownsPendingCommand) { await approach.retryOriginal(); return; } const category = api.pending?.category; await api.retryOriginal(); if (category === 'study_archive' && page === 'home' && !api.pending) { await reloadStudies(); setNotice('Original command resolved. Study lists reloaded.'); return; } setNotice(api.pending ? 'Original command is still pending.' : 'Original command resolved. Reload the study after reviewing unsaved edits.'); })}>Retry original command</Button>}</aside>}
       {resolvedRuns.filter(item => item.actor === api.actor).map(item => <aside key={item.study + item.run}><p>Run {item.run} was accepted in study {item.study}. Your current workspace is unchanged.</p><Button onClick={() => navigate(() => void openLink({ study: item.study, view: 'runs', run: item.run }))}>Open original run</Button></aside>)}
       <div className="workspace-shell">
@@ -414,31 +466,19 @@ export function Workspace() {
       {page === 'new-study' && <Panel className="creation-page"><h1>New study</h1><form onSubmit={e => { e.preventDefault(); void perform(async () => { const token = generation.current, actor = api.actor; const created = await api.createStudy(newStudy); if (token !== generation.current || actor !== api.actor) return; setNewStudy(''); await openLink({ study: created.study_id, view: 'overview' }); }); }}><label>New study name<TextInput required maxLength={4096} value={newStudy} onChange={e => setNewStudy(e.target.value)} /></label><div className="actions"><Button type="submit" variant="primary" disabled={busy || !!api.pending}>Create study</Button><Button type="button" disabled={busy} onClick={() => void openPage('home')}>Cancel</Button></div></form></Panel>}
       {page === 'study' && loading && <p aria-live="polite" aria-busy="true">Loading study/model…</p>}
       {study && <>{(view !== 'model' || !selectedModel) && !(view === 'runs' && runInspection) ? <div className="study-heading"><h1>{study.name}</h1></div> : null}
-        <Tabs navigation className="workspace-views" label="Workspace sections" value={view === 'approach' ? 'overview' : view} onChange={next => chooseView(next as WorkspaceView)} items={(['overview', 'model', 'configurations', 'runs', 'evidence'] as const).map(id => ({ id, label: id === 'model' ? 'Models' : id[0].toUpperCase() + id.slice(1) }))} />
-        {view === 'model' && revision && <RecordBar title="Read-only model version" onReturn={() => navigate(() => void chooseModel(revision.model_id))} returnLabel="Return to current model" />}
-        {view === 'overview' && <OverviewStudyQuestion key={`${api.actor}:${study.study_id}`} api={api} studyId={study.study_id} />}
-        {view === 'overview' && <div className="overview-grid"><Panel className="study-about overview-card" label="About this study"><SectionHeader level={2} title="About this study" actions={<ActionDialog title="Edit study" label="Edit"><fieldset className="form-stack" disabled={busy || !!api.pending}><label>Study name<TextInput value={metadata.name} maxLength={4096} onChange={e => setMetadata({ ...metadata, name: e.target.value })} /></label><label>Description<TextArea aria-label="Description" value={metadata.description} maxLength={4096} onChange={e => setMetadata({ ...metadata, description: e.target.value })} /></label><Button variant="primary" disabled={!metadataDirty} onClick={() => void perform(saveMetadata)}>Save study context</Button></fieldset>{metadataDirty && <p role="status">Unsaved changes are kept when you close this editor.</p>}{busy && <p role="status">Saving study…</p>}{error != null && <p role="alert">{message(error)}</p>}{notice && <p role="status">{notice}</p>}{api.pending && <p role="alert">Command outcome is uncertain. Close this editor and check the original command before making more changes.</p>}</ActionDialog>} /><p className="context-copy"><strong>Description: </strong>{study.description || 'No description yet.'}</p><div className="approach-overview-entry"><Button ref={approachEntry} onClick={() => navigate(() => void openLink({ study: study.study_id, view: 'approach' }))}>View modeling approach</Button></div></Panel><OverviewRecords key={`${api.actor}:${study.study_id}`} api={api} study={study} onOpen={target => navigate(() => void openLink(target))} /></div>}
-        {view !== 'approach' && approachReturn?.study === study.study_id && <Button className="link back-link" onClick={()=>navigate(()=>{const target=approachReturn;setApproachReturn(null);void openLink(target);})}>Return to modeling approach</Button>}
-        {view === 'approach' && caseReturn?.link.study === study.study_id && <Button className="link back-link" onClick={returnFromCase}>{caseReturn.link.run ? 'Return to run' : caseReturn.link.view === 'runs' ? 'Return to run history' : caseReturn.link.configuration ? 'Return to configuration' : 'Return to previous page'}</Button>}
-        {view === 'approach' && <ApproachPanel requestedCase={requestedCase} onCreateConfiguration={(model,selection)=>navigate(()=>{setApproachReturn({study:study.study_id,view:'approach',approach:selection.approach_version_id});void perform(()=>newConfiguration(model.model_id,model,selection));})} onOpenRecord={target=>navigate(()=>{setApproachReturn({study:study.study_id,view:'approach',approach:requestedApproach});void openLink(target);})} onEditingChange={dirty=>{approachEditingRef.current=dirty;setApproachEditing(dirty);}} onOpenModel={id=>navigate(()=>void openLink({study:study.study_id,model:id,view:"model"}))} onHandoff={value => navigate(() => { setApproachHandoff(value); void openLink({study:value.studyId,model:value.modelId,view:"model"}); })} key={study.study_id+"/"+approachEditEpoch} api={api} controller={approach} studyId={study.study_id} requestedVersion={requestedApproach} navigate={navigate} onSelection={id => { setRequestedApproach(id); const exactCase = requestedCase?.approach === id ? requestedCase : null; if (!exactCase) setRequestedCase(undefined); link({ study: study.study_id, view: 'approach', ...(id ? { approach: id } : {}), ...(id && exactCase ? { case: exactCase.id } : {}) }); }} onBack={() => navigate(() => { returnToApproachEntry.current = true; void openLink({ study: study.study_id, view: 'overview' }); })} />}
-        {view === 'model' && !selectedModel && !creatingModel && <section className="models-page"><div className="page-heading"><h2>Models</h2><div className="section-actions"><div className="section-actions" ref={setResourceActions} /><Button variant="primary" disabled={busy || loading || !!api.pending} onClick={() => navigate(() => { clearEditor(); setCreatingModel(true); })}>New model</Button></div></div><Panel className="model-list" bodyClassName="catalogue-body" label="Models">{models.map(m => <article className="model-row" key={m.model_id}><h3>{m.name}</h3><Button aria-label={`Open model ${m.name}`} onClick={() => navigate(() => void chooseModel(m.model_id))}>Open model</Button></article>)}{!models.length && !loading && !error && <p className="empty-state">No models yet. Add a model to this study.</p>}</Panel></section>}
-        {view === 'model' && creatingModel && <Panel className="creation-page"><h2>New model</h2><UnitGuidance guidance={creationGuidance} /><form onSubmit={e => { e.preventDefault(); void perform(async () => { const token = generation.current, actor = api.actor, sid = study.study_id; if (!creationGuidance.catalog) throw new Error('Unit guidance is unavailable. Retry unit guidance. Your edits are kept.'); const created = await api.createModelCommand(sid, {schema_version:'3', command_id:crypto.randomUUID(), expected_revision:study.revision, name:newModel, template}); if (token !== generation.current || actor !== api.actor) return; setNewModel(''); await openLink({ study: sid, model: created.model_id, view: 'model' }); }); }}><label>New model name<TextInput required maxLength={4096} value={newModel} onChange={e => setNewModel(e.target.value)} /></label><label>Starting model<Select aria-label="Starting model" value={template} onChange={e => setTemplate(e.target.value as typeof template)}><option value="empty">Empty model</option><option value="two_component_example">Ordinary two-component example</option></Select></label><div className="actions"><Button type="submit" variant="primary" disabled={busy || !!api.pending || !creationGuidance.catalog}>Create model</Button><Button type="button" disabled={busy} onClick={() => setCreatingModel(false)}>Cancel</Button></div></form></Panel>}
-        {view === 'model' && selectedModel && <div className="model-heading"><div><Button className="link" aria-label="All models" onClick={() => navigate(() => void openLink({ study: study.study_id, view: 'model' }))}>← All models</Button><h2>{revision ? `Model version ${revision.model_revision_id.slice(0, 8)}` : model?.name ?? models.find(m => m.model_id === selectedModel)?.name ?? 'Model'}</h2><p className="model-context"><StatusTag tone={dirty ? "advisory" : "inert"}>{revision ? 'Read-only model version' : dirty ? 'Unsaved local edits' : 'Draft · saved'}</StatusTag></p></div><div className="model-version-controls"><Select aria-label="Model version" value={revision?.model_revision_id ?? 'draft'} disabled={loading || busy} onChange={e => { const rid = e.target.value; navigate(() => void openLink({ study: study.study_id, model: selectedModel, view: 'model', ...(rid === 'draft' ? {} : { revision: rid }) })); }}><option value="draft">{model?.draft_revision?.slice(0, 8) ?? 'Current'} (draft)</option>{revisions.map(r => <option key={r.model_revision_id} value={r.model_revision_id}>{r.model_revision_id.slice(0, 8)} (read-only)</option>)}</Select>
-          {model && <Button variant="primary" disabled={busy || !!api.pending} onClick={() => void perform(async () => { const token = generation.current, actor = api.actor, sid = study.study_id, mid = model.model_id; const valid = () => token === generation.current && actor === api.actor; if ((await saveGuards(guards.filter(guard => ['port-paste', 'editor', 'metadata'].includes(guard.name)), valid)).outcome !== 'saved') return; const current = await api.model(sid, mid); if (!valid()) return; currentModel(current); const saved = await api.commitModel(current); if (!valid()) return; const versions = await api.revisions(sid, mid); if (!valid()) return; setRevisions(versions); setNotice(unresolvedModelUnits(saved).length ? 'Model version saved · units incomplete. Resolve units in the listed active components before creating a configuration.' : `Model version ${saved.model_revision_id.slice(0, 8)} saved.`); })}>Save model version</Button>}
-          <Button disabled={busy || !!api.pending} onClick={() => navigate(() => void perform(() => newConfiguration(selectedModel, revision ?? undefined)))}>Create configuration</Button>
-          <ActionDialog title="Model actions" label="…" triggerLabel="Model actions"><div className="hf-action-list"><div ref={setModelActionHost} />{revision && <ActionDialog title="Model version record" label="Record details"><dl className="hf-record-details"><dt>Model version</dt><dd>{revision.model_revision_id}</dd><dt>SHA-256</dt><dd>{revision.digest}</dd></dl><pre tabIndex={0} aria-label="Model version JSON">{JSON.stringify(revision, null, 2)}</pre></ActionDialog>}<Button disabled={busy || loading} onClick={() => navigate(() => void openLink({ study: study.study_id, model: selectedModel, view: 'model', ...(revision ? { revision: revision.model_revision_id } : {}) }))}>Reload model</Button><div className="section-actions" ref={setResourceActions} /></div></ActionDialog>
-        </div></div>}
-        {view === 'model' && (revision || model) && unresolvedModelUnits((revision ?? model)!).length > 0 && <details><summary><StatusTag tone="advisory">Units incomplete</StatusTag></summary><p>Resolve units in these active components before creating a configuration.</p><ul>{unresolvedModelUnits((revision ?? model)!).map(issue => <li key={issue.instance_id + '/' + issue.port_id}>{issue.component} · {issue.quantity}: units are not specified. <code title={'Definition version ' + issue.definition_version_id}>{issue.definition_version_id.slice(0, 8)}</code><Button onClick={() => select({kind:'variable',instance_id:issue.instance_id,port_id:issue.port_id})}>View quantity</Button></li>)}</ul></details>}
-        {view === 'model' && approachHandoff?.studyId === study.study_id && <div className="section-actions"><Button disabled={!!api.pending} onClick={()=>navigate(()=>{setApproachHandoff(null);void openLink({study:study.study_id,view:'approach'});})}>Return to modeling approach</Button><p className="context-line">Apply the model change, save a model version, then explicitly link its assumption in the approach.</p></div>}{view === 'model' && frozenWorkspace}        <div hidden={view !== 'configurations'}>{(view === 'configurations' || !!sourceReturn) && (model || modified) && <><Button className="link back-link" onClick={() => chooseView('configurations')}>← All configurations</Button><ConfigurationPanel onViewModelUnit={(exact, target) => navigate(() => { setRevision(exact); setModel(null); setView('model'); setContext({actor_id:api.actor,study_id:study.study_id,view:'model',kind:'revision',model_id:exact.model_id,model_revision_id:exact.model_revision_id,snapshot:exact}); setSelection({kind:'variable',...target}); link({study:study.study_id,model:exact.model_id,revision:exact.model_revision_id,view:'model'}); })} modified={modified ?? undefined} onCancelModified={() => navigate(() => { if(study && modified) void openLink({study:study.study_id, view:'runs', run:modified.seed.source_run_id}); })} onViewSourceResult={(runId, output) => void perform(() => viewSourceResult(runId, output))} resourceActionsRef={view === 'configurations' ? setResourceActions : undefined} initialRevision={initialConfigurationRevision} initialApproach={initialConfigurationApproach} key={'configuration-' + (modified?.seed.source_run_id ?? model!.model_id)} api={api} model={model ?? modified!.seed.model_snapshot} study={study} authoringDirty={editorSlot.dirty || portPasteSlot.dirty || metadataDirty} activeRun={activeRun} onInspection={setConfigInspection} evidence={evidence} onEvidenceRecords={setEvidence} onSubmit={submitConfiguration} onHandle={h => { configurationSlot.receive(h); if (model && pendingCopy.current?.configuration.model_id === model.model_id) { const copy = pendingCopy.current; pendingCopy.current = null; h.copy(copy.configuration, copy.snapshot); } }} /></>}</div>
-        {view === 'configurations' && !model && !modified && <section className="configurations-page">{configuration ? <><Button className="link back-link" onClick={() => chooseView('configurations')}>← All configurations</Button><RecordedConfiguration onViewSourceResult={(runId, output) => void perform(() => viewSourceResult(runId, output))} resourceActionsRef={setResourceActions} api={api} activeRun={activeRun} onSubmit={submitConfiguration} saved={configuration} onCopy={() => void perform(() => copyRunConfiguration(configuration.configuration, configuration.model_snapshot))}><ActionDialog title={'Model version ' + configuration.configuration.model_revision_id.slice(0, 8)} label="View model version" width="workspace">{frozenWorkspace}</ActionDialog></RecordedConfiguration></> : <><div className="page-heading"><p>Inputs, evidence and criteria for a saved model version.</p><Button variant="primary" disabled={busy || !!api.pending} onClick={() => void perform(chooseConfigurationModel)}>New configuration</Button></div>
-          {choosingConfiguration && <Panel className="creation-page" title="New configuration"><p>Choose a model. Its current draft will be saved as the model version for this configuration.</p>{models.map(m => <div className="record" key={m.model_id}><span>{m.name}</span><Button disabled={busy || !!api.pending} onClick={() => void perform(() => newConfiguration(m.model_id))}>Use {m.name}</Button></div>)}{!models.length && <p>Create a model before configuring a calculation.</p>}<Button onClick={() => setChoosingConfiguration(false)}>Cancel</Button></Panel>}
-          <Panel label="Configurations"><p className="context-line">{configurationCounts(configurations)} · All saved versions</p>{configurations.map(c => <article className="model-row" key={c.configuration.configuration_revision_id}><div><h3>{c.configuration.name}</h3><p className="row-description">Version {c.configuration.configuration_revision_id.slice(0, 8)} · Model version {c.configuration.model_revision_id.slice(0, 8)} · {c.configuration.inputs.length} inputs</p></div><Button onClick={() => navigate(() => void openLink({ study: study.study_id, view: 'configurations', configuration: c.configuration.configuration_revision_id }))}>Open configuration</Button></article>)}{!configurations.length && !loading && !error && <p className="empty-state">No configurations yet. Save explicit inputs for a model version.</p>}</Panel></>}</section>}
-        <div hidden={view !== 'runs'}>
-        {sourceReturn && view === 'runs' && <Button onClick={returnToConfiguration}>{sourceReturn.view === 'runs' ? 'Return to run' : 'Return to configuration'}</Button>}
-        <RunPanel filters={runFilters} onFilters={setRunFilters} onViewSourceResult={(runId, output) => void perform(() => viewSourceResult(runId, output))} sourceOutput={sourceReturn ?? undefined} resourceActionsRef={view === 'runs' ? setResourceActions : undefined} listEpoch={runListEpoch} workspace={view === 'runs' ? frozenWorkspace : undefined} onSelect={select} key={study.study_id} api={api} studyId={study.study_id} submitted={submitted} onActive={setActiveRun} onInspection={detail => { setRunInspection(detail); if (view === 'runs' && detail) { if (sourceReturn?.runId === detail.run_id) setSelection({ kind: 'variable', ...sourceReturn.output }); else if (runInspection?.run_id !== detail.run_id) setSelection({ kind: 'none' }); const snapshot = detail.history?.model_snapshot ?? undefined; setContext({ actor_id: api.actor, study_id: study.study_id, view: 'runs', kind: 'run', run_id: detail.run_id, snapshot, model_id: snapshot?.model_id, model_revision_id: snapshot?.model_revision_id, configuration_revision_id: detail.history?.configuration?.configuration_revision_id }); link({ study: study.study_id, view: 'runs', run: detail.run_id }); } }} onHistory={() => { if (view === 'runs') link({ study: study.study_id, view: 'runs' }); }} navigate={navigate} onCreateModified={createModified} />
-        </div>
+        <Tabs
+          navigation
+          className="workspace-views"
+          label="Workspace sections"
+          value={selectedTab(view)}
+          onChange={next => chooseView(next as WorkspaceView)}
+          items={studyTabs()}
+        />
+        {ctx && viewRegistry.map(entry => (
+          <Fragment key={entry.name}>{entry.banner?.(ctx)}</Fragment>))}
+        {ctx && viewRegistry.map(entry => (
+          <Fragment key={entry.name}>{entry.render(ctx)}</Fragment>))}
         {(view === 'model' || view === 'configurations' || view === 'runs') && !creatingModel && <ComparisonView actionHost={resourceActions} allowImport={view === 'model'} key={`${api.actor}:${study.study_id}:${view}:${displayedSnapshot?.model_id ?? 'none'}:${displayedSnapshot && 'model_revision_id' in displayedSnapshot ? displayedSnapshot.model_revision_id : displayedSnapshot?.draft_revision ?? 'none'}:${runInspection?.run_id ?? ''}:${configuration?.configuration.configuration_revision_id ?? ''}`} api={api} study={study} root={workspaceRoot} navigate={navigate} scope={displayedSnapshot ? { snapshot: displayedSnapshot, values: variableContext, configuration: variableContext.kind === 'run' ? variableContext.history.configuration?.configuration_revision_id : variableContext.kind === 'configuration' ? variableContext.configuration.configuration_revision_id : undefined, run: view === 'runs' ? runInspection?.run_id : undefined, selection, unsaved: dirty } : null} onImported={async imported => { const token = ++generation.current; clearEditor(); currentModel(imported); setModels(previous => [...previous.filter(m => m.model_id !== imported.model_id), { model_id: imported.model_id, name: imported.name }]); setView('model'); link({ study: study.study_id, model: imported.model_id, view: 'model' }); const [fresh, entries] = await Promise.all([api.study(study.study_id), api.revisions(study.study_id, imported.model_id)]); if (token !== generation.current) return; setCurrentStudy(fresh); setRevisions(entries); setNotice('Model imported with preserved public identities. No source executed.'); }} />}
-        <div hidden={view !== 'evidence'}>{view === 'evidence' && <EvidencePanel key={study.study_id} api={api} studyId={study.study_id} snapshot={revision ?? configInspection?.snapshot ?? configuration?.model_snapshot ?? runInspection?.history?.model_snapshot} configuration={configuration?.configuration ?? configInspection?.saved?.configuration ?? runInspection?.history?.configuration} runId={runInspection?.run_id} records={evidence} onRecords={setEvidence} onHandle={evidenceSlot.receive} onOpen={target => navigate(() => void openLink(target))} />}</div>
       </>}
       </div></div>
     </>}

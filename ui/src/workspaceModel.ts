@@ -66,6 +66,7 @@ export function useGuardSlot<T extends EditorGuard>(clean: () => T) {
     },
   };
 }
+export type GuardSlot<T extends EditorGuard> = ReturnType<typeof useGuardSlot<T>>;
 
 export type WorkspaceView = 'overview' | 'model' | 'configurations' | 'runs' | 'evidence' | 'approach';
 export type Selection = { kind: 'none' } | { kind: 'instance'; instance_id: string }
@@ -80,30 +81,45 @@ export type WorkspaceContext = { actor_id: string; study_id: string; view: Works
 /** `case` is meaningful only beside its exact approach version: a case UUID, or
  * `none` for the explicit null pin (No specific case). */
 export type WorkspaceLink = { view: WorkspaceView; study?: string; model?: string; revision?: string; configuration?: string; run?: string; approach?: string; case?: string };
-const views: WorkspaceView[] = ['overview', 'model', 'configurations', 'runs', 'evidence', 'approach'];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function parseWorkspaceLink(hash: string): WorkspaceLink | null {
+/** A resource identity named by a workspace link is a UUID. */
+export const isResourceIdentity = (value: string) => uuid.test(value);
+/** The link rules of one study view (its registry entry): which resource keys the view
+ * accepts beside the study and how they must agree. A rule throws the refusal text. */
+export type ViewLinkRules = (link: WorkspaceLink, query: URLSearchParams) => void;
+/** A view the link model can resolve by name; the study-shell registry provides them. */
+export type LinkedView = { name: WorkspaceView; parseLink: ViewLinkRules };
+/** Parses the `#v=1` envelope and the resource identities shared by every view, then
+ * applies the named view's own rules. `viewNamed` answers only for an available view, so a
+ * link naming any other view is refused as unavailable. */
+export function parseWorkspaceLink(
+  hash: string,
+  viewNamed: (name: string) => LinkedView | undefined,
+): WorkspaceLink | null {
   if (!hash || !hash.startsWith('#v=')) return null;
   const query = new URLSearchParams(hash.slice(1));
   if (query.get('v') !== '1') throw new Error('This workspace link uses an unsupported version.');
-  const view = query.get('view') ?? 'overview';
-  if (!views.includes(view as WorkspaceView)) throw new Error('This workspace view is unavailable.');
-  const link: WorkspaceLink = { view: view as WorkspaceView };
+  const entry = viewNamed(query.get('view') ?? 'overview');
+  if (!entry) throw new Error('This workspace view is unavailable.');
+  const link: WorkspaceLink = { view: entry.name };
   for (const key of ['study', 'model', 'revision', 'configuration', 'run', 'approach'] as const) {
     const value = query.get(key); if (!value) continue;
     if (!uuid.test(value)) throw new Error('This workspace link has an invalid resource identity.');
     link[key] = value;
   }
-  if (!link.study || (link.revision && !link.model) || (link.run && link.configuration)) throw new Error('This workspace link is incomplete.');
-  if ((link.approach && link.view !== 'approach') || (link.view === 'approach' && (link.model || link.revision || link.configuration || link.run))) throw new Error('This approach link has conflicting resource context.');
-  const caseId = query.get('case');
-  if (caseId !== null) {
-    // A case identity is never global: it must be qualified by its exact approach version.
-    if (!link.approach) throw new Error('This case link does not name an approach version.');
-    if (caseId !== 'none' && !uuid.test(caseId)) throw new Error('This workspace link has an invalid resource identity.');
-    link.case = caseId;
-  }
+  const incomplete =
+    !link.study || (link.revision && !link.model) || (link.run && link.configuration);
+  if (incomplete) throw new Error('This workspace link is incomplete.');
+  entry.parseLink(link, query);
   return link;
+}
+/** Link rules of a view that names no approach version: an approach or case key conflicts. */
+export function resourceViewLink(link: WorkspaceLink, query: URLSearchParams) {
+  if (link.approach) throw new Error('This approach link has conflicting resource context.');
+  // A case identity is never global: it must be qualified by its exact approach version.
+  if (query.get('case') !== null) {
+    throw new Error('This case link does not name an approach version.');
+  }
 }
 export function workspaceHash(link: WorkspaceLink): string {
   const query = new URLSearchParams({ v: '1', view: link.view });
