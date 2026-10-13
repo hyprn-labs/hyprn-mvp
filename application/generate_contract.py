@@ -87,6 +87,23 @@ schemas['RetainedReadIntegrity1']=obj(dict(schema_version={'const':'1'},
 schemas['RetainedReadIntegrity1']['properties']['results_digest']['description']='Verified retained result digest from this read. Null means verification is unavailable.'
 schemas['PublicRunDetail']={**schemas['PublicRun'],'properties':{**schemas['PublicRun']['properties'],'history':ref('RunHistoryRead6'),'runtime_comparison':ref('RuntimeComparison'),
     'retained_integrity':{**ref('RetainedReadIntegrity1'),'description':'Optional for older servers; absence means retained result verification is unavailable.'}}}
+# Light run status: the facets and criterion outcomes reuse the RetainedResults definitions;
+# every value that is not held is null with its reason, never a zero.
+def reasoned(value,reasons):return obj(dict(value=nullable(value),reason=nullable({'enum':reasons})))
+retained=schemas['RetainedResults']['properties']
+schemas['RunStatus1']=obj(dict(run_id=uuid,configuration_revision_id=uuid,
+    configuration_name={**nullable({'type':'string','maxLength':4096}),'description':'As in the run list: the presentation name of '
+        'the exact configuration revision; null when unavailable.'},state={'enum':run_states},
+    process_state=nullable(copy.deepcopy(schemas['PublicRun']['properties']['process_state'])),
+    exit_status=copy.deepcopy(schemas['PublicRun']['properties']['exit_status']),
+    facets=obj({k:reasoned(copy.deepcopy(retained[k]),['not_recorded']) for k in ('execution','convergence','optimization','completeness','applicability')}),
+    criteria=reasoned(copy.deepcopy(retained['criteria']),['not_recorded']),
+    times=obj(dict(submitted_at=reasoned({'type':'string','format':'date-time'},['not_recorded']),
+        **{k:reasoned({'type':'string','format':'date-time'},['not_projected']) for k in ('started_at','finished_at')}))))
+schemas['RunStatus1']['description']=('Light status of one run from the stored run state. process_state and exit_status are the '
+    'stored lifecycle projection (null before recording). Facets and criteria are the stored results, each null with reason '
+    'not_recorded while the run has no retained results. submitted_at is the acceptance time (not_recorded for runs accepted '
+    'before it was recorded); started_at and finished_at are held by the execution engine and not projected (not_projected).')
 schemas["PublicReceipt"]=obj(dict(command_id=uuid,state={"enum":["committed","rejected","pending_remote",*run_states]},
     result={"anyOf":[ref("Study"),ref("EvidenceRecord"),ref("FrozenConfigurationRead7"),model_result,ref("PendingModel"),ref("PublicRun"),ref('RecordRequestRead'),ref('ApproachCommandResultRead2'),{"type":"null"}]},error=nullable(ref("StoredError"))))
 schemas["ConfigurationCommit"]=ref("ConfigurationCommit1")
@@ -235,6 +252,13 @@ for path,methods in spec["paths"].items():
         elif path.endswith('/modified-run-seed'):schema=ref('ModifiedRunSeedRead6')
         elif path.endswith("/runs"):
             schema=array(ref('RunHistoryItem')) if method=='get' else ref('PublicRun');status='200' if method=='get' else '202'
+        elif path.endswith('/run-status'):
+            schema={**array(ref('RunStatus1')),'minItems':1,'maxItems':20}
+            for parameter in op['parameters']:
+                if parameter['in']=='path':parameter['schema']=uuid
+                elif parameter['name']=='run_id':
+                    parameter['schema']={'type':'array','items':uuid,'minItems':1,'maxItems':20,'uniqueItems':True}
+                    parameter['description']='One run of this study per repetition, 1 to 20 distinct runs; the answer keeps this order. No other query field.'
         elif '/runs/' in path and '/artifacts/' in path:schema=None
         elif "/runs/" in path:schema=ref("PublicRunDetail")
         else:raise ValueError(path)
@@ -294,6 +318,8 @@ OPERATION_NOTES={
         'unresolved) are in history.results.criteria. history.assessment (legacy wire name) only identifies the criterion '
         'evaluator (version, evaluator_sha256); it is not a scientific assessment. history.bundle identifies the execution bundle '
         'the run used (bundle_digest and its pins).'),
+    ('/studies/{study_id}/run-status','get'):('Light run status from the stored run state: state, lifecycle projection, '
+        'outcome facets, criterion outcomes and recorded times; never the full history; nothing is read from the execution engine.'),
 }
 for (path,method),text in OPERATION_NOTES.items():
     op=spec['paths'][path][method]

@@ -283,6 +283,29 @@ def approach_runs(db,sid,approach_version_id,case_id,after,limit):
             AND (? IS NULL OR json_extract(c.payload,'$.configuration.approach_binding.case_id')=?) AND (? IS NULL OR r.run_id>?)
         ORDER BY r.run_id LIMIT ?''',(sid,sid,approach_version_id,case_id,case_id,after,after,limit)).fetchall()
 
+# The light run-status read: at most this many runs per call, and the outcome facets it
+# reports from the stored results (the criterion outcomes are reported beside them).
+STATUS_RUNS=20
+STATUS_FACETS=('execution','convergence','optimization','completeness','applicability')
+
+def canonical_uuid(value):
+    try:return isinstance(value,str) and str(UUID(value))==value
+    except ValueError:return False
+
+def status_item(row,configuration_name):
+    """One light status item from a projected row; an unavailable value is null with its
+    reason, never a zero or an empty outcome."""
+    recorded=row['results_type'] not in (None,'null')
+    def stored(key):
+        text=row[key] if recorded else None
+        return dict(value=None,reason='not_recorded') if text is None else dict(value=json.loads(text),reason=None)
+    return dict(run_id=row['run_id'],configuration_revision_id=row['configuration_revision_id'],
+        configuration_name=configuration_name,state=row['public_state'],
+        process_state=row['process_state'],exit_status=row['exit_status'],
+        facets={k:stored(k) for k in STATUS_FACETS},criteria=stored('criteria'),
+        times=dict(submitted_at=dict(value=row['accepted_at'],reason=None) if row['accepted_at'] else dict(value=None,reason='not_recorded'),
+                   started_at=dict(value=None,reason='not_projected'),finished_at=dict(value=None,reason='not_projected')))
+
 class History:
     def __init__(self,store):self.store=store
 
@@ -299,20 +322,57 @@ class History:
             rows = db.execute(
                 "SELECT r.run_id,r.configuration_revision_id,r.command_id,CASE WHEN o.state='accepted_run' THEN COALESCE(json_extract(o.payload,'$.preparation_state'),o.state) ELSE o.state END AS public_state "
                 'FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? ORDER BY r.rowid',(sid,)).fetchall()
-            # One bounded serialized configuration in memory at a time. No outbox
-            # bundle/history bytes, current heads or per-run service reads.
-            contexts={}
-            for r in rows:
-                revision=r['configuration_revision_id']
-                if revision in contexts:continue
-                config=db.execute(
-                    'SELECT CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload ELSE NULL END AS payload '
-                    'FROM configurations WHERE study_id=? AND configuration_revision_id=?',
-                    (MAX_BYTES,sid,revision)).fetchall()
-                contexts[revision]=case_projection(config[0]['payload'],sid,revision) if config else (None,dict(state='unavailable'))
+            contexts=self._contexts(db,sid,rows)
         return [dict(run_id=r['run_id'],configuration_revision_id=r['configuration_revision_id'],command_id=r['command_id'],
                      state=r['public_state'],configuration_name=contexts[r['configuration_revision_id']][0],
                      case_context=contexts[r['configuration_revision_id']][1]) for r in rows]
+
+    @staticmethod
+    def _contexts(db,sid,rows):
+        # One bounded serialized configuration in memory at a time. No outbox
+        # bundle/history bytes, current heads or per-run service reads.
+        contexts={}
+        for r in rows:
+            revision=r['configuration_revision_id']
+            if revision in contexts:continue
+            config=db.execute(
+                'SELECT CASE WHEN length(CAST(payload AS BLOB))<=? THEN payload ELSE NULL END AS payload '
+                'FROM configurations WHERE study_id=? AND configuration_revision_id=?',
+                (MAX_BYTES,sid,revision)).fetchall()
+            contexts[revision]=case_projection(config[0]['payload'],sid,revision) if config else (None,dict(state='unavailable'))
+        return contexts
+
+    def status(self,actor,sid,run_ids):
+        """The light status of 1 to 20 distinct runs of the study, in request order.
+
+        One authorization and one statement over the association, the outbox state and the
+        stored status and result paths (``json_extract``), so no payload is loaded or decoded
+        whole; the configuration name is the run list's. Facets and criterion outcomes are
+        the stored results as they are, each null with ``not_recorded`` while the run has no
+        retained results. The only time HYPRN MVP owns is the acceptance time; the process
+        start and finish times are held by the execution engine and not projected
+        (``not_projected``). Nothing is verified, recomputed or read from the engine here: the
+        full run read stays the integrity-checked record.
+        """
+        with self.store.connection() as db:
+            self.store.authorize(db,actor,sid)
+            if (not isinstance(run_ids,(list,tuple)) or not 1<=len(run_ids)<=STATUS_RUNS
+                    or len(set(run_ids))!=len(run_ids) or not all(map(canonical_uuid,run_ids))):
+                raise DomainError('invalid_request',400)
+            rows=db.execute(
+                "SELECT r.run_id,r.configuration_revision_id,r.accepted_at,"
+                "CASE WHEN o.state='accepted_run' THEN COALESCE(json_extract(o.payload,'$.preparation_state'),o.state) ELSE o.state END AS public_state,"
+                "json_extract(o.payload,'$.status.process_state') AS process_state,"
+                "json_extract(o.payload,'$.status.exit_status') AS exit_status,"
+                "json_type(o.payload,'$.history.results') AS results_type,"
+                +','.join(f"json_extract(o.payload,'$.history.results.{k}') AS {k}" for k in (*STATUS_FACETS,'criteria'))+
+                ' FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id IN ('
+                +','.join('?'*len(run_ids))+')',(sid,*run_ids)).fetchall()
+            # Every id must be a run of this study: no partial answer.
+            if len(rows)!=len(run_ids):raise DomainError('resource_not_found',404)
+            contexts=self._contexts(db,sid,rows)
+        by_id={r['run_id']:r for r in rows}
+        return [status_item(by_id[rid],contexts[by_id[rid]['configuration_revision_id']][0]) for rid in run_ids]
 
     def run_row(self,db,actor,sid,rid,*,payload=True):
         """Authorize, then read the study-scoped run row and its run receipt in ``db``.

@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS receipts(
 CREATE TABLE IF NOT EXISTS run_associations(
  run_id TEXT PRIMARY KEY, study_id TEXT NOT NULL REFERENCES studies(study_id),
  configuration_revision_id TEXT NOT NULL REFERENCES configurations(configuration_revision_id),
- command_id TEXT NOT NULL, store_uuid TEXT, process_uuid TEXT,
+ command_id TEXT NOT NULL, store_uuid TEXT, process_uuid TEXT, accepted_at TEXT,
  UNIQUE(study_id,command_id), UNIQUE(store_uuid,process_uuid)
 );
 CREATE TABLE IF NOT EXISTS outbox(
@@ -255,6 +255,9 @@ class Store:
             columns={row['name'] for row in db.execute('PRAGMA table_info(execution_observation)')}
             if 'runtime_json' not in columns:
                 db.execute('ALTER TABLE execution_observation ADD COLUMN runtime_json TEXT')
+            # Runs accepted before the acceptance time was recorded keep NULL.
+            if 'accepted_at' not in {row['name'] for row in db.execute('PRAGMA table_info(run_associations)')}:
+                db.execute('ALTER TABLE run_associations ADD COLUMN accepted_at TEXT')
 
     @contextmanager
     def connection(self, write=False):

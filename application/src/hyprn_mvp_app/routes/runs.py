@@ -1,7 +1,9 @@
-"""Runs: submission (``execution``), the run read, the run list and retained artifacts (``history``)."""
+"""Runs: submission (``execution``), the run read, the run list, retained artifacts and the light
+run-status read (``history``)."""
 from typing import Annotated
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
+from ..contracts import DomainError
 from ..edge import SubmitRun, page, response, valid_id
 from ..history import retained_read_integrity
 
@@ -29,4 +31,10 @@ def router(deps):
         raw,descriptor=history.read(who,valid_id(study_id),valid_id(run_id),valid_id(artifact_id))
         return Response(content=raw,media_type=descriptor['media_type'],headers={
             'Content-Disposition':'attachment; filename="'+artifact_id+'"','X-Content-SHA256':descriptor['sha256']})
+    @r.get("/api/1/studies/{study_id}/run-status")
+    def light_run_status(study_id:str,request:Request,who:Actor,run_id:Annotated[list[str],Query()]):
+        # The light status of 1 to 20 runs, in request order; run_id is the only query field.
+        sid=valid_id(study_id)
+        if any(key!='run_id' for key,_ in request.query_params.multi_items()):raise DomainError('invalid_request',400)
+        return response(request,history.status(who,sid,run_id))
     return r

@@ -5,6 +5,7 @@ The frozen bundle contract (assembly and every admission check) lives in
 Candidate bytes remain inert here.
 """
 import base64
+from datetime import datetime, timezone
 import json
 from .contracts import DomainError, canonical, check_digest, uid
 from .execution_bundle import (MAX_BYTES, assemble_bundle, closed, safe_path, uses_polish_envelope,
@@ -79,7 +80,11 @@ class Submissions:
                 if frozen['configuration']['study_id']!=sid:raise ValueError('Configuration study mismatch')
             run_id=uid();result=dict(run_id=run_id,command_id=command,state='accepted_run',
                 receipt_url=f'/api/1/studies/{sid}/commands/{command}?category=run')
-            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id) VALUES(?,?,?,?)',(run_id,sid,revision,command))
+            # The acceptance time is written once, in the acceptance transaction, and never
+            # changes; it stays out of the receipt and the outbox payload.
+            accepted_at=datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00','Z')
+            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id,accepted_at) VALUES(?,?,?,?,?)',
+                       (run_id,sid,revision,command,accepted_at))
             db.execute('INSERT INTO outbox VALUES(?,?,?)',(run_id,'accepted_run',json.dumps(dict(actor=actor,frozen=json.loads(row['payload'])))))
             self.fault('before_receipt')
             return result
