@@ -6,6 +6,13 @@ image is HYPRN_MVP_MODELING_SOURCE_IMAGE (deployment/local_paths.py); the comman
 a value they need is unset, and a build refuses a source image that differs from the reviewed
 pin in deployment/pins.json.
 
+The installation decides the deployment's identities (deployment/local_paths.py,
+configured_installation): its root <data root>/modeling, the verified upstream cache, the container
+engine endpoint every docker and compose command uses, and the compose project, container, network
+and ownership label names (hyprn-mvp-<edition>-<id8>-<role>, labelled with the installation's
+owner). The development data root (HYPRN_MVP_DATA_ROOT) keeps its fixed names and the ambient
+engine. Every file of a build context gets an explicit mode, whatever the caller's umask.
+
 The command line acts only on the installation (INSTALLATION). A test fixture may set up its own
 deployment (scoped_deployment) below its scratch scope: the same reviewed recipe settings, image
 and checks, with only the root, the container and network names and the ownership label
@@ -34,10 +41,14 @@ import local_paths
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_ROOT = local_paths.modeling_root(required=False)
-CONTAINER = 'hyprn-mvp-modeling'
-NETWORK = 'hyprn-mvp-private'
+NAMES = local_paths.component_names()
+PROJECT = NAMES['project']
+CONTAINER = NAMES['modeling']
+NETWORK = NAMES['private_network']
 LABEL = 'org.hyprn-mvp.owner'
-OWNER = 'hyprn-mvp-modeling'
+OWNER = NAMES['modeling_owner']
+# Environment of every docker command: the installation's engine endpoint, or None (ambient).
+DOCKER_ENVIRONMENT = local_paths.docker_environment()
 SOURCE_IMAGE = local_paths.modeling_source_image(required=False)
 RUBY_IMAGE = 'ruby@sha256:bceec7582aaa80630bb51a04e2df3af658e64c0640c174371776928ad3bd57b4'
 ARCHIVE_SHA256 = '4937188df6ea12daa8a2b00767005e3649d2974ab6e634409f7756043ef0b360'
@@ -102,7 +113,27 @@ def checked_root(path, deployment=INSTALLATION):
     return path
 
 def run(*args, input=None):
-    return subprocess.run(args, input=input, check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(args, input=input, check=True, capture_output=True, text=True,
+                          env=DOCKER_ENVIRONMENT).stdout.strip()
+
+
+def readable_context(root, executables=()):
+    """Give every folder below ``root`` (itself included) mode 0755 and every file 0644, or 0755
+    for the paths in ``executables``: COPY keeps the context's modes, the image's service user is
+    not root, and the entry point runs with umask 077. A symbolic link is refused."""
+    root = Path(root)
+    executables = {Path(path) for path in executables}
+    for folder, folders, files in os.walk(root):
+        folder = Path(folder)
+        for name in folders + files:
+            path = folder / name
+            if path.is_symlink() or not (path.is_dir() or path.is_file()):
+                raise ValueError('Not a regular file or folder in a build context: ' + str(path))
+        folder.chmod(0o755)
+        for name in files:
+            path = folder / name
+            path.chmod(0o755 if path in executables else 0o644)
+    return root
 
 @contextlib.contextmanager
 def base_reference(image):
@@ -119,7 +150,7 @@ def base_reference(image):
             run('docker', 'image', 'rm', '--no-prune', reference)
 
 def inspect(name, kind='container'):
-    result = subprocess.run(['docker', kind, 'inspect', name], capture_output=True, text=True)
+    result = subprocess.run(['docker', kind, 'inspect', name], capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
     if result.returncode:
         if 'No such' in result.stderr or f'network {name} not found' in result.stderr: return None
         raise RuntimeError(result.stderr)
@@ -411,6 +442,7 @@ def stage_native_inputs(ctx):
     shutil.copyfile(REPO / 'contracts/schemas/model.schema.json', ctx / 'modeling.schema.json')
     stage_replayed_sources(ctx, upstream.getvalue())
     stage_modeling_contract(ctx)
+    readable_context(ctx)
 
 def source_image():
     """The reviewed WhatsOpt source base image; refused unless it is the pinned source image."""
@@ -437,21 +469,30 @@ def build(root=None, *, evidence=None):
         for name in ('modeling/provenance.md', 'deployment/modeling_policy.rb', 'deployment/modeling.Dockerfile'):
             shutil.copyfile(REPO / name, notices / Path(name).name)
         (notices / 'source-identity.json').write_text(json.dumps({'upstream': json.loads((REPO / 'deployment/pins.json').read_text())['verified_sources']['WhatsOpt'], 'source_image': image, 'source_hashes': source_hashes()}, indent=2))
+        readable_context(ctx, executables=(ctx / 'start.sh',))
         # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
         inputs = dict(source_image=image, ruby_image=RUBY_IMAGE, source_hashes=source_hashes())
         tag = 'hyprn-mvp-modeling:' + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
         with base_reference(image) as reference:
-            result = subprocess.run(['docker', 'build', '--network', 'none', '--build-arg', 'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE='+RUBY_IMAGE, '-t', tag, str(ctx)], capture_output=True, text=True)
+            result = subprocess.run(['docker', 'build', '--network', 'none', '--build-arg', 'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE='+RUBY_IMAGE, '-t', tag, str(ctx)], capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
         (evidence / ('build-'+secrets.token_hex(4)+'.log')).write_text(result.stdout + result.stderr)
         result.check_returncode()
     return run('docker', 'image', 'inspect', '--format', '{{.Id}}', tag)
 
 def compose_environment(root, image):
     """Clean compose environment: no inherited COMPOSE_*/DOCKER_* (project name, file, host,
-    context) can redirect the owned deployment. Only PATH/HOME and the two reviewed inputs."""
-    return {'PATH': os.environ.get('PATH', '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin'),
-            'HOME': os.environ.get('HOME', pwd.getpwuid(os.getuid()).pw_dir),
-            'HYPRN_MVP_MODELING_ROOT': str(root), 'HYPRN_MVP_MODELING_IMAGE': image}
+    context) can redirect the owned deployment. Only PATH/HOME, the reviewed inputs (root, image,
+    and the installation's container, network and owner names) and, for an installation,
+    DOCKER_HOST set to its configured engine endpoint."""
+    environment = {'PATH': os.environ.get('PATH', '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin'),
+                   'HOME': os.environ.get('HOME', pwd.getpwuid(os.getuid()).pw_dir),
+                   'HYPRN_MVP_MODELING_ROOT': str(root), 'HYPRN_MVP_MODELING_IMAGE': image,
+                   'HYPRN_MVP_MODELING_CONTAINER': INSTALLATION.container,
+                   'HYPRN_MVP_MODELING_NETWORK': INSTALLATION.network,
+                   'HYPRN_MVP_MODELING_OWNER': INSTALLATION.owner}
+    if DOCKER_ENVIRONMENT is not None:
+        environment['DOCKER_HOST'] = DOCKER_ENVIRONMENT['DOCKER_HOST']
+    return environment
 
 def reviewed_image(image):
     """An existing modeling image may back a deployment only when it is exactly the image of the
@@ -493,17 +534,18 @@ def start_scoped(root, image, log, deployment):
             *[a for s in service['security_opt'] for a in ('--security-opt', s)],
             '--pids-limit', str(service['pids_limit']), '--memory', service['mem_limit'], '--cpus', str(service['cpus']),
             '--restart', service['restart'], *[a for s in service['tmpfs'] for a in ('--tmpfs', s)], *mounts, image]
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
     Path(log).write_text(result.stdout + result.stderr)
     return result.returncode
 
 
 def compose_up(root, image, log, *options):
-    """Create the owned modeling container/network from the exact image (no build, no pull).
+    """Create the owned modeling container/network from the exact image (no build, no pull),
+    in the installation's compose project.
 
     Every compose call goes through here, so none can inherit a redirecting environment."""
-    result = subprocess.run(['docker', 'compose', '-f', str(RECIPE), 'up', '-d', '--no-build',
-                             *options], env=compose_environment(root, image), capture_output=True, text=True)
+    result = subprocess.run(['docker', 'compose', '--project-name', PROJECT, '-f', str(RECIPE), 'up', '-d',
+                             '--no-build', *options], env=compose_environment(root, image), capture_output=True, text=True)
     Path(log).write_text(result.stdout + result.stderr)
     return result.returncode
 

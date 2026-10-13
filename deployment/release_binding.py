@@ -601,8 +601,6 @@ def release_commands(release_dir, manifest_sha):
         + '  # after the first launch',
         build_worker=script('deployment/execution_runtime.py', 'build-worker'),
         attest_worker=script('deployment/execution_runtime.py', 'attest'),
-        # Replacement of the existing owned application container (executor stopped).
-        upgrade_application=script('deployment/application_runtime.py', 'setup --upgrade'),
         # Create-only review record; start requires it when the release cites an independent review.
         record_review=script('deployment/release_binding.py', f'record-review --expected-sha256 {manifest_sha} '
                              "--reference '<review reference>' --review '<absolute review file naming the release id>'"
@@ -614,7 +612,7 @@ def release_commands(release_dir, manifest_sha):
                     f"'{release_dir.parent}/.superseded/' (contents byte-identical, still verifiable)"),
         never_run=('never run against a populated workspace: native_environment.py prepare/extend (they overwrite '
                    'launch-worker/selected.json/runtime.json/locks), initialize_stores.py bootstrap, '
-                   'application_runtime.py setup --rebuild (ungated; replace the application with setup --upgrade), '
+                   'application_runtime.py setup --rebuild (ungated), '
                    'or setup --rebuild of a missing container'),
         rollback=('stop with this release, then run the start command of the retained compatible release '
                   'with its own manifest SHA256; after new-format writes use read-only forward repair instead'),

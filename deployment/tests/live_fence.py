@@ -123,7 +123,7 @@ LIVE_DOCKER_NAMES = INSTALLATION_DOCKER_NAMES | frozenset(local_paths.live_names
 # whatever the root argument.
 LIVE_ENTRYPOINTS = frozenset({'modeling_runtime.py', 'dispatch_runtime.py', 'manage.py', 'application_runtime.py',
                               'initialize_stores.py', 'execution_runtime.py', 'native_environment.py',
-                              'launch_worker.py', 'backup_immutable.py'})
+                              'launch_worker.py'})
 READ_EVENTS = frozenset({'import', 'os.listdir', 'os.scandir', 'subprocess.Popen', 'os.posix_spawn',
                          'os.exec', 'os.spawn', 'glob.glob', 'os.chdir'})
 # Only events that touch a path or start a process are path-checked (os.putenv of a live

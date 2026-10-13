@@ -20,7 +20,9 @@ Never in the configuration: secrets, worker policy or limits, image ids. Every r
 
 This module belongs to the attested execution source set: the launcher takes its execution
 root, runtime owner, native profile, Docker endpoint and the home folder its containment probe
-checks from the configuration loaded here.
+checks from the configuration loaded here, and the modeling and application managers take their
+container, network and project names, ownership label, engine endpoint and the owner's sign-in
+name from it.
 """
 import json
 import os
@@ -253,3 +255,53 @@ def profile_name(configuration):
     if configuration is None:
         return DEVELOPMENT_PROFILE
     return 'hyprn-mvp-' + configuration['edition'] + '-' + configuration['installation_id'][:8]
+
+
+# ---- Component identities of the modeling and application managers.
+# Docker names of an installation start with one of these prefixes; test scopes use
+# ``hyprn-mvp-test-`` and the development data root its fixed names below.
+NAME_PREFIXES = tuple('hyprn-mvp-' + edition + '-' for edition in PRODUCT_EDITIONS)
+DEVELOPMENT_NAMES = {
+    'project': 'hyprn-mvp',
+    'modeling': 'hyprn-mvp-modeling',
+    'private_network': 'hyprn-mvp-private',
+    'modeling_owner': 'hyprn-mvp-modeling',
+    'application': 'hyprn-mvp-application',
+    'public_network': 'hyprn-mvp-public',
+    'application_owner': 'hyprn-mvp-application',
+}
+DEVELOPMENT_USERNAME = 'owner'
+
+
+def component_names(configuration):
+    """Compose project, container and network names of the modeling and application
+    components, and the value of their ownership label: ``hyprn-mvp-<edition>-<id8>-<role>``,
+    every resource labelled with ``owner(configuration)``, so two installations on one engine
+    never share a name and each resource names the installation that owns it."""
+    if configuration is None:
+        return dict(DEVELOPMENT_NAMES)
+    base = 'hyprn-mvp-' + configuration['edition'] + '-' + configuration['installation_id'][:8]
+    label = owner(configuration)
+    return {
+        'project': base,
+        'modeling': base + '-modeling',
+        'private_network': base + '-private',
+        'modeling_owner': label,
+        'application': base + '-application',
+        'public_network': base + '-public',
+        'application_owner': label,
+    }
+
+
+def owner_username(configuration):
+    """Sign-in name provisioned for the owner when the application store is initialized."""
+    return DEVELOPMENT_USERNAME if configuration is None else configuration['owner_username']
+
+
+def docker_environment(configuration, environ=None):
+    """Process environment of a docker command: ``environ`` with ``DOCKER_HOST`` set to the
+    installation's engine endpoint; None (inherit) for the development data root."""
+    if configuration is None:
+        return None
+    environ = os.environ if environ is None else environ
+    return {**environ, 'DOCKER_HOST': configuration['docker']['endpoint']}

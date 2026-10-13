@@ -30,6 +30,8 @@ from hyprn_mvp_app import locations  # noqa: E402
 from hyprn_mvp_integration import installation  # noqa: E402
 
 SCHEMA = json.loads((REPO / 'deployment/config.schema.json').read_text())
+PINS = json.loads((REPO / 'deployment/pins.json').read_text())
+ARCHIVE_SHA256 = PINS['verified_sources']['WhatsOpt']['archive_sha256']
 LINUX = locations.Host(system='linux')
 
 
@@ -459,3 +461,111 @@ def test_a_changed_execution_configuration_makes_the_recorded_runtime_unknown(sc
     assert 'Execution configuration changed' in launcher_view(environment)['identity']
     write(folder, value)
     assert launcher_view(environment)['identity'] == 'accepted'
+
+
+MANAGER_PROBE = '''
+import json, sys
+sys.path[:0] = [sys.argv[1] + '/deployment']
+import application_runtime as application
+import modeling_runtime as modeling
+
+environment = modeling.compose_environment(modeling.DEFAULT_ROOT, 'sha256:' + '0' * 64)
+modeling_view = dict(
+    root=str(modeling.DEFAULT_ROOT), project=modeling.PROJECT, container=modeling.CONTAINER,
+    network=modeling.NETWORK, owner=modeling.OWNER, archive=str(modeling.ARCHIVE),
+    docker_host=(modeling.DOCKER_ENVIRONMENT or {}).get('DOCKER_HOST'),
+    compose_docker_host=environment.get('DOCKER_HOST'))
+application_view = dict(
+    root=str(application.ROOT), container=application.NAME, owner=application.OWNER,
+    network=application.PUBLIC_NETWORK, port=application.PORT, username=application.USERNAME,
+    docker_host=(application.DOCKER_ENVIRONMENT or {}).get('DOCKER_HOST'))
+print(json.dumps(dict(modeling=modeling_view, application=application_view)))
+'''
+
+
+def manager_view(environment):
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, '-I', '-B', '-c', MANAGER_PROBE, str(REPO)],
+        capture_output=True,
+        text=True,
+        env={'PATH': os.environ.get('PATH', ''), **environment},
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_the_modeling_and_application_managers_take_every_identity_from_the_installation(scratch):
+    root, home, folder = scratch
+    value = document(root, home, owner_username='engineer')
+    view = manager_view({'HOME': str(home), 'HYPRN_MVP_CONFIG': str(write(folder, value))})
+    base = 'hyprn-mvp-local-' + value['installation_id'][:8]
+    owner = installation.owner(value)
+    endpoint = value['docker']['endpoint']
+    archive = Path(value['upstream']['cache']) / ARCHIVE_SHA256 / 'WhatsOpt.tar.gz'
+    assert view['modeling'] == dict(
+        root=str(root / 'data' / 'modeling'),
+        project=base,
+        container=base + '-modeling',
+        network=base + '-private',
+        owner=owner,
+        archive=str(archive),
+        docker_host=endpoint,
+        compose_docker_host=endpoint,
+    )
+    assert view['application'] == dict(
+        root=str(root / 'data' / 'application'),
+        container=base + '-application',
+        owner=owner,
+        network=base + '-public',
+        port=18470,
+        username='engineer',
+        docker_host=endpoint,
+    )
+
+
+def test_the_development_data_root_keeps_its_fixed_manager_identities(scratch):
+    root, home, folder = scratch
+    path = write(folder, document(root, home))
+    view = manager_view(
+        {
+            'HOME': str(home),
+            'HYPRN_MVP_DATA_ROOT': str(root / 'development'),
+            'HYPRN_MVP_CONFIG': str(path),
+        }
+    )
+    names = installation.DEVELOPMENT_NAMES
+    assert view['modeling']['root'] == str(root / 'development' / 'modeling')
+    observed = [view['modeling'][key] for key in ('project', 'container', 'network', 'owner')]
+    expected = [names[key] for key in ('project', 'modeling', 'private_network', 'modeling_owner')]
+    assert observed == expected
+    observed = [view['application'][key] for key in ('container', 'network', 'owner', 'username')]
+    expected = [names['application'], names['public_network'], names['application_owner']]
+    assert observed == expected + [installation.DEVELOPMENT_USERNAME]
+    for component in ('modeling', 'application'):
+        assert view[component]['docker_host'] is None
+    assert view['modeling']['compose_docker_host'] is None
+
+
+def test_installations_on_one_engine_never_share_a_name_with_each_other_or_a_test_scope(scratch):
+    root, home, _ = scratch
+    first, second = document(root, home), document(root, home)
+    development = set(installation.component_names(None).values())
+    roles = ('project', 'modeling', 'private_network', 'application', 'public_network')
+    names = []
+    for value in (first, second):
+        one = installation.component_names(value)
+        names.append(one)
+        assert one['modeling_owner'] == one['application_owner'] == installation.owner(value)
+        resources = [one[key] for key in roles]
+        assert all(name.startswith(installation.NAME_PREFIXES) for name in resources)
+        assert not any(name.startswith('hyprn-mvp-test-') for name in resources)
+        assert not set(resources) & development
+    assert not set(names[0].values()) & set(names[1].values())
+    assert installation.owner_username(first) == first['owner_username']
+    assert installation.owner_username(None) == installation.DEVELOPMENT_USERNAME
+    assert installation.docker_environment(None) is None
+    inherited = {'DOCKER_HOST': 'tcp://elsewhere:2375', 'PATH': '/bin'}
+    configured = {'DOCKER_HOST': first['docker']['endpoint'], 'PATH': '/bin'}
+    assert installation.docker_environment(first, inherited) == configured

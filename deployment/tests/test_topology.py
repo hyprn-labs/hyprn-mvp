@@ -9,6 +9,7 @@ live_runtime_fence = live_fence.pytest_fixture('unit')
 import importlib.util
 import json
 from pathlib import Path
+import re
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,8 +50,20 @@ def test_recipe_has_private_modeling_and_no_launch_or_app_mounts():
     assert not any(v['target'].endswith('sock') for v in model['volumes'])
     assert set(recipe['services']) == {'modeling'}
     assert recipe['x-hyprn-mvp-boundaries']['candidate_execution'] == 'blocked_pending_plan_01_12_consumer_attestation'
-    assert model['container_name'] == m.CONTAINER and model['labels'] == {m.LABEL: m.OWNER}
-    assert recipe['networks']['model_private']['name'] == m.NETWORK
+    # Names and owner are the installation's, filled in by the manager's compose environment.
+    environment = m.compose_environment(m.DEFAULT_ROOT, 'sha256:' + '0' * 64)
+    network = recipe['networks']['model_private']
+    assert interpolated(model['container_name'], environment) == m.CONTAINER
+    assert interpolated(model['labels'], environment) == {m.LABEL: m.OWNER}
+    assert interpolated(network['name'], environment) == m.NETWORK
+    assert interpolated(network['labels'], environment) == {m.LABEL: m.OWNER}
+
+
+def interpolated(value, environment):
+    """``value`` as compose reads it: each required ``${NAME:?message}`` replaced by NAME."""
+    if isinstance(value, dict):
+        return {key: interpolated(item, environment) for key, item in value.items()}
+    return re.sub(r'\$\{([A-Z_]+):\?[^}]*\}', lambda match: environment[match.group(1)], value)
 
 def test_image_is_rebuilt_without_inheriting_execution_layers():
     dockerfile = (ROOT / 'deployment/modeling.Dockerfile').read_text()

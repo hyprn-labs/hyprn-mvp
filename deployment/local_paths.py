@@ -18,7 +18,7 @@ Resolution order for every location (first match wins):
 Neutral layout below the data root (every entry relative to ``HYPRN_MVP_DATA_ROOT``)::
 
     application/            development application store (installation data, credentials,
-                            deployed UI, activation records)
+                            deployed UI)
     modeling/               development modeling store
     execution/              development execution store (attested worker, native profile)
     releases/               retained releases
@@ -101,10 +101,14 @@ Environment variables:
     variable is unset, and refuses an id that differs from the reviewed pin in
     ``deployment/pins.json``.
 
-Two stdlib-only units that may not import this module read ``HYPRN_MVP_DATA_ROOT`` the
-same way: the attested execution launcher (``launcher.py`` in the integration package)
-and the standalone backup tool (``deployment/tools/backup_immutable.py``). The launcher
-also reads ``HYPRN_MVP_SCRATCH_ROOT`` to recognise scoped test folders.
+The attested execution launcher (``launcher.py`` in the integration package) may not import
+this module; it reads ``HYPRN_MVP_DATA_ROOT`` the same way, and ``HYPRN_MVP_SCRATCH_ROOT`` to
+recognise scoped test folders.
+
+Identities: while ``HYPRN_MVP_DATA_ROOT`` names the development data root, the managers keep
+the development store's fixed container, network and owner names and the ambient container
+engine; otherwise the installation configuration decides them (``configured_installation``,
+read by the same loader as the attested launcher).
 """
 import hashlib
 import json
@@ -227,6 +231,38 @@ def data_root(*, required=True):
     return absolute(value, DATA_ROOT)
 
 
+def configured_installation():
+    """The installation configuration that decides the managers' identities: None while
+    HYPRN_MVP_DATA_ROOT names the development data root (it comes first, as in the attested
+    launcher) or while HYPRN_MVP_CONFIG is unset."""
+    if os.environ.get(DATA_ROOT, ''):
+        return None
+    return installation()
+
+
+def component_names():
+    """Compose project, container, network and owner names of the modeling and application
+    components (``installation.component_names``): the installation's, or the development
+    data root's fixed names."""
+    return _installation_loader().component_names(configured_installation())
+
+
+def owner_username():
+    """The owner's sign-in name provisioned with a new application store."""
+    return _installation_loader().owner_username(configured_installation())
+
+
+def docker_environment():
+    """Environment of the managers' docker commands: DOCKER_HOST set to the installation's
+    engine endpoint, or None (the ambient engine) for the development data root."""
+    return _installation_loader().docker_environment(configured_installation())
+
+
+def installation_name_prefixes():
+    """The prefixes every Docker name of an installation starts with (one per edition)."""
+    return _installation_loader().NAME_PREFIXES
+
+
 def under(relative, *, required=True):
     root = data_root(required=required)
     return None if root is None else root / relative
@@ -264,12 +300,6 @@ def require_file(path, name):
 
 def application_root(*, required=True):
     return under(APPLICATION, required=required)
-
-
-def activation_root(*, required=True):
-    """Activation records of the development installation, kept with its application store."""
-    root = application_root(required=required)
-    return None if root is None else root / 'activation'
 
 
 def modeling_root(*, required=True):

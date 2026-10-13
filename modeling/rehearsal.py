@@ -4,8 +4,10 @@
 
 The image is built exactly as deployment/modeling_runtime.py builds the owned service: from the
 reviewed WhatsOpt source image (HYPRN_MVP_MODELING_SOURCE_IMAGE), the pinned Ruby base, the
-pinned upstream archive in the verified upstream cache below HYPRN_MVP_DATA_ROOT, the ordered
-patches and the deployment policy, with no network access. The build log and the image record
+pinned upstream archive read only through the manager's fail-closed upstream resolver (the
+verified upstream cache: HYPRN_MVP_UPSTREAM_CACHE, else the installation's upstream.cache, else
+below the data root), the ordered patches and the deployment policy, with no network access, on
+the installation's container engine. The build log and the image record
 go to a new folder below the scratch root (deployment/local_paths.py); the record is printed as
 JSON. Static generation tests take the image id from HYPRN_MVP_NATIVE_STATIC_IMAGE; the reviewed
 producer image is pinned in deployment/pins.json (``modeling_producer``).

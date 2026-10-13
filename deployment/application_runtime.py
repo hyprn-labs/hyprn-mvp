@@ -1,7 +1,13 @@
 """Manage only the owned application container; no execution or legacy access.
 
-The application store is HYPRN_MVP_DATA_ROOT/application and the published port is
-HYPRN_MVP_PORT (deployment/local_paths.py); the commands refuse while either is unset.
+The installation decides every identity (deployment/local_paths.py): the store
+<data root>/application, the published port (HYPRN_MVP_PORT, else the configuration's
+ports.app), the container, public network and ownership label names
+(hyprn-mvp-<edition>-<id8>-<role>, labelled with the installation's owner), the container
+engine endpoint of every docker command and the owner's sign-in name provisioned with a new
+store. The development data root keeps its fixed names, the ambient engine and the sign-in name
+"owner". The commands refuse while the store or the port is unresolved. Every file of the build
+context gets an explicit mode, whatever the caller's umask.
 """
 import argparse
 import hashlib
@@ -13,9 +19,6 @@ import shutil
 import sys
 import subprocess
 import tempfile
-import time
-import urllib.error
-import urllib.request
 from uuid import uuid4
 import release_binding
 import local_paths
@@ -23,17 +26,25 @@ import modeling_runtime
 
 ROOT=local_paths.application_root(required=False)
 REPO=Path(__file__).resolve().parents[1]
-NAME="hyprn-mvp-application"
-OWNER="hyprn-mvp-application"
+NAMES=local_paths.component_names()
+NAME=NAMES["application"]
+OWNER=NAMES["application_owner"]
 BASE="sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
 # Development application port (HYPRN_MVP_PORT); None while unset, refused by main().
 PORT=local_paths.port(required=False)
-PUBLIC_NETWORK="hyprn-mvp-public"
+PUBLIC_NETWORK=NAMES["public_network"]
+# Sign-in name of the owner provisioned with a new store.
+USERNAME=local_paths.owner_username()
+# Environment of every docker command: the installation's engine endpoint, or None (ambient).
+DOCKER_ENVIRONMENT=local_paths.docker_environment()
 UI_DIST=None if ROOT is None else ROOT/"ui"
 def run(*args,input=None):
-    return subprocess.run(args,input=input,text=True,capture_output=True,check=True).stdout.strip()
+    result=subprocess.run(args,input=input,text=True,capture_output=True,check=True,
+                          env=DOCKER_ENVIRONMENT)
+    return result.stdout.strip()
 def inspect():
-    result=subprocess.run(["docker","inspect",NAME],text=True,capture_output=True)
+    result=subprocess.run(["docker","inspect",NAME],text=True,capture_output=True,
+                          env=DOCKER_ENVIRONMENT)
     if result.returncode:
         if "no such" in result.stderr.lower():return None
         raise RuntimeError("Unable to inspect owned application")
@@ -109,63 +120,8 @@ def write_identity(raw):
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
-def docker_top():
-    return subprocess.run(["docker","top",NAME,"-eo","pid,args"],text=True,capture_output=True)
-def in_container_dispatchers():
-    """Dispatcher processes inside the application container. A container that is not
-    running has none; any other docker failure is a refusal, never an assumed absence."""
-    result=docker_top()
-    if result.returncode:
-        if "is not running" in result.stderr or "No such container" in result.stderr:return []
-        raise RuntimeError("docker top failed; cannot prove no in-container dispatcher: "+result.stderr.strip()[:200])
-    return [line.strip() for line in result.stdout.splitlines()[1:] if "hyprn_mvp_app.dispatcher" in line]
-def require_executor_quiescent():
-    """No host executor (fail-closed executor.json, free executor.lock) and no
-    dispatcher left inside the application container (docker exec children can outlive the host)."""
-    import dispatch_runtime
-    executor=dispatch_runtime.executor_quiescence()
-    found=in_container_dispatchers()
-    if found:raise ValueError("A dispatcher still runs inside the application container ("+found[0][:120]+"); refusing")
-    return dict(executor=executor,in_container_dispatchers=[])
-def liveness_probe(timeout=60.0,interval=1.0):
-    """The replacement serves the reviewed API: unauthenticated GET /api/1/studies -> 401."""
-    url=f"http://127.0.0.1:{PORT}/api/1/studies"
-    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    deadline=time.monotonic()+timeout;attempts=0;last=None
-    while True:
-        attempts+=1
-        try:
-            response=opener.open(urllib.request.Request(url,method="GET"),timeout=5)
-            last="HTTP "+str(getattr(response,"status",None));response.close()
-        except urllib.error.HTTPError as error:
-            if error.code==401:return dict(url=url,status=401,attempts=attempts)
-            last="HTTP "+str(error.code)
-        except (urllib.error.URLError,OSError) as error:
-            last=repr(error)[:200]
-        if time.monotonic()>=deadline:
-            raise RuntimeError("Application liveness probe failed (expected unauthenticated 401): "+str(last))
-        time.sleep(interval)
-def upgrade_gate():
-    """Reviewed upgrade: replace the EXISTING owned container with the bound release's image
-    over the preserved store. Every precondition is read-only and precedes any effect."""
-    if bound_release() is None:raise ValueError("Upgrade requires a selected release binding (served UI must be the release build)")
-    require_executor_quiescent()
-    if (ROOT.is_symlink() or not (ROOT/"identity.json").is_file() or not (ROOT/"application/application.sqlite").is_file()
-            or not (ROOT/"credentials/owner.password").is_file()):
-        raise ValueError("Preserved application store, credentials or identity missing; refusing upgrade")
-    identity=json.loads((ROOT/"identity.json").read_text())
-    if (identity.get("owner"),identity.get("container"),identity.get("store"))!=(OWNER,NAME,str(ROOT/"application")):
-        raise ValueError("Application identity mismatch; refusing upgrade")
-    existing=inspect()
-    if existing is None:raise ValueError("Owned application container missing; the upgrade replaces an existing container only")
-    guard(existing)
-    if existing["Image"]!=identity["image"]:
-        raise ValueError("Application container image differs from its recorded identity; refusing upgrade")
-    return dict(previous_image=identity["image"],previous_container=existing["Id"])
-def setup(rebuild=False, build_evidence_dir=None, upgrade=False):
-    if upgrade and rebuild:raise ValueError("--upgrade cannot be combined with --rebuild")
+def setup(rebuild=False, build_evidence_dir=None):
     if bound_release() is not None:release_manifest(bound_release())  # refuse a release without a UI build first
-    if upgrade:gate=upgrade_gate()
     modeling_runtime.check(modeling_runtime.DEFAULT_ROOT)
     if ROOT.is_symlink():raise ValueError("Unsafe runtime root")
     ROOT.mkdir(exist_ok=True,mode=0o700);ROOT.chmod(0o700)
@@ -181,7 +137,7 @@ def setup(rebuild=False, build_evidence_dir=None, upgrade=False):
     existing=inspect()
     if existing:
         guard(existing)
-        if not rebuild and not upgrade:
+        if not rebuild:
             check();run("docker","start",NAME);return check()
     elif (ROOT/"identity.json").exists():
         raise ValueError("Owned application container missing; preserve store and investigate")
@@ -200,37 +156,39 @@ def setup(rebuild=False, build_evidence_dir=None, upgrade=False):
             if not (UI_DIST/'index.html').is_file():raise ValueError('Build the audited UI before rebuilding the application')
             shutil.copytree(UI_DIST,temp/'ui-dist')
         shutil.copy(REPO/"deployment/application.Dockerfile",temp/"Dockerfile")
+        # COPY keeps the context's modes and the application user is not root.
+        modeling_runtime.readable_context(temp)
         evidence = build_evidence_directory(build_evidence_dir)
         # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
         inputs=hashlib.sha256(json.dumps(dict(base=BASE,context=sorted(
             (str(p.relative_to(temp)),hashlib.sha256(p.read_bytes()).hexdigest()) for p in temp.rglob("*") if p.is_file())),
             sort_keys=True).encode()).hexdigest()
         tag="hyprn-mvp-application:"+inputs[:16]
-        built=subprocess.run(["docker","build","--network=none","--pull=false","-t",tag,str(temp)],text=True,capture_output=True)
+        built=subprocess.run(["docker","build","--network=none","--pull=false","-t",tag,str(temp)],
+                             text=True,capture_output=True,env=DOCKER_ENVIRONMENT)
         (evidence/"build.log").write_text(built.stdout)
         (evidence/"build.stderr").write_text(built.stderr)
         (evidence/"result.json").write_text(json.dumps({"exit":built.returncode})+"\n")
         built.check_returncode()
     image=run("docker","image","inspect",tag,"--format","{{.Id}}")
     store=ROOT/"application"
-    replaced=None
-    if upgrade:
-        # Never reprovision. Keep the previous container (stopped, renamed) until the new one
-        # passes check; any failure restores it and the previous identity exactly.
-        previous_identity=(ROOT/"identity.json").read_bytes()
-        retained=ROOT/"evidence"/("identity-before-upgrade-"+uuid4().hex+".json")
-        with retained.open("xb") as output:output.write(previous_identity)
-        replaced=NAME+"-replaced-"+uuid4().hex[:12]
-        (evidence/"upgrade.json").write_text(json.dumps(dict(gate,image=image,identity_before=str(retained),
-                                                               replaced_container=replaced),indent=2)+"\n")
-    elif not existing:
+    if not existing:
         if list(store.iterdir()):raise ValueError("Refusing unowned nonempty application store")
         password_file=ROOT/"credentials/owner.password"
         fd=os.open(password_file,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         password=secrets.token_urlsafe(32)
         with os.fdopen(fd,"w") as f:f.write(password+"\n")
-        bootstrap="import sys,os; from hyprn_mvp_app.store import Store; from hyprn_mvp_app.auth import Auth; s=Store('/store/application.sqlite'); Auth(s,'').provision('owner',sys.stdin.read().strip()); os.chown('/store/application.sqlite',10002,10002); os.chown('/store',10002,10002)"
-        run("docker","run","--rm","-i","--network=none","--user","0:0","--mount",f"type=bind,src={store},dst=/store",image,"python","-c",bootstrap,input=password)
+        # The owner's sign-in name is an argument and the password is read from standard input.
+        bootstrap=("import sys,os\n"
+                   "from hyprn_mvp_app.store import Store\n"
+                   "from hyprn_mvp_app.auth import Auth\n"
+                   "s=Store('/store/application.sqlite')\n"
+                   "Auth(s,'').provision(sys.argv[1],sys.stdin.read().strip())\n"
+                   "os.chown('/store/application.sqlite',10002,10002)\n"
+                   "os.chown('/store',10002,10002)\n")
+        run("docker","run","--rm","-i","--network=none","--user","0:0",
+            "--mount",f"type=bind,src={store},dst=/store",image,"python","-c",bootstrap,USERNAME,
+            input=password)
     else:
         run("docker","stop",NAME)
         run("docker","rm",NAME)
@@ -248,37 +206,7 @@ def setup(rebuild=False, build_evidence_dir=None, upgrade=False):
         identity=dict(owner=OWNER,container=NAME,image=image,base=BASE,source_hashes=hashes(),store=str(store))
         write_identity((json.dumps(identity,indent=2)+"\n").encode())
         return check()
-    if not upgrade:return create()
-    # Re-check right before the first container effect (the build took minutes).
-    require_executor_quiescent()
-    moved=False
-    try:
-        run("docker","stop",NAME)
-        run("docker","rename",NAME,replaced);moved=True
-        result=create()
-        # The previous container is discarded only after the replacement is running and
-        # serves the reviewed API (unauthenticated GET /api/1/studies -> 401).
-        if not result.get("running"):raise ValueError("Replacement application container is not running")
-        result["liveness"]=liveness_probe()
-    except BaseException:
-        restore_upgrade(replaced,previous_identity,moved)
-        raise
-    try:run("docker","rm",replaced)
-    except subprocess.CalledProcessError:result["replaced_container_retained"]=replaced
-    return result
-def restore_upgrade(replaced,previous_identity,moved):
-    """Put the previous identity (first, atomically) and container back exactly; the store
-    was never touched."""
-    try:
-        write_identity(previous_identity)
-        if moved:
-            if inspect() is not None:
-                run("docker","stop",NAME);run("docker","rm",NAME)
-            run("docker","rename",replaced,NAME)
-        run("docker","start",NAME)
-    except BaseException as error:
-        raise RuntimeError("Application upgrade failed and its automatic restore failed; the previous container is kept as "
-                           +replaced+" with identity evidence/identity-before-upgrade-*.json") from error
+    return create()
 def main():
     local_paths.require(ROOT)
     local_paths.require(PORT,local_paths.PORT)
@@ -286,11 +214,10 @@ def main():
     parser.add_argument("operation",choices=["setup","check","stop"])
     parser.add_argument("--rebuild",action="store_true")
     parser.add_argument("--build-evidence-dir",type=Path)
-    parser.add_argument("--upgrade",action="store_true",help="Reviewed replacement of the existing owned container with the bound release (executor stopped)")
     args=parser.parse_args()
     if args.build_evidence_dir and args.operation!="setup":parser.error("Build evidence requires setup")
-    if args.upgrade and args.operation!="setup":parser.error("--upgrade requires setup")
-    if args.operation=="setup":result=setup(args.rebuild,args.build_evidence_dir,upgrade=args.upgrade)
+    if args.operation=="setup":
+        result=setup(args.rebuild,args.build_evidence_dir)
     elif args.operation=="check":result=check()
     else:
         result=check();run("docker","stop",NAME);result["running"]=False

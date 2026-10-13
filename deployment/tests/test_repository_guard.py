@@ -1279,7 +1279,6 @@ class LocationResolutionTests(unittest.TestCase):
             for resolver, relative in self.STORES.items():
                 with self.subTest(resolver=resolver):
                     self.assertEqual(getattr(self.paths, resolver)(), Path(data) / relative)
-            self.assertEqual(self.paths.activation_root(), Path(data) / 'application/activation')
             self.assertEqual(self.paths.store_roots(), tuple(Path(data) / r for r in self.STORES.values()))
             self.assertEqual(self.paths.live_roots(), ())
             import tempfile
@@ -1841,8 +1840,16 @@ class UpstreamArchiveGuardTests(unittest.TestCase):
         self.assertEqual(live_fence.STATE.policy, 'unit')
         stage = self.scope.root / 'tmp' / ('upstream-stage-' + uuid4().hex)
         stage.mkdir(parents=True)
-        self.runtime.stage_native_inputs(stage)
+        previous = os.umask(0o077)  # as under the ./hyprn-mvp entry point
+        try:
+            self.runtime.stage_native_inputs(stage)
+        finally:
+            os.umask(previous)
         self.assertEqual(live_fence.STATE.trips, [])
+        # Staged build inputs are readable by the image's non-root service user.
+        for path in (stage, *stage.rglob('*')):
+            mode = path.stat().st_mode & 0o777
+            self.assertEqual(mode, 0o755 if path.is_dir() else 0o644, str(path))
         staged = (stage / 'provenance-inputs/upstream.tar.gz').read_bytes()
         self.assertEqual(hashlib.sha256(staged).hexdigest(), self.runtime.ARCHIVE_SHA256)
         self.assertTrue((stage / 'provenance-inputs/upstream/LICENSE').is_file())

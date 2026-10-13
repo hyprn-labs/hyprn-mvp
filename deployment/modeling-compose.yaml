@@ -3,8 +3,8 @@
   "services": {
     "modeling": {
       "image": "${HYPRN_MVP_MODELING_IMAGE:?Use the image ID from identity.json}",
-      "container_name": "hyprn-mvp-modeling",
-      "labels": {"org.hyprn-mvp.owner": "hyprn-mvp-modeling"},
+      "container_name": "${HYPRN_MVP_MODELING_CONTAINER:?Use the container name of the installation}",
+      "labels": {"org.hyprn-mvp.owner": "${HYPRN_MVP_MODELING_OWNER:?Use the owner of the installation}"},
       "user": "10001:10001", "read_only": true, "cap_drop": ["ALL"],
       "security_opt": ["no-new-privileges:true"],
       "pids_limit": 128, "mem_limit": "768m", "cpus": 1,
@@ -17,7 +17,7 @@
       ]
     }
   },
-  "networks": {"model_private": {"name":"hyprn-mvp-private", "internal":true, "labels":{"org.hyprn-mvp.owner":"hyprn-mvp-modeling"}}},
+  "networks": {"model_private": {"name":"${HYPRN_MVP_MODELING_NETWORK:?Use the network name of the installation}", "internal":true, "labels":{"org.hyprn-mvp.owner":"${HYPRN_MVP_MODELING_OWNER:?Use the owner of the installation}"}}},
   "x-hyprn-mvp-boundaries": {
     "application": "the application owner mounts the application store and signs scoped model requests",
     "execution": "the trusted execution process owns a separate AiiDA store and the restricted launch authority",

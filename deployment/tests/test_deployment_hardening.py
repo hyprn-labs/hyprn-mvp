@@ -1,4 +1,4 @@
-"""Deployment hardening: managers, release binding and the reviewed backup tool.
+"""Deployment hardening: managers and release binding.
 
 Every root is a disposable directory under tmp_path; docker, HTTP, signals and the live runtime
 are faked or refused. No test needs Git history.
@@ -11,15 +11,11 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
 import live_fence  # noqa: E402
 live_runtime_fence = live_fence.pytest_fixture('unit')
 import ast
-import datetime
-import errno
 import fcntl
-import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import sqlite3
 import stat
 import subprocess
 import sys
@@ -272,7 +268,7 @@ def test_launcher_evidence_must_carry_the_manifest_launcher_sha256(tmp_path):
     assert native.launcher_evidence(root, binding)['records'] == [str(good)]
 
 
-# ---- application_runtime setup --upgrade -------------------------------------------------
+# ---- application_runtime: retained UI builds and atomic identity writes -----------------
 
 def with_ui_build(path, manifest, **extra):
     """Add a retained UI build (and optional manifest fields); rewrite the digest record."""
@@ -288,218 +284,150 @@ def with_ui_build(path, manifest, **extra):
     return manifest, release.sha256(raw)
 
 
-def upgrade_env(tmp_path, monkeypatch):
-    path, manifest, sha = make_release(tmp_path / 'releases')
-    manifest, sha = with_ui_build(path, manifest)
-    binding = binding_for(path, manifest, sha)
-    root = tmp_path / 'application'
-    for name in ('application', 'credentials', 'evidence', 'wheels'):
-        (root / name).mkdir(parents=True)
-    (root / 'application/application.sqlite').write_bytes(b'preserved application store')
-    (root / 'credentials/owner.password').write_text('preserved-password\n')
-    (root / 'wheels/reviewed.whl').write_bytes(b'wheel')
-    (root / 'identity.json').write_text(json.dumps(dict(owner=app.OWNER, container=app.NAME, image='sha256:old-app',
-                                                        base=app.BASE, source_hashes={}, store=str(root / 'application'))))
-    execution = tmp_path / 'execution'
-    execution.mkdir()
-    repo = tmp_path / 'repo'
-    for relative in ('application/src/hyprn_mvp_app/__init__.py', 'contracts/schemas/model.schema.json',
-                     'application/requirements.lock', 'deployment/application.Dockerfile',
-                     'deployment/application_runtime.py'):
-        (repo / relative).parent.mkdir(parents=True, exist_ok=True)
-        (repo / relative).write_text(relative + '\n')
-    monkeypatch.setattr(app, 'ROOT', root)
-    monkeypatch.setattr(app, 'REPO', repo)
-    monkeypatch.setattr(dispatch, 'ROOT', execution)
-    monkeypatch.setattr(release, 'ACTIVE', binding)
-    monkeypatch.setattr(modeling, 'check', lambda root, **kw: dict(running=True))
-    owned_network = dict(Labels={modeling.LABEL: app.OWNER})
-    monkeypatch.setattr(modeling, 'inspect', lambda name, kind='container': owned_network if name == app.PUBLIC_NETWORK else None)
-    state = types.SimpleNamespace(container=dict(Id='old-id', Name='/' + app.NAME, Image='sha256:old-app',
-                                                 Config=dict(Labels={modeling.LABEL: app.OWNER})),
-                                  commands=[], events=[], fail=None, running=True, top=[], probe='ok')
-
-    def fake_run(*args, input=None):
-        state.commands.append(args)
-        state.events.append(('docker',) + args[1:3])
-        if state.fail and args[:len(state.fail)] == state.fail:
-            raise subprocess.CalledProcessError(1, args, '', 'injected failure')
-        if args[:3] == ('docker', 'image', 'inspect'):
-            return app.BASE if args[3] == 'python:3.12.11-slim-bookworm' else 'sha256:new-app'
-        if args[:3] == ('docker', 'run', '-d'):
-            state.container = dict(Id='new-id', Name='/' + app.NAME, Image='sha256:new-app',
-                                   Config=dict(Labels={modeling.LABEL: app.OWNER}))
-        if args[:2] == ('docker', 'rename') and args[2] == app.NAME:
-            state.container = None
-        if args[:2] == ('docker', 'rename') and args[3] == app.NAME:
-            state.container = dict(Id='old-id', Name='/' + app.NAME, Image='sha256:old-app',
-                                   Config=dict(Labels={modeling.LABEL: app.OWNER}))
-        if args[:2] == ('docker', 'rm') and args[2] == app.NAME:
-            state.container = None
-        return ''
-
-    def fake_build(args, **kwargs):
-        return subprocess.CompletedProcess(args, 0, 'built', '')
-
-    def identity_events(raw):
-        state.events.append(('identity', json.loads(raw)['image']))
-    real_write = app.write_identity if hasattr(app, 'write_identity') else None
-
-    def write_identity(raw):
-        identity_events(raw)
-        return real_write(raw)
-    monkeypatch.setattr(app, 'inspect', lambda: state.container)
-    monkeypatch.setattr(app, 'run', fake_run)
-    monkeypatch.setattr(subprocess, 'run', fake_build)
-    if real_write is not None:
-        monkeypatch.setattr(app, 'write_identity', write_identity)
-    monkeypatch.setattr(app, 'check', lambda allow_source_change=False: dict(
-        container=app.NAME, image=(state.container or {}).get('Image'), running=state.running))
-    monkeypatch.setattr(app, 'in_container_dispatchers', lambda: list(state.top), raising=False)
-
-    def probe(**kwargs):
-        state.events.append(('probe', state.probe))
-        if state.probe != 'ok':
-            raise RuntimeError('Application liveness probe failed: ' + state.probe)
-        return dict(status=401)
-    monkeypatch.setattr(app, 'liveness_probe', probe, raising=False)
-    return types.SimpleNamespace(root=root, execution=execution, state=state, binding=binding)
-
-
-def test_upgrade_removes_the_replaced_container_only_after_running_and_http_401(tmp_path, monkeypatch):
-    env = upgrade_env(tmp_path, monkeypatch)
-    result = app.setup(upgrade=True)
-    assert result['running'] and result['image'] == 'sha256:new-app'
-    events = env.state.events
-    removal = next(i for i, e in enumerate(events) if e[:2] == ('docker', 'rm'))
-    probe = events.index(('probe', 'ok'))
-    assert probe < removal  # liveness proven before the rollback container is discarded
-
-
-@pytest.mark.parametrize('failure', ['not-running', 'probe'])
-def test_upgrade_restores_when_the_new_container_is_not_live(tmp_path, monkeypatch, failure):
-    env = upgrade_env(tmp_path, monkeypatch)
-    identity_before = (env.root / 'identity.json').read_bytes()
-    if failure == 'not-running':
-        env.state.running = False  # created, passes inspection, but crashed
-    else:
-        env.state.probe = 'connection refused'
-    with pytest.raises((RuntimeError, ValueError)):
-        app.setup(upgrade=True)
-    effects = [c for c in env.state.commands if c[:3] != ('docker', 'image', 'inspect')]
-    replaced = next(c[3] for c in effects if c[:2] == ('docker', 'rename'))
-    assert ('docker', 'rm', replaced) not in effects  # the previous container is never discarded
-    assert effects[-2:] == [('docker', 'rename', replaced, app.NAME), ('docker', 'start', app.NAME)]
-    assert env.state.container['Image'] == 'sha256:old-app'
-    assert (env.root / 'identity.json').read_bytes() == identity_before
-
-
-def test_upgrade_restore_writes_identity_atomically_before_any_container_step(tmp_path, monkeypatch):
-    """If the container restore itself fails, identity.json already names the previous image."""
-    env = upgrade_env(tmp_path, monkeypatch)
-    identity_before = (env.root / 'identity.json').read_bytes()
-    env.state.probe = 'timeout'
-    original = app.run
-
-    def failing_restore(*args, input=None):
-        if args[:2] == ('docker', 'rename') and args[3] == app.NAME:
-            env.state.commands.append(args)
-            raise subprocess.CalledProcessError(1, args, '', 'restore rename failed')
-        return original(*args, input=input)
-    monkeypatch.setattr(app, 'run', failing_restore)
-    with pytest.raises(RuntimeError, match='automatic restore failed'):
-        app.setup(upgrade=True)
-    assert (env.root / 'identity.json').read_bytes() == identity_before
-    assert not [p for p in env.root.iterdir() if p.name.startswith('.identity')]  # temp replaced atomically
-
-
 def test_identity_writes_are_atomic_replacements(tmp_path, monkeypatch):
     monkeypatch.setattr(app, 'ROOT', tmp_path)
     (tmp_path / 'identity.json').write_text('old\n')
     replaced = []
     real = os.replace
-    monkeypatch.setattr(app.os, 'replace', lambda a, b: replaced.append((Path(a).parent, Path(b))) or real(a, b))
+
+    def recorded(a, b):
+        replaced.append((Path(a).parent, Path(b)))
+        return real(a, b)
+
+    monkeypatch.setattr(app.os, 'replace', recorded)
     app.write_identity(b'{"image": "x"}\n')
     assert (tmp_path / 'identity.json').read_bytes() == b'{"image": "x"}\n'
     assert replaced == [(tmp_path, tmp_path / 'identity.json')]
     assert stat.S_IMODE((tmp_path / 'identity.json').stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize('case', ['lock', 'unparsable', 'in-container'])
-def test_upgrade_gate_refuses_hidden_executors_before_any_effect(tmp_path, monkeypatch, case):
-    env = upgrade_env(tmp_path, monkeypatch)
-    held = None
-    if case == 'lock':
-        held = HeldLock(env.execution / 'executor.lock')
-        match = 'executor.lock is held'
-    elif case == 'unparsable':
-        executor_json(env.execution, raw='{"pid":')
-        match = 'executor.json'
-    else:
-        env.state.top = ['4242 python -B -m hyprn_mvp_app.dispatcher --with-exports']
-        match = 'dispatcher'
+def private_tree(root, files):
+    """Files written under umask 077, as by the ./hyprn-mvp entry point."""
+    previous = os.umask(0o077)
     try:
-        with pytest.raises(ValueError, match=match):
-            app.setup(upgrade=True)
+        for relative in files:
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (root / relative).write_text(relative + '\n')
     finally:
-        if held:
-            held.release()
-    assert env.state.commands == []
+        os.umask(previous)
+    return root
 
 
-def test_upgrade_rechecks_the_executor_immediately_before_docker_stop(tmp_path, monkeypatch):
-    env = upgrade_env(tmp_path, monkeypatch)
-    calls = []
-    real = app.require_executor_quiescent
-
-    def counted():
-        calls.append([c for c in env.state.commands if c[:2] == ('docker', 'stop')])
-        if len(calls) == 2:
-            env.state.top = ['4242 python -B -m hyprn_mvp_app.dispatcher']  # appeared during the build
-        return real()
-    monkeypatch.setattr(app, 'require_executor_quiescent', counted)
-    with pytest.raises(ValueError, match='dispatcher'):
-        app.setup(upgrade=True)
-    assert len(calls) == 2 and calls[1] == []  # second check after the build, before any docker stop
-    assert not any(c[:2] in (('docker', 'stop'), ('docker', 'rename'), ('docker', 'start')) for c in env.state.commands)
-    assert env.state.container['Image'] == 'sha256:old-app'
+def modes(root):
+    found = {}
+    for path in sorted(root.rglob('*')):
+        found[str(path.relative_to(root))] = stat.S_IMODE(path.stat().st_mode)
+    return found
 
 
-def test_in_container_dispatchers_parse_docker_top(monkeypatch):
-    outputs = {'running': types.SimpleNamespace(returncode=0, stdout='PID COMMAND\n10 python -m uvicorn\n'
-                                                '11 python -B -m hyprn_mvp_app.dispatcher --with-exports\n', stderr=''),
-               'stopped': types.SimpleNamespace(returncode=1, stdout='', stderr='Error response from daemon: container x is not running'),
-               'broken': types.SimpleNamespace(returncode=1, stdout='', stderr='permission denied')}
-    for name, output in outputs.items():
-        monkeypatch.setattr(app, 'docker_top', lambda output=output: output)
-        if name == 'broken':
-            with pytest.raises(RuntimeError, match='docker top'):
-                app.in_container_dispatchers()
-        else:
-            found = app.in_container_dispatchers()
-            assert found == (['11 python -B -m hyprn_mvp_app.dispatcher --with-exports'] if name == 'running' else [])
+def test_build_contexts_are_readable_whatever_the_umask(tmp_path):
+    root = private_tree(tmp_path / 'context', ('Dockerfile', 'start.sh', 'notices/a/b.json'))
+    modeling.readable_context(root, executables=(root / 'start.sh',))
+    assert modes(root) == {
+        'Dockerfile': 0o644,
+        'notices': 0o755,
+        'notices/a': 0o755,
+        'notices/a/b.json': 0o644,
+        'start.sh': 0o755,
+    }
+    assert stat.S_IMODE(root.stat().st_mode) == 0o755
+    # A link could make chmod act outside the context: refused.
+    (root / 'notices/link').symlink_to(tmp_path)
+    with pytest.raises(ValueError, match='build context'):
+        modeling.readable_context(root)
 
 
-def test_liveness_probe_requires_unauthenticated_401(monkeypatch):
-    import urllib.error
-    monkeypatch.setattr(app, 'PORT', 54321)  # Synthetic port: no development port is needed.
-    answers = []
+APPLICATION_SOURCES = (
+    'application/src/hyprn_mvp_app/__init__.py',
+    'contracts/schemas/model.schema.json',
+    'application/requirements.lock',
+    'deployment/application.Dockerfile',
+    'deployment/application_runtime.py',
+)
+INSTALLATION = 'hyprn-mvp-local-0123abcd'
 
-    class Opener:
-        def open(self, request, timeout):
-            assert request.full_url == 'http://127.0.0.1:%d/api/1/studies' % app.PORT and request.get_method() == 'GET'
-            assert not request.has_header('Cookie') and not request.has_header('Authorization')
-            answer = answers.pop(0)
-            if isinstance(answer, Exception):
-                raise answer
-            return types.SimpleNamespace(status=answer, close=lambda: None)
-    monkeypatch.setattr(app.urllib.request, 'build_opener', lambda *handlers: Opener())
-    monkeypatch.setattr(app.time, 'sleep', lambda s: None)
-    answers[:] = [urllib.error.URLError('refused'), urllib.error.HTTPError('u', 401, 'Unauthorized', {}, None)]
-    assert app.liveness_probe(timeout=5, interval=0)['status'] == 401
-    answers[:] = [200] * 3
-    with pytest.raises(RuntimeError, match='liveness'):
-        app.liveness_probe(timeout=0, interval=0)  # an unauthenticated 200 is not the reviewed application
+
+def fresh_application(tmp_path, monkeypatch):
+    """application_runtime.setup on a blank store with every docker effect faked."""
+    root = tmp_path / 'application'
+    (root / 'wheels').mkdir(parents=True)
+    (root / 'wheels/reviewed.whl').write_bytes(b'wheel')
+    repo = private_tree(tmp_path / 'repo', APPLICATION_SOURCES)
+    ui = private_tree(tmp_path / 'ui', ('index.html', 'assets/app.js'))
+    names = dict(
+        NAME=INSTALLATION + '-application',
+        OWNER=INSTALLATION + '-' + 'e' * 27,
+        PUBLIC_NETWORK=INSTALLATION + '-public',
+        USERNAME='engineer',
+        PORT=18470,
+    )
+    for key, value in dict(names, ROOT=root, REPO=repo, UI_DIST=ui).items():
+        monkeypatch.setattr(app, key, value)
+    monkeypatch.setattr(release, 'ACTIVE', None)
+    monkeypatch.setattr(modeling, 'check', lambda root, **kw: dict(running=True))
+    monkeypatch.setattr(modeling, 'inspect', lambda name, kind='container': None)
+    monkeypatch.setattr(app, 'inspect', lambda: None)
+    state = types.SimpleNamespace(commands=[], inputs=[], context={})
+
+    def fake_run(*args, input=None):
+        state.commands.append(args)
+        state.inputs.append(input)
+        if args[:3] == ('docker', 'image', 'inspect'):
+            return app.BASE if args[3] == 'python:3.12.11-slim-bookworm' else 'sha256:new-app'
+        return ''
+
+    def fake_build(args, **kwargs):
+        state.context = modes(Path(args[-1]))
+        return subprocess.CompletedProcess(args, 0, 'built', '')
+
+    def checked(allow_source_change=False):
+        return dict(container=app.NAME, running=True)
+
+    monkeypatch.setattr(app, 'run', fake_run)
+    monkeypatch.setattr(subprocess, 'run', fake_build)
+    monkeypatch.setattr(app, 'check', checked)
+    return types.SimpleNamespace(root=root, state=state, names=names)
+
+
+def command(state, *prefix):
+    return next(c for c in state.commands if c[: len(prefix)] == prefix)
+
+
+def test_a_new_application_store_provisions_the_installation_owner_and_names(tmp_path, monkeypatch):
+    env = fresh_application(tmp_path, monkeypatch)
+    previous = os.umask(0o077)
+    try:
+        assert app.setup()['running']
+    finally:
+        os.umask(previous)
+    # Every file the image copies is readable by the application user.
+    context = env.state.context
+    assert context and all(mode == (0o755 if mode & 0o100 else 0o644) for mode in context.values())
+    assert all(context[name] == 0o755 for name in ('application', 'contracts', 'ui-dist', 'wheels'))
+    provision = command(env.state, 'docker', 'run', '--rm')
+    assert provision[-4:-2] == ('python', '-c') and provision[-1] == 'engineer'
+    password = env.state.inputs[env.state.commands.index(provision)]
+    assert password == (env.root / 'credentials/owner.password').read_text().strip()
+    assert password not in ' '.join(provision)
+    text = ' '.join(command(env.state, 'docker', 'run', '-d'))
+    for expected in (
+        '--name ' + env.names['NAME'],
+        '--label org.hyprn-mvp.owner=' + env.names['OWNER'],
+        '--network ' + env.names['PUBLIC_NETWORK'],
+        '-p 127.0.0.1:18470:8000',
+    ):
+        assert expected in text
+    assert command(env.state, 'docker', 'network', 'create')[-1] == env.names['PUBLIC_NETWORK']
+    identity = json.loads((env.root / 'identity.json').read_text())
+    assert (identity['owner'], identity['container']) == (env.names['OWNER'], env.names['NAME'])
+
+
+def test_the_application_manager_has_no_upgrade_path():
+    """Replacing an installed application is not a command of this phase (no update command)."""
+    source = Path(app.__file__).read_text()
+    for removed in ('upgrade', 'restore_upgrade', 'liveness_probe', 'in_container_dispatchers'):
+        assert removed not in source
+    assert not hasattr(app, 'upgrade_gate')
 
 
 # ---- modeling_runtime: every compose call runs in a clean environment ---------------------
@@ -514,9 +442,21 @@ def test_compose_runs_with_a_clean_environment(tmp_path, monkeypatch):
     (tmp_path / 'evidence').mkdir()
     assert modeling.compose_up(tmp_path, 'sha256:img', tmp_path / 'evidence/compose.log') == 0
     args, env = calls[0]
-    assert args[:2] == ['docker', 'compose'] and set(env) <= {'PATH', 'HOME', 'HYPRN_MVP_MODELING_ROOT', 'HYPRN_MVP_MODELING_IMAGE'}
-    assert env['HYPRN_MVP_MODELING_ROOT'] == str(tmp_path) and env['HYPRN_MVP_MODELING_IMAGE'] == 'sha256:img'
+    assert args[:4] == ['docker', 'compose', '--project-name', modeling.PROJECT]
+    names = tuple('HYPRN_MVP_MODELING_' + name for name in ('CONTAINER', 'NETWORK', 'OWNER'))
+    reviewed = {'PATH', 'HOME', 'HYPRN_MVP_MODELING_ROOT', 'HYPRN_MVP_MODELING_IMAGE', *names}
+    assert set(env) <= reviewed
+    assert env['HYPRN_MVP_MODELING_ROOT'] == str(tmp_path)
+    assert env['HYPRN_MVP_MODELING_IMAGE'] == 'sha256:img'
+    assert [env[name] for name in names] == [modeling.CONTAINER, modeling.NETWORK, modeling.OWNER]
     assert not any(k.startswith('COMPOSE_') or k.startswith('DOCKER_') for k in env)
+    # An installation's compose call names its configured engine, never the inherited one.
+    configured = {'PATH': '/usr/bin', 'DOCKER_HOST': 'unix:///configured/docker.sock'}
+    monkeypatch.setattr(modeling, 'DOCKER_ENVIRONMENT', configured)
+    assert modeling.compose_up(tmp_path, 'sha256:img', tmp_path / 'evidence/compose.log') == 0
+    env = calls[1][1]
+    assert set(env) <= reviewed | {'DOCKER_HOST'}
+    assert env['DOCKER_HOST'] == 'unix:///configured/docker.sock'
     source = Path(modeling.__file__).read_text()
     assert source.count("'docker', 'compose'") == 1 and source.count('compose_environment(') == 2  # one call site
     assert 'compose_up(' in source.split('def setup(', 1)[1]
@@ -717,133 +657,8 @@ def test_release_commands_document_review_and_immutability_steps(tmp_path):
     assert named and named <= release.RELEASE_BINDING_PATHS, named
     assert 'make-immutable' in commands['make_immutable'] and 'opt-in' in commands['make_immutable']
     assert 'chflags -R nouchg' in commands['quarantine']
-
-
-# ---- Reviewed immutable-read backup tool --------------------------------------------------
-
-def backup_tool():
-    spec = importlib.util.spec_from_file_location('backup_immutable', REPO / 'deployment/tools/backup_immutable.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def workspace(tmp_path):
-    root = tmp_path / 'data-root'
-    for relative in ('application/application/computational-records', 'application/evidence', 'application/credentials',
-                     'execution/aiida-store/container', 'execution/aiida/.aiida', 'execution/evidence',
-                     'modeling/modeling', 'modeling/credentials', 'modeling/evidence', 'application/activation/evidence'):
-        (root / relative).mkdir(parents=True)
-    for relative in ('application/application/application.sqlite', 'execution/aiida-store/database.sqlite'):
-        with sqlite3.connect(root / relative) as db:
-            db.execute('CREATE TABLE t(v)')
-            db.execute("INSERT INTO t VALUES('rollback-journal')")
-        db.close()
-    db = sqlite3.connect(root / 'modeling/modeling/model.sqlite3')
-    db.execute('PRAGMA journal_mode=WAL')
-    db.execute('CREATE TABLE t(v)')
-    db.execute("INSERT INTO t VALUES('wal')")
-    db.commit()
-    db.close()  # clean close checkpoints and removes the WAL
-    (root / 'execution/aiida-store/container/packed').write_bytes(b'native object')
-    (root / 'application/application/computational-records/r.json').write_text('{}')
-    (root / 'application/activation/evidence/container-removal.json').write_text('{}')
-    for relative in ('execution/launch-worker', 'execution/runtime.json', 'application/identity.json', 'modeling/identity.json'):
-        (root / relative).write_text(relative + '\n')
-    for relative in ('application/credentials/owner.password', 'modeling/credentials/model.key',
-                     'modeling/credentials/rails.key', 'execution/aiida/.aiida/config.json'):
-        (root / relative).write_text('secret ' + relative + '\n')
-    (root / 'execution/executor.lock').write_bytes(b'')
-    return root
-
-
-def test_backup_refuses_a_nonempty_model_wal_after_stop(tmp_path):
-    tool = backup_tool()
-    root = workspace(tmp_path)
-    assert tool.wal_state(root)['modeling/modeling/model.sqlite3'] == dict(wal=None, journal=None)
-    writer = sqlite3.connect(root / 'modeling/modeling/model.sqlite3')
-    writer.execute('PRAGMA wal_autocheckpoint=0')
-    writer.execute("INSERT INTO t VALUES('not yet checkpointed')")
-    writer.commit()
-    try:
-        assert tool.wal_state(root)['modeling/modeling/model.sqlite3']['wal'] > 0
-        with pytest.raises(SystemExit, match='WAL'):
-            tool.backup(root, tmp_path / 'backup', containers=lambda: [])
-        assert not (tmp_path / 'backup').exists()
-    finally:
-        writer.close()
-    (root / 'application/application/application.sqlite-journal').write_bytes(b'hot journal')
-    with pytest.raises(SystemExit, match='journal'):
-        tool.backup(root, tmp_path / 'backup', containers=lambda: [])
-
-
-@pytest.mark.parametrize('case', ['running-container', 'lock', 'unparsable', 'running-executor'])
-def test_backup_refuses_unless_everything_is_stopped(tmp_path, monkeypatch, case):
-    tool = backup_tool()
-    root = workspace(tmp_path)
-    containers = lambda: []  # noqa: E731
-    held = None
-    if case == 'running-container':
-        containers = lambda: [app.NAME]  # noqa: E731
-    elif case == 'lock':
-        held = HeldLock(root / 'execution/executor.lock')
-    elif case == 'unparsable':
-        (root / 'execution/executor.json').write_text('{')
-    else:
-        (root / 'execution/executor.json').write_text(json.dumps(dict(pid=os.getpid(), identity={})))
-        monkeypatch.setattr(tool, 'process_command', lambda pid: '/py -B /r/source/deployment/dispatch_runtime.py --serve')
-    try:
-        with pytest.raises(SystemExit):
-            tool.backup(root, tmp_path / 'backup', containers=containers)
-    finally:
-        if held:
-            held.release()
-    assert not (tmp_path / 'backup').exists()
-
-
-def test_backup_copies_read_only_with_digest_only_credentials(tmp_path):
-    tool = backup_tool()
-    root = workspace(tmp_path)
-    before = {p: p.read_bytes() for p in root.rglob('*') if p.is_file()}
-    result = tool.backup(root, tmp_path / 'backup', containers=lambda: [])
-    target = tmp_path / 'backup'
-    assert {p: p.read_bytes() for p in root.rglob('*') if p.is_file()} == before  # source untouched
-    manifest = json.loads((target / 'backup-manifest.json').read_text())
-    assert result['manifest_sha256'] == release.sha256((target / 'backup-manifest.json').read_bytes())
-    assert manifest['tool_sha256'] == release.sha256((REPO / 'deployment/tools/backup_immutable.py').read_bytes())
-    assert manifest['wal_state']['modeling/modeling/model.sqlite3'] == dict(wal=None, journal=None)
-    databases = [e for e in manifest['entries'] if e['kind'] == 'sqlite-backup']
-    assert len(databases) == 3 and all(e['integrity'] == 'ok' for e in databases)
-    with sqlite3.connect(target / 'modeling/modeling/model.sqlite3') as db:
-        assert db.execute('SELECT v FROM t').fetchall() == [('wal',)]
-    assert (target / 'execution/aiida-store/container/packed').read_bytes() == b'native object'
-    assert not (target / 'application/credentials').exists() and not (target / 'execution/aiida').exists()
-    assert set(manifest['identity_digests']) == set(tool.DIGEST_ONLY)
-    assert stat.S_IMODE(target.stat().st_mode) == 0o700
-    assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in target.rglob('*') if p.is_file())
-    with pytest.raises(FileExistsError):
-        tool.backup(root, target, containers=lambda: [])  # create-only
-
-
-def test_lock_probe_reports_without_docker(tmp_path):
-    tool = backup_tool()
-    root = workspace(tmp_path)
-    assert tool.lock_probe(root) == dict(executor_running=False, executor_json='absent', lock_available=True)
-    held = HeldLock(root / 'execution/executor.lock')
-    try:
-        assert tool.lock_probe(root)['lock_available'] is False
-    finally:
-        held.release()
-
-
-def test_backup_tool_is_stdlib_python39_compatible_and_pins_its_live_root():
-    source = (REPO / 'deployment/tools/backup_immutable.py').read_text()
-    tree = ast.parse(source, feature_version=(3, 9))
-    imported = {a.name.split('.')[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    imported |= {n.module.split('.')[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-    assert imported <= {'argparse', 'datetime', 'fcntl', 'hashlib', 'json', 'os', 'pathlib', 'sqlite3', 'stat',
-                        'subprocess', 'sys'}
-    assert "ROOT = stores_root()" in source and "os.environ.get('HYPRN_MVP_DATA_ROOT', '')" in source
+    # No command replaces an installed application (no update command in this phase).
+    assert not any('upgrade' in text for text in commands.values())
 
 
 def test_qualification_requires_the_attestation_coverage_group():
