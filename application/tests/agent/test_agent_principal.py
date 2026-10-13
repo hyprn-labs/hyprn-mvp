@@ -122,19 +122,18 @@ def memberships(path, sid):
 
 # ---- Agent sessions through the real middleware ---------------------------------------
 
-def test_agent_session_reads_its_delegated_study_and_lists_only_that_study(env):
+def test_agent_session_reads_only_its_delegated_study_and_never_lists_studies(env):
     study, other = new_study(env, 'Delegated'), new_study(env, 'Other')
     agent, delegation = delegate(env, study['study_id'])
     session = env['auth'].mint_agent_session(delegation['delegation_id'])
     assert session['actor_id'] == agent and session['study_id'] == study['study_id']
     client = agent_client(env['app'], session)
-    read = client.get(f"/api/1/studies/{study['study_id']}")
+    read = client.get(f"/api/1/studies/{study['study_id']}/runs")
     assert read.status_code == 200, read.text
-    assert read.json()['data']['name'] == 'Delegated'
+    assert client.get(f"/api/1/studies/{other['study_id']}/runs").status_code == 404
+    # A study-scoped session has no study listing: no registered tool or internal read uses it.
     listed = client.get('/api/1/studies')
-    assert listed.status_code == 200, listed.text
-    assert [s['study_id'] for s in listed.json()['data']] == [study['study_id']]
-    assert other['study_id'] not in {s['study_id'] for s in listed.json()['data']}
+    assert listed.status_code == 403, listed.text
     capabilities = client.get('/api/1/capabilities')
     assert capabilities.status_code == 200, capabilities.text
     assert env['model'].calls == [(agent, study['study_id'], 'GET', '/capabilities')] * len(env['model'].calls)
@@ -206,8 +205,9 @@ def test_another_study_is_not_found_for_an_agent_session(env):
     study, other = new_study(env, 'Delegated'), new_study(env, 'Other')
     _, delegation = delegate(env, study['study_id'])
     client = agent_client(env['app'], env['auth'].mint_agent_session(delegation['delegation_id']))
-    for path in (f"/api/1/studies/{other['study_id']}", f"/api/1/studies/{other['study_id']}/evidence",
-                 f'/api/1/studies/{uid()}'):
+    other_sid = other['study_id']
+    for path in (f'/api/1/studies/{other_sid}/runs', f'/api/1/studies/{other_sid}/commands/{uid()}',
+                 f'/api/1/studies/{uid()}/runs'):
         response = client.get(path)
         assert response.status_code == 404, response.text
         assert response.json()['error']['code'] == 'resource_not_found'
@@ -218,8 +218,8 @@ def test_agent_session_is_pinned_to_its_delegation_even_when_the_agent_holds_ano
     _, delegation = delegate(env, first['study_id'])
     delegate(env, second['study_id'])
     client = agent_client(env['app'], env['auth'].mint_agent_session(delegation['delegation_id']))
-    assert client.get(f"/api/1/studies/{second['study_id']}").status_code == 404
-    assert [s['study_id'] for s in client.get('/api/1/studies').json()['data']] == [first['study_id']]
+    assert client.get(f"/api/1/studies/{second['study_id']}/runs").status_code == 404
+    assert client.get(f"/api/1/studies/{first['study_id']}/runs").status_code == 200
 
 
 def test_tool_token_is_refused_on_the_api(env):
@@ -252,14 +252,14 @@ def test_agent_authority_follows_the_delegating_users_current_membership(env):
         with pytest.raises(DomainError, match='forbidden'):
             store.authorize(db, agent, sid, write=True)
     client = agent_client(env['app'], env['auth'].mint_agent_session(delegation['delegation_id']))
-    assert client.get(f'/api/1/studies/{sid}').status_code == 200
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 200
     set_role(env, sid, 'writer', None)
     with store.connection() as db:
         with pytest.raises(DomainError, match='resource_not_found'):
             store.authorize(db, agent, sid)
-    response = client.get(f'/api/1/studies/{sid}')
+    response = client.get(f'/api/1/studies/{sid}/runs')
     assert response.status_code == 404, response.text
-    assert client.get('/api/1/studies').json()['data'] == []
+    assert store.list_studies(agent) == []
 
 
 def test_agent_never_holds_owner_authority_and_reads_need_no_write_effect(env):
@@ -332,10 +332,10 @@ def test_revoked_or_expired_delegation_refuses_the_next_call(env):
     agent, delegation = delegate(env, sid)
     client = agent_client(env['app'], env['auth'].mint_agent_session(delegation['delegation_id']))
     token = env['auth'].mint_tool_token(delegation['delegation_id'], ttl_hours=8, client_label='Codex')['token']
-    assert client.get(f'/api/1/studies/{sid}').status_code == 200
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 200
     assert env['auth'].revoke_delegation(delegation['delegation_id']) is True
     assert env['auth'].revoke_delegation(delegation['delegation_id']) is False
-    assert client.get(f'/api/1/studies/{sid}').status_code == 401
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 401
     with pytest.raises(DomainError, match='unauthenticated'):
         env['auth'].verify_tool_token(token)
     with pytest.raises(DomainError, match='unauthenticated'):
@@ -347,10 +347,10 @@ def test_revoked_or_expired_delegation_refuses_the_next_call(env):
     _, renewed = delegate(env, sid)
     client = agent_client(env['app'], env['auth'].mint_agent_session(renewed['delegation_id']))
     token = env['auth'].mint_tool_token(renewed['delegation_id'], ttl_hours=8, client_label='Codex')['token']
-    assert client.get(f'/api/1/studies/{sid}').status_code == 200
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 200
     with sqlite3.connect(env['path']) as db:
         db.execute('UPDATE agent_delegations SET expires_at=0 WHERE delegation_id=?', (renewed['delegation_id'],))
-    assert client.get(f'/api/1/studies/{sid}').status_code == 401
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 401
     with pytest.raises(DomainError, match='unauthenticated'):
         env['auth'].verify_tool_token(token)
     with env['store'].connection() as db:
@@ -365,7 +365,7 @@ def test_expired_agent_session_is_refused(env):
     assert session['expires_at'] <= time.time() + 15 * 60 + 1
     with sqlite3.connect(env['path']) as db:
         db.execute('UPDATE agent_api_sessions SET expires_at=0')
-    assert agent_client(env['app'], session).get(f'/api/1/studies/{sid}').status_code == 401
+    assert agent_client(env['app'], session).get(f'/api/1/studies/{sid}/runs').status_code == 401
 
 
 def test_owner_recovery_revokes_agent_credentials(env):
@@ -464,8 +464,8 @@ def test_agent_study_creation_makes_the_delegating_user_owner_and_never_widens_t
             store.authorize(db, agent, new)
     assert receipt['actor_id'] == agent and receipt['state'] == 'committed'
     client = agent_client(env['app'], session)
-    assert client.get(f'/api/1/studies/{new}').status_code == 404
-    assert [s['study_id'] for s in client.get('/api/1/studies').json()['data']] == [sid]
+    assert client.get(f'/api/1/studies/{new}/runs').status_code == 404
+    assert client.get(f'/api/1/studies/{sid}/runs').status_code == 200
     assert store.list_studies(agent) == [store.study(env['actors']['writer'], sid)]
     assert env['clients']['writer'].get(f'/api/1/studies/{new}').status_code == 200
 
