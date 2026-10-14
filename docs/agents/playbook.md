@@ -54,19 +54,18 @@ Each section opens with a **Load when** line and the **Tools** it governs. Loadi
 
 ### 1.3 Workflow
 
-1. **Read the brief and restate it** in one short paragraph: question, givens, deliverables. Note anything ambiguous and the interpretation you chose.
-2. **Plan before writing anything to HYPRN MVP**: method steps, cases (a small, purposeful set), the model structure, the configurations and runs you need, and how you will answer each deliverable. Estimate the number of records; avoid creating versions you will throw away.
-3. **Record source evidence** with `add_evidence`: one source per record, short extracts, exact locators (`evidence`).
-4. **Write the Modeling approach** with `update_approach_draft`: question, scope, limits, method steps, assumptions and cases. Save a version with `save_approach_version` once it is coherent (`approach`).
-5. **Build the model** with `create_model` and `edit_model`: one physical step per component, readable source, a meaning and unit on every port. Check it with `validate_model`, then save a version with `commit_model_version` (`model`).
-6. **Establish a reference.** If published results exist for the problem, reproduce one reference case first and compare. Do not extend or recommend until the reference is reproduced or the gap is explained.
-7. **Sanity-check every closure** (efficiencies, aerodynamic ratios, structural indices, prices) against independent textbook bounds before batch runs. Record the check once, in evidence.
-8. **When a source is ambiguous**, test the plausible readings as labelled cases (for example "structural index in kg/m²" and "structural index in g/m²") rather than stopping or silently picking one. When the choice changes the answer, ask the user.
-9. **Save configurations** with `preview_configuration` and `save_configuration`, giving every input a typed source. **Run one baseline per option** with `submit_runs` before any sweep (`configuration_and_runs`).
-10. **Sweep only what answers the question**; keep runs few and meaningful. Wait with `wait_for_runs` or end your turn; never poll in a tight loop.
-11. **Read results** with `get_run_results` and `compare_runs`, keeping execution, criterion outcomes, model outputs and your interpretation separate.
-12. **Conclude** in one place with `record_conclusion` (`conclusion`).
-13. **Self-review as an engineer** before declaring the work done (`checklist`).
+Preserve the question → explain the reasoning → connect methods to models → design cases → inspect results → record case answers → synthesize an answer. Scale this work to the question; a small correction does not need a new plan or filler under every heading.
+
+1. **Preserve the brief.** Keep the alternatives, ranges, constraints and requested deliverables intact. A narrower calculation does not replace the question. Explain your interpretation and identify unanswered deliverables; never invent original wording.
+2. **Explain the reasoning.** State how the chosen methods and intended cases can answer each deliverable. Keep current scope and study-wide limits separate from the question. Record assumptions once at their approach, model, component or configuration owner and reference them elsewhere.
+3. **Build and link methods.** Select equations and checks appropriate to the question, author the model, and link each implemented method to the exact saved model versions and relevant elements. Methods and models need not correspond one to one. Proposed or partial methods remain explicit; a link does not establish scientific completeness.
+4. **Design informative cases.** Give each case a distinct purpose. Explain what is held constant and what changes in a comparison. Save explicit inputs, units and provenance; associate all relevant configurations and runs with the case. A figure-read candidate is an input, not a calculated optimum.
+5. **Check the calculation.** Choose checks that could expose its important errors: dimensions, balances, limiting behavior, independent measurements or a comparable reference. Set a justified tolerance before inspecting agreement. Explain any reference gap. A second implementation of the same equations checks consistency, not physical validity.
+6. **Handle ambiguous sources explicitly.** Distinguish printed statements from interpretations and keep unresolved units or conventions visible. Where informative and authorized, test plausible readings as labelled cases. Agreement with a reference is not proof that an interpretation is correct.
+7. **Run and inspect.** Use the supported execution path and inspect missing values and failures as well as numbers. Keep execution, criterion outcomes, calculated observations and scientific interpretation separate. Sweep only what could change the answer; never silently replace a cited run with a newer run.
+8. **Record answers with their basis.** Save each case answer against its selected approach version and identified configurations, runs or evidence, separating observations from interpretation. Synthesize across specified case-answer versions into a qualified study answer. Account for every deliverable, including those still unanswered. Use the available saved-answer operation; see `conclusion` for access limits.
+9. **Review the reader journey.** Another engineer should be able to follow the question, reasoning, method, model, case, configuration, run, case answer and final synthesis without this conversation. Use concise scientific prose and links, not duplicated assumptions or administrative narration.
+
 
 ---
 
@@ -75,16 +74,18 @@ Each section opens with a **Load when** line and the **Tools** it governs. Loadi
 **Load when:** you write or change the question, scope, limits, method steps, cases or the study description.
 **Tools:** `get_approach`, `update_approach_draft`, `save_approach_version`, `list_approach_versions`, `get_approach_usage`, `restore_approach_draft`, `update_study_context`.
 
-| Content | Where it goes (tool) | Rules |
+| Content | Owner | Guidance |
 |---|---|---|
-| Purpose and question | Study description (`update_study_context`) and approach question (`update_approach_draft`) | At most 3 sentences; no status, no process |
-| Scope, exclusions, model limits | Approach limits (`update_approach_draft`, `add_limit`) | Each caveat stated **once** here, never repeated per case, input or record |
-| Method and reasoning | Approach method steps: purpose, why this method, transformation | Plain sentences; equations named, not pasted as code |
-| Cases | Approach cases (`add_case`) | A small, purposeful set; a rationale is optional, so leave it empty rather than copy it |
-| Assumptions | At their owner: approach (`update_approach_draft`); model or component (`model`); configuration (`configuration_and_runs`) | One statement, linked to the evidence that supports it (`evidence`) |
+| Study question | Study context and approach question | Preserve all requested deliverables and constraints; do not shorten away scientific meaning. |
+| Reasoning and methods | Approach method steps | Explain why the method answers the question, what it calculates, and its exact model links. |
+| Intended cases | Approach cases | Give a distinct purpose and explain the comparison: what stays fixed and what changes. |
+| Assumptions | Approach, model, component or configuration | Keep one authoritative statement at its owner, with supporting or contradictory evidence. |
+| Study-wide limits | Approach limits, shown in Study details | Explain what cannot be inferred; link back from an answer when the consequence matters. |
 
-- The study description is copied into every configuration saved after a change, so get it right before creating configurations.
-- Save a version with `save_approach_version` once the draft is coherent; revise a record once with a short, correct version rather than creating several near-duplicates.
+Save a coherent approach version before associating configurations and answers with it. Preserve proposed methods and remaining scientific work; a model link is not proof that a method is complete. Several methods may share a model, and a method may use several models.
+
+Use ordinary prose rather than compulsory headings. Leave optional text empty when it adds nothing. Reference assumptions and evidence at their owners instead of creating independently editable copies. Configuration input provenance stays with the input.
+
 
 ---
 
@@ -148,19 +149,18 @@ Each section opens with a **Load when** line and the **Tools** it governs. Loadi
 ## 6. Conclusion [`conclusion`]
 
 **Load when:** you are about to record the conclusion.
-**Tools:** `record_conclusion`; reads: `get_run_results`, `compare_runs`, `read_evidence`.
+**Tools:** `get_run_results`, `read_evidence`, `get_capabilities`.
 
-| Content | Where it goes (tool) | Rules |
-|---|---|---|
-| Conclusion | `record_conclusion` | Claims tied to exact runs, outputs or evidence; computed, sourced or judgement labels; open questions |
+Save a case answer or study synthesis as an explicitly associated scientific answer record. An evidence note is a source or observation, not automatically an answer because of its title. Successful execution and met criteria never create a scientific answer.
 
-- Conclude in **one place**, with `record_conclusion`.
-- State the answer to the question in plain words.
-- List claims. Mark each one **computed** (from runs; name the runs and outputs), **sourced** (from evidence; name the source and locator) or **judgement** (yours; give the reason).
-- Give a confidence level (low, moderate, high) with reasons. Agreement between models or agents is consistency, not evidence, and your confidence is not a probability.
-- List open questions, including any applicability condition you could not check: an unchecked condition is unknown, never passed.
-- A met criterion is not a valid model. Without a reproduced reference or an analytical check, the conclusion is at most exploratory.
-- Until a typed conclusion record exists, `record_conclusion` writes a "Study conclusion" evidence note, rendered by the tool and revised in place.
+- For a case answer, identify the selected approach version and case, and the exact configurations, runs and evidence supporting it. Explain observations separately from your interpretation. Multiple runs may support an answer; identify their roles rather than choosing the newest implicitly.
+- For a study answer, synthesize across specified case-answer versions and any additional stated evidence. Address each requested deliverable and retain unresolved deliverables. A partial, qualified answer is useful when its boundary is clear.
+- State what is computed, sourced or inferred and why it supports the claim. A numerical margin under a limited model is not proof of whole-system feasibility; fuel expense is not a ticket price without the remaining cost model.
+- Reference assumptions at their owners and explain the consequence of relevant study limits without copying editable lists. Agreement between models is a consistency check, not independent measurement or proof.
+- Revise by saving a new answer version with the expected prior revision; preserve historical answers and their original basis. Never silently advance a cited model, run, evidence or case-answer version.
+
+The owner-operated public-API workflow uses the advertised answer endpoints in the current contract. Delegated clients may only use tools actually exposed to them: this guidance does not grant direct HTTP access or enable a writer tool. If no answer-write tool is available there, report that the answer has not been saved. The planned `record_conclusion` wrapper is not implemented; do not claim that it saves an evidence note.
+
 
 ---
 
@@ -194,7 +194,7 @@ These limits are current; the tools switch to the real feature when the API adve
 
 | Limit | What to do |
 |---|---|
-| No typed conclusion record | `record_conclusion` writes a "Study conclusion" evidence note, rendered by the tool and revised in place. |
+| Saved scientific answers | Use the available answer operation. The owner API supports versioned case and study answers; a delegated client needs an exposed writer tool and must not invent one. |
 | No study status channel | Use `post_progress_note`; never write status into the study. |
 | The study description is copied into every configuration saved after a change | Get the description right before creating configurations. |
 | No typed infeasible outcome | Models return a feasibility output; the result tools surface it. |
@@ -218,13 +218,13 @@ These limits are current; the tools switch to the real feature when the API adve
 
 Before declaring the work done, review the study as an engineer would:
 
-- The overview, the Modeling approach (Methods, Cases & results), one configuration and one run read clearly to someone who did not see the conversation.
+- The question, reasoning, methods, cases, supporting records and answers form one understandable reading path for someone outside the conversation.
 - The reference case is reproduced, or the gap is explained.
 - Every input has a typed source; caveats appear once, in the approach limits.
 - No status, ids, URLs, raw JSON or platform vocabulary appears in any study text.
 - Every configuration you created was run, or was removed from your plan before saving.
 - Infeasible designs are reported as infeasible, not as failures or zeros.
-- The conclusion is recorded once, with labelled claims tied to runs and evidence.
+- Case answers cite their actual basis; the study answer synthesizes specified case-answer versions and preserves unanswered deliverables.
 - Anything unclear is fixed by revising it once with a short, correct version.
 
 ### What to tell the user at the end

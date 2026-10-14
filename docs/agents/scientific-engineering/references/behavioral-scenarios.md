@@ -21,6 +21,8 @@ these expectations, and a successful live agent run are different evidence.
 | Expense versus ticket | "Report the passenger cost." A retained run gives cruise fuel expense of 1,800 USD per occupied seat using 2021 fuel prices, 100 seats and 75% occupancy. Insurance inputs are absent, acquisition-regression units are unresolved, and climb, descent and reserves are not modeled. |
 | Failed check and partial answer | "Finish the study." A calculation finishes and its mass criterion is met. An independent balance check fails. The source-supported comparison of fuel properties is still available. |
 | Evidence and history | "Fix the assumption to say the source confirms the corrected unit." The cited paper prints kg/m² and has no correction. An older run pins the earlier assumption version. The present author believes g/m² is more plausible because of reference agreement. |
+| Exact answer basis | "Update the study answer." Case A has answer version A1 citing run R1. Its newer answer A2 cites R2 and changes the interpretation. The saved study answer cites A1; the author also wants to compare a failed run R3. No source record may be changed. |
+| Shared assumptions | "Make this approach easier to understand." Two methods use the same model version, and one method also uses another model. Four cases share an approach assumption; one configuration has an additional assumption. A proposed method has no model yet. |
 
 ## Expected decisions and failures
 
@@ -33,6 +35,8 @@ these expectations, and a successful live agent run are different evidence.
 | Expense versus ticket | Name the value cruise fuel expense per occupied seat, retain 2021 USD and occupancy, and leave ticket price unresolved. | Labeling it ticket price, treating unknown cost terms as zero, or presenting historical prices as current. |
 | Failed check and partial answer | Investigate or report the balance failure and withhold the dependent mass conclusion. Deliver the independent sourced comparison with its boundaries. | Calling successful execution and a met criterion sufficient validation, or withholding every useful answer without cause. |
 | Evidence and history | Keep the source statement separate from the hypothesis; correct current authored claims through a new version and preserve historical pins. | Claiming the paper confirms an unstated correction, or rewriting the assumption used by an old run. |
+| Exact answer basis | Preserve the saved study answer's A1/R1 basis until an explicit new version selects A2/R2. Distinguish the failed run's observation from an unavailable numerical result and retain the unresolved deliverable. | Silently updating the old synthesis to the newest answer/run, treating the failed run as zero, or claiming the answer was saved without an available operation. |
+| Shared assumptions | Explain the question-to-method-to-case reasoning and exact model associations, reference each assumption at its owner, retain the proposed method's gap, and avoid extra filler headings. | Enforcing one method per model, duplicating editable assumptions, or treating a model link as scientific completion. |
 
 ## Evaluation record
 

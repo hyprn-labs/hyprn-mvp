@@ -5,16 +5,17 @@ description: Frame and assess engineering studies in HYPRN MVP, preserving the u
 
 # Scientific and engineering judgment
 
-Repository-owned foundation for the future study agent. This file is not installed,
-automatically loaded, or served by the application. It adds no tool, authority or
-API requirement. The [packaged playbook](../playbook.md) remains the runtime guidance;
-its source is [playbook.py](../../../application/src/hyprn_mvp_app/agent_tools/playbook.py).
-Before activation, reconcile these rules into that single source and evaluate the
-result on the supported agent surfaces. Do not distribute a second competing copy
-in study folders. The owner-operated demonstration uses the access path described
-in [local-api-demo.md](../local-api-demo.md).
+Repository-owned scientific guidance. Its core workflow is integrated into the
+application's [packaged playbook](../playbook.md), whose authoritative source is
+[playbook.py](../../../application/src/hyprn_mvp_app/agent_tools/playbook.py).
+Agents receive that guidance through `get_playbook`; this file adds the detailed
+source-interpretation and comparison practices below. It is not automatically
+installed as a separate client skill and grants no API or execution authority.
+The owner-operated demonstration uses [its supported API path](../local-api-demo.md).
+Keep the runtime guidance and this reference consistent; do not distribute another
+editable copy in study folders.
 
-Use this foundation to decide what a calculation can establish and to write a
+Use this guidance to decide what a calculation can establish and to write a
 study another engineer can inspect without the conversation. Apply the parts
 relevant to the question; a small correction does not require a new study plan.
 
@@ -46,8 +47,11 @@ label a reconstruction or restatement as such; do not invent a verbatim human
 quotation or attribution. Do not silently drop ranges, alternatives, constraints
 or secondary objectives when making the question easier to read.
 
-Explain the current approach in this order: what is calculated, by which method,
-for which intended cases, and why that calculation helps answer the question.
+Explain the reasoning connecting the question, selected methods and intended cases.
+For each implemented method, link exact model versions and relevant elements;
+several methods may share a model, and a method may use several models. Preserve
+proposed or partial methods and their unresolved work. A link is not evidence that
+the method is scientifically complete.
 State exclusions and unresolved validity conditions in limits. Keep assumptions
 separate: an assumption is a condition being adopted, with its rationale and
 support; a limit says what cannot be inferred. An open question identifies what
@@ -120,9 +124,16 @@ occupied seat does not establish a ticket price. Missing capital, insurance,
 operations or mission inputs remain unresolved; do not silently substitute zero
 or invented values. Explain which missing terms prevent the requested estimate.
 
-For each conclusion, connect the claim to the relevant run outputs or source
-versions, state whether it is computed, sourced or judgment, and attach the
-qualification that changes its interpretation. Preserve distinctions among
+Record each case answer against the selected approach version and case. Identify
+all configurations, runs and source versions that support it, explaining their
+roles. Separate observations from interpretation and preserve missing or failed
+results where they affect the answer. Never substitute a newer run silently.
+
+Synthesize a study answer across explicitly selected case-answer versions. Address
+every requested deliverable, including unanswered ones. For each claim, state
+whether it is computed, sourced or judgment, and attach the qualification that
+changes its interpretation. Save a new answer version when revising the conclusion;
+ordinary evidence notes do not become answers because of their titles. Preserve distinctions among
 execution, convergence, termination, feasibility, completeness, applicability and
 criterion outcome. Report unresolved applicability as unresolved, even when a
 criterion is met. Confidence is a reasoned judgment, not an unsupported probability.
@@ -146,6 +157,6 @@ their actual claims, limits state the missing coverage, and the conclusion answe
 only what the retained evidence establishes. Correct authored content with new
 versions where required; never rewrite the records used by historical runs.
 
-For evaluation before integration, use the contrasting requests in
+When changing this guidance, use the contrasting requests in
 [behavioral scenarios](references/behavioral-scenarios.md). They test decisions,
 not exact prose or headings.

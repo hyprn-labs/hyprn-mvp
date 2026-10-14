@@ -53,6 +53,8 @@ Read current revisions before editing. Keep saved versions and recorded runs
 immutable. Readiness or execution success alone does not establish a scientifically
 valid answer. Use the scientific writing and interpretation rules in
 `docs/agents/playbook.md`; tool names there describe capabilities, while this
-demonstration calls the existing public endpoints directly. Conclude in chat with
-actual results, assumptions, sources and limitations, and inspect saved records
-in the UI. Do not substitute seeded models or results for the authoring loop.
+demonstration calls the existing public endpoints directly. Save case and study answers through the current answer endpoints, citing exact
+approach, case, configuration, run, evidence and case-answer versions as applicable.
+Separate observations from interpretation and keep unanswered deliverables explicit.
+Then conclude in chat with actual results, assumptions, sources and limitations,
+and inspect the saved reader journey in the UI. Do not substitute seeded models or results for the authoring loop.
