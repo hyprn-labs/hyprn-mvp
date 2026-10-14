@@ -225,12 +225,14 @@ PRODUCT_PATHS = (
 SNAPSHOT_ROOTS = ('deployment', 'application/src', 'integration/src', 'editions/local/src')
 
 
-def _private_directory(path):
+def _private_directory(path, *, output=False):
     path = Path(path)
     if not path.is_absolute() or any(p.is_symlink() for p in (path, *path.parents)):
         raise ReleaseError('Absolute non-symlink directory required')
     if path.exists() and (not path.is_dir() or path.stat().st_uid != os.getuid()):
         raise ReleaseError('Foreign release directory')
+    if output and path.exists() and path.stat().st_mode & 0o022:
+        raise ReleaseError('Release output directory must not be group or world writable')
     return path
 
 
@@ -250,7 +252,10 @@ def snapshot(
     warn=None,
 ):
     """Archive committed product bytes only; dirty edits are reported and excluded."""
-    checkout, releases_root = _private_directory(checkout), _private_directory(releases_root)
+    checkout, releases_root = (
+        _private_directory(checkout),
+        _private_directory(releases_root, output=True),
+    )
     if edition != 'local' or mode not in ('checkout', 'frozen'):
         raise ReleaseError('Unsupported release edition or mode')
     if type(require_review) is not bool:
@@ -438,7 +443,7 @@ def activate(release_dir, expected_sha256, *, reviews_root=None):
 
 def active(releases_root, *, checkout=None):
     """Resolve and verify the active snapshot without building or attesting anything."""
-    releases_root = _private_directory(releases_root)
+    releases_root = _private_directory(releases_root, output=True)
     pointer = releases_root / 'active.json'
     if pointer.is_symlink():
         raise ReleaseError('Unsafe active release pointer')
@@ -653,7 +658,15 @@ def _foreign_checkout(cwd, source):
     return False
 
 
-def bind(script_file, *, effectful, project_imports, expected_sha256=None, require_source_cwd=None):
+def bind(
+    script_file,
+    *,
+    effectful,
+    project_imports,
+    expected_sha256=None,
+    require_source_cwd=None,
+    allow_checkout_drift=False,
+):
     """Bind this process to the release containing script_file; fail before effects."""
     global ACTIVE
     script = Path(os.path.abspath(script_file))
@@ -693,7 +706,7 @@ def bind(script_file, *, effectful, project_imports, expected_sha256=None, requi
         raise
     except (ReleaseError, OSError, ValueError, KeyError) as error:
         raise ReleaseBindingError(str(error)) from error
-    if 'source_commit' in manifest:
+    if 'source_commit' in manifest and not allow_checkout_drift:
         require_checkout(manifest)
     if effectful and manifest['review_state']['state'] != 'reviewed':
         raise ReleaseBindingError(
@@ -748,6 +761,10 @@ def entrypoint(script_file, *, read_only, project_imports, expected_sha256=None)
         return bind(
             script_file,
             effectful=not read_only,
+            allow_checkout_drift=(
+                read_only
+                or (Path(script_file).name == 'dispatch_runtime.py' and sys.argv[1:] == ['--stop'])
+            ),
             project_imports=project_imports,
             expected_sha256=expected_sha256,
         )

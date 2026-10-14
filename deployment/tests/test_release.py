@@ -331,3 +331,62 @@ def test_start_requires_current_attestation_and_exact_runtime_images(monkeypatch
     with pytest.raises(RuntimeError, match='differs|stale'):
         dispatch.require_runtime_images(dict(images=expected))
     assert len(calls) == (0 if failure == 'model' else 1)
+
+
+@pytest.mark.parametrize('mode', [0o720, 0o702])
+def test_snapshot_refuses_writable_output_root(checkout, tmp_path, mode):
+    output = tmp_path / 'releases'
+    output.mkdir()
+    output.chmod(mode)
+    with pytest.raises(release.ReleaseError, match='group or world writable'):
+        release.snapshot(checkout, output)
+    assert not list(output.iterdir())
+
+
+@pytest.mark.parametrize('operation', ['--status', '--stop', '--start'])
+def test_manager_inspection_and_stop_survive_checkout_head_change(checkout, tmp_path, operation):
+    repo = Path(__file__).resolve().parents[2]
+    for name in ('release.py', 'local_paths.py'):
+        (checkout / 'deployment' / name).write_bytes((repo / 'deployment' / name).read_bytes())
+    (checkout / 'deployment/dispatch_runtime.py').write_text('# manager entrypoint\n')
+    git(checkout, 'add', 'deployment')
+    git(checkout, 'commit', '-qm', 'binding bootstrap')
+    selected = release.snapshot(checkout, tmp_path / 'releases')
+    source = Path(selected['path']) / 'source'
+    git(checkout, 'commit', '--allow-empty', '-qm', 'next head')
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+import release
+script = str(Path(sys.argv[1]) / 'dispatch_runtime.py')
+digest,operation = sys.argv[2:]
+sys.argv = [script, operation]
+release.entrypoint(script,read_only=operation=='--status',project_imports=True,expected_sha256=digest)
+print('bound')
+"""
+    env = dict(os.environ, HYPRN_MVP_DATA_ROOT=str(tmp_path))
+    for key in (release.ENV_ROOT, release.ENV_MANIFEST, release.ENV_SHA):
+        env.pop(key, None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            '-I',
+            '-B',
+            '-c',
+            code,
+            str(source / 'deployment'),
+            selected['manifest_sha256'],
+            operation,
+        ],
+        cwd=source,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if operation == '--start':
+        assert result.returncode == 2, result.stderr
+        assert 'source_changed' in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == 'bound'

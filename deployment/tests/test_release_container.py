@@ -19,13 +19,14 @@ import application_runtime as app
 import release
 import modeling_runtime as modeling
 import scoped_fixture as guard
+import checks
 from test_deployment_hardening import binding_for
 
 REPO = Path(__file__).resolve().parents[2]
 
 
 def test_actual_container_bytes_match_then_refuse_tamper(tmp_path, monkeypatch):
-    scope = guard.scope_from_environment()
+    scope = guard.validate_scope(checks.PROJECTION_SCOPE)
     name = guard.SCOPE_PREFIX + scope.run_uuid[:8] + '-release'
     owner = name
     result = release.snapshot(REPO, tmp_path / 'releases')
@@ -96,6 +97,7 @@ def test_actual_container_bytes_match_then_refuse_tamper(tmp_path, monkeypatch):
             app.require_release_inventory(binding)
         records.append(dict(case='missing', refused=True))
         target.write_bytes(original)
+        target.chmod(0o644)
         extra = mutable / 'src/hyprn_mvp_app/extra.py'
         extra.write_text('# extra runtime file\n')
         extra.chmod(0o644)
