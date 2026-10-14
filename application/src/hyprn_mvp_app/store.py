@@ -235,6 +235,45 @@ def agent_effects(raw):
     """The effects of a stored delegation (canonical JSON array) as a frozenset."""
     return frozenset(json.loads(raw))
 
+# ---- Receipt recovery: how a client recovers after a lost reply, decided once, here. Every
+# receipt read carries one ``recovery`` value; no client keeps a table of receipt states or
+# categories (ADR-0004). A run is never resent: its lifecycle is read from the run.
+RECEIPT_RETRY_AFTER_S=2
+RECOVERY_VALUES=("adopt","wait","resend_same_command","uncertain","refused")
+# Run receipt states whose result is the run (its lifecycle is read from the run itself).
+RUN_RESULT_STATES=frozenset({"accepted_run","prepared","preparation_failed","dispatching","recorded"})
+
+def receipt_recovery(category,receipt):
+    """The recovery of a reader who may see the scope, for the receipt of ``category``
+    (``None`` when it is missing): ``recovery`` and, with ``wait``, ``retry_after_s``.
+
+    ``adopt``: the result is the outcome (``committed``; a run's accepted states);
+    ``refused``: the stored rejection is the outcome; ``uncertain``: never resend (an
+    uncertain run, or any state this table does not name); ``resend_same_command``: send the
+    same command id and body again (a model ``pending_remote`` receipt, whose owner re-queries
+    the modeling service first; a missing receipt of any category but ``run``, the mutation
+    route re-checking authorization and exact idempotency); ``wait``: read again after
+    ``retry_after_s`` (another ``pending_remote`` receipt; a missing run receipt, since a
+    run is never resent)."""
+    wait=dict(recovery="wait",retry_after_s=RECEIPT_RETRY_AFTER_S)
+    if receipt is None:
+        return wait if category=="run" else dict(recovery="resend_same_command")
+    state=receipt["state"]
+    if state=="committed" or category=="run" and state in RUN_RESULT_STATES:
+        return dict(recovery="adopt")
+    if state=="rejected":return dict(recovery="refused")
+    if state=="pending_remote" and category!="run":
+        return dict(recovery="resend_same_command") if category=="model" else wait
+    return dict(recovery="uncertain")
+
+class ReceiptMissing(DomainError):
+    """No receipt in a scope the reader may see: today's ``resource_not_found`` 404 (code,
+    message and outcome unchanged), carrying the recovery for the error envelope. ``data()`` is
+    unchanged, so nothing new is ever persisted from it."""
+    def __init__(self,category):
+        super().__init__("resource_not_found",404)
+        self.recovery=receipt_recovery(category,None)
+
 class Store:
     def __init__(self, path):
         original=Path(path).absolute()
@@ -570,13 +609,23 @@ class Store:
     _receipt=command_receipt
 
     def receipt(self,actor,study,category,command):
+        row=self.visible_receipt(actor,study,category,command)
+        if row is None:raise DomainError("resource_not_found",404)
+        return row
+
+    def visible_receipt(self,actor,study,category,command):
+        """``receipt`` for the receipt reads: the same authorization and the same scoped 404
+        for a reader who may not see the scope (a non-member, a foreign study, an agent outside
+        its pre-study rules, a created study the reader no longer belongs to), but ``None``
+        for a missing receipt in a scope the reader may see."""
         with self.connection() as db:
             if study:self.authorize(db,actor,study)
             agent=None if study else self.agent_actor(db,actor)
-            if agent is not None and category!="study_create":raise DomainError("resource_not_found",404)
+            if agent is not None and category!="study_create":
+                raise DomainError("resource_not_found",404)
             row=self.command_receipt(db,self._scope(actor,study),category,command)
+            if row is None:return None
             if agent is not None:return self._agent_pre_study_outcome(db,agent,row)
-            if row is None:raise DomainError("resource_not_found",404)
             # Pre-study receipts also re-check membership in the created study.
             if not study and row["result"] and "study_id" in row["result"]:
                 self.authorize(db,actor,row["result"]["study_id"])

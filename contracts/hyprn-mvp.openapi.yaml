@@ -8208,7 +8208,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ReceiptError"
                 }
               }
             }
@@ -8301,7 +8301,8 @@
               }
             }
           }
-        }
+        },
+        "description": "recovery says how to proceed after a lost reply, decided by the owner. adopt: the result is the outcome; refused: the stored rejection is the outcome; wait: read again after retry_after_s; resend_same_command: send the same command id and body again; uncertain: never resend; a run is never resent. A missing receipt in a scope the reader may see is resource_not_found 404 whose error carries recovery (and retry_after_s); without recovery the reader may not see the scope."
       }
     },
     "/commands/{command_id}": {
@@ -8365,7 +8366,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ReceiptError"
                 }
               }
             }
@@ -8458,7 +8459,8 @@
               }
             }
           }
-        }
+        },
+        "description": "recovery says how to proceed after a lost reply, decided by the owner. adopt: the result is the outcome; refused: the stored rejection is the outcome; wait: read again after retry_after_s; resend_same_command: send the same command id and body again; uncertain: never resend; a run is never resent. A missing receipt in a scope the reader may see is resource_not_found 404 whose error carries recovery (and retry_after_s); without recovery the reader may not see the scope."
       }
     },
     "/studies/{study_id}/runs": {
@@ -50416,12 +50418,154 @@
                 "type": "null"
               }
             ]
+          },
+          "recovery": {
+            "enum": [
+              "adopt",
+              "wait",
+              "resend_same_command",
+              "uncertain",
+              "refused"
+            ]
+          },
+          "retry_after_s": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
           }
         },
         "required": [
           "command_id",
           "state",
           "result",
+          "error",
+          "recovery"
+        ],
+        "additionalProperties": false
+      },
+      "ReceiptError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "enum": [
+                  "invalid_request",
+                  "unauthenticated",
+                  "forbidden",
+                  "resource_not_found",
+                  "stale_revision",
+                  "command_payload_conflict",
+                  "reference_conflict",
+                  "identity_collision",
+                  "limit_exceeded",
+                  "invalid_model",
+                  "invalid_configuration",
+                  "unsupported_capability",
+                  "incompatible_rebind",
+                  "backend_unavailable",
+                  "isolation_unverified",
+                  "operation_pending",
+                  "dispatch_uncertain",
+                  "rate_limited",
+                  "internal_error",
+                  "history_not_recorded",
+                  "corrupt_retained_record",
+                  "unsupported_record_version",
+                  "missing_results",
+                  "missing_artifacts",
+                  "missing_or_invalid_artifact"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "request_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "command_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resource_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "current_revision": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                },
+                "maxItems": 1000
+              },
+              "outcome": {
+                "enum": [
+                  "unchanged",
+                  "committed",
+                  "pending",
+                  "unknown"
+                ]
+              },
+              "recovery": {
+                "enum": [
+                  "adopt",
+                  "wait",
+                  "resend_same_command",
+                  "uncertain",
+                  "refused"
+                ]
+              },
+              "retry_after_s": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 60
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "request_id",
+              "command_id",
+              "resource_id",
+              "current_revision",
+              "fields",
+              "outcome"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
           "error"
         ],
         "additionalProperties": false

@@ -4,6 +4,7 @@ study scope. This module reaches no project module but ``contracts``; it never i
 a route module or an agent module, so every router depends on the edge and never on another
 router or on the application composition."""
 from dataclasses import dataclass
+import json
 from typing import Any, Callable, Literal
 from uuid import UUID
 from fastapi.responses import JSONResponse
@@ -107,9 +108,22 @@ def delegated_scope(session,studies):
     return [s for s in studies if s["study_id"]==session["study_id"]]
 
 def error_response(request,error):
+    # A missing receipt in a scope the reader may see also carries the owner's recovery
+    # (``recovery`` and, with ``wait``, ``retry_after_s``); no other error does.
+    recovery=getattr(error,"recovery",None)
+    if recovery:return receipt_error_response(request,error,recovery)
     return JSONResponse(status_code=error.status,content={"error":dict(code=error.code,message=error.code.replace("_"," "),
         request_id=getattr(request.state,"request_id",uid()),command_id=getattr(request.state,"command_id",None),
         resource_id=None,current_revision=error.current_revision,fields=error.fields,outcome=error.outcome)})
+
+def receipt_error_response(request,error,recovery):
+    """The error envelope of ``error`` exactly as for any error, with the recovery members
+    beside the other fields of ``error``."""
+    plain=DomainError(error.code,error.status,current_revision=error.current_revision,
+                      fields=error.fields,outcome=error.outcome)
+    content=json.loads(error_response(request,plain).body)
+    content["error"].update(recovery)
+    return JSONResponse(status_code=error.status,content=content)
 
 def response(request,data,status=200,**extra):
     return JSONResponse(status_code=status,content=dict(schema_version="1",request_id=request.state.request_id,data=data,**extra))

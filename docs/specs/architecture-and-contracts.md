@@ -296,17 +296,19 @@ RFC 8785 canonical JSON over finite I-JSON values; arrays keep order unless a sc
 
 No distributed transaction or cross-store lock. Each cross-store operation has one server-side owner (section 3.1, ADR-0004), never a client. The owner persists intent locally, invokes the remote store with the same command ID, adopts its authoritative receipt, and reconciles before any retry. Legitimate remote results are never deleted to simulate rollback.
 
-| State | Meaning | Next step |
-|---|---|---|
-| absent | No receipt in this store | Same ID and payload may be sent (store-local only) |
-| rejected / committed | Rejection, or effect with receipt, recorded atomically | Exact replay returns the original outcome |
-| pending_remote | Intent stored; remote command sent or uncertain | Query the same remote command; adopt one proven result |
-| accepted_run | Run and outbox durable | One serialized dispatcher may claim |
-| dispatching | AiiDA boundary may be crossed | Reconcile only |
-| recorded | One matching native process associated | Return the run and lifecycle projection |
-| uncertain | No proof of no-effect or unique process | Investigate; never redispatch |
+| State | Meaning | Next step | Recovery |
+|---|---|---|---|
+| absent | No receipt in this store | Same ID and payload may be sent (store-local only) | `resend_same_command`; for a run `wait` with `retry_after_s` (a run is never resent) |
+| rejected / committed | Rejection, or effect with receipt, recorded atomically | Exact replay returns the original outcome | `refused` / `adopt` |
+| pending_remote | Intent stored; remote command sent or uncertain | Query the same remote command; adopt one proven result | `resend_same_command` for a model command (the owner re-queries the modeling service with the same command ID before any remote resend); `wait` with `retry_after_s` for any other category |
+| accepted_run | Run and outbox durable | One serialized dispatcher may claim | `adopt` (also `prepared` and `preparation_failed`) |
+| dispatching | AiiDA boundary may be crossed | Reconcile only | `adopt` |
+| recorded | One matching native process associated | Return the run and lifecycle projection | `adopt` |
+| uncertain | No proof of no-effect or unique process | Investigate; never redispatch | `uncertain` |
 
 Unknown is not absent. AiiDA lifecycle (created, waiting, running, finished, excepted, killed, unknown, plus exit data) is projected separately.
+
+**Recovery.** The owner decides how a client recovers after a lost reply: every receipt read carries one `recovery` value, held once in `store` (`receipt_recovery`, `RECEIPT_RETRY_AFTER_S` = 2 s), and every client (the UI, the agent journal, the command line) follows it and keeps no table of its own. `adopt`: the result is the outcome (for a run, the run; its lifecycle is read from the run, never from the receipt); `refused`: the stored rejection is the outcome, and a resend replays it; `wait`: read again after `retry_after_s`; `resend_same_command`: send the same command ID and body again, and the mutation route re-checks authorization and exact idempotency; `uncertain`: never resend, investigate through the record's read. A run is never resent: after its own bounded waits a client reports the outcome as uncertain. A missing receipt in a scope the reader may see is `resource_not_found` 404 whose error object carries `recovery` (and `retry_after_s`); a reader who may not see the scope gets the same 404 without them.
 
 ### 6.7 Modeling Backend Contract
 

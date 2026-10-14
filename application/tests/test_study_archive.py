@@ -164,7 +164,9 @@ def test_command_id_idempotency_replay_and_payload_conflict(env):
 
     receipt = c.get(f'/api/1/studies/{sid}/commands/{command}', params=dict(category='study_archive'))
     assert receipt.status_code == 200
-    assert receipt.json()['data'] == dict(command_id=command, state='committed', result=first.json()['data'], error=None)
+    assert receipt.json()['data'] == dict(
+        command_id=command, state='committed', result=first.json()['data'], error=None,
+        recovery='adopt')
     raw = store.receipt(env['actors']['owner'], sid, 'study_archive', command)
     assert raw['actor_id'] == env['actors']['owner'] and raw['state'] == 'committed'
 

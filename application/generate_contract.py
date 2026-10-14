@@ -8,7 +8,7 @@ sys.path.insert(0,str(Path(__file__).parent/"src"))
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.modeling import SCHEMA
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
-from hyprn_mvp_app.store import AGENT_EFFECTS
+from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=create_app(None,None,None).openapi()
@@ -156,6 +156,16 @@ schemas["PublicReceipt"]=obj(dict(command_id=uuid,state={"enum":["committed","re
     result={"anyOf":[ref("Study"),ref("EvidenceRecord"),ref("FrozenConfigurationRead7"),model_result,
         ref("PendingModel"),ref("PublicRun"),ref('RecordRequestRead'),ref('ApproachCommandResultRead2'),
         ref('AgentTokenRevoke1'),{"type":"null"}]},error=nullable(ref("StoredError"))))
+# Receipt recovery, decided by the owner (store.receipt_recovery): every receipt read carries
+# it, and a missing receipt in a scope the reader may see carries it in its 404 error object.
+recovery_enum={'enum':list(RECOVERY_VALUES)}
+retry_after={'type':'integer','minimum':1,'maximum':60}
+schemas['PublicReceipt']['properties'].update(recovery=recovery_enum,retry_after_s=retry_after)
+schemas['PublicReceipt']['required'].append('recovery')
+schemas['ReceiptError']=copy.deepcopy(schemas['Error'])
+schemas['ReceiptError']['properties']['error']['properties'].update(
+    recovery=copy.deepcopy(recovery_enum),retry_after_s=copy.deepcopy(retry_after))
+RECEIPT_READS=('/studies/{study_id}/commands/{command_id}','/commands/{command_id}')
 schemas["ConfigurationCommit"]=ref("ConfigurationCommit1")
 schemas.pop('ConfigurationCommitV2',None)
 schemas['PublicConfigurationRequest']={'oneOf':[ref('ConfigurationCandidate1'),ref('ConfigurationRequest2'),ref('ConfigurationRequest3'),ref('ConfigurationRequest4')]}
@@ -340,6 +350,8 @@ for path,methods in spec["paths"].items():
             response['properties']['next_cursor']=nullable(uuid)
             response['required'].append('next_cursor')
         if response:op["responses"][status]={"description":"Authorized typed result","content":{"application/json":{"schema":response}}}
+        if path in RECEIPT_READS:
+            op['responses']['404']['content']['application/json']['schema']=ref('ReceiptError')
         if '/runs/' in path and '/artifacts/' in path:
             op['responses']['200']={'description':'Authorized exact retained bytes; never execute or inline-render source',
                 'content':{'application/octet-stream':{'schema':{'type':'string','format':'binary'}}},
@@ -357,6 +369,12 @@ for path,methods in spec["paths"].items():
 # Domain wording (CONTEXT.md glossary) and request-field guidance appear as operation
 # descriptions only. Shared schema components stay byte-equal to contracts/schemas; legacy wire
 # names are mapped to domain terms in contracts/README.md ("Domain terms and legacy wire names").
+RECOVERY_NOTE=('recovery says how to proceed after a lost reply, decided by the owner. adopt: '
+    'the result is the outcome; refused: the stored rejection is the outcome; wait: read again '
+    'after retry_after_s; resend_same_command: send the same command id and body again; '
+    'uncertain: never resend; a run is never resent. A missing receipt in a scope the reader may '
+    'see is resource_not_found 404 whose error carries recovery (and retry_after_s); without '
+    'recovery the reader may not see the scope.')
 OPERATION_NOTES={
     ('/studies/{study_id}/models','post'):('Create a model in this study. expected_revision is the study\'s current revision '
         '(GET /studies/{study_id}); creating a model advances the study revision. Later model edits and the commit use the '
@@ -411,6 +429,7 @@ OPERATION_NOTES={
     ('/agent/attribution/studies','get'):('Studies an agent created that the signed-in person '
         'is a current member of, newest first (record_kind study), each checked against the '
         'agent\'s pre-study receipt. Agent sessions are refused (403).'),
+    **{(path,'get'):RECOVERY_NOTE for path in RECEIPT_READS},
     ('/studies/{study_id}/run-status','get'):('Light run status from the stored run state: state, '
         'lifecycle projection, '
         'outcome facets, criterion outcomes and recorded times; never the full history; '
