@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** The fuel demo now also groups shared limit evidence, simplifies model details and groups run exports. Removal of obsolete aggregate statuses from new results and current API/agent views is in progress in an isolated backend batch; the running demo still uses its previous attested runtime. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The scientific guidance foundation is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
+**Current focus:** Finish the committed result-format/API cleanup and the approved continuous modeling-approach reader with persistent case/study answers. The final producer and capture are pinned; integrated native checks are running before worker re-attestation and demo refresh. Core scientific guidance is now in the packaged playbook; independent behavioral review and the combined reader journey remain pending. Preserve the live study and all authoring records. Full mission/cost closure and release qualification remain separate.
 
 ## Current Position
 
@@ -51,7 +51,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 | Later evidence-label fix | Run-scoped evidence expects a synthetic root instance absent from the production model. Preserve frozen identities; the demonstrated conclusion uses study scope with exact run references. |
 | Demo export integration | The retained demo dispatcher runs without export processing. Computational-record preview request `6488355f-f5ca-4005-8aea-7ecb3b4aa0a9` is queued; reconcile this request when enabling the existing export loop. Do not submit a duplicate. Model export is verified. |
 | Later performance work | `get_study_overview` reads whole owner lists; large-study scaling remains unqualified. |
-| Workflow-agent integration | Evaluate the scientific foundation against independent scenario responses and real client behavior, then reconcile it into the single packaged playbook before activation. No current agent behavior is changed by the foundation files. |
+| Current reader/answer batch | Complete persistent answer API and continuous reader integration, independent scientific-guidance scenarios, actual client verification and guarded demo refresh. Core runtime guidance is committed at `5cd430f`; the standalone skill is not installed automatically. |
 
 ## Verification Constraints and Known Limits
 
@@ -66,4 +66,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: finish the integrated UI acceptance, then integrate and verify the result-format/API cleanup before rebuilding the modeling producer and re-attesting the worker. Preserve the running demonstrated study and its native records; do not clean its retained scope. The current UI batch is 7c57a6a with editable-empty-state follow-up 3ee243c; backend work is isolated in codex/run-result-contract-cleanup. The queued computational export remains a separate obligation. The scientific guidance foundation awaits agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
+Next: finish integrated native checks on the result-format cleanup (`790a09f`, `e0ed5ba`, `1a51a53`) and verified producer/capture pin `57679bc`. The user approved the continuous reader mock and explicitly chose persistent case/study answers. Follow [the focused batch plan](phases/03-agent-tools-for-coding-agents/continuous-approach-PLAN.md): UI and answer owners work in disjoint worktrees; root owns guidance, integration and live refresh. Scientific guidance commit `5cd430f` passes packaged agent-tool checks, but independent scenarios and final reader acceptance remain pending. The live demo still uses its previous attested runtime and must not execute against changed checkout inputs. Preserve its retained scope, keys, stores and ten historical runs. Reconcile the existing queued computational export when enabling both dispatcher and native-bridge export processing; never resubmit it. Leave live study authoring records unchanged for the approved reader work. No publication, full phase qualification or delegated writer-token enablement is requested.

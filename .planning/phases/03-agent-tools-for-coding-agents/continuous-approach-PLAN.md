@@ -20,7 +20,7 @@ illustrative prose and values are not study data. Leave live authoring records u
    CSS and browser assertions, affected UI specifications/control map. Reuse the canonical
    model view and existing assumption-owner components. No API/schema, configuration
    components, generated contracts, runtime/build inputs or live-store edits.
-2. Guidance executor: docs/agents/scientific-engineering/, authoritative runtime
+2. Root guidance lane: docs/agents/scientific-engineering/, authoritative runtime
    agent_tools/playbook.py, generated docs/agents/playbook.md, affected guidance tests
    and concise tooling documentation corrections. No API/schema/runtime execution
    changes or model authoring. Guidance must describe actually available capabilities.
@@ -41,8 +41,9 @@ browser/native checks and commits/checks the combined delivery tree before demo 
   promotion of an arbitrary output. Criteria and execution are supporting facts, not answers.
 - Scientific interpretations and final synthesis require an explicit persisted association
   to their basis. Never infer them from successful runs or evidence titles. Where no
-  assessment exists, state that plainly. The answer-record capability is being scoped
-  separately; preserve a clear integration seam without speculative API calls.
+  assessment exists, state that plainly. The user explicitly approved persistent case and study answers; the answer owner
+  implements a versioned application record and public API in a separate lane. UI
+  integrates that contract, with no speculative calls or title-based association.
 - Each assumption remains at its existing owner. Reference/open it, do not copy an editable
   list. Study limits stay in Study details; input provenance stays with inputs.
 - Runtime guidance requires deliverable accounting, scientific reasoning, exact method/model
