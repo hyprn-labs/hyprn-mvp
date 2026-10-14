@@ -3772,7 +3772,12 @@ test('@approach-method expandable steps open the canonical model version', async
   await expect(
     detail.getByRole('group', { name: 'Step implementation elements', exact: true }),
   ).toHaveCount(0);
-  await expect(explanation.locator('pre')).toHaveCount(0);
+  await expect(explanation.getByLabel('Read-only authored source')).toHaveCount(4);
+  await expect(explanation.getByLabel('Read-only authored source').first()).not.toBeVisible();
+  await explanation.getByText('Python function', { exact: true }).click();
+  await expect(explanation.getByLabel('Read-only authored source').first()).toBeVisible();
+  await expect(explanation.getByRole('textbox')).toHaveCount(0);
+  await explanation.getByText('Python function', { exact: true }).click();
   await expect(explanation.locator('table')).toHaveCount(0);
   await s4Shots(page, 's5-approach-methods', detail);
   // Open model version is the canonical model view, read-only, titled by its version.
