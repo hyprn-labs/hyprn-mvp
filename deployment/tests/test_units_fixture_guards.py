@@ -139,12 +139,39 @@ class UnitsGuardTests(unittest.TestCase):
     def test_mixed_exact_child_argv_and_clean_environment(self):
         from types import SimpleNamespace
         scope = fixture.allocate_scope(fixture.new_scope())
-        with patch.object(fixture, 'new_scope', return_value=scope), patch.object(fixture, 'allocate_scope', return_value=scope), patch.object(runner, 'require_environment'), patch.object(runner.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')) as launch:
-            self.assertEqual(runner.run_group('units-native', units_mixed_repair=True), 0)
+        completed = SimpleNamespace(returncode=0, stdout='', stderr='')
+        with patch.object(runner, 'prepare_image_builder') as prepare:
+            with (
+                patch.object(fixture, 'new_scope', return_value=scope),
+                patch.object(fixture, 'allocate_scope', return_value=scope),
+                patch.object(runner, 'require_environment'),
+                patch.object(runner.subprocess, 'run', return_value=completed) as launch,
+            ):
+                self.assertEqual(runner.run_group('units-native', units_mixed_repair=True), 0)
+            prepare.assert_called_once_with(scope)
+            launch.assert_called_once()
         args, kwargs = launch.call_args
         self.assertEqual(args[0], [fixture.APPROVED_PYTHON, '-B', str(Path(runner.__file__).resolve()), '--units-native-child', '--units-mixed-repair'])
         self.assertEqual(kwargs['env'], fixture.clean_environment(scope))
         self.assertEqual(kwargs['cwd'], runner.REPO)
+
+    def test_builder_discovery_refuses_invalid_inventory_before_copying(self):
+        from types import SimpleNamespace
+        missing = str(self.scope.root / 'absent-builder')
+        inventories = ('', '[]', json.dumps([{'Name': 'buildx', 'Path': missing}]),
+                       json.dumps([{'Name': 'buildx'}, {'Name': 'buildx'}]))
+        for inventory in inventories:
+            with self.subTest(inventory=inventory):
+                inspected = SimpleNamespace(stdout=inventory)
+                with patch.object(runner.subprocess, 'run', return_value=inspected) as inspect:
+                    with patch.object(fixture, 'scoped_path') as destination:
+                        with self.assertRaises(ValueError):
+                            runner.prepare_image_builder(self.scope)
+                        destination.assert_not_called()
+                inspect.assert_called_once_with(
+                    ['docker', 'info', '--format', '{{json .ClientInfo.Plugins}}'],
+                    text=True, capture_output=True, check=True, timeout=60,
+                )
 
     def test_mixed_incomplete_skipped_failed_or_foreign_collection_cannot_pass(self):
         from types import SimpleNamespace
