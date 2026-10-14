@@ -9,7 +9,7 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 - Merged and verified on the work branch:
   - Phase 1: complete.
   - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5.
-  - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10.
+  - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
   - Each task has a checkpoint.
 - Combined-tree results are in STATE "Stopped at". Every listed group is green.
 
@@ -17,7 +17,6 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 
 | Task | State | Next step |
 |---|---|---|
-| 3.7 (attribution chip on the record views) | Not started. | Run next; 3.6 is merged and verified at `088e528`. |
 | 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Not started; an earlier attempt left no commits. | Run in parallel with 2.7 (disjoint files). 2.6 alone uses the fixed scratch folder groups. |
 | 2.7 (engine, worker and application images) | Not started; an earlier attempt left no commits. | Run in parallel with 2.6. |
 
@@ -54,7 +53,6 @@ Phase 3 after 3.7: 3.12 (`/mcp` server), then the plan's waves. Checkpoints 3.17
 ## Small open items
 
 - Regenerate `ui/dependency-audit.json` for the prettier addition.
-- `ui/tests/approach.spec.ts`, case "Overview reads the exact saved version": an in-flight read can consume the one-shot 503 route, so the test is racy and needs fixing.
 - `units-native` failed with `unsafe_export` once, when run from a worktree folder. It passes from the primary checkout.
 - Section 5.4 of `docs/agents/tooling-spec.md` mentions a run-read cache that no tool has; fix it in 3.32.
 - Agent runtime client names (`claude-code`, `codex-mcp-client`) are unconfirmed until the client-facts probe (3.17/3.19).
