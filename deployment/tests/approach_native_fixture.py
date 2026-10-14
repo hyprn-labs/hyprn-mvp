@@ -102,7 +102,8 @@ class ApproachJourney(NativeJourney):
         assert self.process_count()==n and not self.canary()['candidate_side_effect']
         self.dispatch(rid);detail=self.request('GET','runs/'+rid)
         assert detail['state']=='recorded' and not detail['history']['errors'],detail
-        assert detail['history']['history_schema_version']=='3'
+        assert detail['history']['history_schema_version']=='7'
+        assert detail['history']['results']['schema_version']=='2'
         assert detail['history']['results']['execution']['state']=='finished'
         assert self.process_count()==n+1
         self.dispatch(rid);assert self.process_count()==n+1

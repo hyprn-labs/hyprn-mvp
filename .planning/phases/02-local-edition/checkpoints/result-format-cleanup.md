@@ -99,3 +99,46 @@ API-a121 passed (kedrkd10,164s), including current bundle with missing results k
 history7. Final committed agent-tools270 passed (81te2q_8,43.9s). Bridge-history and
 archive-service/readiness/locality checks remain running; no current native execution
 has been claimed by this lane.
+
+## Final executor verification and handoff
+
+Runtime/schema source remains frozen at da90a08. Final bridge-history passed119,
+failed0 (23xemlbl,279.3s), including standalone9 refusal. Final style-ratchet33,
+guard116 and units-guards138 passed (mv0n8_26). Final sequence81te2q_8 passed
+agent-tools270 (43.9s), archive-service44 (679.6s), runtime-observation58 (26.6s)
+and locality-contracts155 (12.1s), with zero failures or skips. These results
+complement the focused contract/API/current-receipt checks above; they do not
+establish current native producer execution or final qualification.
+
+Release ledgers now cover21 evidence roots and45 isolated scopes, all archived
+and released, zero remaining. Additional completed roots after the first27 scopes:
+r5hlmia8,1wnihf1u,mv0n8_26,kedrkd10,23xemlbl,81te2q_8. The earlier3_94tth3
+environment refusal allocated no scope. No live or durable-native scope was used.
+
+Root confirmed the boundary: current local production remains enforced by its exact
+pinned producer; this batch does not broaden arbitrary private-backend policy.
+Strict historical readers retain old protocol bytes and digests, while public
+historical views remove obsolete aggregate fields and expose explicit source/view
+identities. Downloads retain exact historical artifacts. This decision requires
+no additional producer/schema changes.
+
+Root review found one further current native fixture assertion: the shared
+ApproachJourney.execute helper still expected history3 when executing a new run of
+a legacy string-unit model. It now requires history7/results2, and the units-native
+comment describes that current execution accurately. This final fixture-only delta
+changes no attested source or producer input; root owns its native journey verification.
+Old captured-history admission tests remain unchanged.
+
+Archive-service wall time prompted a read-only performance inquiry. Retained
+units-launcher baselines were77.8s and77.4s; root's current integrated run passed
+at148.4s. No retained archive-service timing was found for comparison. A pure
+schema timing probe used a nonexistent old PreparedModelArtifactRead2 definition
+and failed before measuring; no runtime or store was touched and no performance
+conclusion is claimed. Root explicitly deferred optimization unless the real
+browser/native journey exposes material latency. Source freeze remains intact.
+
+Root owns the final rebuilt producer image/pin and current13-program recapture,
+worker rebuild/attestation, integrated native checks and guarded demo refresh.
+The earlier producer build before the receipt correction is intermediate evidence.
+The exact protocol1 and pre-split captures remain retained. No live deployment,
+human acceptance or complete phase/release qualification is claimed by this lane.

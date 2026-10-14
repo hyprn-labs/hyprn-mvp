@@ -140,11 +140,11 @@ def test_native_compounds_histories_and_archive():
             assert all(k['outcome']=='met' for k in dh['history']['results']['criteria'])
             assert any(link.node.uuid==node.outputs.results.uuid for link in dn.base.links.get_incoming().all())
             records.append((dr,dh,ds,canonical(j.payload(dr))));selected.append(dr)
-        # A real old string-unit history remains distinct from new Model3 history.
+        # A new run preserves the legacy model's string-unit convention.
         draft,legacy=j.model('Legacy dimensionless',[component('legacy','',version='2'),instance('legacy')],version='2')
         t=targets(legacy,'legacy')
         legacy_saved=j.save_configuration(j.configuration(legacy,'Legacy zero',[literal(t['x'],0,'',eid)],[criterion(t['y'],0,'',eid)],None,e))
-        # This method requires History4, so use the original concrete historical helper.
+        # Use the shared execution helper for this current run of a legacy model.
         from approach_native_fixture import ApproachJourney
         lr,lh,ln=ApproachJourney.execute(j,legacy_saved)
         near(output(lh,t['y'])['value'],0);assert output(lh,t['y'])['units']==''
