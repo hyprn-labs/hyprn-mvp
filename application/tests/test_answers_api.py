@@ -10,10 +10,11 @@ from fastapi.testclient import TestClient
 
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.auth import Auth
-from hyprn_mvp_app.store import Store, uid
+from hyprn_mvp_app.store import Store, uid, digest
 from test_assumptions_evidence_api import api, generated, ORIGIN, NoModeling
 from test_approach_api import write, save, assert_http, assert_shape
 from test_approach_closure import sample, D, model, config
+from test_approach_service import run_env
 
 
 @pytest.fixture
@@ -355,3 +356,67 @@ def test_successful_same_study_evidence_basis_is_exact_and_not_rewritten(answer_
         '/api/1/studies/' + e['sid'] + '/evidence/' + evidence['evidence_version_id']
     )
     assert read.status_code == 200 and read.json()['data'] == evidence
+
+
+def test_failed_retained_run_remains_citeable_without_promoting_it_to_an_answer(run_env):
+    """An authored limitation may cite failure; execution does not author an interpretation."""
+    e = run_env
+    rid, _ = e['source'](current=True)
+    with e['store'].connection(write=True) as db:
+        payload = json.loads(
+            db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+        )
+        result = payload['history']['results']
+        result['execution'].update(
+            state='failed', exit_code=1, message='Synthetic component failure'
+        )
+        for output in result['outputs']:
+            output.update(
+                value=None,
+                availability='unavailable',
+                reason='not computed',
+                producer_completed=False,
+                assigned=False,
+            )
+        payload['history']['digest'] = digest(
+            {key: value for key, value in payload['history'].items() if key != 'digest'}
+        )
+        raw = json.dumps(payload)
+        db.execute('UPDATE outbox SET payload=? WHERE run_id=?', (raw, rid))
+    auth = Auth(e['store'], ORIGIN)
+    actor = auth.provision('answer-owner', 'correct horse battery staple')
+    with e['store'].connection(write=True) as db:
+        db.execute('UPDATE memberships SET actor_id=? WHERE study_id=?', (actor, e['sid']))
+    client = TestClient(create_app(e['store'], auth, NoModeling()), base_url=ORIGIN)
+    session = client.post(
+        '/api/1/session',
+        json=dict(username='answer-owner', password='correct horse battery staple'),
+        headers={'Origin': ORIGIN},
+    )
+    client.headers.update({'Origin': ORIGIN, 'X-CSRF-Token': session.json()['data']['csrf_token']})
+    e['client'] = client
+    content = sample(D['ApproachContent1'])
+    case = sample(D['ApproachCase1'])
+    content['cases'] = [case]
+    draft, _ = write(e, dict(schema_version='1', expected_revision=None, content=content))
+    version, _ = save(e, draft)
+    e['version'] = version.json()['data']['saved']['version']['approach_version_id']
+    e['case'] = case['case_id']
+    read = client.get('/api/1/studies/' + e['sid'] + '/runs/' + rid)
+    assert read.status_code == 200, read.text
+    results = read.json()['data']['history']['results']
+    assert results['execution']['state'] == 'failed'
+    assert all(output['value'] is None for output in results['outputs'])
+    assert heads(e).json()['data']['items'] == []
+    request = body(
+        e,
+        observations='The retained execution failed; its outputs are not computed.',
+        interpretation='This run cannot support the requested comparison.',
+        qualifications=['The failed run leaves the comparison unresolved.'],
+    )
+    request['basis']['run_ids'] = [rid]
+    answer = saved(e, request)
+    assert answer['basis']['run_ids'] == [rid]
+    assert answer['interpretation'] == request['interpretation']
+    with e['store'].connection() as db:
+        assert db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0] == raw
