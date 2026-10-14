@@ -6,7 +6,7 @@
   "node_base_image": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
   "modeling_source_image": "sha256:19eb22a1fe6853396faa1d9074c6d3b685d3f9a36f058ad234d825e68b2a79cb",
   "modeling_producer": {
-    "image": "sha256:55979e903b5ad398ee8e990ae42c2e2290f34c3a8fc118c6cbc58beedb64f33f",
+    "image": "sha256:5e4f56f4fa266f16a5304f8ca6f19c2db4513b321e6cb1ab0e04d45eec9d5765",
     "artifact_source_hashes": {
       "/native/app/lib/whats_opt/openmdao_generator.rb": "130210495eb2192dbbb6d1952ccf467320fcae00758e1514af4d99efa0c65ff4"
     }
