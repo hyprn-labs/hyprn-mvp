@@ -16,13 +16,13 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 
 ## Overview
 
-1. **Study question** card at the top: the study question as the card's heading, and a "See more details" action at its bottom right that opens a dialog with Study question, Study context, Assumptions and Limits (an empty question reads "No study question yet").
+1. **Study question** card at the top: the study question as the card's heading, and a "See more details" action at its bottom right that opens a dialog with Study question, Current approach, Assumptions, Limits and Open questions (an empty question reads "No study question yet").
 2. A two-column grid of equal cards (same width and height on desktop, stacked on narrow screens):
    - **About this study**: a dedicated "Edit" action in its header, then "Description:" followed by the saved description with its line and paragraph breaks ("No description yet." when empty), and "View modeling approach" at the bottom right of the same card. No separate approach heading, explanatory paragraph or dividing line. The action wraps if needed at zoom and returns keyboard focus after navigation back from the approach.
    - **Recent runs**: at most five rows, each with the run name and short ID as a link, `small` metadata and its Execution and Criteria tags at the right; "View all runs" in the card header.
 3. Full width below: **Recent configurations**, distinguishing configurations from their saved versions, with "View all configurations" in the header.
 
-Study conditions and limits live on the modeling approach page only; Overview links to it.
+Study details keeps the question separate from the current approach and limits. Empty optional prose, assumptions and limits are omitted in read-only views; editing retains the controls needed to add them. Evidence opens directly beside its claim, with version and relationship details inside the evidence view.
 
 ## Models
 

@@ -307,7 +307,8 @@ print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assum
 
 # Approach page and Overview question box. One StudyQuestionBox on Overview and on the
 # approach page; "See more details"
-# opens one StudyDetailsDialog (Study question · Study context · Assumptions · Limits) for the
+# opens one StudyDetailsDialog (question, current approach, assumptions, limits, open questions)
+# for the
 # exact content shown. Study conditions & limits, Question in detail and the Overview
 # CurrentStudyConditions are gone. Methods: Explanation · Assumptions & evidence, one
 # implementation line and the canonical model version; no Model & quantities tab, quantity cards
@@ -315,7 +316,8 @@ print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assum
 # a Study limits link.
 details_text=(ROOT/'src/ApproachAssumptions.tsx').read_text()
 for term in ('export function StudyQuestionBox(','export function StudyDetailsDialog(','export function OverviewStudyQuestion(','>See more details<','Study details</h2>',
- 'aria-label="Study question"','aria-label="Study context"','aria-label="Study assumptions"','aria-label="Study limits"','No limit is mapped to an individual case or result.',
+ 'aria-label="Study question"','aria-label="Current approach"','aria-label="Study assumptions"',
+ 'aria-label="Study limits"','aria-label="Open questions"',
  'api.fence({studyId})','api.readFailed(error,read)','useAccessLoss(api,studyId','Current saved approach v'):
  assert term in details_text,('src/ApproachAssumptions.tsx','Study question box and details',term)
 for removed in ('export function StudyConditions(','StudyConditionsAction','CurrentStudyConditions','Study conditions & limits','Approach-owned',"'Model assumption'",'(read-only)`};'):

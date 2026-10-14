@@ -31,7 +31,11 @@ export type ApproachReadSource = { kind: 'draft'; content: ApproachContent; reso
  * fetches today's model, evidence, usage or draft as a historical substitute. */
 /** Live results for an exact saved version: one card per case (definition, runs and
  * configurations together). Study limits open the reader's Study details at Limits. */
-export type ApproachResultsSlot = (slot: { focusCase?: { id: string; token: number }; onViewStep: (stepId: string) => void; onStudyLimits: () => void }) => ReactNode;
+export type ApproachResultsSlot = (slot: {
+  focusCase?: { id: string; token: number };
+  onViewStep: (stepId: string) => void;
+  onStudyLimits?: () => void;
+}) => ReactNode;
 
 export function ApproachReader({ source, onAccessLost, questionActions, findings, focusCase, api, studyId, onChange, disabled, baseVersion, onHandoff, onOpenModel, onEditingChange, onCreateConfiguration }: { onAccessLost?:()=>void; onCreateConfiguration?:(caseId:string)=>void; onEditingChange?: (dirty: boolean) => void; onOpenModel?: (id: string) => void; baseVersion?: string | null; onHandoff?: (value: ApproachHandoff) => void; source: ApproachReadSource; questionActions?: ReactNode; findings?: ApproachResultsSlot; focusCase?: { id: string; token: number }; api?: HyprnMvpApi; studyId?: string; onChange?: (content: ApproachContent) => void; disabled?: boolean }) {
   const sectionId = useId();
@@ -48,23 +52,130 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
   const details=useRef<StudyDetailsHandle>(null);
   const casesPanel=<Panel label="Cases and evaluation" title="Cases and evaluation"><ApproachCases onCreateConfiguration={onCreateConfiguration} content={content} models={resolved?.models} onChange={onChange} disabled={disabled}/></Panel>;
   // Retained and draft readers never navigate to live case usage.
-  return <CaseNavigation.Provider value={null}><ApproachAnnotations onAccessLost={onAccessLost} contextLabel={source.kind==='draft'?'Current approach draft':'Saved approach v'+source.record.version.version_number} api={source.kind === 'draft' ? api : undefined} studyId={studyId} content={content} resolved={resolved} onChange={onChange} disabled={disabled} onEditingChange={onEditingChange} baseVersion={baseVersion} onHandoff={onHandoff} onOpenModel={onOpenModel}>
-    <div role="region" aria-label="The modeling approach">
-      <StudyQuestionBox question={content.question} scope={content.scope} headingId={sectionId+'-question'} onDetails={()=>details.current?.open()}
-        actions={<>{questionActions}{source.kind==='retained'&&<ActionDialog title="Earlier work"><ApproachBasis closure={source.record.closure} content={content} resolved={resolved}/></ActionDialog>}</>}/>
-      <StudyDetailsDialog ref={details}/>
-      <Tabs label="Approach sections" value={chapter} onChange={setChapter} items={[{id:'methods',label:'Methods',tabId:sectionId+'-tab-methods',panelId:sectionId+'-methods'},{id:'cases',label:'Cases & results',tabId:sectionId+'-tab-cases',panelId:sectionId+'-cases'}]}/>
-      <div id={sectionId+'-methods'} role="tabpanel" aria-labelledby={sectionId+'-tab-methods'} hidden={chapter!=='methods'}>
-        <ApproachMethod key={viewKey} viewKey={viewKey} version={source.kind==='draft'?null:{id:source.record.version.approach_version_id,number:source.record.version.version_number}} requestedStep={requestedStep} onOpenModel={onOpenModel} api={source.kind === 'draft' ? api : undefined} studyId={studyId} content={content} resolved={resolved} onChange={onChange} disabled={disabled}/>
-      </div>
-      <div id={sectionId+'-cases'} role="tabpanel" aria-labelledby={sectionId+'-tab-cases'} hidden={chapter!=='cases'}>
-        {findings ? findings({focusCase,onViewStep:viewStep,onStudyLimits:()=>details.current?.open('limits')}) : <>
-          <Panel className="approach-results" label="Results" title="Results"><p className="approach-eyebrow">Answer to the study question</p><h3 className="approach-results-answer">No study answer has been assessed.</h3><p className="context-line">{source.kind === 'draft' ? 'Save an approach version to connect configurations and runs to this explanation.' : 'Results belong to the configurations and runs that used this version. This view shows its explanation only.'}</p></Panel>
-          {casesPanel}
-        </>}
-      </div>
-    </div>
-  </ApproachAnnotations></CaseNavigation.Provider>;
+  return (
+    <CaseNavigation.Provider value={null}>
+      <ApproachAnnotations
+        onAccessLost={onAccessLost}
+        contextLabel={
+          source.kind === 'draft'
+            ? 'Current approach draft'
+            : 'Saved approach v' + source.record.version.version_number
+        }
+        api={source.kind === 'draft' ? api : undefined}
+        studyId={studyId}
+        content={content}
+        resolved={resolved}
+        onChange={onChange}
+        disabled={disabled}
+        onEditingChange={onEditingChange}
+        baseVersion={baseVersion}
+        onHandoff={onHandoff}
+        onOpenModel={onOpenModel}
+      >
+        <div role="region" aria-label="The modeling approach">
+          <StudyQuestionBox
+            question={content.question}
+            scope={content.scope}
+            headingId={sectionId + '-question'}
+            onDetails={() => details.current?.open()}
+            actions={
+              <>
+                {questionActions}
+                {source.kind === 'retained' && (
+                  <ActionDialog title="Earlier work">
+                    <ApproachBasis
+                      closure={source.record.closure}
+                      content={content}
+                      resolved={resolved}
+                    />
+                  </ActionDialog>
+                )}
+              </>
+            }
+          />
+          <StudyDetailsDialog ref={details} />
+          <Tabs
+            label="Approach sections"
+            value={chapter}
+            onChange={setChapter}
+            items={[
+              {
+                id: 'methods',
+                label: 'Methods',
+                tabId: sectionId + '-tab-methods',
+                panelId: sectionId + '-methods',
+              },
+              {
+                id: 'cases',
+                label: 'Cases & results',
+                tabId: sectionId + '-tab-cases',
+                panelId: sectionId + '-cases',
+              },
+            ]}
+          />
+          <div
+            id={sectionId + '-methods'}
+            role="tabpanel"
+            aria-labelledby={sectionId + '-tab-methods'}
+            hidden={chapter !== 'methods'}
+          >
+            <ApproachMethod
+              key={viewKey}
+              viewKey={viewKey}
+              version={
+                source.kind === 'draft'
+                  ? null
+                  : {
+                      id: source.record.version.approach_version_id,
+                      number: source.record.version.version_number,
+                    }
+              }
+              requestedStep={requestedStep}
+              onOpenModel={onOpenModel}
+              api={source.kind === 'draft' ? api : undefined}
+              studyId={studyId}
+              content={content}
+              resolved={resolved}
+              onChange={onChange}
+              disabled={disabled}
+            />
+          </div>
+          <div
+            id={sectionId + '-cases'}
+            role="tabpanel"
+            aria-labelledby={sectionId + '-tab-cases'}
+            hidden={chapter !== 'cases'}
+          >
+            {findings ? (
+              findings({
+                focusCase,
+                onViewStep: viewStep,
+                onStudyLimits:
+                  content.limitations.trim() || descriptiveApproach(content).limit_items.length
+                    ? () => details.current?.open('limits')
+                    : undefined,
+              })
+            ) : (
+              <>
+                <Panel className="approach-results" label="Results" title="Results">
+                  <p className="approach-eyebrow">Answer to the study question</p>
+                  <h3 className="approach-results-answer">No study answer has been assessed.</h3>
+                  <p className="context-line">
+                    {source.kind === 'draft'
+                      ? 'Save an approach version to connect configurations and runs ' +
+                        'to this explanation.'
+                      : 'Results belong to the configurations and runs that used this version. ' +
+                        'This view shows its explanation only.'}
+                  </p>
+                </Panel>
+                {casesPanel}
+              </>
+            )}
+          </div>
+        </div>
+      </ApproachAnnotations>
+    </CaseNavigation.Provider>
+  );
 }
 export function ApproachPanel({ requestedCase, api, controller, studyId, requestedVersion, navigate, onSelection, onBack, onHandoff, onOpenModel, onEditingChange, onCreateConfiguration, onOpenRecord }: { onCreateConfiguration?:(model:ModelRevisionRead4,selection:ApproachSelection1)=>void;onOpenRecord?:(target:WorkspaceLink)=>void; requestedCase?: { id: string; token: number }; onEditingChange?: (dirty: boolean) => void; onOpenModel?: (id: string) => void; onHandoff?: (value: ApproachHandoff) => void; api: HyprnMvpApi; controller: ApproachController; studyId: string; requestedVersion?: string; navigate: (action: () => void) => void; onSelection: (id?: string) => void; onBack: () => void }) {
   const state = useApproachController(controller);

@@ -62,7 +62,7 @@ Any change to a reader-facing name is made in this file together with the interf
 | Evidence used by a run in an older format | "Evidence used by this run" | "Supporting evidence" |
 | Configuration context evidence | "Context evidence" | "Supporting evidence" |
 | Earlier work (the approach's prior basis) | "Earlier work" everywhere: the ⋯ menu, the section, "Add earlier work", "View earlier work", "Earlier work record", "Earlier record" | "Prior scientific basis", "prior basis" |
-| Earlier limits text | "Earlier limits text" | "Recorded limitations (legacy text)" |
+| Study limits prose | Shown under "Limits" alongside structured limits, without a format label | "Earlier limits text", "Recorded limitations (legacy text)" |
 | Approach version label in Study details | "Current approach draft", "Saved approach vN", "Current saved approach vN" | "Retained with approach vN" |
 | Approach link of a configuration | "Linked modeling approach"; "No modeling approach is linked." | "Recorded modeling approach", "No modeling approach was recorded." |
 | Evidence library intro | "Sources and observations used in this study." | "Saved notes and references" |
@@ -91,3 +91,5 @@ Any change to a reader-facing name is made in this file together with the interf
 - Run tabs: Results, Model, Configuration, Evidence.
 - Model views: Graph, XDSM.
 - Footer link: "Third-party software notices".
+
+Study details uses "Current approach" for the approach scope and omits empty optional prose sections in read-only views. Assumption role fields, citation relationship codes and evidence version IDs stay out of this brief; proposed conditions remain labelled "Proposed condition", conflicting evidence stays visibly labelled "Conflicting evidence", and citation relationships and version IDs remain available when opening the evidence. Authorship claims are labelled as supplied and unverified.

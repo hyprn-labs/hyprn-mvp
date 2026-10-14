@@ -52,19 +52,251 @@ export function ApproachAnnotations(props:Props){
   if(denied)return <p role="alert">Access to this resource is no longer available.</p>;
   return <Context.Provider value={{...props,onEditing:(key,dirty)=>setEditors(old=>dirty?(old.includes(key)?old:[...old,key]):old.includes(key)?old.filter(id=>id!==key):old),models,configurations,records,addRecords:items=>setRecords(old=>items.length?[...old.filter(r=>!items.some(n=>n.evidence_version_id===r.evidence_version_id)),...items]:[])}}>{error&&<p role="alert">Referenced assumptions or evidence could not be loaded. {error}</p>}{props.children}</Context.Provider>;
 }
-function Citations({links,label,onChange}:{links:ApproachEvidenceLink1[];label:string;onChange?:(links:ApproachEvidenceLink1[])=>void}){
-  const {api,studyId,records,addRecords,disabled,onEditing}=useAnnotations(),[picker,setPicker]=useState(false),[editing,setEditing]=useState<{index:number;value:ApproachEvidenceLink1}|null>(null);
-  const dialog=useRef<HTMLDialogElement>(null),invoker=useRef<HTMLElement|null>(null);
-  useEffect(()=>{if(editing){dialog.current?.showModal();dialog.current?.querySelector('select')?.focus();}},[!!editing]);
-  const dirty=!!editing&&JSON.stringify(editing.value)!==JSON.stringify(links[editing.index]);
-  useLayoutEffect(()=>{if(editing)onEditing('citation/'+label,dirty);return()=>{if(editing)onEditing('citation/'+label,false);};},[dirty,!!editing]);
-  function close(){dialog.current?.close();setEditing(null);invoker.current?.focus();}
-  return <section aria-label={label+' evidence'}>{!links.length&&<p className="context-line">No evidence linked</p>}{links.map((link,index)=><div className="evidence-record" key={link.evidence_version_id+link.relation}><div className="section-actions"><span>{link.relation==='supports'?'Supports':link.relation==='challenges'?'Challenges':'Context'}</span>{records.find(r=>r.evidence_version_id===link.evidence_version_id)?<EvidenceRecordBody compact record={records.find(r=>r.evidence_version_id===link.evidence_version_id)!}/>:<span>Evidence unavailable</span>}{onChange&&<><Button disabled={disabled} onClick={()=>{invoker.current=document.activeElement as HTMLElement;setEditing({index,value:structuredClone(link)});}}>Edit citation</Button><Button disabled={disabled} onClick={()=>onChange(links.filter((_,i)=>i!==index))}>Remove citation</Button></>}</div>{link.locator&&<p className="context-line">{link.locator}</p>}</div>)}{onChange&&api&&studyId&&<Button aria-label={"Add evidence to "+label} disabled={disabled||links.length>=64} onClick={()=>setPicker(true)}>Add evidence</Button>}{picker&&api&&studyId&&<EvidencePicker onDirty={dirty=>onEditing("evidence/"+label,dirty)} api={api} studyId={studyId} ownerKey={label} label={label} scope={{scope_version:'1',kind:'study',study_id:studyId}} assumption onRecords={addRecords} onClose={()=>setPicker(false)} onAttach={(record,relation)=>{if(relation&&!links.some(l=>l.evidence_version_id===record.evidence_version_id&&l.relation===relation))onChange?.([...links,{evidence_version_id:record.evidence_version_id,relation}]);setPicker(false);}}/>}{editing&&<DialogFrame ref={dialog} aria-label="Edit citation" onCancel={e=>{e.preventDefault();close();}}><h2>Edit citation</h2><p>{label}</p><label>Relationship<Select aria-label="Citation relationship" disabled={disabled} value={editing.value.relation} onChange={e=>setEditing({...editing,value:{...editing.value,relation:e.target.value as ApproachEvidenceLink1['relation']}})}><option value="supports">Supports</option><option value="challenges">Challenges</option><option value="context">Context</option></Select></label><label>Location in evidence<TextInput aria-label="Evidence locator" maxLength={512} disabled={disabled} value={editing.value.locator??''} onChange={e=>setEditing({...editing,value:{...editing.value,locator:e.target.value}})}/></label><div className="actions"><Button disabled={disabled} variant="primary" onClick={()=>{onChange?.(links.map((l,i)=>i===editing.index?editing.value:l));close();}}>Apply citation</Button><Button onClick={close}>Cancel</Button></div></DialogFrame>}</section>;
+function Citations({
+  links,
+  label,
+  onChange,
+  brief = false,
+}: {
+  brief?: boolean;
+  links: ApproachEvidenceLink1[];
+  label: string;
+  onChange?: (links: ApproachEvidenceLink1[]) => void;
+}) {
+  const { api, studyId, records, addRecords, disabled, onEditing } = useAnnotations(),
+    [picker, setPicker] = useState(false),
+    [editing, setEditing] = useState<{ index: number; value: ApproachEvidenceLink1 } | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null),
+    invoker = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (editing) {
+      dialog.current?.showModal();
+      dialog.current?.querySelector('select')?.focus();
+    }
+  }, [!!editing]);
+  const dirty = !!editing && JSON.stringify(editing.value) !== JSON.stringify(links[editing.index]);
+  useLayoutEffect(() => {
+    if (editing) onEditing('citation/' + label, dirty);
+    return () => {
+      if (editing) onEditing('citation/' + label, false);
+    };
+  }, [dirty, !!editing]);
+  function close() {
+    dialog.current?.close();
+    setEditing(null);
+    invoker.current?.focus();
+  }
+  return (
+    <section aria-label={label + ' evidence'}>
+      {!links.length && !brief && <p className="context-line">No evidence linked</p>}
+      {links.map((link, index) => (
+        <div className="evidence-record" key={link.evidence_version_id + link.relation}>
+          <div className="section-actions">
+            {!brief && (
+              <span>
+                {link.relation === 'supports'
+                  ? 'Supports'
+                  : link.relation === 'challenges'
+                    ? 'Challenges'
+                    : 'Context'}
+              </span>
+            )}
+            {records.find((r) => r.evidence_version_id === link.evidence_version_id) ? (
+              <EvidenceRecordBody
+                compact
+                brief={brief}
+                relation={brief ? link.relation : undefined}
+                record={records.find((r) => r.evidence_version_id === link.evidence_version_id)!}
+              />
+            ) : (
+              <span>Evidence unavailable</span>
+            )}
+            {onChange && (
+              <>
+                <Button
+                  disabled={disabled}
+                  onClick={() => {
+                    invoker.current = document.activeElement as HTMLElement;
+                    setEditing({ index, value: structuredClone(link) });
+                  }}
+                >
+                  Edit citation
+                </Button>
+                <Button
+                  disabled={disabled}
+                  onClick={() => onChange(links.filter((_, i) => i !== index))}
+                >
+                  Remove citation
+                </Button>
+              </>
+            )}
+          </div>
+          {link.locator && <p className="context-line">{link.locator}</p>}
+        </div>
+      ))}
+      {onChange && api && studyId && (
+        <Button
+          aria-label={'Add evidence to ' + label}
+          disabled={disabled || links.length >= 64}
+          onClick={() => setPicker(true)}
+        >
+          Add evidence
+        </Button>
+      )}
+      {picker && api && studyId && (
+        <EvidencePicker
+          onDirty={(dirty) => onEditing('evidence/' + label, dirty)}
+          api={api}
+          studyId={studyId}
+          ownerKey={label}
+          label={label}
+          scope={{ scope_version: '1', kind: 'study', study_id: studyId }}
+          assumption
+          onRecords={addRecords}
+          onClose={() => setPicker(false)}
+          onAttach={(record, relation) => {
+            if (
+              relation &&
+              !links.some(
+                (l) =>
+                  l.evidence_version_id === record.evidence_version_id && l.relation === relation,
+              )
+            )
+              onChange?.([...links, { evidence_version_id: record.evidence_version_id, relation }]);
+            setPicker(false);
+          }}
+        />
+      )}
+      {editing && (
+        <DialogFrame
+          ref={dialog}
+          aria-label="Edit citation"
+          onCancel={(e) => {
+            e.preventDefault();
+            close();
+          }}
+        >
+          <h2>Edit citation</h2>
+          <p>{label}</p>
+          <label>
+            Relationship
+            <Select
+              aria-label="Citation relationship"
+              disabled={disabled}
+              value={editing.value.relation}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  value: {
+                    ...editing.value,
+                    relation: e.target.value as ApproachEvidenceLink1['relation'],
+                  },
+                })
+              }
+            >
+              <option value="supports">Supports</option>
+              <option value="challenges">Challenges</option>
+              <option value="context">Context</option>
+            </Select>
+          </label>
+          <label>
+            Location in evidence
+            <TextInput
+              aria-label="Evidence locator"
+              maxLength={512}
+              disabled={disabled}
+              value={editing.value.locator ?? ''}
+              onChange={(e) =>
+                setEditing({ ...editing, value: { ...editing.value, locator: e.target.value } })
+              }
+            />
+          </label>
+          <div className="actions">
+            <Button
+              disabled={disabled}
+              variant="primary"
+              onClick={() => {
+                onChange?.(links.map((l, i) => (i === editing.index ? editing.value : l)));
+                close();
+              }}
+            >
+              Apply citation
+            </Button>
+            <Button onClick={close}>Cancel</Button>
+          </div>
+        </DialogFrame>
+      )}
+    </section>
+  );
 }
-export function ApproachAssumptions({showHeading=true}:{showHeading?:boolean}={}){
-  const ctx=useAnnotations(),{api,studyId,content,records,onChange,disabled,addRecords}=ctx;
-  const [error,setError]=useState(''),[handoff,setHandoff]=useState<ApproachAssumption1|null>(null);
-  return <section className="approach-basis"><Assumptions showHeading={showHeading} approach ownerKey={studyId??'retained'} ownerLabel="Modeling approach" items={content.assumptions} records={records} itemActions={onChange&&api?a=>(a as ApproachAssumption1).role==='proposed_model_condition'&&<Button disabled={disabled} aria-label={'Implement condition: '+a.statement} onClick={()=>setHandoff(a as ApproachAssumption1)}>Implement in model</Button>:undefined} editable={onChange&&api&&studyId?{api,studyId,scope:{scope_version:'1',kind:'study',study_id:studyId},disabled,onRecords:addRecords,onDirty:dirty=>ctx.onEditing('assumption',dirty),onChange:items=>{if(content.steps.some(s=>s.assumption_refs.some(r=>r.kind==='approach'&&!items.some(a=>a.assumption_id===r.assumption_id)))){setError('A method step uses this assumption. Remove its reference before removing the assumption.');return;}setError('');onChange({...content,assumptions:items as ApproachAssumption1[]});}}:undefined}/>{error&&<p role="alert">{error}</p>}{handoff&&<Handoff proposal={handoff} onClose={()=>setHandoff(null)}/>}</section>;
+export function ApproachAssumptions({
+  showHeading = true,
+  brief = false,
+}: { showHeading?: boolean; brief?: boolean } = {}) {
+  const ctx = useAnnotations(),
+    { api, studyId, content, records, onChange, disabled, addRecords } = ctx;
+  const [error, setError] = useState(''),
+    [handoff, setHandoff] = useState<ApproachAssumption1 | null>(null);
+  return (
+    <section className="approach-basis">
+      <Assumptions
+        showHeading={showHeading}
+        brief={brief}
+        approach
+        ownerKey={studyId ?? 'retained'}
+        ownerLabel="Modeling approach"
+        items={content.assumptions}
+        records={records}
+        itemActions={
+          onChange && api
+            ? (a) =>
+                (a as ApproachAssumption1).role === 'proposed_model_condition' && (
+                  <Button
+                    disabled={disabled}
+                    aria-label={'Implement condition: ' + a.statement}
+                    onClick={() => setHandoff(a as ApproachAssumption1)}
+                  >
+                    Implement in model
+                  </Button>
+                )
+            : undefined
+        }
+        editable={
+          onChange && api && studyId
+            ? {
+                api,
+                studyId,
+                scope: { scope_version: '1', kind: 'study', study_id: studyId },
+                disabled,
+                onRecords: addRecords,
+                onDirty: (dirty) => ctx.onEditing('assumption', dirty),
+                onChange: (items) => {
+                  if (
+                    content.steps.some((s) =>
+                      s.assumption_refs.some(
+                        (r) =>
+                          r.kind === 'approach' &&
+                          !items.some((a) => a.assumption_id === r.assumption_id),
+                      ),
+                    )
+                  ) {
+                    setError(
+                      'A method step uses this assumption. ' +
+                        'Remove its reference before removing the assumption.',
+                    );
+                    return;
+                  }
+                  setError('');
+                  onChange({ ...content, assumptions: items as ApproachAssumption1[] });
+                },
+              }
+            : undefined
+        }
+      />
+      {error && <p role="alert">{error}</p>}
+      {handoff && <Handoff proposal={handoff} onClose={() => setHandoff(null)} />}
+    </section>
+  );
 }
 function describe(ref:ApproachAssumptionRef1,ctx:Context){
   // Owner labels name the owner once: Modeling approach, Model or Component, Configuration.
@@ -111,7 +343,20 @@ function Handoff({proposal,onClose}:{proposal:ApproachAssumption1;onClose:()=>vo
 
 /** A supplied origin claim beside the agreed question; attribution is never authenticated. */
 function QuestionClaim({title,claim}:{title:string;claim:ApproachQuestionClaim1|null}){
-  return <div className="study-details-claim"><h4>{title}</h4>{claim?<><p className="context-copy">{claim.text||'No wording'}</p><p className="context-line">{claim.attribution.kind==='unknown'?'Authorship unknown':`Supplied ${claim.attribution.kind==='human'?'human':'agent'} attribution`}{claim.attribution.label?': '+claim.attribution.label:''} · Origin claim, not authenticated authorship.</p></>:<p className="context-line">{title==='Original wording'?'No original wording':'No elaboration'}</p>}</div>;
+  if (!claim?.text.trim()) return null;
+  return (
+    <div className="study-details-claim">
+      <h4>{title}</h4>
+      <p className="context-copy">{claim.text}</p>
+      <p className="context-line">
+        {claim.attribution.kind === 'unknown'
+          ? 'Authorship unknown'
+          : `Supplied ${claim.attribution.kind === 'human' ? 'human' : 'agent'} attribution`}
+        {claim.attribution.label ? ': ' + claim.attribution.label : ''} · Authorship has not been
+        verified.
+      </p>
+    </div>
+  );
 }
 
 /** The study question box: the same component on Overview and on the
@@ -127,7 +372,8 @@ export function StudyQuestionBox({question,scope,headingId,actions,onDetails,chi
 }
 
 export type StudyDetailsHandle={open:(focus?:'limits')=>void};
-/** Study details: Study question · Study context · Assumptions · Limits, for the exact content
+/** Study details separates the question, current approach, assumptions, limits and open questions
+ * for the exact content
  * of the surrounding ApproachAnnotations (current draft, a saved or a retained version).
  * Editable only where that context is (approach edit mode); read-only everywhere else. */
 export function StudyDetailsDialog({ref}:{ref?:Ref<StudyDetailsHandle>}){
@@ -154,26 +400,149 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
   useEffect(()=>{if(editing){dialog.current?.showModal();dialog.current?.querySelector('textarea')?.focus();}},[!!editing]);
   function close(){dialog.current?.close();setEditing(null);invoker.current?.focus();}
   function update(items:typeof limits){onChange?.({...described,limit_items:items});}
-  return <div className="study-details">
-    <p className="context-line">{contextLabel??"Current approach draft"}</p>
-    <section aria-label="Study question" className="study-details-section"><h3>Study question</h3>
-      <p className="context-copy study-details-question">{content.question||'No study question'}</p>
-      <QuestionClaim title="Original wording" claim={described.original_question}/>
-      <QuestionClaim title="Elaboration" claim={described.elaboration}/>
-    </section>
-    <section aria-label="Study context" className="study-details-section"><h3>Study context</h3>
-      <p className="context-copy">{content.scope||'No scope'}</p>
-      <h4>Open questions</h4><p className="context-copy">{content.open_questions||'No open questions'}</p>
-    </section>
-    <section aria-label="Study assumptions" className="study-details-section"><h3>Assumptions</h3><ApproachAssumptions showHeading={false}/></section>
-    <section aria-label="Study limits" className="study-details-section study-limits-section"><h3 ref={limitsHeading} tabIndex={-1}>Limits</h3>
-      <p className="context-line">Limits apply to every result of this study. No limit is mapped to an individual case or result.</p>
-      {onChange&&<Button disabled={disabled||limits.length>=256} onClick={()=>begin()}>Add limit</Button>}
-      {!limits.length&&!content.limitations&&<p className="context-line">No limits</p>}
-      {limits.map(item=><article className="study-limit-item" key={item.limit_id}><p className="context-copy">{item.statement}</p><Citations links={item.evidence_links} label={item.statement} onChange={onChange?links=>update(limits.map(l=>l.limit_id===item.limit_id?{...l,evidence_links:links}:l)):undefined}/>{onChange&&<div className="section-actions"><Button disabled={disabled} aria-label={'Edit limit: '+item.statement} onClick={()=>begin(structuredClone(item))}>Edit limit</Button><ActionDialog title={'Remove limit: '+item.statement} label="Remove limit" disabled={disabled}><p>Remove {item.statement} from this draft? Saved versions and linked records remain unchanged.</p><Button disabled={disabled} onClick={()=>update(limits.filter(l=>l.limit_id!==item.limit_id))}>Remove this limit</Button></ActionDialog></div>}</article>)}
-      {content.limitations&&<article className="study-limit-item"><h4>Earlier limits text</h4><p className="context-copy">{content.limitations}</p><p className="context-line">No evidence linked</p></article>}
-    </section>
-  {editing&&<DialogFrame ref={dialog} aria-label="Edit study limit" onCancel={e=>{e.preventDefault();close();}}><h2>Edit study limit</h2><form className="form-stack" onSubmit={e=>{e.preventDefault();if(!editing.statement.trim())return;update(limits.some(l=>l.limit_id===editing.limit_id)?limits.map(l=>l.limit_id===editing.limit_id?editing:l):[...limits,editing]);close();}}><label>Limit statement<TextArea aria-label="Limit statement" required maxLength={4096} value={editing.statement} onChange={e=>setEditing({...editing,statement:e.target.value})}/></label><div className="actions"><Button type="submit" variant="primary" disabled={disabled||!editing.statement.trim()}>Apply limit</Button><Button type="button" onClick={close}>Cancel</Button></div></form></DialogFrame>}</div>;
+  return (
+    <div className="study-details">
+      <p className="context-line">{contextLabel ?? 'Current approach draft'}</p>
+      <section aria-label="Study question" className="study-details-section">
+        <h3>Study question</h3>
+        <p className="context-copy study-details-question">
+          {content.question || 'No study question'}
+        </p>
+        <QuestionClaim title="Original wording" claim={described.original_question} />
+        <QuestionClaim title="Elaboration" claim={described.elaboration} />
+      </section>
+      {content.scope.trim() && (
+        <section aria-label="Current approach" className="study-details-section">
+          <h3>Current approach</h3>
+          <p className="context-copy">{content.scope}</p>
+        </section>
+      )}
+      {(content.assumptions.length > 0 || onChange) && (
+        <section aria-label="Study assumptions" className="study-details-section">
+          <h3>Assumptions</h3>
+          <ApproachAssumptions showHeading={false} brief />
+        </section>
+      )}
+      {(limits.length > 0 || content.limitations.trim() || onChange) && (
+        <section aria-label="Study limits" className="study-details-section study-limits-section">
+          <h3 ref={limitsHeading} tabIndex={-1}>
+            Limits
+          </h3>
+          {onChange && (
+            <Button disabled={disabled || limits.length >= 256} onClick={() => begin()}>
+              Add limit
+            </Button>
+          )}
+          {limits.map((item) => (
+            <article className="study-limit-item" key={item.limit_id}>
+              <p className="context-copy">{item.statement}</p>
+              <Citations
+                brief
+                links={item.evidence_links}
+                label={item.statement}
+                onChange={
+                  onChange
+                    ? (links) =>
+                        update(
+                          limits.map((l) =>
+                            l.limit_id === item.limit_id ? { ...l, evidence_links: links } : l,
+                          ),
+                        )
+                    : undefined
+                }
+              />
+              {onChange && (
+                <div className="section-actions">
+                  <Button
+                    disabled={disabled}
+                    aria-label={'Edit limit: ' + item.statement}
+                    onClick={() => begin(structuredClone(item))}
+                  >
+                    Edit limit
+                  </Button>
+                  <ActionDialog
+                    title={'Remove limit: ' + item.statement}
+                    label="Remove limit"
+                    disabled={disabled}
+                  >
+                    <p>
+                      Remove {item.statement} from this draft? Saved versions and linked records
+                      remain unchanged.
+                    </p>
+                    <Button
+                      disabled={disabled}
+                      onClick={() => update(limits.filter((l) => l.limit_id !== item.limit_id))}
+                    >
+                      Remove this limit
+                    </Button>
+                  </ActionDialog>
+                </div>
+              )}
+            </article>
+          ))}
+          {content.limitations.trim() && (
+            <article className="study-limit-item">
+              <p className="context-copy">{content.limitations}</p>
+            </article>
+          )}
+        </section>
+      )}
+      {content.open_questions.trim() && (
+        <section aria-label="Open questions" className="study-details-section">
+          <h3>Open questions</h3>
+          <p className="context-copy">{content.open_questions}</p>
+        </section>
+      )}
+      {editing && (
+        <DialogFrame
+          ref={dialog}
+          aria-label="Edit study limit"
+          onCancel={(e) => {
+            e.preventDefault();
+            close();
+          }}
+        >
+          <h2>Edit study limit</h2>
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!editing.statement.trim()) return;
+              update(
+                limits.some((l) => l.limit_id === editing.limit_id)
+                  ? limits.map((l) => (l.limit_id === editing.limit_id ? editing : l))
+                  : [...limits, editing],
+              );
+              close();
+            }}
+          >
+            <label>
+              Limit statement
+              <TextArea
+                aria-label="Limit statement"
+                required
+                maxLength={4096}
+                value={editing.statement}
+                onChange={(e) => setEditing({ ...editing, statement: e.target.value })}
+              />
+            </label>
+            <div className="actions">
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={disabled || !editing.statement.trim()}
+              >
+                Apply limit
+              </Button>
+              <Button type="button" onClick={close}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogFrame>
+      )}
+    </div>
+  );
 }
 
 type OverviewQuestion={kind:'loading'}|{kind:'none';draft:boolean}|{kind:'error';text:string}|{kind:'lost'}|{kind:'ready';record:ApproachSavedRead3};

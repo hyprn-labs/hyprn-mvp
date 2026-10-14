@@ -259,7 +259,7 @@
     },
     "approach-page-03": {
       "spec": "approach.spec.ts",
-      "test": "@approach-configuration Cases & results shows each case once with its runs and Study limits opens Limits"
+      "test": "@approach-configuration Cases show runs once and omit an empty limits link"
     },
     "approach-page-04": {
       "spec": "approach.spec.ts",
