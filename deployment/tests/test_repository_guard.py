@@ -662,6 +662,93 @@ class AgentGroupsGuardTests(unittest.TestCase):
             allocate.assert_not_called()
 
 
+class AgentBrowserGuardTests(unittest.TestCase):
+    """The agent browser group: closed specs on the in-browser agent double, the reviewed
+    application interpreter, a browser need and a report that fails closed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scope = fixture.scope_from_environment()
+
+    def test_agent_ui_group_is_closed_with_fixed_targets_and_application_interpreter(self):
+        import agent_ui_fixture as agent
+
+        self.assertEqual(runner.AGENT_BROWSER_GROUPS, {'agent-ui'})
+        self.assertEqual(
+            runner.GROUPS['agent-ui'],
+            (
+                'deployment/tests/agent_ui_fixture.py',
+                'deployment/tests/foundry_ui_fixture.py',
+                'ui/tests/foundry-fixtures.ts',
+                'ui/tests/agent-fixtures.ts',
+                'application/tests/agent/fixtures/recorded_api.json',
+                'ui/tests/agent-attribution.spec.ts',
+            ),
+        )
+        self.assertEqual(agent.GROUP_SPECS, {'agent-ui': ('agent-attribution.spec.ts',)})
+        specs = tuple(t for t in runner.GROUPS['agent-ui'] if t.endswith('.spec.ts'))
+        self.assertEqual(specs, tuple('ui/tests/' + spec for spec in agent.GROUP_SPECS['agent-ui']))
+        self.assertEqual(runner.GROUP_INTERPRETERS['agent-ui'], fixture.APPROVED_CONTRACT_PYTHON)
+        self.assertEqual(runner.group_class('agent-ui'), 'must-pass')
+        self.assertEqual(runner.group_needs('agent-ui'), ('browser',))
+        self.assertIn('agent-ui', runner.CHILD_GROUPS)
+        self.assertFalse(
+            runner.AGENT_BROWSER_GROUPS
+            & (
+                runner.FOUNDRY_BROWSER_GROUPS
+                | runner.PROJECT_PYTEST_GROUPS
+                | runner.SERVED_BROWSER_GROUPS
+                | runner.DOCKER_GROUPS
+                | runner.FIXTURE_GROUPS
+                | set(runner.DOCUMENTS_ROUTES)
+            )
+        )
+        config = agent.browser_config(self.scope)
+        self.assertEqual(config['testMatch'], ['agent-attribution.spec.ts'])
+        self.assertEqual((config['workers'], config['retries'], config['forbidOnly']), (1, 0, True))
+        for key in ('outputDir', 'snapshotPathTemplate'):
+            self.assertTrue(config[key].startswith(str(self.scope.root) + '/evidence/'), key)
+
+    def test_agent_ui_report_fails_closed(self):
+        import agent_ui_fixture as agent
+
+        good = dict(expected=7, unexpected=0, skipped=0, flaky=0)
+        specs = set(agent.GROUP_SPECS['agent-ui'])
+        self.assertTrue(agent.report_passed(0, good, specs, []))
+        for returncode, stats, files, forbidden in (
+            (1, good, specs, []),
+            (0, {}, specs, []),
+            (0, dict(good, expected=0), specs, []),
+            (0, dict(good, skipped=1), specs, []),
+            (0, dict(good, flaky=1), specs, []),
+            (0, dict(good, unexpected=1), specs, []),
+            (0, good, set(), []),
+            (0, good, specs | {'foundry-zoom.spec.ts'}, []),
+            (0, good, specs, ['openmdao']),
+        ):
+            with self.subTest(returncode=returncode, stats=stats, files=files, forbidden=forbidden):
+                self.assertFalse(agent.report_passed(returncode, stats, files, forbidden))
+
+    def test_agent_ui_child_refuses_wrong_interpreter_unknown_group_or_missing_target(self):
+        import agent_ui_fixture as agent
+
+        # This guard child runs the native interpreter: the application-only child must refuse.
+        with patch.object(agent.subprocess, 'run') as spawned:
+            with self.assertRaisesRegex(ValueError, 'reviewed interpreter'):
+                runner.agent_browser_child('agent-ui')
+            with self.assertRaisesRegex(ValueError, 'reviewed application interpreter'):
+                agent.run(group='agent-ui')
+            with self.assertRaisesRegex(ValueError, 'Unknown agent'):
+                runner.agent_browser_child('agent-ui-x')
+            spawned.assert_not_called()
+        missing = ValueError('Required target missing')
+        with patch.object(runner, 'targets_for', side_effect=missing), \
+                patch.object(fixture, 'allocate_scope') as allocate:
+            with self.assertRaisesRegex(ValueError, 'Required target missing'):
+                runner.run_group('agent-ui')
+            allocate.assert_not_called()
+
+
 class RegistryGuardTests(unittest.TestCase):
     """Every group has a class and environment needs; absent needs fail before allocation."""
 

@@ -658,6 +658,22 @@ NATIVE_ENVIRONMENT_PYTEST_GROUPS = frozenset({'native-environment'})
 GROUPS.update({'native-environment': ('deployment/tests/test_native_environment.py',)})
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
+# Agent browser groups: the agent screens on the in-browser agent double, which is layered over
+# the foundry double. Closed specs, reviewed application interpreter, scope-bound build and
+# evidence; never a served installation, and no pytest collection or native import.
+AGENT_BROWSER_GROUPS = frozenset({'agent-ui'})
+GROUPS['agent-ui'] = (
+    'deployment/tests/agent_ui_fixture.py',
+    'deployment/tests/foundry_ui_fixture.py',
+    'ui/tests/foundry-fixtures.ts',
+    'ui/tests/agent-fixtures.ts',
+    'application/tests/agent/fixtures/recorded_api.json',
+    'ui/tests/agent-attribution.spec.ts',
+)
+GROUP_INTERPRETERS.update(
+    {group: fixture.APPROVED_CONTRACT_PYTHON for group in AGENT_BROWSER_GROUPS}
+)
+CHILD_GROUPS = CHILD_GROUPS | AGENT_BROWSER_GROUPS
 
 
 def directory_target(group, target, path):
@@ -701,6 +717,7 @@ BROWSER_GROUPS = (FOUNDRY_BROWSER_GROUPS | SERVED_BROWSER_GROUPS | SERVED_INSTAL
                   | set(APPROACH_BROWSER_GROUPS) | set(UNITS_BROWSER_GROUPS)
                   | {'combined-static', 'findings-native', 'findings-native-read'}
                   | {g for g, route in DOCUMENTS_ROUTES.items() if route['mode'] == 'browser'})
+BROWSER_GROUPS = BROWSER_GROUPS | AGENT_BROWSER_GROUPS
 # Durable-fixture groups read manifest-verified fixtures below the development data root.
 FIXTURE_GROUPS = frozenset({'findings-native-preflight', 'findings-native', 'findings-native-read',
                             'approach-ui-history'})
@@ -1020,6 +1037,18 @@ def foundry_browser_child(group):
     return foundry_ui_fixture.run(group=group)
 
 
+def agent_browser_child(group):
+    scope = fixture.scope_from_environment()  # Before fixture import, build or writes.
+    if group not in AGENT_BROWSER_GROUPS:
+        raise ValueError('Unknown agent browser group')
+    if sys.executable != scope.interpreter or scope.interpreter != GROUP_INTERPRETERS[group]:
+        raise ValueError('Child must use the reviewed interpreter')
+    targets_for(group)
+    import agent_ui_fixture
+
+    return agent_ui_fixture.run(group=group)
+
+
 def units_browser_child(group):
     scope = fixture.scope_from_environment()  # Before fixture import or writes.
     if group not in UNITS_BROWSER_GROUPS:
@@ -1210,6 +1239,8 @@ def child(group, *, units_mixed_repair=False):
         return findings_child(group)
     if group in FOUNDRY_BROWSER_GROUPS:
         return foundry_browser_child(group)
+    if group in AGENT_BROWSER_GROUPS:
+        return agent_browser_child(group)
     if group in UNITS_BROWSER_GROUPS:
         return units_browser_child(group)
     if group in APPROACH_BROWSER_GROUPS:

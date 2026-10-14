@@ -292,6 +292,22 @@
     "home-archive-02": {
       "spec": "result-bindings.spec.ts",
       "test": "@retained Overview recent records show name and id8 with Execution and Criteria, no identity disclosures, the study name once and one notices link"
+    },
+    "attribution-01": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "Home marks agent-created studies, active and archived, and no person-created study"
+    },
+    "attribution-02": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "a study heading names the agent that created it; a person-created study has none"
+    },
+    "attribution-03": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "Overview marks a description an agent wrote, not one a person wrote since"
+    },
+    "attribution-04": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "model headings and Record details name the agent that wrote the draft or version"
     }
   }
 }
