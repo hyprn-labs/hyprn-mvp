@@ -49,6 +49,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -111,18 +112,21 @@ ATTESTED_PROJECT_FILES = frozenset({
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/worker.py',
 })
-# The only reviewed dynamic code loading in attested modules,
-# (path, line, callee). Line drift fails the test and needs a reviewed update.
+# Every reviewed dynamic-loading construct is pinned by
+# (path, enclosing function, callee, count): new, removed or moved constructs fail,
+# while line drift outside a reviewed seam leaves its identity unchanged.
 # calculation.py: literal ``__import__('hashlib')`` (stdlib, no project code).
-# worker.py 1010/1013/1014: the single frozen-entry candidate seam ``load_program``
-# (spec_from_file_location at 1010, then module_from_spec and exec_module on that spec),
+# worker.py: the single frozen-entry candidate seam ``load_program``
+# (spec_from_file_location, then module_from_spec and exec_module on that spec),
 # reached only after byte verification of the frozen bundle.
 DYNAMIC_ALLOWLIST = frozenset({
-    ('integration/src/hyprn_mvp_integration/calculation.py', 66, '__import__'),
-    ('integration/src/hyprn_mvp_integration/calculation.py', 129, '__import__'),
-    ('integration/src/hyprn_mvp_integration/worker.py', 1010, 'spec_from_file_location'),
-    ('integration/src/hyprn_mvp_integration/worker.py', 1013, 'module_from_spec'),
-    ('integration/src/hyprn_mvp_integration/worker.py', 1014, 'exec_module'),
+    ('integration/src/hyprn_mvp_integration/calculation.py',
+     'ScalarCalculation.define.validate_inputs', '__import__', 1),
+    ('integration/src/hyprn_mvp_integration/calculation.py', 'ScalarParser.parse', '__import__', 1),
+    ('integration/src/hyprn_mvp_integration/worker.py',
+     'load_program', 'spec_from_file_location', 1),
+    ('integration/src/hyprn_mvp_integration/worker.py', 'load_program', 'module_from_spec', 1),
+    ('integration/src/hyprn_mvp_integration/worker.py', 'load_program', 'exec_module', 1),
 })
 DYNAMIC_CALLS = frozenset({'__import__', 'exec', 'eval', 'compile', 'globals', 'locals', 'vars'})
 DYNAMIC_ATTRIBUTES = frozenset({
@@ -381,36 +385,63 @@ def test_attested_list_stays_a_reviewed_literal_in_the_launcher():
     assert 'src' not in ast.unparse(augments[0].value)
 
 
+def function_scoped_nodes(node, qualified=(), enclosing='<module>'):
+    """Yield nodes with their qualified enclosing function, including nested methods.
+
+    Decorators, defaults and bases run outside the definition's body. A class adds
+    its name to method qualification, but its body is not itself a function.
+    """
+    yield enclosing, node
+    for field, value in ast.iter_fields(node):
+        nested, owner = qualified, enclosing
+        if field == 'body' and isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            nested = (*qualified, node.name)
+            if not isinstance(node, ast.ClassDef):
+                owner = '.'.join(nested)
+        for child in value if isinstance(value, list) else [value]:
+            if isinstance(child, ast.AST):
+                yield from function_scoped_nodes(child, nested, owner)
+
+
 def dynamic_loading(path):
-    """(line, callee) for every dynamic code-loading construct in ``path``."""
+    """(enclosing function, callee, count) for every loading construct in ``path``."""
     found = set()
-    for node in ast.walk(ast.parse(path.read_text())):
+    for enclosing, node in function_scoped_nodes(ast.parse(path.read_text())):
+        def record(location, callee):
+            # The Call and its Name describe one construct; two calls on one line
+            # remain distinct by source span, even when their callee and owner match.
+            found.add((enclosing, location.lineno, location.col_offset,
+                       location.end_lineno, location.end_col_offset, callee))
+
         if isinstance(node, ast.Call):
             func = node.func
             # Builtins are reached by bare name (``import builtins`` is banned below), so
             # ``re.compile`` and similar attribute calls are not dynamic code loading.
             name = func.id if isinstance(func, ast.Name) else None
             if name in DYNAMIC_CALLS:
-                found.add((node.lineno, name))
+                record(func, name)
             elif name in REFLECTIVE and (len(node.args) < 2 or not isinstance(node.args[1], ast.Constant)):
-                found.add((node.lineno, name))
+                record(func, name)
         if isinstance(node, ast.Attribute) and node.attr in DYNAMIC_ATTRIBUTES:
-            found.add((node.lineno, node.attr))
+            record(node, node.attr)
         elif isinstance(node, ast.Name) and node.id in DYNAMIC_ATTRIBUTES:
-            found.add((node.lineno, node.id))
+            record(node, node.id)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name in DYNAMIC_MODULES or alias.name.split('.')[0] in DYNAMIC_MODULES:
-                    found.add((node.lineno, alias.name))
+                    record(alias, alias.name)
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ''
             if module in DYNAMIC_MODULES or module.split('.')[0] in DYNAMIC_MODULES:
-                found.add((node.lineno, module))
+                record(node, module)
             for alias in node.names:
                 if (alias.name in DYNAMIC_ATTRIBUTES or alias.name in DYNAMIC_CALLS
                         or (module == 'importlib' and alias.name != 'util')):
-                    found.add((node.lineno, alias.name))
-    return found
+                    record(alias, alias.name)
+    counts = Counter((owner, callee) for owner, _, _, _, _, callee in found)
+    return {(owner, callee, count) for (owner, callee), count in counts.items()}
 
 
 def test_attested_modules_load_no_code_dynamically_outside_the_reviewed_allowlist():
@@ -418,16 +449,32 @@ def test_attested_modules_load_no_code_dynamically_outside_the_reviewed_allowlis
     entry_points in attested modules, except the reviewed allowlist (exact, no stale entry)."""
     found = set()
     for name in sorted(attested_closure()):
-        found |= {(relative(name), line, callee) for line, callee in dynamic_loading(module_path(name))}
+        found |= {(relative(name), owner, callee, count)
+                  for owner, callee, count in dynamic_loading(module_path(name))}
     assert found == DYNAMIC_ALLOWLIST, dict(unreviewed=sorted(found - DYNAMIC_ALLOWLIST),
                                             stale=sorted(DYNAMIC_ALLOWLIST - found))
-    calculation = (INTEGRATION / 'calculation.py').read_text().splitlines()
-    for line in (66, 129):
-        assert "__import__('hashlib')" in calculation[line - 1]
-    source = (INTEGRATION / 'worker.py').read_text()
-    seam = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == 'load_program')
-    assert seam.lineno < 1010 and 1014 <= seam.end_lineno
-    assert "spec_from_file_location('_hyprn_mvp_frozen_entry'" in ast.get_source_segment(source, seam)
+    calculation = ast.parse((INTEGRATION / 'calculation.py').read_text())
+    imports = {owner: node for owner, node in function_scoped_nodes(calculation)
+               if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+               and node.func.id == '__import__'}
+    assert set(imports) == {'ScalarCalculation.define.validate_inputs', 'ScalarParser.parse'}
+    for call in imports.values():
+        assert len(call.args) == 1 and not call.keywords
+        assert isinstance(call.args[0], ast.Constant) and call.args[0].value == 'hashlib'
+    worker = ast.parse((INTEGRATION / 'worker.py').read_text())
+    seam = [node for owner, node in function_scoped_nodes(worker) if owner == 'load_program']
+    assignments = {node.targets[0].id: node.value for node in seam
+                   if isinstance(node, ast.Assign) and len(node.targets) == 1
+                   and isinstance(node.targets[0], ast.Name)}
+    spec = assignments['spec']
+    assert isinstance(spec, ast.Call)
+    assert ast.unparse(spec.func) == 'importlib.util.spec_from_file_location'
+    assert isinstance(spec.args[0], ast.Constant)
+    assert spec.args[0].value == '_hyprn_mvp_frozen_entry'
+    assert ast.unparse(assignments['module']) == 'importlib.util.module_from_spec(spec)'
+    executions = [node for node in seam if isinstance(node, ast.Call)
+                  and isinstance(node.func, ast.Attribute) and node.func.attr == 'exec_module']
+    assert len(executions) == 1 and ast.unparse(executions[0]) == 'spec.loader.exec_module(module)'
 
 
 def test_dynamic_loading_scanner_detects_every_banned_form(tmp_path):
@@ -452,9 +499,67 @@ def test_dynamic_loading_scanner_detects_every_banned_form(tmp_path):
     path = tmp_path / 'candidate.py'
     for source, callee in cases.items():
         path.write_text(source)
-        assert callee in {c for _, c in dynamic_loading(path)}, source
+        assert callee in {c for _, c, _ in dynamic_loading(path)}, source
     path.write_text("import re, hashlib\ngetattr(module, 'build_model', None)\nimport importlib.util\nre.compile('x')\n")
     assert dynamic_loading(path) == set()
+
+
+def test_line_drift_outside_a_reviewed_seam_keeps_the_allowlist(tmp_path):
+    path = tmp_path / 'candidate.py'
+    source = "def load():\n    return __import__('hashlib')\n"
+    path.write_text(source)
+    reviewed = dynamic_loading(path)
+    assert reviewed == {('load', '__import__', 1)}
+    path.write_text('# Unrelated declaration\nvalue = 1\n\n' + source)
+    assert dynamic_loading(path) == reviewed
+
+
+@pytest.mark.parametrize('calls', [
+    "__import__('hashlib')\n    __import__('hashlib')",
+    "__import__('hashlib'); __import__('hashlib')",
+    "__import__('hashlib').__import__('hashlib')",
+])
+def test_a_second_dynamic_call_changes_the_reviewed_count(tmp_path, calls):
+    path = tmp_path / 'candidate.py'
+    path.write_text('def load():\n    ' + calls + '\n')
+    found = dynamic_loading(path)
+    reviewed = {('load', '__import__', 1)}
+    assert found - reviewed == {('load', '__import__', 2)}
+    assert reviewed - found == reviewed
+
+
+def test_a_moved_dynamic_call_has_an_unreviewed_owner_and_a_stale_entry(tmp_path):
+    path = tmp_path / 'candidate.py'
+    path.write_text("def other():\n    return __import__('hashlib')\n")
+    found = dynamic_loading(path)
+    reviewed = {('load', '__import__', 1)}
+    assert found - reviewed == {('other', '__import__', 1)}
+    assert reviewed - found == reviewed
+
+
+def test_a_removed_dynamic_call_leaves_a_stale_allowlist_entry(tmp_path):
+    path = tmp_path / 'candidate.py'
+    path.write_text('def load():\n    return None\n')
+    found = dynamic_loading(path)
+    reviewed = {('load', '__import__', 1)}
+    assert found == set() and reviewed - found == reviewed
+
+
+@pytest.mark.parametrize('source,owner', [
+    ("__import__('hashlib')\n", '<module>'),
+    ("class Loader:\n    def load(self):\n        __import__('hashlib')\n", 'Loader.load'),
+    ("def outer():\n    def inner():\n        __import__('hashlib')\n", 'outer.inner'),
+    ("class Loader:\n    def load(self):\n        def inner():\n"
+     "            __import__('hashlib')\n", 'Loader.load.inner'),
+    ("async def load():\n    __import__('hashlib')\n", 'load'),
+    ("class Loader:\n    __import__('hashlib')\n", '<module>'),
+    ("def load(value=__import__('hashlib')):\n    pass\n", '<module>'),
+    ("@__import__('hashlib')\ndef load():\n    pass\n", '<module>'),
+])
+def test_dynamic_calls_keep_their_qualified_enclosing_function(tmp_path, source, owner):
+    path = tmp_path / 'candidate.py'
+    path.write_text(source)
+    assert dynamic_loading(path) == {(owner, '__import__', 1)}
 
 
 FAIL_CLOSED_PROBE = '''
