@@ -2,6 +2,7 @@ import { Button, Panel, RecordBar, Select, StatusTag, TextInput } from '../desig
 import { ModelEditor } from '../ModelEditor';
 import { ModelView } from '../ModelView';
 import { ActionDialog } from '../Presentation';
+import { AttributionDetail, RecordAttribution } from '../attribution';
 import { ComponentWhatWhy } from '../SelectionInspector';
 import { UnitGuidance } from '../UnitEditor';
 import { unresolvedModelUnits } from '../unitLabels';
@@ -168,6 +169,11 @@ function renderModel(ctx: ViewContext) {
                     ? 'Unsaved local edits'
                     : 'Draft · saved'}
               </StatusTag>
+              {revision ? (
+                <RecordAttribution kind="model_version" id={revision.model_revision_id} />
+              ) : (
+                !dirty && <RecordAttribution kind="model_draft" id={model?.draft_revision} />
+              )}
             </p>
           </div>
           <div className="model-version-controls">
@@ -235,6 +241,11 @@ function renderModel(ctx: ViewContext) {
                       <dd>{revision.model_revision_id}</dd>
                       <dt>SHA-256</dt>
                       <dd>{revision.digest}</dd>
+                      <AttributionDetail
+                        kind="model_version"
+                        id={revision.model_revision_id}
+                        label="Saved by"
+                      />
                     </dl>
                     <pre tabIndex={0} aria-label="Model version JSON">
                       {JSON.stringify(revision, null, 2)}

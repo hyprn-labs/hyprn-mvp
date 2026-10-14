@@ -1,5 +1,6 @@
 import { OverviewStudyQuestion } from '../ApproachAssumptions';
 import { message } from '../api';
+import { RecordAttribution } from '../attribution';
 import { Button, Panel, TextArea, TextInput } from '../design';
 import { OverviewRecords } from '../OverviewRecords';
 import { ActionDialog, SectionHeader } from '../Presentation';
@@ -71,6 +72,8 @@ function renderOverview(ctx: ViewContext) {
             <strong>Description: </strong>
             {study.description || 'No description yet.'}
           </p>
+          {/* Who wrote the description: its own line when an agent wrote this revision. */}
+          <RecordAttribution kind="study_context" id={study.revision} line />
           <div className="approach-overview-entry">
             <Button
               ref={approachEntry}

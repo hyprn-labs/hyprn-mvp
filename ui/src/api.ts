@@ -7,6 +7,7 @@ import type { ApproachState2, ApproachPreviewRequestRead2, ApproachPreviewRead3,
 import type { UnitCatalog1, PublicNewModel } from './contract';
 import type { StudyArchiveCommand } from './contract';
 import type { ReceiptError } from './contract';
+import type { AgentAttribution1, AgentAttributionPage1 } from './contract';
 export type * from './contract';
 export type Envelope<T> = { schema_version: '1'; data: T; next_cursor?: string | null };
 export type EvidencePage = Envelope<EvidenceRecord[]> & { next_cursor: string | null };
@@ -65,6 +66,32 @@ export function validateEditCommand(command: ApplyRead4, snapshot?: ModelDraftRe
   if (snapshot && snapshot.instances.length + snapshot.connections.length + snapshot.definitions.reduce((n, d) => n + d.ports.length, 0) > 1000) throw new Error('Preview exceeds the 1000 element limit; reduce the proposal.');
 }
 const modelPath = (sid: string, mid: string) => `/studies/${sid}/models/${mid}`;
+/** Who acted for one agent-written record: the agent's and the delegating user's names, each
+ * from its own API field and never parsed from text. A user without a name reads "unknown
+ * user", so an agent-written record never looks person-written. */
+export type AttributionEntry = { readonly agent: string; readonly user: string };
+/** Attribution entries keyed by `attributionKey`: newest entry first wins. */
+export type AttributionIndex = ReadonlyMap<string, AttributionEntry>;
+export type AttributionKind = AgentAttribution1['record_kind'];
+/** Index key of one record: its kind and its version id (versioned records) or record id. */
+export const attributionKey = (kind: AttributionKind, id: string) => kind + '\u0000' + id;
+const attributionEntry = (item: AgentAttribution1): AttributionEntry => ({
+  agent: item.agent.display_name,
+  user: item.delegator.display_name ?? 'unknown user',
+});
+/** Every page of one attribution read (newest first), following its opaque cursor. */
+async function attributionPages(
+  read: (cursor: string | null) => Promise<AgentAttributionPage1>,
+): Promise<AgentAttribution1[]> {
+  const items: AgentAttribution1[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: AgentAttributionPage1 = await read(cursor);
+    items.push(...page.items);
+    cursor = page.next_cursor;
+  } while (cursor);
+  return items;
+}
 export class HyprnMvpApi {
   unitCatalog = async (sid: string, signal?: AbortSignal) => (await this.request<UnitCatalog1>(`/studies/${sid}/unit-catalog`, undefined, 'GET', signal)).data;
   approach = async (sid: string, signal?: AbortSignal) => (await this.request<ApproachState2>(`/studies/${sid}/approach`, undefined, 'GET', signal)).data;
@@ -254,6 +281,38 @@ export class HyprnMvpApi {
     do { const page = await this.request<T[]>(path + (cursor ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}` : ''), undefined, 'GET', signal); all.push(...page.data); cursor = page.next_cursor; } while (cursor);
     return all;
   }
+  /** Who wrote what in one study: every page of its attribution read, indexed by record kind
+   * and by both the record id and the version id of each entry (newest entry first wins). */
+  attribution = async (sid: string, signal?: AbortSignal): Promise<AttributionIndex> => {
+    const path = `/studies/${sid}/agent/attribution?limit=100`;
+    const items = await attributionPages(async (cursor) => {
+      const next = cursor ? `${path}&cursor=${encodeURIComponent(cursor)}` : path;
+      return (await this.request<AgentAttributionPage1>(next, undefined, 'GET', signal)).data;
+    });
+    const index = new Map<string, AttributionEntry>();
+    for (const item of items) {
+      for (const id of [item.record_id, item.version_id]) {
+        const key = id === null ? null : attributionKey(item.record_kind, id);
+        if (key !== null && !index.has(key)) index.set(key, attributionEntry(item));
+      }
+    }
+    return index;
+  };
+  /** The studies an agent created that the signed-in user is a member of, keyed by study id. */
+  createdStudies = async (signal?: AbortSignal): Promise<ReadonlyMap<string, AttributionEntry>> => {
+    const path = '/agent/attribution/studies?limit=100';
+    const items = await attributionPages(async (cursor) => {
+      const next = cursor ? `${path}&cursor=${encodeURIComponent(cursor)}` : path;
+      return (await this.request<AgentAttributionPage1>(next, undefined, 'GET', signal)).data;
+    });
+    const created = new Map<string, AttributionEntry>();
+    for (const item of items) {
+      if (item.record_kind === 'study' && !created.has(item.study_id)) {
+        created.set(item.study_id, attributionEntry(item));
+      }
+    }
+    return created;
+  };
   studies = () => this.list<Study>('/studies');
   /** Study-wide archive. Home reads both lists; archive is presentation
    * state, never access control or deletion. Commands use the shared receipt/recovery path. */
