@@ -117,15 +117,15 @@ The application is a single-page React client with hash deep links that name exp
 
 ### 3.3 Overview
 
-- **Study question box** at the top, read from the latest saved approach version only (a draft is never study context). **See more details** at its bottom-right opens the **Study details** dialog: Study question (agreed question, original wording, elaboration, each with attribution) · Study context (scope, open questions) · Assumptions (approach-owned, with evidence) · Limits (with evidence; limits apply to the whole study).
-- **About this study**: Edit, description, and one action, **View modeling approach**. The action opens the same saved version as the displayed question; it opens Draft only when no saved version exists. Editing remains an explicit choice on the approach page.
-- **Recent runs**: run name and short ID with Execution and Criteria tags. **Recent configurations**: name and revision. Full identities are only in Record details.
+- The latest saved approach is the main reading page. **About this study** contains the full study question and **See more details**; editing is an explicit separate action.
+- Three clear section panels follow: **Reasoning and methods**, **Cases and their answers**, **Answer to the study question**. These reuse the versioned approach reader directly. There is no duplicate recent-runs/configurations dashboard or bare jump-link menu.
+- The case filter bar is visible without expanding a menu. Answer text, supporting results/sources and technical record identities are separate; referenced case answers open in a dialog rather than recursively nesting controls.
 
 ### 3.4 Modeling approach
 
 - Header: back to Overview, version select, Edit approach / save draft / save approach version, overflow with Record details and Earlier work. The same study question box and Study details dialog as Overview; in edit mode Study details is where approach assumptions and limits are added and edited.
-- One continuous page follows the full saved engineering question: **Reasoning and methods**, **Cases and their answers**, then **Answer to the study question**. Section links move focus and scroll without replacing the workspace route. There are no chapter tabs or separate method map.
-- Methods expand in place to show purpose, basis and reasoning, calculation, dependencies and unresolved work. Proposed and partially linked methods remain explicit. Model selection handles several exact versions; **Open model version** opens the canonical read-only model view with the relevant components and quantities highlighted. Assumption and evidence references use their canonical owners alongside the explanation.
+- One continuous page follows the full saved engineering question: **Reasoning and methods**, **Cases and their answers**, then **Answer to the study question**. Each part has a bordered section panel. There are no chapter tabs or separate method map.
+- Methods expand in place to show purpose, basis and reasoning, calculation, dependencies and unresolved work. Proposed and partially linked methods remain explicit. Model selection handles several exact versions; **View model details** opens the canonical read-only model view with the relevant components and quantities highlighted. Assumption and evidence references use their canonical owners alongside the explanation.
 - Cases expand to show the question and purpose, every associated saved configuration and run, and the case answer where explicitly assessed. No configuration disappears merely because a run exists, and no run is selected implicitly as latest. Outputs keep units and missing-value reasons; full precision, execution and criterion checks are supporting run details.
 - Usage review keeps case filtering, refresh, bounded reads, pagination and failures explicit. The final study synthesis follows the cases. Empty scientific assessments say they have not been assessed; successful execution, met criteria and evidence titles never supply an answer. Study limits remain in **Study details**.
 
@@ -134,12 +134,12 @@ The application is a single-page React client with hash deep links that name exp
 - Models list with **New model** (empty or from a starting model) and Open model.
 - Model page: back to all models, name and version select (draft or read-only version), **Save model version**, Create configuration, overflow (rename, reload, import and compare, Record details for versions). A "Units incomplete" disclosure lists quantities whose unit is still unspecified; such drafts can be saved, but execution stays blocked until units are resolved.
 - **Canonical model view** (one component, reused everywhere a model is shown):
-  - Toolbar: **Graph | XDSM** toggle, clear selection, show or hide Components and Details. Authoring actions (add component, connect ports, overflow) appear only in the current draft.
+  - Toolbar: **Graph | XDSM** toggle, clear selection, show or hide Details. Authoring actions (add component, connect ports, overflow) appear only in the current draft.
   - Canvas with a Details panel beside it, and the **Quantities** table below at full width in its own scroll region.
   - Details, nothing selected: the model's summary and its **Assumptions**, plus a count of component assumptions.
-  - Details, component selected: **What it computes** (each linked method step's transformation text, then **View source**, a read-only text view that is never run; in a draft, Edit source), **Why** (every linked method step with its purpose and rationale and a link back to that step in the modeling approach), and the component's **Assumptions**. Method steps are linked by exact implementation references, never by name.
-  - Quantities table: Quantity (symbol and name) · Component · Direction (with "from …", "to …", "set in configuration" or "model result" folded in) · Definition · Unit, plus Value and Provenance in configuration and run contexts. Filters for text, component, direction and availability. Selecting a component in the graph, XDSM or table scopes and highlights its rows.
-  - Edit ports and component edits open as dialogs. There is no ports table in Details, no incoming or outgoing lists and no notes.
+  - Details, component selected: the same Purpose, Basis and reasoning, Calculation in plain words and Python function as the overview method. Source comes from the exact model; the overview is read-only. The current model panel edits the existing approach draft explanation and model source and retains assumption authoring. Saved model contexts retain their saved method explanation. Exact implementation references link methods, never names.
+  - Quantities table: Quantity (symbol and name) · Component · Direction (with "from …", "to …", "set in configuration" or "model result" folded in) · Definition · Unit, plus Value and Provenance in configuration and run contexts. Filters for text and direction, with component selection providing the scope. Selecting a component in the graph, XDSM or table scopes and highlights its rows.
+  - Edit ports and component edits open as dialogs; port-metadata paste is absent. There is no ports table in Details, no incoming or outgoing lists and no notes.
 
 ### 3.6 Configurations
 

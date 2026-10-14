@@ -94,6 +94,7 @@ export function ModelMethodDetails({
             <label>
               Purpose
               <TextArea
+                aria-label="Purpose"
                 maxLength={4096}
                 value={step.purpose}
                 onChange={(event) => update('purpose', event.target.value)}
@@ -102,6 +103,7 @@ export function ModelMethodDetails({
             <label>
               Basis and reasoning
               <TextArea
+                aria-label="Basis and reasoning"
                 maxLength={4096}
                 value={step.rationale}
                 onChange={(event) => update('rationale', event.target.value)}
@@ -110,6 +112,7 @@ export function ModelMethodDetails({
             <label>
               Calculation in plain words
               <TextArea
+                aria-label="Calculation in plain words"
                 maxLength={4096}
                 value={step.intent.transformation}
                 onChange={(event) => update('transformation', event.target.value)}

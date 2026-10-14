@@ -182,7 +182,7 @@ export function ComponentSource({
 /** One presentation for the authored method, in Overview and Models. */
 export function MethodExplanation({ step, source }: { step: ApproachStep1; source?: ReactNode }) {
   return (
-    <div className="method-explanation">
+    <div className="method-narrative">
       {step.purpose && (
         <section className="inspector-section">
           <h4>Purpose</h4>

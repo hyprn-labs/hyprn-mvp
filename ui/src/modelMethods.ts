@@ -103,8 +103,8 @@ export function retainedMethodLinks(
   };
 }
 
-/** The model draft reads the approach draft; saved models read the latest saved approach. One bounded read
- * pair (state, then the exact version); a failure or confirmed denial shows "unavailable" and
+/** The model draft reads the approach draft; saved models read the latest saved approach.
+ * One bounded read pair (state, then the exact version); failures show "unavailable" and
  * never invents a link. Cleared on sign-out or confirmed access loss. */
 export function useLatestMethodLinks(
   api: HyprnMvpApi,
