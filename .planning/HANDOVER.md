@@ -28,12 +28,13 @@ Every selected mass is below 575 tonnes and expense uses 100 occupied seats. The
 original engineering question remains intact; aircraft optimization, complete-mission
 feasibility and ticket price are explicitly unresolved. The latest UI refinement makes Overview the saved approach, with section boxes and visible case filtering; model details share the method explanation and edit its draft. Port-metadata paste is removed. See [overview-refinement.md](phases/03-agent-tools-for-coding-agents/checkpoints/overview-refinement.md). Stop adding features and await product feedback. Exact current identities are in the integration checkpoint.
 
-The current follow-up preserves the question box and page order; editing is inside
-Study details, method navigation is at the bottom, and supporting records are grouped
-once per configuration. See [overview-followup.md](phases/03-agent-tools-for-coding-agents/checkpoints/overview-followup.md).
-The scientific guidance now requires coherence checks across cited records and
-method explanations that follow the implemented calculation. This batch updates
-guidance; it does not claim a new scientific review of the existing demo content.
+The latest cleanup (`e5e98cd`) reads question → study answer → methods, with cases
+in their own tab replacing Evidence. Evidence stays beside assertions; Edit study is
+one editor; model quantities/actions, configurations and run tabs are simplified.
+Focused browser 19, style 33, agent-tools 270 and static/build checks pass. See
+[interface-cleanup.md](phases/03-agent-tools-for-coding-agents/checkpoints/interface-cleanup.md).
+The refreshed runtime guidance requires citations to support the actual input value
+and scenario. Existing scientific records were not re-authored in this UI batch.
 
 Latest user instruction: old studies and runs are disposable. Historical preservation,
 backups and broad compatibility verification are not prerequisites for this demo.
