@@ -1,0 +1,5075 @@
+{
+ "approach": {
+  "draft": {
+   "approach_id": "5a000000-0000-4000-8000-000000000001",
+   "base_version_id": "5a000000-0000-4000-8000-000000000012",
+   "content": {
+    "assumptions": [
+     {
+      "assumption_id": "5a000000-0000-4000-8000-000000000071",
+      "evidence_links": [],
+      "role": "overall_method",
+      "statement": "Standard atmosphere."
+     }
+    ],
+    "basis_refs": [
+     {
+      "kind": "run",
+      "reason": "Baseline result",
+      "relation": "supports",
+      "run_id": "5c000000-0000-4000-8000-000000000001"
+     }
+    ],
+    "cases": [
+     {
+      "binding_id": "5a000000-0000-4000-8000-000000000031",
+      "case_id": "5a000000-0000-4000-8000-000000000051",
+      "evidence_links": [],
+      "question": "Is 9,000 km reachable?",
+      "rationale": "",
+      "title": "Baseline mission"
+     },
+     {
+      "binding_id": null,
+      "case_id": "5a000000-0000-4000-8000-000000000052",
+      "evidence_links": [],
+      "question": "Is 12,000 km reachable?",
+      "rationale": "Market study asks for it.",
+      "title": "Long range"
+     }
+    ],
+    "elaboration": null,
+    "limit_items": [
+     {
+      "evidence_links": [],
+      "limit_id": "5a000000-0000-4000-8000-000000000061",
+      "statement": "Valid for subsonic cruise only."
+     }
+    ],
+    "limitations": "Fixed engine efficiency.",
+    "model_bindings": [
+     {
+      "binding_id": "5a000000-0000-4000-8000-000000000031",
+      "model_id": "53000000-0000-4000-8000-000000000001",
+      "model_revision_id": "53000000-0000-4000-8000-000000000012"
+     }
+    ],
+    "open_questions": "Tank insulation mass is not yet sourced.",
+    "original_question": {
+     "attribution": {
+      "kind": "human",
+      "label": null
+     },
+     "text": "Is a hydrogen airliner feasible?"
+    },
+    "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+    "schema_version": "2",
+    "scope": "Conceptual sizing only; no certification analysis.",
+    "steps": [
+     {
+      "assumption_refs": [],
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "locator": "p. 12",
+        "relation": "context"
+       }
+      ],
+      "implementation_refs": [],
+      "implementation_state": "proposed",
+      "intent": {
+       "depends_on_step_ids": [],
+       "inputs": "Payload, range",
+       "outputs": "MTOW",
+       "transformation": "Mission to masses"
+      },
+      "purpose": "Size the aircraft for the mission.",
+      "rationale": "",
+      "remaining_work": "",
+      "step_id": "5a000000-0000-4000-8000-000000000041",
+      "title": "Mission definition"
+     },
+     {
+      "assumption_refs": [],
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "locator": "p. 12",
+        "relation": "context"
+       }
+      ],
+      "implementation_refs": [
+       {
+        "binding_id": "5a000000-0000-4000-8000-000000000031",
+        "kind": "model"
+       }
+      ],
+      "implementation_state": "partial",
+      "intent": {
+       "depends_on_step_ids": [
+        "5a000000-0000-4000-8000-000000000041"
+       ],
+       "inputs": "Payload, range",
+       "outputs": "MTOW",
+       "transformation": "Mission to masses"
+      },
+      "purpose": "Close the mass loop with the tank structural index.",
+      "rationale": "",
+      "remaining_work": "Add the tank insulation mass.",
+      "step_id": "5a000000-0000-4000-8000-000000000042",
+      "title": "Mass closure"
+     }
+    ]
+   },
+   "revision": "5a000000-0000-4000-8000-000000000021",
+   "schema_version": "2",
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "updated_at": "2026-10-14T07:30:00Z",
+   "updated_by": "52000000-0000-4000-8000-000000000002"
+  },
+  "latest_version": {
+   "approach_id": "5a000000-0000-4000-8000-000000000001",
+   "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+   "created_at": "2026-10-12T10:00:00Z",
+   "created_by": "52000000-0000-4000-8000-000000000001",
+   "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+   "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+   "schema_version": "2",
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "version_number": 2
+  }
+ },
+ "approach_saved": {
+  "5a000000-0000-4000-8000-000000000011": {
+   "closure": {
+    "approach_versions": [
+     {
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000011",
+      "content": {
+       "assumptions": [
+        {
+         "assumption_id": "5a000000-0000-4000-8000-000000000071",
+         "evidence_links": [],
+         "role": "overall_method",
+         "statement": "Standard atmosphere."
+        }
+       ],
+       "basis_refs": [],
+       "cases": [],
+       "elaboration": null,
+       "limit_items": [
+        {
+         "evidence_links": [],
+         "limit_id": "5a000000-0000-4000-8000-000000000061",
+         "statement": "Valid for subsonic cruise only."
+        }
+       ],
+       "limitations": "Fixed engine efficiency.",
+       "model_bindings": [],
+       "open_questions": "Tank insulation mass is not yet sourced.",
+       "original_question": {
+        "attribution": {
+         "kind": "human",
+         "label": null
+        },
+        "text": "Is a hydrogen airliner feasible?"
+       },
+       "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+       "schema_version": "2",
+       "scope": "Conceptual sizing only; no certification analysis.",
+       "steps": [
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [],
+         "implementation_state": "proposed",
+         "intent": {
+          "depends_on_step_ids": [],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Size the aircraft for the mission.",
+         "rationale": "",
+         "remaining_work": "",
+         "step_id": "5a000000-0000-4000-8000-000000000041",
+         "title": "Mission definition"
+        }
+       ]
+      },
+      "created_at": "2026-10-11T10:00:00Z",
+      "created_by": "52000000-0000-4000-8000-000000000001",
+      "digest": "931701b73d507990bfea8ce5c61f58bfa852e26ee18dfa09a118dc3737f6b800",
+      "predecessor_version_id": null,
+      "schema_version": "2",
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "version_number": 1
+     }
+    ],
+    "configurations": [],
+    "digest": "2d5f3363c8cb71dd299e0771ef5c7bfd354d9d920fbb137ecadc083d41e319d8",
+    "evidence": [],
+    "models": [],
+    "root_approach_digest": "931701b73d507990bfea8ce5c61f58bfa852e26ee18dfa09a118dc3737f6b800",
+    "root_approach_version_id": "5a000000-0000-4000-8000-000000000011",
+    "run_contexts": [],
+    "schema_version": "3"
+   },
+   "version": {
+    "approach_id": "5a000000-0000-4000-8000-000000000001",
+    "approach_version_id": "5a000000-0000-4000-8000-000000000011",
+    "content": {
+     "assumptions": [
+      {
+       "assumption_id": "5a000000-0000-4000-8000-000000000071",
+       "evidence_links": [],
+       "role": "overall_method",
+       "statement": "Standard atmosphere."
+      }
+     ],
+     "basis_refs": [],
+     "cases": [],
+     "elaboration": null,
+     "limit_items": [
+      {
+       "evidence_links": [],
+       "limit_id": "5a000000-0000-4000-8000-000000000061",
+       "statement": "Valid for subsonic cruise only."
+      }
+     ],
+     "limitations": "Fixed engine efficiency.",
+     "model_bindings": [],
+     "open_questions": "Tank insulation mass is not yet sourced.",
+     "original_question": {
+      "attribution": {
+       "kind": "human",
+       "label": null
+      },
+      "text": "Is a hydrogen airliner feasible?"
+     },
+     "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+     "schema_version": "2",
+     "scope": "Conceptual sizing only; no certification analysis.",
+     "steps": [
+      {
+       "assumption_refs": [],
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "locator": "p. 12",
+         "relation": "context"
+        }
+       ],
+       "implementation_refs": [],
+       "implementation_state": "proposed",
+       "intent": {
+        "depends_on_step_ids": [],
+        "inputs": "Payload, range",
+        "outputs": "MTOW",
+        "transformation": "Mission to masses"
+       },
+       "purpose": "Size the aircraft for the mission.",
+       "rationale": "",
+       "remaining_work": "",
+       "step_id": "5a000000-0000-4000-8000-000000000041",
+       "title": "Mission definition"
+      }
+     ]
+    },
+    "created_at": "2026-10-11T10:00:00Z",
+    "created_by": "52000000-0000-4000-8000-000000000001",
+    "digest": "931701b73d507990bfea8ce5c61f58bfa852e26ee18dfa09a118dc3737f6b800",
+    "predecessor_version_id": null,
+    "schema_version": "2",
+    "study_id": "51000000-0000-4000-8000-000000000001",
+    "version_number": 1
+   }
+  },
+  "5a000000-0000-4000-8000-000000000012": {
+   "closure": {
+    "approach_versions": [
+     {
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+      "content": {
+       "assumptions": [
+        {
+         "assumption_id": "5a000000-0000-4000-8000-000000000071",
+         "evidence_links": [],
+         "role": "overall_method",
+         "statement": "Standard atmosphere."
+        }
+       ],
+       "basis_refs": [
+        {
+         "kind": "run",
+         "reason": "Baseline result",
+         "relation": "supports",
+         "run_id": "5c000000-0000-4000-8000-000000000001"
+        }
+       ],
+       "cases": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "case_id": "5a000000-0000-4000-8000-000000000051",
+         "evidence_links": [],
+         "question": "Is 9,000 km reachable?",
+         "rationale": "",
+         "title": "Baseline mission"
+        },
+        {
+         "binding_id": null,
+         "case_id": "5a000000-0000-4000-8000-000000000052",
+         "evidence_links": [],
+         "question": "Is 12,000 km reachable?",
+         "rationale": "Market study asks for it.",
+         "title": "Long range"
+        }
+       ],
+       "elaboration": null,
+       "limit_items": [
+        {
+         "evidence_links": [],
+         "limit_id": "5a000000-0000-4000-8000-000000000061",
+         "statement": "Valid for subsonic cruise only."
+        }
+       ],
+       "limitations": "Fixed engine efficiency.",
+       "model_bindings": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "model_id": "53000000-0000-4000-8000-000000000001",
+         "model_revision_id": "53000000-0000-4000-8000-000000000012"
+        }
+       ],
+       "open_questions": "Tank insulation mass is not yet sourced.",
+       "original_question": {
+        "attribution": {
+         "kind": "human",
+         "label": null
+        },
+        "text": "Is a hydrogen airliner feasible?"
+       },
+       "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+       "schema_version": "2",
+       "scope": "Conceptual sizing only; no certification analysis.",
+       "steps": [
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [],
+         "implementation_state": "proposed",
+         "intent": {
+          "depends_on_step_ids": [],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Size the aircraft for the mission.",
+         "rationale": "",
+         "remaining_work": "",
+         "step_id": "5a000000-0000-4000-8000-000000000041",
+         "title": "Mission definition"
+        },
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [
+          {
+           "binding_id": "5a000000-0000-4000-8000-000000000031",
+           "kind": "model"
+          }
+         ],
+         "implementation_state": "partial",
+         "intent": {
+          "depends_on_step_ids": [
+           "5a000000-0000-4000-8000-000000000041"
+          ],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Close the mass loop with the tank structural index.",
+         "rationale": "",
+         "remaining_work": "Add the tank insulation mass.",
+         "step_id": "5a000000-0000-4000-8000-000000000042",
+         "title": "Mass closure"
+        }
+       ]
+      },
+      "created_at": "2026-10-12T10:00:00Z",
+      "created_by": "52000000-0000-4000-8000-000000000001",
+      "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+      "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+      "schema_version": "2",
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "version_number": 2
+     }
+    ],
+    "configurations": [],
+    "digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+    "evidence": [],
+    "models": [],
+    "root_approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+    "root_approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "run_contexts": [],
+    "schema_version": "3"
+   },
+   "version": {
+    "approach_id": "5a000000-0000-4000-8000-000000000001",
+    "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "content": {
+     "assumptions": [
+      {
+       "assumption_id": "5a000000-0000-4000-8000-000000000071",
+       "evidence_links": [],
+       "role": "overall_method",
+       "statement": "Standard atmosphere."
+      }
+     ],
+     "basis_refs": [
+      {
+       "kind": "run",
+       "reason": "Baseline result",
+       "relation": "supports",
+       "run_id": "5c000000-0000-4000-8000-000000000001"
+      }
+     ],
+     "cases": [
+      {
+       "binding_id": "5a000000-0000-4000-8000-000000000031",
+       "case_id": "5a000000-0000-4000-8000-000000000051",
+       "evidence_links": [],
+       "question": "Is 9,000 km reachable?",
+       "rationale": "",
+       "title": "Baseline mission"
+      },
+      {
+       "binding_id": null,
+       "case_id": "5a000000-0000-4000-8000-000000000052",
+       "evidence_links": [],
+       "question": "Is 12,000 km reachable?",
+       "rationale": "Market study asks for it.",
+       "title": "Long range"
+      }
+     ],
+     "elaboration": null,
+     "limit_items": [
+      {
+       "evidence_links": [],
+       "limit_id": "5a000000-0000-4000-8000-000000000061",
+       "statement": "Valid for subsonic cruise only."
+      }
+     ],
+     "limitations": "Fixed engine efficiency.",
+     "model_bindings": [
+      {
+       "binding_id": "5a000000-0000-4000-8000-000000000031",
+       "model_id": "53000000-0000-4000-8000-000000000001",
+       "model_revision_id": "53000000-0000-4000-8000-000000000012"
+      }
+     ],
+     "open_questions": "Tank insulation mass is not yet sourced.",
+     "original_question": {
+      "attribution": {
+       "kind": "human",
+       "label": null
+      },
+      "text": "Is a hydrogen airliner feasible?"
+     },
+     "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+     "schema_version": "2",
+     "scope": "Conceptual sizing only; no certification analysis.",
+     "steps": [
+      {
+       "assumption_refs": [],
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "locator": "p. 12",
+         "relation": "context"
+        }
+       ],
+       "implementation_refs": [],
+       "implementation_state": "proposed",
+       "intent": {
+        "depends_on_step_ids": [],
+        "inputs": "Payload, range",
+        "outputs": "MTOW",
+        "transformation": "Mission to masses"
+       },
+       "purpose": "Size the aircraft for the mission.",
+       "rationale": "",
+       "remaining_work": "",
+       "step_id": "5a000000-0000-4000-8000-000000000041",
+       "title": "Mission definition"
+      },
+      {
+       "assumption_refs": [],
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "locator": "p. 12",
+         "relation": "context"
+        }
+       ],
+       "implementation_refs": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "kind": "model"
+        }
+       ],
+       "implementation_state": "partial",
+       "intent": {
+        "depends_on_step_ids": [
+         "5a000000-0000-4000-8000-000000000041"
+        ],
+        "inputs": "Payload, range",
+        "outputs": "MTOW",
+        "transformation": "Mission to masses"
+       },
+       "purpose": "Close the mass loop with the tank structural index.",
+       "rationale": "",
+       "remaining_work": "Add the tank insulation mass.",
+       "step_id": "5a000000-0000-4000-8000-000000000042",
+       "title": "Mass closure"
+      }
+     ]
+    },
+    "created_at": "2026-10-12T10:00:00Z",
+    "created_by": "52000000-0000-4000-8000-000000000001",
+    "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+    "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+    "schema_version": "2",
+    "study_id": "51000000-0000-4000-8000-000000000001",
+    "version_number": 2
+   }
+  }
+ },
+ "approach_usage": {
+  "5a000000-0000-4000-8000-000000000011": [],
+  "5a000000-0000-4000-8000-000000000012": [
+   {
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+    "kind": "configuration"
+   },
+   {
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+    "kind": "configuration"
+   },
+   {
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+    "kind": "run",
+    "run_id": "5c000000-0000-4000-8000-000000000001"
+   },
+   {
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+    "kind": "run",
+    "run_id": "5c000000-0000-4000-8000-000000000002"
+   },
+   {
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+    "kind": "run",
+    "run_id": "5c000000-0000-4000-8000-000000000003"
+   }
+  ]
+ },
+ "approach_versions": [
+  {
+   "approach_id": "5a000000-0000-4000-8000-000000000001",
+   "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+   "created_at": "2026-10-12T10:00:00Z",
+   "created_by": "52000000-0000-4000-8000-000000000001",
+   "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+   "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+   "schema_version": "2",
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "version_number": 2
+  },
+  {
+   "approach_id": "5a000000-0000-4000-8000-000000000001",
+   "approach_version_id": "5a000000-0000-4000-8000-000000000011",
+   "created_at": "2026-10-11T10:00:00Z",
+   "created_by": "52000000-0000-4000-8000-000000000001",
+   "digest": "931701b73d507990bfea8ce5c61f58bfa852e26ee18dfa09a118dc3737f6b800",
+   "predecessor_version_id": null,
+   "schema_version": "2",
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "version_number": 1
+  }
+ ],
+ "assumption_evidence": {
+  "53000000-0000-4000-8000-000000000001": {
+   "53000000-0000-4000-8000-000000000012": {
+    "draft_revision": null,
+    "evidence": [
+     {
+      "content": "Cruise at Mach 0.78 at 35,000 ft; reserves per the 2023 regulation, p. 12.",
+      "evidence_id": "59000000-0000-4000-8000-000000000001",
+      "evidence_schema_version": "3",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+      "kind": "note",
+      "parent_evidence_version_id": "59000000-0000-4000-8000-000000000011",
+      "recorded_context": {
+       "label": "Study",
+       "resource_labels": [
+        {
+         "kind": "study",
+         "name": "Hydrogen aircraft sizing",
+         "resource_id": "51000000-0000-4000-8000-000000000001",
+         "version_id": null
+        }
+       ],
+       "schema_version": "1"
+      },
+      "resource_scope": {
+       "kind": "study",
+       "scope_version": "1",
+       "study_id": "51000000-0000-4000-8000-000000000001"
+      },
+      "source_refs": [
+       "Mission requirements, 2023 edition, p. 12"
+      ],
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "title": "Mission profile note"
+     }
+    ],
+    "links": [
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000001",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+      "status": "resolved"
+     },
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000002",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+      "status": "unavailable"
+     }
+    ],
+    "model_digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "schema_version": "1"
+   },
+   "draft": {
+    "draft_revision": "draft-7",
+    "evidence": [
+     {
+      "content": "Cruise at Mach 0.78 at 35,000 ft; reserves per the 2023 regulation, p. 12.",
+      "evidence_id": "59000000-0000-4000-8000-000000000001",
+      "evidence_schema_version": "3",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+      "kind": "note",
+      "parent_evidence_version_id": "59000000-0000-4000-8000-000000000011",
+      "recorded_context": {
+       "label": "Study",
+       "resource_labels": [
+        {
+         "kind": "study",
+         "name": "Hydrogen aircraft sizing",
+         "resource_id": "51000000-0000-4000-8000-000000000001",
+         "version_id": null
+        }
+       ],
+       "schema_version": "1"
+      },
+      "resource_scope": {
+       "kind": "study",
+       "scope_version": "1",
+       "study_id": "51000000-0000-4000-8000-000000000001"
+      },
+      "source_refs": [
+       "Mission requirements, 2023 edition, p. 12"
+      ],
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "title": "Mission profile note"
+     },
+     {
+      "content": "Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.",
+      "evidence_id": "59000000-0000-4000-8000-000000000002",
+      "evidence_schema_version": "3",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+      "kind": "note",
+      "parent_evidence_version_id": null,
+      "recorded_context": {
+       "label": "Hydrogen aircraft, model version 2",
+       "resource_labels": [
+        {
+         "kind": "model",
+         "name": "Hydrogen aircraft",
+         "resource_id": "53000000-0000-4000-8000-000000000001",
+         "version_id": "53000000-0000-4000-8000-000000000012"
+        }
+       ],
+       "schema_version": "1"
+      },
+      "resource_scope": {
+       "kind": "model_revision",
+       "model_id": "53000000-0000-4000-8000-000000000001",
+       "model_revision_id": "53000000-0000-4000-8000-000000000012",
+       "scope_version": "1",
+       "study_id": "51000000-0000-4000-8000-000000000001"
+      },
+      "source_refs": [
+       "Andro et al. 2022, Table 3"
+      ],
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "title": "Andro et al. 2022 - structural index"
+     }
+    ],
+    "links": [
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000001",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+      "status": "resolved"
+     },
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000002",
+      "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+      "status": "resolved"
+     }
+    ],
+    "model_digest": null,
+    "model_revision_id": null,
+    "schema_version": "1"
+   }
+  }
+ },
+ "capabilities": {
+  "contract_versions": [
+   "1",
+   "1.1",
+   "prepared_artifact/2",
+   "execution_bundle/2",
+   "execution_bundle/3",
+   "configuration/2",
+   "hyprn_mvp.openmdao.program/1",
+   "computational_record/1",
+   "configuration/3",
+   "execution_bundle/4",
+   "model/3",
+   "model/4"
+  ],
+  "engineering": [
+   "flat_explicit_scalar",
+   "result_linked_inputs/1",
+   "evidence_revisions/1",
+   "study_archive/1",
+   "configuration_assumptions/1"
+  ],
+  "execution": "durable_scalar_submission",
+  "limits": {
+   "computational_record": {
+    "computational_runs": 64,
+    "expanded_bytes": 33554432,
+    "inventory_bytes": 4194304,
+    "logical_paths": 4096,
+    "metadata_bytes": 1048576,
+    "native_archive_bytes": 16777216,
+    "per_file_bytes": 16777216,
+    "selected_runs": 16,
+    "wrapper_bytes": 33554432
+   },
+   "depth": 32,
+   "edits": 256,
+   "elements": 1000,
+   "request_bytes": 2097152,
+   "result_source_bindings": 1000,
+   "result_source_dependencies": 64,
+   "result_source_outputs": 50,
+   "result_source_runs": 100,
+   "source_bytes": 262144
+  },
+  "modeling": [
+   "model_revision_listing",
+   "model_rename",
+   "model_assumptions/1",
+   "unit_declarations/1",
+   "quantity_definitions/1"
+  ],
+  "unavailable": [
+   "documents",
+   "membership_management",
+   "nested_composition",
+   "selective_rebind",
+   "coupled",
+   "optimization",
+   "uncertainty",
+   "cancellation",
+   "assistance"
+  ]
+ },
+ "configurations": [
+  {
+   "approach_closure": {
+    "approach_versions": [
+     {
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+      "content": {
+       "assumptions": [
+        {
+         "assumption_id": "5a000000-0000-4000-8000-000000000071",
+         "evidence_links": [],
+         "role": "overall_method",
+         "statement": "Standard atmosphere."
+        }
+       ],
+       "basis_refs": [
+        {
+         "kind": "run",
+         "reason": "Baseline result",
+         "relation": "supports",
+         "run_id": "5c000000-0000-4000-8000-000000000001"
+        }
+       ],
+       "cases": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "case_id": "5a000000-0000-4000-8000-000000000051",
+         "evidence_links": [],
+         "question": "Is 9,000 km reachable?",
+         "rationale": "",
+         "title": "Baseline mission"
+        },
+        {
+         "binding_id": null,
+         "case_id": "5a000000-0000-4000-8000-000000000052",
+         "evidence_links": [],
+         "question": "Is 12,000 km reachable?",
+         "rationale": "Market study asks for it.",
+         "title": "Long range"
+        }
+       ],
+       "elaboration": null,
+       "limit_items": [
+        {
+         "evidence_links": [],
+         "limit_id": "5a000000-0000-4000-8000-000000000061",
+         "statement": "Valid for subsonic cruise only."
+        }
+       ],
+       "limitations": "Fixed engine efficiency.",
+       "model_bindings": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "model_id": "53000000-0000-4000-8000-000000000001",
+         "model_revision_id": "53000000-0000-4000-8000-000000000012"
+        }
+       ],
+       "open_questions": "Tank insulation mass is not yet sourced.",
+       "original_question": {
+        "attribution": {
+         "kind": "human",
+         "label": null
+        },
+        "text": "Is a hydrogen airliner feasible?"
+       },
+       "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+       "schema_version": "2",
+       "scope": "Conceptual sizing only; no certification analysis.",
+       "steps": [
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [],
+         "implementation_state": "proposed",
+         "intent": {
+          "depends_on_step_ids": [],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Size the aircraft for the mission.",
+         "rationale": "",
+         "remaining_work": "",
+         "step_id": "5a000000-0000-4000-8000-000000000041",
+         "title": "Mission definition"
+        },
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [
+          {
+           "binding_id": "5a000000-0000-4000-8000-000000000031",
+           "kind": "model"
+          }
+         ],
+         "implementation_state": "partial",
+         "intent": {
+          "depends_on_step_ids": [
+           "5a000000-0000-4000-8000-000000000041"
+          ],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Close the mass loop with the tank structural index.",
+         "rationale": "",
+         "remaining_work": "Add the tank insulation mass.",
+         "step_id": "5a000000-0000-4000-8000-000000000042",
+         "title": "Mass closure"
+        }
+       ]
+      },
+      "created_at": "2026-10-12T10:00:00Z",
+      "created_by": "52000000-0000-4000-8000-000000000001",
+      "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+      "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+      "schema_version": "2",
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "version_number": 2
+     }
+    ],
+    "configurations": [],
+    "digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+    "evidence": [],
+    "models": [],
+    "root_approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+    "root_approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "run_contexts": [],
+    "schema_version": "3"
+   },
+   "configuration": {
+    "approach_binding": {
+     "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "approach_id": "5a000000-0000-4000-8000-000000000001",
+     "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+     "case_id": "5a000000-0000-4000-8000-000000000051",
+     "closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f"
+    },
+    "assumptions": [
+     {
+      "assumption_id": "5b000000-0000-4000-8000-000000000021",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "relation": "supports"
+       }
+      ],
+      "statement": "Reserves are 5 % of trip fuel."
+     }
+    ],
+    "configuration_id": "5b000000-0000-4000-8000-000000000001",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+    "context_snapshot": {
+     "boundary": "Aircraft level; airport infrastructure excluded.",
+     "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+     "notes": []
+    },
+    "context_source": {
+     "expected_study_revision": "study-rev-4",
+     "kind": "current_study"
+    },
+    "criteria": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "evidence_version_ids": [
+       "59000000-0000-4000-8000-000000000012"
+      ],
+      "operator": "ge",
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000006"
+      },
+      "threshold": 9000,
+      "units": "km"
+     },
+     {
+      "absolute_tolerance": 0.0,
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "evidence_version_ids": [],
+      "operator": "eq",
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000007"
+      },
+      "threshold": 1,
+      "units": ""
+     }
+    ],
+    "derivation": null,
+    "digest": "aad096d302d3a6936656ce2fad30c31c94e1b57132af96a8ef0deba01ecdf0b1",
+    "evidence_snapshots": [],
+    "general_context_evidence_version_ids": [],
+    "inputs": [
+     {
+      "provenance": {
+       "evidence_version_ids": [],
+       "kind": "manual",
+       "statement": "Study brief"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000001"
+      },
+      "units": "kg",
+      "value": 15300
+     },
+     {
+      "provenance": {
+       "evidence_version_ids": [
+        "59000000-0000-4000-8000-000000000021"
+       ],
+       "kind": "source",
+       "statement": "Andro et al. 2022, Table 3"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000002"
+      },
+      "units": "",
+      "value": 0.32
+     },
+     {
+      "provenance": {
+       "evidence_version_ids": [],
+       "kind": "manual",
+       "statement": "Judgement: early estimate"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000005"
+      },
+      "units": "",
+      "value": 0.25
+     }
+    ],
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "name": "Liquid hydrogen, 9,000 km",
+    "numerical": {
+     "constraints": [],
+     "derivatives": {
+      "check": null,
+      "form": null,
+      "method": "none"
+     },
+     "design_variables": [],
+     "initialization": [],
+     "mode": "deterministic",
+     "objectives": [],
+     "optimizer": null,
+     "solvers": [],
+     "uncertainty": null
+    },
+    "parent_revision_id": null,
+    "required_capabilities": [
+     "configuration_assumptions/1"
+    ],
+    "schema_version": "4",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "model_snapshot": {
+    "annotations": [],
+    "assumptions": [
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000001",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "relation": "supports"
+       }
+      ],
+      "owner": {
+       "kind": "model"
+      },
+      "statement": "Cruise at constant Mach number."
+     },
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000002",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+        "relation": "supports"
+       }
+      ],
+      "owner": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "kind": "instance"
+      },
+      "statement": "Structural index from the historical regression."
+     }
+    ],
+    "boundary_mappings": [],
+    "connections": [
+     {
+      "connection_id": "57000000-0000-4000-8000-000000000001",
+      "source_ref": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000003"
+      },
+      "target_ref": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000004"
+      }
+     }
+    ],
+    "definitions": [
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000001",
+      "definition_version_id": "55000000-0000-4000-8000-000000000011",
+      "kind": "composite",
+      "name": "Aircraft",
+      "ports": [],
+      "quantity_definitions": [],
+      "residual_port_ids": [],
+      "source_refs": []
+     },
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000002",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "kind": "explicit_component",
+      "name": "MassClosure",
+      "ports": [
+       {
+        "code_symbol": "payload_mass",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "input",
+        "name": "payload_mass",
+        "port_id": "56000000-0000-4000-8000-000000000001",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "structural_index",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "input",
+        "name": "structural_index",
+        "port_id": "56000000-0000-4000-8000-000000000002",
+        "units": {
+         "kind": "dimensionless"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "mtow",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "output",
+        "name": "mtow",
+        "port_id": "56000000-0000-4000-8000-000000000003",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       }
+      ],
+      "quantity_definitions": [
+       {
+        "port_id": "56000000-0000-4000-8000-000000000001",
+        "statement": "Payload mass carried on the design mission."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000002",
+        "statement": "Structural index: empty mass over take-off mass."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000003",
+        "statement": "Maximum take-off mass."
+       }
+      ],
+      "residual_port_ids": [],
+      "source_refs": [
+       "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+      ]
+     },
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000003",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "kind": "explicit_component",
+      "name": "Range",
+      "ports": [
+       {
+        "code_symbol": "mtow",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "input",
+        "name": "mtow",
+        "port_id": "56000000-0000-4000-8000-000000000004",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "fuel_fraction",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "input",
+        "name": "fuel_fraction",
+        "port_id": "56000000-0000-4000-8000-000000000005",
+        "units": {
+         "kind": "unspecified"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "range",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "output",
+        "name": "range",
+        "port_id": "56000000-0000-4000-8000-000000000006",
+        "units": {
+         "expression": "km",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "feasible",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "output",
+        "name": "feasible",
+        "port_id": "56000000-0000-4000-8000-000000000007",
+        "units": {
+         "kind": "dimensionless"
+        },
+        "value_type": "real_scalar"
+       }
+      ],
+      "quantity_definitions": [
+       {
+        "port_id": "56000000-0000-4000-8000-000000000004",
+        "statement": "Maximum take-off mass."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000006",
+        "statement": "Still-air range at cruise."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000007",
+        "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+       }
+      ],
+      "residual_port_ids": [],
+      "source_refs": [
+       "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+      ]
+     }
+    ],
+    "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+    "instances": [
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000011",
+      "instance_id": "54000000-0000-4000-8000-000000000001",
+      "name": "Aircraft"
+     },
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "name": "Mass closure"
+     },
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "instance_id": "54000000-0000-4000-8000-000000000003",
+      "name": "Range"
+     }
+    ],
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "originating_draft_revision": "draft-6",
+    "parent_model_revision_id": "53000000-0000-4000-8000-000000000011",
+    "ports": [
+     {
+      "code_symbol": "payload_mass",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "input",
+      "name": "payload_mass",
+      "port_id": "56000000-0000-4000-8000-000000000001",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "structural_index",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "input",
+      "name": "structural_index",
+      "port_id": "56000000-0000-4000-8000-000000000002",
+      "units": {
+       "kind": "dimensionless"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "mtow",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "output",
+      "name": "mtow",
+      "port_id": "56000000-0000-4000-8000-000000000003",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "mtow",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "input",
+      "name": "mtow",
+      "port_id": "56000000-0000-4000-8000-000000000004",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "fuel_fraction",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "input",
+      "name": "fuel_fraction",
+      "port_id": "56000000-0000-4000-8000-000000000005",
+      "units": {
+       "kind": "unspecified"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "range",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "output",
+      "name": "range",
+      "port_id": "56000000-0000-4000-8000-000000000006",
+      "units": {
+       "expression": "km",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "feasible",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "output",
+      "name": "feasible",
+      "port_id": "56000000-0000-4000-8000-000000000007",
+      "units": {
+       "kind": "dimensionless"
+      },
+      "value_type": "real_scalar"
+     }
+    ],
+    "required_capabilities": [
+     "model_assumptions/1",
+     "quantity_definitions/1",
+     "unit_declarations/1"
+    ],
+    "root_instance_id": "54000000-0000-4000-8000-000000000001",
+    "schema_version": "4",
+    "source_files": [
+     {
+      "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+      "encoding": "base64",
+      "media_type": "text/x-python",
+      "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+     },
+     {
+      "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+      "encoding": "base64",
+      "media_type": "text/x-python",
+      "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+     }
+    ]
+   },
+   "schema_version": "7",
+   "study_revision": "study-rev-4"
+  },
+  {
+   "approach_closure": {
+    "approach_versions": [
+     {
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+      "content": {
+       "assumptions": [
+        {
+         "assumption_id": "5a000000-0000-4000-8000-000000000071",
+         "evidence_links": [],
+         "role": "overall_method",
+         "statement": "Standard atmosphere."
+        }
+       ],
+       "basis_refs": [
+        {
+         "kind": "run",
+         "reason": "Baseline result",
+         "relation": "supports",
+         "run_id": "5c000000-0000-4000-8000-000000000001"
+        }
+       ],
+       "cases": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "case_id": "5a000000-0000-4000-8000-000000000051",
+         "evidence_links": [],
+         "question": "Is 9,000 km reachable?",
+         "rationale": "",
+         "title": "Baseline mission"
+        },
+        {
+         "binding_id": null,
+         "case_id": "5a000000-0000-4000-8000-000000000052",
+         "evidence_links": [],
+         "question": "Is 12,000 km reachable?",
+         "rationale": "Market study asks for it.",
+         "title": "Long range"
+        }
+       ],
+       "elaboration": null,
+       "limit_items": [
+        {
+         "evidence_links": [],
+         "limit_id": "5a000000-0000-4000-8000-000000000061",
+         "statement": "Valid for subsonic cruise only."
+        }
+       ],
+       "limitations": "Fixed engine efficiency.",
+       "model_bindings": [
+        {
+         "binding_id": "5a000000-0000-4000-8000-000000000031",
+         "model_id": "53000000-0000-4000-8000-000000000001",
+         "model_revision_id": "53000000-0000-4000-8000-000000000012"
+        }
+       ],
+       "open_questions": "Tank insulation mass is not yet sourced.",
+       "original_question": {
+        "attribution": {
+         "kind": "human",
+         "label": null
+        },
+        "text": "Is a hydrogen airliner feasible?"
+       },
+       "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+       "schema_version": "2",
+       "scope": "Conceptual sizing only; no certification analysis.",
+       "steps": [
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [],
+         "implementation_state": "proposed",
+         "intent": {
+          "depends_on_step_ids": [],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Size the aircraft for the mission.",
+         "rationale": "",
+         "remaining_work": "",
+         "step_id": "5a000000-0000-4000-8000-000000000041",
+         "title": "Mission definition"
+        },
+        {
+         "assumption_refs": [],
+         "evidence_links": [
+          {
+           "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+           "locator": "p. 12",
+           "relation": "context"
+          }
+         ],
+         "implementation_refs": [
+          {
+           "binding_id": "5a000000-0000-4000-8000-000000000031",
+           "kind": "model"
+          }
+         ],
+         "implementation_state": "partial",
+         "intent": {
+          "depends_on_step_ids": [
+           "5a000000-0000-4000-8000-000000000041"
+          ],
+          "inputs": "Payload, range",
+          "outputs": "MTOW",
+          "transformation": "Mission to masses"
+         },
+         "purpose": "Close the mass loop with the tank structural index.",
+         "rationale": "",
+         "remaining_work": "Add the tank insulation mass.",
+         "step_id": "5a000000-0000-4000-8000-000000000042",
+         "title": "Mass closure"
+        }
+       ]
+      },
+      "created_at": "2026-10-12T10:00:00Z",
+      "created_by": "52000000-0000-4000-8000-000000000001",
+      "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+      "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+      "schema_version": "2",
+      "study_id": "51000000-0000-4000-8000-000000000001",
+      "version_number": 2
+     }
+    ],
+    "configurations": [],
+    "digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+    "evidence": [],
+    "models": [],
+    "root_approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+    "root_approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "run_contexts": [],
+    "schema_version": "3"
+   },
+   "configuration": {
+    "approach_binding": {
+     "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "approach_id": "5a000000-0000-4000-8000-000000000001",
+     "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+     "case_id": "5a000000-0000-4000-8000-000000000051",
+     "closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f"
+    },
+    "assumptions": [
+     {
+      "assumption_id": "5b000000-0000-4000-8000-000000000021",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "relation": "supports"
+       }
+      ],
+      "statement": "Reserves are 5 % of trip fuel."
+     }
+    ],
+    "configuration_id": "5b000000-0000-4000-8000-000000000001",
+    "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+    "context_snapshot": {
+     "boundary": "Aircraft level; airport infrastructure excluded.",
+     "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+     "notes": []
+    },
+    "context_source": {
+     "expected_study_revision": "study-rev-4",
+     "kind": "current_study"
+    },
+    "criteria": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "evidence_version_ids": [
+       "59000000-0000-4000-8000-000000000012"
+      ],
+      "operator": "ge",
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000006"
+      },
+      "threshold": 9000,
+      "units": "km"
+     },
+     {
+      "absolute_tolerance": 0.0,
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "evidence_version_ids": [],
+      "operator": "eq",
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000007"
+      },
+      "threshold": 1,
+      "units": ""
+     }
+    ],
+    "derivation": null,
+    "digest": "e3316a52344ac4ebd8aa00769d89d83f33cd41dd17a871ad64dd036f56d044f7",
+    "evidence_snapshots": [],
+    "general_context_evidence_version_ids": [],
+    "inputs": [
+     {
+      "provenance": {
+       "evidence_version_ids": [],
+       "kind": "manual",
+       "statement": "Study brief"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000001"
+      },
+      "units": "kg",
+      "value": 15300
+     },
+     {
+      "provenance": {
+       "evidence_version_ids": [
+        "59000000-0000-4000-8000-000000000021"
+       ],
+       "kind": "source",
+       "statement": "Andro et al. 2022, Table 3"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000002"
+      },
+      "units": "",
+      "value": 0.31
+     },
+     {
+      "provenance": {
+       "evidence_version_ids": [],
+       "kind": "manual",
+       "statement": "Judgement: early estimate"
+      },
+      "result_binding": null,
+      "target": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000005"
+      },
+      "units": "",
+      "value": 0.3333333333333333
+     }
+    ],
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "name": "Liquid hydrogen, 12,000 km",
+    "numerical": {
+     "constraints": [],
+     "derivatives": {
+      "check": null,
+      "form": null,
+      "method": "none"
+     },
+     "design_variables": [],
+     "initialization": [],
+     "mode": "deterministic",
+     "objectives": [],
+     "optimizer": null,
+     "solvers": [],
+     "uncertainty": null
+    },
+    "parent_revision_id": "5b000000-0000-4000-8000-000000000011",
+    "required_capabilities": [
+     "configuration_assumptions/1"
+    ],
+    "schema_version": "4",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "model_snapshot": {
+    "annotations": [],
+    "assumptions": [
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000001",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+        "relation": "supports"
+       }
+      ],
+      "owner": {
+       "kind": "model"
+      },
+      "statement": "Cruise at constant Mach number."
+     },
+     {
+      "assumption_id": "58000000-0000-4000-8000-000000000002",
+      "evidence_links": [
+       {
+        "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+        "relation": "supports"
+       }
+      ],
+      "owner": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "kind": "instance"
+      },
+      "statement": "Structural index from the historical regression."
+     }
+    ],
+    "boundary_mappings": [],
+    "connections": [
+     {
+      "connection_id": "57000000-0000-4000-8000-000000000001",
+      "source_ref": {
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "port_id": "56000000-0000-4000-8000-000000000003"
+      },
+      "target_ref": {
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "port_id": "56000000-0000-4000-8000-000000000004"
+      }
+     }
+    ],
+    "definitions": [
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000001",
+      "definition_version_id": "55000000-0000-4000-8000-000000000011",
+      "kind": "composite",
+      "name": "Aircraft",
+      "ports": [],
+      "quantity_definitions": [],
+      "residual_port_ids": [],
+      "source_refs": []
+     },
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000002",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "kind": "explicit_component",
+      "name": "MassClosure",
+      "ports": [
+       {
+        "code_symbol": "payload_mass",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "input",
+        "name": "payload_mass",
+        "port_id": "56000000-0000-4000-8000-000000000001",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "structural_index",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "input",
+        "name": "structural_index",
+        "port_id": "56000000-0000-4000-8000-000000000002",
+        "units": {
+         "kind": "dimensionless"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "mtow",
+        "definition_version_id": "55000000-0000-4000-8000-000000000012",
+        "direction": "output",
+        "name": "mtow",
+        "port_id": "56000000-0000-4000-8000-000000000003",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       }
+      ],
+      "quantity_definitions": [
+       {
+        "port_id": "56000000-0000-4000-8000-000000000001",
+        "statement": "Payload mass carried on the design mission."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000002",
+        "statement": "Structural index: empty mass over take-off mass."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000003",
+        "statement": "Maximum take-off mass."
+       }
+      ],
+      "residual_port_ids": [],
+      "source_refs": [
+       "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+      ]
+     },
+     {
+      "annotations": [],
+      "boundary_mappings": [],
+      "child_instances": [],
+      "definition_id": "55000000-0000-4000-8000-000000000003",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "kind": "explicit_component",
+      "name": "Range",
+      "ports": [
+       {
+        "code_symbol": "mtow",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "input",
+        "name": "mtow",
+        "port_id": "56000000-0000-4000-8000-000000000004",
+        "units": {
+         "expression": "kg",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "fuel_fraction",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "input",
+        "name": "fuel_fraction",
+        "port_id": "56000000-0000-4000-8000-000000000005",
+        "units": {
+         "kind": "unspecified"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "range",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "output",
+        "name": "range",
+        "port_id": "56000000-0000-4000-8000-000000000006",
+        "units": {
+         "expression": "km",
+         "kind": "physical"
+        },
+        "value_type": "real_scalar"
+       },
+       {
+        "code_symbol": "feasible",
+        "definition_version_id": "55000000-0000-4000-8000-000000000013",
+        "direction": "output",
+        "name": "feasible",
+        "port_id": "56000000-0000-4000-8000-000000000007",
+        "units": {
+         "kind": "dimensionless"
+        },
+        "value_type": "real_scalar"
+       }
+      ],
+      "quantity_definitions": [
+       {
+        "port_id": "56000000-0000-4000-8000-000000000004",
+        "statement": "Maximum take-off mass."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000006",
+        "statement": "Still-air range at cruise."
+       },
+       {
+        "port_id": "56000000-0000-4000-8000-000000000007",
+        "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+       }
+      ],
+      "residual_port_ids": [],
+      "source_refs": [
+       "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+      ]
+     }
+    ],
+    "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+    "instances": [
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000011",
+      "instance_id": "54000000-0000-4000-8000-000000000001",
+      "name": "Aircraft"
+     },
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "name": "Mass closure"
+     },
+     {
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "instance_id": "54000000-0000-4000-8000-000000000003",
+      "name": "Range"
+     }
+    ],
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "originating_draft_revision": "draft-6",
+    "parent_model_revision_id": "53000000-0000-4000-8000-000000000011",
+    "ports": [
+     {
+      "code_symbol": "payload_mass",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "input",
+      "name": "payload_mass",
+      "port_id": "56000000-0000-4000-8000-000000000001",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "structural_index",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "input",
+      "name": "structural_index",
+      "port_id": "56000000-0000-4000-8000-000000000002",
+      "units": {
+       "kind": "dimensionless"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "mtow",
+      "definition_version_id": "55000000-0000-4000-8000-000000000012",
+      "direction": "output",
+      "name": "mtow",
+      "port_id": "56000000-0000-4000-8000-000000000003",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "mtow",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "input",
+      "name": "mtow",
+      "port_id": "56000000-0000-4000-8000-000000000004",
+      "units": {
+       "expression": "kg",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "fuel_fraction",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "input",
+      "name": "fuel_fraction",
+      "port_id": "56000000-0000-4000-8000-000000000005",
+      "units": {
+       "kind": "unspecified"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "range",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "output",
+      "name": "range",
+      "port_id": "56000000-0000-4000-8000-000000000006",
+      "units": {
+       "expression": "km",
+       "kind": "physical"
+      },
+      "value_type": "real_scalar"
+     },
+     {
+      "code_symbol": "feasible",
+      "definition_version_id": "55000000-0000-4000-8000-000000000013",
+      "direction": "output",
+      "name": "feasible",
+      "port_id": "56000000-0000-4000-8000-000000000007",
+      "units": {
+       "kind": "dimensionless"
+      },
+      "value_type": "real_scalar"
+     }
+    ],
+    "required_capabilities": [
+     "model_assumptions/1",
+     "quantity_definitions/1",
+     "unit_declarations/1"
+    ],
+    "root_instance_id": "54000000-0000-4000-8000-000000000001",
+    "schema_version": "4",
+    "source_files": [
+     {
+      "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+      "encoding": "base64",
+      "media_type": "text/x-python",
+      "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+     },
+     {
+      "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+      "encoding": "base64",
+      "media_type": "text/x-python",
+      "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+     }
+    ]
+   },
+   "schema_version": "7",
+   "study_revision": "study-rev-4"
+  }
+ ],
+ "description": "Recorded public API reads of one synthetic study (fixed identities), served by the recorded API double of test_agent_read_tools.py. Every body validates against contracts/hyprn-mvp.openapi.yaml at test time.",
+ "evidence_heads": [
+  {
+   "content": "Cruise at Mach 0.78 at 35,000 ft; reserves per the 2023 regulation, p. 12.",
+   "evidence_id": "59000000-0000-4000-8000-000000000001",
+   "evidence_schema_version": "3",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+   "kind": "note",
+   "parent_evidence_version_id": "59000000-0000-4000-8000-000000000011",
+   "recorded_context": {
+    "label": "Study",
+    "resource_labels": [
+     {
+      "kind": "study",
+      "name": "Hydrogen aircraft sizing",
+      "resource_id": "51000000-0000-4000-8000-000000000001",
+      "version_id": null
+     }
+    ],
+    "schema_version": "1"
+   },
+   "resource_scope": {
+    "kind": "study",
+    "scope_version": "1",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "source_refs": [
+    "Mission requirements, 2023 edition, p. 12"
+   ],
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "title": "Mission profile note"
+  },
+  {
+   "content": "Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.",
+   "evidence_id": "59000000-0000-4000-8000-000000000002",
+   "evidence_schema_version": "3",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+   "kind": "note",
+   "parent_evidence_version_id": null,
+   "recorded_context": {
+    "label": "Hydrogen aircraft, model version 2",
+    "resource_labels": [
+     {
+      "kind": "model",
+      "name": "Hydrogen aircraft",
+      "resource_id": "53000000-0000-4000-8000-000000000001",
+      "version_id": "53000000-0000-4000-8000-000000000012"
+     }
+    ],
+    "schema_version": "1"
+   },
+   "resource_scope": {
+    "kind": "model_revision",
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "scope_version": "1",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "source_refs": [
+    "Andro et al. 2022, Table 3"
+   ],
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "title": "Andro et al. 2022 - structural index"
+  },
+  {
+   "content": "Legacy note saved before evidence titles.",
+   "evidence_id": "59000000-0000-4000-8000-000000000003",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000031",
+   "kind": "note",
+   "scope": null,
+   "source_refs": [],
+   "study_id": "51000000-0000-4000-8000-000000000001"
+  }
+ ],
+ "evidence_versions": [
+  {
+   "content": "Legacy note saved before evidence titles.",
+   "evidence_id": "59000000-0000-4000-8000-000000000003",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000031",
+   "kind": "note",
+   "scope": null,
+   "source_refs": [],
+   "study_id": "51000000-0000-4000-8000-000000000001"
+  },
+  {
+   "content": "Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.Table 3 gives a structural index of 0.30 to 0.34 for liquid hydrogen tanks integrated in the fuselage.",
+   "evidence_id": "59000000-0000-4000-8000-000000000002",
+   "evidence_schema_version": "3",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+   "kind": "note",
+   "parent_evidence_version_id": null,
+   "recorded_context": {
+    "label": "Hydrogen aircraft, model version 2",
+    "resource_labels": [
+     {
+      "kind": "model",
+      "name": "Hydrogen aircraft",
+      "resource_id": "53000000-0000-4000-8000-000000000001",
+      "version_id": "53000000-0000-4000-8000-000000000012"
+     }
+    ],
+    "schema_version": "1"
+   },
+   "resource_scope": {
+    "kind": "model_revision",
+    "model_id": "53000000-0000-4000-8000-000000000001",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "scope_version": "1",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "source_refs": [
+    "Andro et al. 2022, Table 3"
+   ],
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "title": "Andro et al. 2022 - structural index"
+  },
+  {
+   "content": "Cruise at Mach 0.78 at 35,000 ft; reserves per the 2023 regulation, p. 12.",
+   "evidence_id": "59000000-0000-4000-8000-000000000001",
+   "evidence_schema_version": "3",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+   "kind": "note",
+   "parent_evidence_version_id": "59000000-0000-4000-8000-000000000011",
+   "recorded_context": {
+    "label": "Study",
+    "resource_labels": [
+     {
+      "kind": "study",
+      "name": "Hydrogen aircraft sizing",
+      "resource_id": "51000000-0000-4000-8000-000000000001",
+      "version_id": null
+     }
+    ],
+    "schema_version": "1"
+   },
+   "resource_scope": {
+    "kind": "study",
+    "scope_version": "1",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "source_refs": [
+    "Mission requirements, 2023 edition, p. 12"
+   ],
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "title": "Mission profile note"
+  },
+  {
+   "content": "Cruise at Mach 0.78 at 35,000 ft.",
+   "evidence_id": "59000000-0000-4000-8000-000000000001",
+   "evidence_schema_version": "3",
+   "evidence_version_id": "59000000-0000-4000-8000-000000000011",
+   "kind": "note",
+   "parent_evidence_version_id": null,
+   "recorded_context": {
+    "label": "Study",
+    "resource_labels": [
+     {
+      "kind": "study",
+      "name": "Hydrogen aircraft sizing",
+      "resource_id": "51000000-0000-4000-8000-000000000001",
+      "version_id": null
+     }
+    ],
+    "schema_version": "1"
+   },
+   "resource_scope": {
+    "kind": "study",
+    "scope_version": "1",
+    "study_id": "51000000-0000-4000-8000-000000000001"
+   },
+   "source_refs": [],
+   "study_id": "51000000-0000-4000-8000-000000000001",
+   "title": "Mission profile note"
+  }
+ ],
+ "model_drafts": {
+  "53000000-0000-4000-8000-000000000001": {
+   "annotations": [],
+   "assumptions": [
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000001",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "kind": "model"
+     },
+     "statement": "Cruise at constant Mach number."
+    },
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000002",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "kind": "instance"
+     },
+     "statement": "Structural index from the historical regression."
+    }
+   ],
+   "boundary_mappings": [],
+   "connections": [
+    {
+     "connection_id": "57000000-0000-4000-8000-000000000001",
+     "source_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "port_id": "56000000-0000-4000-8000-000000000003"
+     },
+     "target_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000003",
+      "port_id": "56000000-0000-4000-8000-000000000004"
+     }
+    }
+   ],
+   "definitions": [
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000001",
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "kind": "composite",
+     "name": "Aircraft",
+     "ports": [],
+     "quantity_definitions": [],
+     "residual_port_ids": [],
+     "source_refs": []
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000002",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "kind": "explicit_component",
+     "name": "MassClosure",
+     "ports": [
+      {
+       "code_symbol": "payload_mass",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "payload_mass",
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "structural_index",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "structural_index",
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "output",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "statement": "Payload mass carried on the design mission."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "statement": "Structural index: empty mass over take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "statement": "Maximum take-off mass."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+     ]
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000003",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "kind": "explicit_component",
+     "name": "Range",
+     "ports": [
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "fuel_fraction",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "fuel_fraction",
+       "port_id": "56000000-0000-4000-8000-000000000005",
+       "units": {
+        "kind": "unspecified"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "range",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "range",
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "units": {
+        "expression": "km",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "feasible",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "feasible",
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "statement": "Maximum take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "statement": "Still-air range at cruise."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+     ]
+    }
+   ],
+   "draft_revision": "draft-7",
+   "instances": [
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "instance_id": "54000000-0000-4000-8000-000000000001",
+     "name": "Aircraft"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "instance_id": "54000000-0000-4000-8000-000000000002",
+     "name": "Mass closure"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "instance_id": "54000000-0000-4000-8000-000000000003",
+     "name": "Range"
+    }
+   ],
+   "model_id": "53000000-0000-4000-8000-000000000001",
+   "name": "Hydrogen aircraft",
+   "ports": [
+    {
+     "code_symbol": "payload_mass",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "payload_mass",
+     "port_id": "56000000-0000-4000-8000-000000000001",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "structural_index",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "structural_index",
+     "port_id": "56000000-0000-4000-8000-000000000002",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "output",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000003",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000004",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "fuel_fraction",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "fuel_fraction",
+     "port_id": "56000000-0000-4000-8000-000000000005",
+     "units": {
+      "kind": "unspecified"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "range",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "range",
+     "port_id": "56000000-0000-4000-8000-000000000006",
+     "units": {
+      "expression": "km",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "feasible",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "feasible",
+     "port_id": "56000000-0000-4000-8000-000000000007",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    }
+   ],
+   "required_capabilities": [
+    "model_assumptions/1",
+    "quantity_definitions/1",
+    "unit_declarations/1"
+   ],
+   "root_instance_id": "54000000-0000-4000-8000-000000000001",
+   "schema_version": "4",
+   "source_files": [
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+    },
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+    }
+   ],
+   "study_id": "51000000-0000-4000-8000-000000000001"
+  }
+ },
+ "model_revision": {
+  "53000000-0000-4000-8000-000000000011": {
+   "annotations": [],
+   "assumptions": [
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000001",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "kind": "model"
+     },
+     "statement": "Cruise at constant Mach number."
+    },
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000002",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "kind": "instance"
+     },
+     "statement": "Structural index from the historical regression."
+    }
+   ],
+   "boundary_mappings": [],
+   "connections": [
+    {
+     "connection_id": "57000000-0000-4000-8000-000000000001",
+     "source_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "port_id": "56000000-0000-4000-8000-000000000003"
+     },
+     "target_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000003",
+      "port_id": "56000000-0000-4000-8000-000000000004"
+     }
+    }
+   ],
+   "definitions": [
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000001",
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "kind": "composite",
+     "name": "Aircraft",
+     "ports": [],
+     "quantity_definitions": [],
+     "residual_port_ids": [],
+     "source_refs": []
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000002",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "kind": "explicit_component",
+     "name": "MassClosure",
+     "ports": [
+      {
+       "code_symbol": "payload_mass",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "payload_mass",
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "structural_index",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "structural_index",
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "output",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "statement": "Payload mass carried on the design mission."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "statement": "Structural index: empty mass over take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "statement": "Maximum take-off mass."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+     ]
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000003",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "kind": "explicit_component",
+     "name": "Range",
+     "ports": [
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "fuel_fraction",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "fuel_fraction",
+       "port_id": "56000000-0000-4000-8000-000000000005",
+       "units": {
+        "kind": "unspecified"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "range",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "range",
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "units": {
+        "expression": "km",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "feasible",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "feasible",
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "statement": "Maximum take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "statement": "Still-air range at cruise."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+     ]
+    }
+   ],
+   "digest": "73dc002a39a0e14514574a0d10cf4f9250c19221deb2cb0a0cd18090b64c05a4",
+   "instances": [
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "instance_id": "54000000-0000-4000-8000-000000000001",
+     "name": "Aircraft"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "instance_id": "54000000-0000-4000-8000-000000000002",
+     "name": "Mass closure"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "instance_id": "54000000-0000-4000-8000-000000000003",
+     "name": "Range"
+    }
+   ],
+   "model_id": "53000000-0000-4000-8000-000000000001",
+   "model_revision_id": "53000000-0000-4000-8000-000000000011",
+   "originating_draft_revision": "draft-3",
+   "parent_model_revision_id": null,
+   "ports": [
+    {
+     "code_symbol": "payload_mass",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "payload_mass",
+     "port_id": "56000000-0000-4000-8000-000000000001",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "structural_index",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "structural_index",
+     "port_id": "56000000-0000-4000-8000-000000000002",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "output",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000003",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000004",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "fuel_fraction",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "fuel_fraction",
+     "port_id": "56000000-0000-4000-8000-000000000005",
+     "units": {
+      "kind": "unspecified"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "range",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "range",
+     "port_id": "56000000-0000-4000-8000-000000000006",
+     "units": {
+      "expression": "km",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "feasible",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "feasible",
+     "port_id": "56000000-0000-4000-8000-000000000007",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    }
+   ],
+   "required_capabilities": [
+    "model_assumptions/1",
+    "quantity_definitions/1",
+    "unit_declarations/1"
+   ],
+   "root_instance_id": "54000000-0000-4000-8000-000000000001",
+   "schema_version": "4",
+   "source_files": [
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+    },
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+    }
+   ]
+  },
+  "53000000-0000-4000-8000-000000000012": {
+   "annotations": [],
+   "assumptions": [
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000001",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "kind": "model"
+     },
+     "statement": "Cruise at constant Mach number."
+    },
+    {
+     "assumption_id": "58000000-0000-4000-8000-000000000002",
+     "evidence_links": [
+      {
+       "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+       "relation": "supports"
+      }
+     ],
+     "owner": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "kind": "instance"
+     },
+     "statement": "Structural index from the historical regression."
+    }
+   ],
+   "boundary_mappings": [],
+   "connections": [
+    {
+     "connection_id": "57000000-0000-4000-8000-000000000001",
+     "source_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000002",
+      "port_id": "56000000-0000-4000-8000-000000000003"
+     },
+     "target_ref": {
+      "instance_id": "54000000-0000-4000-8000-000000000003",
+      "port_id": "56000000-0000-4000-8000-000000000004"
+     }
+    }
+   ],
+   "definitions": [
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000001",
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "kind": "composite",
+     "name": "Aircraft",
+     "ports": [],
+     "quantity_definitions": [],
+     "residual_port_ids": [],
+     "source_refs": []
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000002",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "kind": "explicit_component",
+     "name": "MassClosure",
+     "ports": [
+      {
+       "code_symbol": "payload_mass",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "payload_mass",
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "structural_index",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "structural_index",
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "output",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "statement": "Payload mass carried on the design mission."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "statement": "Structural index: empty mass over take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "statement": "Maximum take-off mass."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+     ]
+    },
+    {
+     "annotations": [],
+     "boundary_mappings": [],
+     "child_instances": [],
+     "definition_id": "55000000-0000-4000-8000-000000000003",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "kind": "explicit_component",
+     "name": "Range",
+     "ports": [
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "fuel_fraction",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "fuel_fraction",
+       "port_id": "56000000-0000-4000-8000-000000000005",
+       "units": {
+        "kind": "unspecified"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "range",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "range",
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "units": {
+        "expression": "km",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "feasible",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "feasible",
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "quantity_definitions": [
+      {
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "statement": "Maximum take-off mass."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "statement": "Still-air range at cruise."
+      },
+      {
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+      }
+     ],
+     "residual_port_ids": [],
+     "source_refs": [
+      "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+     ]
+    }
+   ],
+   "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+   "instances": [
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000011",
+     "instance_id": "54000000-0000-4000-8000-000000000001",
+     "name": "Aircraft"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "instance_id": "54000000-0000-4000-8000-000000000002",
+     "name": "Mass closure"
+    },
+    {
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "instance_id": "54000000-0000-4000-8000-000000000003",
+     "name": "Range"
+    }
+   ],
+   "model_id": "53000000-0000-4000-8000-000000000001",
+   "model_revision_id": "53000000-0000-4000-8000-000000000012",
+   "originating_draft_revision": "draft-6",
+   "parent_model_revision_id": "53000000-0000-4000-8000-000000000011",
+   "ports": [
+    {
+     "code_symbol": "payload_mass",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "payload_mass",
+     "port_id": "56000000-0000-4000-8000-000000000001",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "structural_index",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "input",
+     "name": "structural_index",
+     "port_id": "56000000-0000-4000-8000-000000000002",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000012",
+     "direction": "output",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000003",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "mtow",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "mtow",
+     "port_id": "56000000-0000-4000-8000-000000000004",
+     "units": {
+      "expression": "kg",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "fuel_fraction",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "input",
+     "name": "fuel_fraction",
+     "port_id": "56000000-0000-4000-8000-000000000005",
+     "units": {
+      "kind": "unspecified"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "range",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "range",
+     "port_id": "56000000-0000-4000-8000-000000000006",
+     "units": {
+      "expression": "km",
+      "kind": "physical"
+     },
+     "value_type": "real_scalar"
+    },
+    {
+     "code_symbol": "feasible",
+     "definition_version_id": "55000000-0000-4000-8000-000000000013",
+     "direction": "output",
+     "name": "feasible",
+     "port_id": "56000000-0000-4000-8000-000000000007",
+     "units": {
+      "kind": "dimensionless"
+     },
+     "value_type": "real_scalar"
+    }
+   ],
+   "required_capabilities": [
+    "model_assumptions/1",
+    "quantity_definitions/1",
+    "unit_declarations/1"
+   ],
+   "root_instance_id": "54000000-0000-4000-8000-000000000001",
+   "schema_version": "4",
+   "source_files": [
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+    },
+    {
+     "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+     "encoding": "base64",
+     "media_type": "text/x-python",
+     "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+    }
+   ]
+  }
+ },
+ "model_revisions": {
+  "53000000-0000-4000-8000-000000000001": [
+   {
+    "digest": "73dc002a39a0e14514574a0d10cf4f9250c19221deb2cb0a0cd18090b64c05a4",
+    "model_revision_id": "53000000-0000-4000-8000-000000000011",
+    "originating_draft_revision": "draft-3",
+    "parent_model_revision_id": null
+   },
+   {
+    "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "originating_draft_revision": "draft-6",
+    "parent_model_revision_id": "53000000-0000-4000-8000-000000000011"
+   }
+  ]
+ },
+ "models": [
+  {
+   "command_id": "5d000000-0000-4000-8000-000000000009",
+   "model_id": "53000000-0000-4000-8000-000000000001"
+  }
+ ],
+ "readiness": {
+  "capability": "flat_explicit_scalar",
+  "expires_at": "2026-10-14T08:05:00Z",
+  "observed_at": "2026-10-14T08:00:00Z",
+  "readiness_schema_version": "1",
+  "reasons": [],
+  "status": "ready"
+ },
+ "result_sources": [
+  {
+   "labels": {
+    "instance_name": "Mass closure",
+    "model_name": "Hydrogen aircraft",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "output_name": "mtow",
+    "run_name": "Run of 'Liquid hydrogen, 9,000 km'"
+   },
+   "native_availability": "not_rechecked",
+   "outcomes": {
+    "applicability": {
+     "evidence_refs": [],
+     "state": "unassessed"
+    },
+    "criteria": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "outcome": "met",
+      "reason": "range 9000.000000000002 km >= 9000 km"
+     },
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "outcome": "met",
+      "reason": "feasible 1 = 1"
+     }
+    ],
+    "execution": {
+     "exit_code": 0,
+     "message": "",
+     "state": "finished"
+    }
+   },
+   "results_digest": "82f3e9c695dc6b8d1b11818d5701919e286de8d47f7c3eb3100c485f79e57828",
+   "source_configuration_digest": "aad096d302d3a6936656ce2fad30c31c94e1b57132af96a8ef0deba01ecdf0b1",
+   "source_output": {
+    "instance_id": "54000000-0000-4000-8000-000000000002",
+    "port_id": "56000000-0000-4000-8000-000000000003"
+   },
+   "source_run_id": "5c000000-0000-4000-8000-000000000001",
+   "units": "kg",
+   "value": 22500.0
+  },
+  {
+   "labels": {
+    "instance_name": "Range",
+    "model_name": "Hydrogen aircraft",
+    "model_revision_id": "53000000-0000-4000-8000-000000000012",
+    "output_name": "range",
+    "run_name": "Run of 'Liquid hydrogen, 9,000 km'"
+   },
+   "native_availability": "not_rechecked",
+   "outcomes": {
+    "applicability": {
+     "evidence_refs": [],
+     "state": "unassessed"
+    },
+    "criteria": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "outcome": "met",
+      "reason": "range 9000.000000000002 km >= 9000 km"
+     },
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "outcome": "met",
+      "reason": "feasible 1 = 1"
+     }
+    ],
+    "execution": {
+     "exit_code": 0,
+     "message": "",
+     "state": "finished"
+    }
+   },
+   "results_digest": "82f3e9c695dc6b8d1b11818d5701919e286de8d47f7c3eb3100c485f79e57828",
+   "source_configuration_digest": "aad096d302d3a6936656ce2fad30c31c94e1b57132af96a8ef0deba01ecdf0b1",
+   "source_output": {
+    "instance_id": "54000000-0000-4000-8000-000000000003",
+    "port_id": "56000000-0000-4000-8000-000000000006"
+   },
+   "source_run_id": "5c000000-0000-4000-8000-000000000001",
+   "units": "km",
+   "value": 9000.000000000002
+  }
+ ],
+ "run_details": {
+  "5c000000-0000-4000-8000-000000000001": {
+   "command_id": "5d000000-0000-4000-8000-000000000001",
+   "exit_status": 0,
+   "history": {
+    "approach_closure": {
+     "approach_versions": [
+      {
+       "approach_id": "5a000000-0000-4000-8000-000000000001",
+       "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+       "content": {
+        "assumptions": [
+         {
+          "assumption_id": "5a000000-0000-4000-8000-000000000071",
+          "evidence_links": [],
+          "role": "overall_method",
+          "statement": "Standard atmosphere."
+         }
+        ],
+        "basis_refs": [
+         {
+          "kind": "run",
+          "reason": "Baseline result",
+          "relation": "supports",
+          "run_id": "5c000000-0000-4000-8000-000000000001"
+         }
+        ],
+        "cases": [
+         {
+          "binding_id": "5a000000-0000-4000-8000-000000000031",
+          "case_id": "5a000000-0000-4000-8000-000000000051",
+          "evidence_links": [],
+          "question": "Is 9,000 km reachable?",
+          "rationale": "",
+          "title": "Baseline mission"
+         },
+         {
+          "binding_id": null,
+          "case_id": "5a000000-0000-4000-8000-000000000052",
+          "evidence_links": [],
+          "question": "Is 12,000 km reachable?",
+          "rationale": "Market study asks for it.",
+          "title": "Long range"
+         }
+        ],
+        "elaboration": null,
+        "limit_items": [
+         {
+          "evidence_links": [],
+          "limit_id": "5a000000-0000-4000-8000-000000000061",
+          "statement": "Valid for subsonic cruise only."
+         }
+        ],
+        "limitations": "Fixed engine efficiency.",
+        "model_bindings": [
+         {
+          "binding_id": "5a000000-0000-4000-8000-000000000031",
+          "model_id": "53000000-0000-4000-8000-000000000001",
+          "model_revision_id": "53000000-0000-4000-8000-000000000012"
+         }
+        ],
+        "open_questions": "Tank insulation mass is not yet sourced.",
+        "original_question": {
+         "attribution": {
+          "kind": "human",
+          "label": null
+         },
+         "text": "Is a hydrogen airliner feasible?"
+        },
+        "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+        "schema_version": "2",
+        "scope": "Conceptual sizing only; no certification analysis.",
+        "steps": [
+         {
+          "assumption_refs": [],
+          "evidence_links": [
+           {
+            "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+            "locator": "p. 12",
+            "relation": "context"
+           }
+          ],
+          "implementation_refs": [],
+          "implementation_state": "proposed",
+          "intent": {
+           "depends_on_step_ids": [],
+           "inputs": "Payload, range",
+           "outputs": "MTOW",
+           "transformation": "Mission to masses"
+          },
+          "purpose": "Size the aircraft for the mission.",
+          "rationale": "",
+          "remaining_work": "",
+          "step_id": "5a000000-0000-4000-8000-000000000041",
+          "title": "Mission definition"
+         },
+         {
+          "assumption_refs": [],
+          "evidence_links": [
+           {
+            "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+            "locator": "p. 12",
+            "relation": "context"
+           }
+          ],
+          "implementation_refs": [
+           {
+            "binding_id": "5a000000-0000-4000-8000-000000000031",
+            "kind": "model"
+           }
+          ],
+          "implementation_state": "partial",
+          "intent": {
+           "depends_on_step_ids": [
+            "5a000000-0000-4000-8000-000000000041"
+           ],
+           "inputs": "Payload, range",
+           "outputs": "MTOW",
+           "transformation": "Mission to masses"
+          },
+          "purpose": "Close the mass loop with the tank structural index.",
+          "rationale": "",
+          "remaining_work": "Add the tank insulation mass.",
+          "step_id": "5a000000-0000-4000-8000-000000000042",
+          "title": "Mass closure"
+         }
+        ]
+       },
+       "created_at": "2026-10-12T10:00:00Z",
+       "created_by": "52000000-0000-4000-8000-000000000001",
+       "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+       "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+       "schema_version": "2",
+       "study_id": "51000000-0000-4000-8000-000000000001",
+       "version_number": 2
+      }
+     ],
+     "configurations": [],
+     "digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+     "evidence": [],
+     "models": [],
+     "root_approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "root_approach_version_id": "5a000000-0000-4000-8000-000000000012",
+     "run_contexts": [],
+     "schema_version": "3"
+    },
+    "artifacts": [
+     {
+      "artifact_id": "5e000000-0000-4000-8000-000000000001",
+      "media_type": "application/octet-stream",
+      "name": "results.json",
+      "role": "results",
+      "sha256": "c4793fb94443793eb32e1128b2d4d2cb4c20bed467a6929ec09f78cb87af21a1",
+      "size": 812
+     }
+    ],
+    "assessment": {
+     "evaluator_sha256": "27f6343f980c4c0ab821d9c72d211d0eb76b0853825cefd80476a05e43cab27e",
+     "version": "fixed-threshold-1"
+    },
+    "bundle": {
+     "approach_closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+     "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "bundle_digest": "93db9dc111b649382b9b8914e26d78c6af16c78e0d0a588bd9198b7533e307a7",
+     "configuration_digest": "aad096d302d3a6936656ce2fad30c31c94e1b57132af96a8ef0deba01ecdf0b1",
+     "dependencies": [
+      {
+       "lock_path": "locks/openmdao.lock",
+       "name": "openmdao",
+       "version": "3.45.1"
+      }
+     ],
+     "model_digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+     "model_schema_version": "4",
+     "schema_version": "8"
+    },
+    "configuration": {
+     "approach_binding": {
+      "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+      "case_id": "5a000000-0000-4000-8000-000000000051",
+      "closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f"
+     },
+     "assumptions": [
+      {
+       "assumption_id": "5b000000-0000-4000-8000-000000000021",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "relation": "supports"
+        }
+       ],
+       "statement": "Reserves are 5 % of trip fuel."
+      }
+     ],
+     "configuration_id": "5b000000-0000-4000-8000-000000000001",
+     "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+     "context_snapshot": {
+      "boundary": "Aircraft level; airport infrastructure excluded.",
+      "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+      "notes": []
+     },
+     "context_source": {
+      "expected_study_revision": "study-rev-4",
+      "kind": "current_study"
+     },
+     "criteria": [
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000031",
+       "evidence_version_ids": [
+        "59000000-0000-4000-8000-000000000012"
+       ],
+       "operator": "ge",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000006"
+       },
+       "threshold": 9000,
+       "units": "km"
+      },
+      {
+       "absolute_tolerance": 0.0,
+       "criterion_id": "5b000000-0000-4000-8000-000000000032",
+       "evidence_version_ids": [],
+       "operator": "eq",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000007"
+       },
+       "threshold": 1,
+       "units": ""
+      }
+     ],
+     "derivation": null,
+     "digest": "aad096d302d3a6936656ce2fad30c31c94e1b57132af96a8ef0deba01ecdf0b1",
+     "evidence_snapshots": [],
+     "general_context_evidence_version_ids": [],
+     "inputs": [
+      {
+       "provenance": {
+        "evidence_version_ids": [],
+        "kind": "manual",
+        "statement": "Study brief"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000001"
+       },
+       "units": "kg",
+       "value": 15300
+      },
+      {
+       "provenance": {
+        "evidence_version_ids": [
+         "59000000-0000-4000-8000-000000000021"
+        ],
+        "kind": "source",
+        "statement": "Andro et al. 2022, Table 3"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000002"
+       },
+       "units": "",
+       "value": 0.32
+      },
+      {
+       "provenance": {
+        "evidence_version_ids": [],
+        "kind": "manual",
+        "statement": "Judgement: early estimate"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000005"
+       },
+       "units": "",
+       "value": 0.25
+      }
+     ],
+     "model_id": "53000000-0000-4000-8000-000000000001",
+     "model_revision_id": "53000000-0000-4000-8000-000000000012",
+     "name": "Liquid hydrogen, 9,000 km",
+     "numerical": {
+      "constraints": [],
+      "derivatives": {
+       "check": null,
+       "form": null,
+       "method": "none"
+      },
+      "design_variables": [],
+      "initialization": [],
+      "mode": "deterministic",
+      "objectives": [],
+      "optimizer": null,
+      "solvers": [],
+      "uncertainty": null
+     },
+     "parent_revision_id": null,
+     "required_capabilities": [
+      "configuration_assumptions/1"
+     ],
+     "schema_version": "4",
+     "study_id": "51000000-0000-4000-8000-000000000001"
+    },
+    "context": {
+     "boundary": "Aircraft level; airport infrastructure excluded.",
+     "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+     "notes": []
+    },
+    "errors": [],
+    "evidence": [],
+    "history_schema_version": "6",
+    "model_snapshot": {
+     "annotations": [],
+     "assumptions": [
+      {
+       "assumption_id": "58000000-0000-4000-8000-000000000001",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "relation": "supports"
+        }
+       ],
+       "owner": {
+        "kind": "model"
+       },
+       "statement": "Cruise at constant Mach number."
+      },
+      {
+       "assumption_id": "58000000-0000-4000-8000-000000000002",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+         "relation": "supports"
+        }
+       ],
+       "owner": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "kind": "instance"
+       },
+       "statement": "Structural index from the historical regression."
+      }
+     ],
+     "boundary_mappings": [],
+     "connections": [
+      {
+       "connection_id": "57000000-0000-4000-8000-000000000001",
+       "source_ref": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000003"
+       },
+       "target_ref": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000004"
+       }
+      }
+     ],
+     "definitions": [
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000001",
+       "definition_version_id": "55000000-0000-4000-8000-000000000011",
+       "kind": "composite",
+       "name": "Aircraft",
+       "ports": [],
+       "quantity_definitions": [],
+       "residual_port_ids": [],
+       "source_refs": []
+      },
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000002",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "kind": "explicit_component",
+       "name": "MassClosure",
+       "ports": [
+        {
+         "code_symbol": "payload_mass",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "input",
+         "name": "payload_mass",
+         "port_id": "56000000-0000-4000-8000-000000000001",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "structural_index",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "input",
+         "name": "structural_index",
+         "port_id": "56000000-0000-4000-8000-000000000002",
+         "units": {
+          "kind": "dimensionless"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "mtow",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "output",
+         "name": "mtow",
+         "port_id": "56000000-0000-4000-8000-000000000003",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        }
+       ],
+       "quantity_definitions": [
+        {
+         "port_id": "56000000-0000-4000-8000-000000000001",
+         "statement": "Payload mass carried on the design mission."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000002",
+         "statement": "Structural index: empty mass over take-off mass."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000003",
+         "statement": "Maximum take-off mass."
+        }
+       ],
+       "residual_port_ids": [],
+       "source_refs": [
+        "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+       ]
+      },
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000003",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "kind": "explicit_component",
+       "name": "Range",
+       "ports": [
+        {
+         "code_symbol": "mtow",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "input",
+         "name": "mtow",
+         "port_id": "56000000-0000-4000-8000-000000000004",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "fuel_fraction",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "input",
+         "name": "fuel_fraction",
+         "port_id": "56000000-0000-4000-8000-000000000005",
+         "units": {
+          "kind": "unspecified"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "range",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "output",
+         "name": "range",
+         "port_id": "56000000-0000-4000-8000-000000000006",
+         "units": {
+          "expression": "km",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "feasible",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "output",
+         "name": "feasible",
+         "port_id": "56000000-0000-4000-8000-000000000007",
+         "units": {
+          "kind": "dimensionless"
+         },
+         "value_type": "real_scalar"
+        }
+       ],
+       "quantity_definitions": [
+        {
+         "port_id": "56000000-0000-4000-8000-000000000004",
+         "statement": "Maximum take-off mass."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000006",
+         "statement": "Still-air range at cruise."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000007",
+         "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+        }
+       ],
+       "residual_port_ids": [],
+       "source_refs": [
+        "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+       ]
+      }
+     ],
+     "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+     "instances": [
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000011",
+       "instance_id": "54000000-0000-4000-8000-000000000001",
+       "name": "Aircraft"
+      },
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "name": "Mass closure"
+      },
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "name": "Range"
+      }
+     ],
+     "model_id": "53000000-0000-4000-8000-000000000001",
+     "model_revision_id": "53000000-0000-4000-8000-000000000012",
+     "originating_draft_revision": "draft-6",
+     "parent_model_revision_id": "53000000-0000-4000-8000-000000000011",
+     "ports": [
+      {
+       "code_symbol": "payload_mass",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "payload_mass",
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "structural_index",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "structural_index",
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "output",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "fuel_fraction",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "fuel_fraction",
+       "port_id": "56000000-0000-4000-8000-000000000005",
+       "units": {
+        "kind": "unspecified"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "range",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "range",
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "units": {
+        "expression": "km",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "feasible",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "feasible",
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "required_capabilities": [
+      "model_assumptions/1",
+      "quantity_definitions/1",
+      "unit_declarations/1"
+     ],
+     "root_instance_id": "54000000-0000-4000-8000-000000000001",
+     "schema_version": "4",
+     "source_files": [
+      {
+       "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+       "encoding": "base64",
+       "media_type": "text/x-python",
+       "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+      },
+      {
+       "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+       "encoding": "base64",
+       "media_type": "text/x-python",
+       "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+      }
+     ]
+    },
+    "results": {
+     "applicability": {
+      "evidence_refs": [],
+      "state": "unassessed"
+     },
+     "artifacts": [],
+     "bundle_digest": "93db9dc111b649382b9b8914e26d78c6af16c78e0d0a588bd9198b7533e307a7",
+     "completeness": {
+      "available": 3,
+      "expected": 3,
+      "failed": 0,
+      "unavailable": 0
+     },
+     "convergence": {
+      "diagnostics_ref": null,
+      "state": "not_applicable"
+     },
+     "criteria": [
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000031",
+       "outcome": "met",
+       "reason": "range 9000.000000000002 km >= 9000 km"
+      },
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000032",
+       "outcome": "met",
+       "reason": "feasible 1 = 1"
+      }
+     ],
+     "execution": {
+      "exit_code": 0,
+      "message": "",
+      "state": "finished"
+     },
+     "optimization": {
+      "feasibility": "not_applicable",
+      "termination": "not_applicable"
+     },
+     "outputs": [
+      {
+       "assigned": true,
+       "availability": "available",
+       "producer_completed": true,
+       "reason": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000003"
+       },
+       "units": "kg",
+       "value": 22500.0
+      },
+      {
+       "assigned": true,
+       "availability": "available",
+       "producer_completed": true,
+       "reason": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000006"
+       },
+       "units": "km",
+       "value": 9000.000000000002
+      },
+      {
+       "assigned": true,
+       "availability": "available",
+       "producer_completed": true,
+       "reason": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000007"
+       },
+       "units": "",
+       "value": 1.0
+      }
+     ],
+     "run_id": "5c000000-0000-4000-8000-000000000001",
+     "schema_version": "1"
+    }
+   },
+   "process_state": "finished",
+   "receipt_url": "/api/1/studies/51000000-0000-4000-8000-000000000001/commands/5d000000-0000-4000-8000-000000000001?category=run",
+   "retained_integrity": {
+    "results_digest": "15d36a256abdb06576a0c3211f4b7f56e78382777abb656ec5b6bbc360147fec",
+    "schema_version": "1"
+   },
+   "run_id": "5c000000-0000-4000-8000-000000000001",
+   "state": "recorded"
+  },
+  "5c000000-0000-4000-8000-000000000002": {
+   "command_id": "5d000000-0000-4000-8000-000000000002",
+   "exit_status": 1,
+   "history": {
+    "approach_closure": {
+     "approach_versions": [
+      {
+       "approach_id": "5a000000-0000-4000-8000-000000000001",
+       "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+       "content": {
+        "assumptions": [
+         {
+          "assumption_id": "5a000000-0000-4000-8000-000000000071",
+          "evidence_links": [],
+          "role": "overall_method",
+          "statement": "Standard atmosphere."
+         }
+        ],
+        "basis_refs": [
+         {
+          "kind": "run",
+          "reason": "Baseline result",
+          "relation": "supports",
+          "run_id": "5c000000-0000-4000-8000-000000000001"
+         }
+        ],
+        "cases": [
+         {
+          "binding_id": "5a000000-0000-4000-8000-000000000031",
+          "case_id": "5a000000-0000-4000-8000-000000000051",
+          "evidence_links": [],
+          "question": "Is 9,000 km reachable?",
+          "rationale": "",
+          "title": "Baseline mission"
+         },
+         {
+          "binding_id": null,
+          "case_id": "5a000000-0000-4000-8000-000000000052",
+          "evidence_links": [],
+          "question": "Is 12,000 km reachable?",
+          "rationale": "Market study asks for it.",
+          "title": "Long range"
+         }
+        ],
+        "elaboration": null,
+        "limit_items": [
+         {
+          "evidence_links": [],
+          "limit_id": "5a000000-0000-4000-8000-000000000061",
+          "statement": "Valid for subsonic cruise only."
+         }
+        ],
+        "limitations": "Fixed engine efficiency.",
+        "model_bindings": [
+         {
+          "binding_id": "5a000000-0000-4000-8000-000000000031",
+          "model_id": "53000000-0000-4000-8000-000000000001",
+          "model_revision_id": "53000000-0000-4000-8000-000000000012"
+         }
+        ],
+        "open_questions": "Tank insulation mass is not yet sourced.",
+        "original_question": {
+         "attribution": {
+          "kind": "human",
+          "label": null
+         },
+         "text": "Is a hydrogen airliner feasible?"
+        },
+        "question": "Can a liquid hydrogen aircraft carry 150 passengers over 9,000 km?",
+        "schema_version": "2",
+        "scope": "Conceptual sizing only; no certification analysis.",
+        "steps": [
+         {
+          "assumption_refs": [],
+          "evidence_links": [
+           {
+            "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+            "locator": "p. 12",
+            "relation": "context"
+           }
+          ],
+          "implementation_refs": [],
+          "implementation_state": "proposed",
+          "intent": {
+           "depends_on_step_ids": [],
+           "inputs": "Payload, range",
+           "outputs": "MTOW",
+           "transformation": "Mission to masses"
+          },
+          "purpose": "Size the aircraft for the mission.",
+          "rationale": "",
+          "remaining_work": "",
+          "step_id": "5a000000-0000-4000-8000-000000000041",
+          "title": "Mission definition"
+         },
+         {
+          "assumption_refs": [],
+          "evidence_links": [
+           {
+            "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+            "locator": "p. 12",
+            "relation": "context"
+           }
+          ],
+          "implementation_refs": [
+           {
+            "binding_id": "5a000000-0000-4000-8000-000000000031",
+            "kind": "model"
+           }
+          ],
+          "implementation_state": "partial",
+          "intent": {
+           "depends_on_step_ids": [
+            "5a000000-0000-4000-8000-000000000041"
+           ],
+           "inputs": "Payload, range",
+           "outputs": "MTOW",
+           "transformation": "Mission to masses"
+          },
+          "purpose": "Close the mass loop with the tank structural index.",
+          "rationale": "",
+          "remaining_work": "Add the tank insulation mass.",
+          "step_id": "5a000000-0000-4000-8000-000000000042",
+          "title": "Mass closure"
+         }
+        ]
+       },
+       "created_at": "2026-10-12T10:00:00Z",
+       "created_by": "52000000-0000-4000-8000-000000000001",
+       "digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+       "predecessor_version_id": "5a000000-0000-4000-8000-000000000011",
+       "schema_version": "2",
+       "study_id": "51000000-0000-4000-8000-000000000001",
+       "version_number": 2
+      }
+     ],
+     "configurations": [],
+     "digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+     "evidence": [],
+     "models": [],
+     "root_approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "root_approach_version_id": "5a000000-0000-4000-8000-000000000012",
+     "run_contexts": [],
+     "schema_version": "3"
+    },
+    "artifacts": [
+     {
+      "artifact_id": "5e000000-0000-4000-8000-000000000001",
+      "media_type": "application/octet-stream",
+      "name": "results.json",
+      "role": "results",
+      "sha256": "c4793fb94443793eb32e1128b2d4d2cb4c20bed467a6929ec09f78cb87af21a1",
+      "size": 812
+     }
+    ],
+    "assessment": {
+     "evaluator_sha256": "27f6343f980c4c0ab821d9c72d211d0eb76b0853825cefd80476a05e43cab27e",
+     "version": "fixed-threshold-1"
+    },
+    "bundle": {
+     "approach_closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f",
+     "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+     "bundle_digest": "b7a08c97408a35b4bcf1e91b33c9e4df52ffc42cf19ffa3b54e1f174814ce341",
+     "configuration_digest": "e3316a52344ac4ebd8aa00769d89d83f33cd41dd17a871ad64dd036f56d044f7",
+     "dependencies": [
+      {
+       "lock_path": "locks/openmdao.lock",
+       "name": "openmdao",
+       "version": "3.45.1"
+      }
+     ],
+     "model_digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+     "model_schema_version": "4",
+     "schema_version": "8"
+    },
+    "configuration": {
+     "approach_binding": {
+      "approach_digest": "aacf8ad6d2949334025da5da49d2f5b3807ae0238e2c4a1c7b38b87947636299",
+      "approach_id": "5a000000-0000-4000-8000-000000000001",
+      "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+      "case_id": "5a000000-0000-4000-8000-000000000051",
+      "closure_digest": "5b2c4dd9df863025964d63120744444d977f9a6f7c3697f122326bb09a55e88f"
+     },
+     "assumptions": [
+      {
+       "assumption_id": "5b000000-0000-4000-8000-000000000021",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "relation": "supports"
+        }
+       ],
+       "statement": "Reserves are 5 % of trip fuel."
+      }
+     ],
+     "configuration_id": "5b000000-0000-4000-8000-000000000001",
+     "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+     "context_snapshot": {
+      "boundary": "Aircraft level; airport infrastructure excluded.",
+      "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+      "notes": []
+     },
+     "context_source": {
+      "expected_study_revision": "study-rev-4",
+      "kind": "current_study"
+     },
+     "criteria": [
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000031",
+       "evidence_version_ids": [
+        "59000000-0000-4000-8000-000000000012"
+       ],
+       "operator": "ge",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000006"
+       },
+       "threshold": 9000,
+       "units": "km"
+      },
+      {
+       "absolute_tolerance": 0.0,
+       "criterion_id": "5b000000-0000-4000-8000-000000000032",
+       "evidence_version_ids": [],
+       "operator": "eq",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000007"
+       },
+       "threshold": 1,
+       "units": ""
+      }
+     ],
+     "derivation": null,
+     "digest": "e3316a52344ac4ebd8aa00769d89d83f33cd41dd17a871ad64dd036f56d044f7",
+     "evidence_snapshots": [],
+     "general_context_evidence_version_ids": [],
+     "inputs": [
+      {
+       "provenance": {
+        "evidence_version_ids": [],
+        "kind": "manual",
+        "statement": "Study brief"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000001"
+       },
+       "units": "kg",
+       "value": 15300
+      },
+      {
+       "provenance": {
+        "evidence_version_ids": [
+         "59000000-0000-4000-8000-000000000021"
+        ],
+        "kind": "source",
+        "statement": "Andro et al. 2022, Table 3"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000002"
+       },
+       "units": "",
+       "value": 0.31
+      },
+      {
+       "provenance": {
+        "evidence_version_ids": [],
+        "kind": "manual",
+        "statement": "Judgement: early estimate"
+       },
+       "result_binding": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000005"
+       },
+       "units": "",
+       "value": 0.3333333333333333
+      }
+     ],
+     "model_id": "53000000-0000-4000-8000-000000000001",
+     "model_revision_id": "53000000-0000-4000-8000-000000000012",
+     "name": "Liquid hydrogen, 12,000 km",
+     "numerical": {
+      "constraints": [],
+      "derivatives": {
+       "check": null,
+       "form": null,
+       "method": "none"
+      },
+      "design_variables": [],
+      "initialization": [],
+      "mode": "deterministic",
+      "objectives": [],
+      "optimizer": null,
+      "solvers": [],
+      "uncertainty": null
+     },
+     "parent_revision_id": "5b000000-0000-4000-8000-000000000011",
+     "required_capabilities": [
+      "configuration_assumptions/1"
+     ],
+     "schema_version": "4",
+     "study_id": "51000000-0000-4000-8000-000000000001"
+    },
+    "context": {
+     "boundary": "Aircraft level; airport infrastructure excluded.",
+     "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+     "notes": []
+    },
+    "errors": [],
+    "evidence": [],
+    "history_schema_version": "6",
+    "model_snapshot": {
+     "annotations": [],
+     "assumptions": [
+      {
+       "assumption_id": "58000000-0000-4000-8000-000000000001",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000012",
+         "relation": "supports"
+        }
+       ],
+       "owner": {
+        "kind": "model"
+       },
+       "statement": "Cruise at constant Mach number."
+      },
+      {
+       "assumption_id": "58000000-0000-4000-8000-000000000002",
+       "evidence_links": [
+        {
+         "evidence_version_id": "59000000-0000-4000-8000-000000000021",
+         "relation": "supports"
+        }
+       ],
+       "owner": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "kind": "instance"
+       },
+       "statement": "Structural index from the historical regression."
+      }
+     ],
+     "boundary_mappings": [],
+     "connections": [
+      {
+       "connection_id": "57000000-0000-4000-8000-000000000001",
+       "source_ref": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000003"
+       },
+       "target_ref": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000004"
+       }
+      }
+     ],
+     "definitions": [
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000001",
+       "definition_version_id": "55000000-0000-4000-8000-000000000011",
+       "kind": "composite",
+       "name": "Aircraft",
+       "ports": [],
+       "quantity_definitions": [],
+       "residual_port_ids": [],
+       "source_refs": []
+      },
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000002",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "kind": "explicit_component",
+       "name": "MassClosure",
+       "ports": [
+        {
+         "code_symbol": "payload_mass",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "input",
+         "name": "payload_mass",
+         "port_id": "56000000-0000-4000-8000-000000000001",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "structural_index",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "input",
+         "name": "structural_index",
+         "port_id": "56000000-0000-4000-8000-000000000002",
+         "units": {
+          "kind": "dimensionless"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "mtow",
+         "definition_version_id": "55000000-0000-4000-8000-000000000012",
+         "direction": "output",
+         "name": "mtow",
+         "port_id": "56000000-0000-4000-8000-000000000003",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        }
+       ],
+       "quantity_definitions": [
+        {
+         "port_id": "56000000-0000-4000-8000-000000000001",
+         "statement": "Payload mass carried on the design mission."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000002",
+         "statement": "Structural index: empty mass over take-off mass."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000003",
+         "statement": "Maximum take-off mass."
+        }
+       ],
+       "residual_port_ids": [],
+       "source_refs": [
+        "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+       ]
+      },
+      {
+       "annotations": [],
+       "boundary_mappings": [],
+       "child_instances": [],
+       "definition_id": "55000000-0000-4000-8000-000000000003",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "kind": "explicit_component",
+       "name": "Range",
+       "ports": [
+        {
+         "code_symbol": "mtow",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "input",
+         "name": "mtow",
+         "port_id": "56000000-0000-4000-8000-000000000004",
+         "units": {
+          "expression": "kg",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "fuel_fraction",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "input",
+         "name": "fuel_fraction",
+         "port_id": "56000000-0000-4000-8000-000000000005",
+         "units": {
+          "kind": "unspecified"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "range",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "output",
+         "name": "range",
+         "port_id": "56000000-0000-4000-8000-000000000006",
+         "units": {
+          "expression": "km",
+          "kind": "physical"
+         },
+         "value_type": "real_scalar"
+        },
+        {
+         "code_symbol": "feasible",
+         "definition_version_id": "55000000-0000-4000-8000-000000000013",
+         "direction": "output",
+         "name": "feasible",
+         "port_id": "56000000-0000-4000-8000-000000000007",
+         "units": {
+          "kind": "dimensionless"
+         },
+         "value_type": "real_scalar"
+        }
+       ],
+       "quantity_definitions": [
+        {
+         "port_id": "56000000-0000-4000-8000-000000000004",
+         "statement": "Maximum take-off mass."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000006",
+         "statement": "Still-air range at cruise."
+        },
+        {
+         "port_id": "56000000-0000-4000-8000-000000000007",
+         "statement": "Feasibility flag: 1 when the mission range is met, 0 otherwise."
+        }
+       ],
+       "residual_port_ids": [],
+       "source_refs": [
+        "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+       ]
+      }
+     ],
+     "digest": "c9a36b82cb67dc9b71203d9d2615cbee5e763ad1aca975212e0dc9b38fa66acf",
+     "instances": [
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000011",
+       "instance_id": "54000000-0000-4000-8000-000000000001",
+       "name": "Aircraft"
+      },
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "instance_id": "54000000-0000-4000-8000-000000000002",
+       "name": "Mass closure"
+      },
+      {
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "instance_id": "54000000-0000-4000-8000-000000000003",
+       "name": "Range"
+      }
+     ],
+     "model_id": "53000000-0000-4000-8000-000000000001",
+     "model_revision_id": "53000000-0000-4000-8000-000000000012",
+     "originating_draft_revision": "draft-6",
+     "parent_model_revision_id": "53000000-0000-4000-8000-000000000011",
+     "ports": [
+      {
+       "code_symbol": "payload_mass",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "payload_mass",
+       "port_id": "56000000-0000-4000-8000-000000000001",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "structural_index",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "input",
+       "name": "structural_index",
+       "port_id": "56000000-0000-4000-8000-000000000002",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000012",
+       "direction": "output",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000003",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "mtow",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "mtow",
+       "port_id": "56000000-0000-4000-8000-000000000004",
+       "units": {
+        "expression": "kg",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "fuel_fraction",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "input",
+       "name": "fuel_fraction",
+       "port_id": "56000000-0000-4000-8000-000000000005",
+       "units": {
+        "kind": "unspecified"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "range",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "range",
+       "port_id": "56000000-0000-4000-8000-000000000006",
+       "units": {
+        "expression": "km",
+        "kind": "physical"
+       },
+       "value_type": "real_scalar"
+      },
+      {
+       "code_symbol": "feasible",
+       "definition_version_id": "55000000-0000-4000-8000-000000000013",
+       "direction": "output",
+       "name": "feasible",
+       "port_id": "56000000-0000-4000-8000-000000000007",
+       "units": {
+        "kind": "dimensionless"
+       },
+       "value_type": "real_scalar"
+      }
+     ],
+     "required_capabilities": [
+      "model_assumptions/1",
+      "quantity_definitions/1",
+      "unit_declarations/1"
+     ],
+     "root_instance_id": "54000000-0000-4000-8000-000000000001",
+     "schema_version": "4",
+     "source_files": [
+      {
+       "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIE1hc3NDbG9zdXJlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgicGF5bG9hZF9tYXNzIiwgdW5pdHM9ImtnIikKICAgICAgICBzZWxmLmFkZF9pbnB1dCgic3RydWN0dXJhbF9pbmRleCIpCiAgICAgICAgc2VsZi5hZGRfb3V0cHV0KCJtdG93IiwgdW5pdHM9ImtnIikKCiAgICBkZWYgY29tcHV0ZShzZWxmLCBpbnB1dHMsIG91dHB1dHMpOgogICAgICAgIG91dHB1dHNbIm10b3ciXSA9IGlucHV0c1sicGF5bG9hZF9tYXNzIl0gLyAoMSAtIGlucHV0c1sic3RydWN0dXJhbF9pbmRleCJdKQo=",
+       "encoding": "base64",
+       "media_type": "text/x-python",
+       "sha256": "98f4a765204036280853db0061506faffdedb2cf354c366d7ba7db36bb3387d7"
+      },
+      {
+       "bytes": "aW1wb3J0IG9wZW5tZGFvLmFwaSBhcyBvbQoKCmNsYXNzIFJhbmdlKG9tLkV4cGxpY2l0Q29tcG9uZW50KToKICAgIGRlZiBzZXR1cChzZWxmKToKICAgICAgICBzZWxmLmFkZF9pbnB1dCgibXRvdyIsIHVuaXRzPSJrZyIpCiAgICAgICAgc2VsZi5hZGRfaW5wdXQoImZ1ZWxfZnJhY3Rpb24iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgicmFuZ2UiLCB1bml0cz0ia20iKQogICAgICAgIHNlbGYuYWRkX291dHB1dCgiZmVhc2libGUiKQoKICAgIGRlZiBjb21wdXRlKHNlbGYsIGlucHV0cywgb3V0cHV0cyk6CiAgICAgICAgb3V0cHV0c1sicmFuZ2UiXSA9IDM2MDAwLjAgKiBpbnB1dHNbImZ1ZWxfZnJhY3Rpb24iXQogICAgICAgIG91dHB1dHNbImZlYXNpYmxlIl0gPSAxLjAgaWYgb3V0cHV0c1sicmFuZ2UiXSA+PSA5MDAwLjAgZWxzZSAwLjAK",
+       "encoding": "base64",
+       "media_type": "text/x-python",
+       "sha256": "3f2de76d0067ecc935a88a5586c6c8dcdb308fd09f9c2d3e67b5f992d7796fe7"
+      }
+     ]
+    },
+    "results": {
+     "applicability": {
+      "evidence_refs": [],
+      "state": "unassessed"
+     },
+     "artifacts": [],
+     "bundle_digest": "b7a08c97408a35b4bcf1e91b33c9e4df52ffc42cf19ffa3b54e1f174814ce341",
+     "completeness": {
+      "available": 1,
+      "expected": 3,
+      "failed": 2,
+      "unavailable": 2
+     },
+     "convergence": {
+      "diagnostics_ref": null,
+      "state": "not_applicable"
+     },
+     "criteria": [
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000031",
+       "outcome": "unresolved",
+       "reason": "range is not available"
+      },
+      {
+       "criterion_id": "5b000000-0000-4000-8000-000000000032",
+       "outcome": "unresolved",
+       "reason": "feasible is not available"
+      }
+     ],
+     "execution": {
+      "exit_code": 1,
+      "message": "Range.compute raised ValueError: fuel fraction above the tank volume limit (line 12)",
+      "state": "failed"
+     },
+     "optimization": {
+      "feasibility": "not_applicable",
+      "termination": "not_applicable"
+     },
+     "outputs": [
+      {
+       "assigned": true,
+       "availability": "available",
+       "producer_completed": true,
+       "reason": null,
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000002",
+        "port_id": "56000000-0000-4000-8000-000000000003"
+       },
+       "units": "kg",
+       "value": 22172.0
+      },
+      {
+       "assigned": true,
+       "availability": "unavailable",
+       "producer_completed": false,
+       "reason": "producer_failed",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000006"
+       },
+       "units": "km",
+       "value": null
+      },
+      {
+       "assigned": true,
+       "availability": "unavailable",
+       "producer_completed": false,
+       "reason": "producer_failed",
+       "target": {
+        "instance_id": "54000000-0000-4000-8000-000000000003",
+        "port_id": "56000000-0000-4000-8000-000000000007"
+       },
+       "units": "",
+       "value": null
+      }
+     ],
+     "run_id": "5c000000-0000-4000-8000-000000000002",
+     "schema_version": "1"
+    }
+   },
+   "process_state": "finished",
+   "receipt_url": "/api/1/studies/51000000-0000-4000-8000-000000000001/commands/5d000000-0000-4000-8000-000000000002?category=run",
+   "retained_integrity": {
+    "results_digest": "a3f7ec9e161709627781a5e939e896a839940dbf53eb8b22e137a37d75388f47",
+    "schema_version": "1"
+   },
+   "run_id": "5c000000-0000-4000-8000-000000000002",
+   "state": "recorded"
+  },
+  "5c000000-0000-4000-8000-000000000003": {
+   "command_id": "5d000000-0000-4000-8000-000000000003",
+   "receipt_url": "/api/1/studies/51000000-0000-4000-8000-000000000001/commands/5d000000-0000-4000-8000-000000000003?category=run",
+   "run_id": "5c000000-0000-4000-8000-000000000003",
+   "state": "accepted_run"
+  }
+ },
+ "run_status": {
+  "5c000000-0000-4000-8000-000000000001": {
+   "configuration_name": "Liquid hydrogen, 9,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+   "criteria": {
+    "reason": null,
+    "value": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "outcome": "met",
+      "reason": "range 9000.000000000002 km >= 9000 km"
+     },
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "outcome": "met",
+      "reason": "feasible 1 = 1"
+     }
+    ]
+   },
+   "exit_status": 0,
+   "facets": {
+    "applicability": {
+     "reason": null,
+     "value": {
+      "evidence_refs": [],
+      "state": "unassessed"
+     }
+    },
+    "completeness": {
+     "reason": null,
+     "value": {
+      "available": 3,
+      "expected": 3,
+      "failed": 0,
+      "unavailable": 0
+     }
+    },
+    "convergence": {
+     "reason": null,
+     "value": {
+      "diagnostics_ref": null,
+      "state": "not_applicable"
+     }
+    },
+    "execution": {
+     "reason": null,
+     "value": {
+      "exit_code": 0,
+      "message": "",
+      "state": "finished"
+     }
+    },
+    "optimization": {
+     "reason": null,
+     "value": {
+      "feasibility": "not_applicable",
+      "termination": "not_applicable"
+     }
+    }
+   },
+   "process_state": "finished",
+   "run_id": "5c000000-0000-4000-8000-000000000001",
+   "state": "recorded",
+   "times": {
+    "finished_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "started_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "submitted_at": {
+     "reason": null,
+     "value": "2026-10-14T07:00:00.000000Z"
+    }
+   }
+  },
+  "5c000000-0000-4000-8000-000000000002": {
+   "configuration_name": "Liquid hydrogen, 12,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+   "criteria": {
+    "reason": null,
+    "value": [
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000031",
+      "outcome": "unresolved",
+      "reason": "range is not available"
+     },
+     {
+      "criterion_id": "5b000000-0000-4000-8000-000000000032",
+      "outcome": "unresolved",
+      "reason": "feasible is not available"
+     }
+    ]
+   },
+   "exit_status": 1,
+   "facets": {
+    "applicability": {
+     "reason": null,
+     "value": {
+      "evidence_refs": [],
+      "state": "unassessed"
+     }
+    },
+    "completeness": {
+     "reason": null,
+     "value": {
+      "available": 1,
+      "expected": 3,
+      "failed": 2,
+      "unavailable": 2
+     }
+    },
+    "convergence": {
+     "reason": null,
+     "value": {
+      "diagnostics_ref": null,
+      "state": "not_applicable"
+     }
+    },
+    "execution": {
+     "reason": null,
+     "value": {
+      "exit_code": 1,
+      "message": "Range.compute raised ValueError: fuel fraction above the tank volume limit (line 12)",
+      "state": "failed"
+     }
+    },
+    "optimization": {
+     "reason": null,
+     "value": {
+      "feasibility": "not_applicable",
+      "termination": "not_applicable"
+     }
+    }
+   },
+   "process_state": "finished",
+   "run_id": "5c000000-0000-4000-8000-000000000002",
+   "state": "recorded",
+   "times": {
+    "finished_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "started_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "submitted_at": {
+     "reason": "not_recorded",
+     "value": null
+    }
+   }
+  },
+  "5c000000-0000-4000-8000-000000000003": {
+   "configuration_name": "Liquid hydrogen, 12,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+   "criteria": {
+    "reason": "not_recorded",
+    "value": null
+   },
+   "exit_status": null,
+   "facets": {
+    "applicability": {
+     "reason": "not_recorded",
+     "value": null
+    },
+    "completeness": {
+     "reason": "not_recorded",
+     "value": null
+    },
+    "convergence": {
+     "reason": "not_recorded",
+     "value": null
+    },
+    "execution": {
+     "reason": "not_recorded",
+     "value": null
+    },
+    "optimization": {
+     "reason": "not_recorded",
+     "value": null
+    }
+   },
+   "process_state": null,
+   "run_id": "5c000000-0000-4000-8000-000000000003",
+   "state": "accepted_run",
+   "times": {
+    "finished_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "started_at": {
+     "reason": "not_projected",
+     "value": null
+    },
+    "submitted_at": {
+     "reason": null,
+     "value": "2026-10-14T07:58:00.000000Z"
+    }
+   }
+  }
+ },
+ "runs": [
+  {
+   "case_context": {
+    "approach_id": "5a000000-0000-4000-8000-000000000001",
+    "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "case_name": "Baseline mission",
+    "state": "linked",
+    "version_number": 2
+   },
+   "command_id": "5d000000-0000-4000-8000-000000000001",
+   "configuration_name": "Liquid hydrogen, 9,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000011",
+   "run_id": "5c000000-0000-4000-8000-000000000001",
+   "state": "recorded"
+  },
+  {
+   "case_context": {
+    "approach_id": "5a000000-0000-4000-8000-000000000001",
+    "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "case_name": "Baseline mission",
+    "state": "linked",
+    "version_number": 2
+   },
+   "command_id": "5d000000-0000-4000-8000-000000000002",
+   "configuration_name": "Liquid hydrogen, 12,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+   "run_id": "5c000000-0000-4000-8000-000000000002",
+   "state": "recorded"
+  },
+  {
+   "case_context": {
+    "approach_id": "5a000000-0000-4000-8000-000000000001",
+    "approach_version_id": "5a000000-0000-4000-8000-000000000012",
+    "case_id": "5a000000-0000-4000-8000-000000000051",
+    "case_name": "Baseline mission",
+    "state": "linked",
+    "version_number": 2
+   },
+   "command_id": "5d000000-0000-4000-8000-000000000003",
+   "configuration_name": "Liquid hydrogen, 12,000 km",
+   "configuration_revision_id": "5b000000-0000-4000-8000-000000000012",
+   "run_id": "5c000000-0000-4000-8000-000000000003",
+   "state": "accepted_run"
+  }
+ ],
+ "study": {
+  "archived": false,
+  "boundary": "Aircraft level; airport infrastructure excluded.",
+  "description": "Sizing study for a 150-seat liquid hydrogen airliner.",
+  "name": "Hydrogen aircraft sizing",
+  "revision": "study-rev-4",
+  "study_id": "51000000-0000-4000-8000-000000000001"
+ },
+ "study_id": "51000000-0000-4000-8000-000000000001",
+ "unit_catalog": {
+  "affine_conversion": false,
+  "catalog_digest": "f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3",
+  "engine": "OpenMDAO",
+  "engine_source_sha256": "9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92",
+  "engine_version": "3.45.1",
+  "schema_version": "1",
+  "supported_units": [
+   "m",
+   "km",
+   "cm",
+   "mm",
+   "s",
+   "min",
+   "h",
+   "kg",
+   "g",
+   "N",
+   "Pa",
+   "kPa",
+   "MPa",
+   "K",
+   "degC",
+   "degF",
+   "rad",
+   "deg",
+   "m/s",
+   "km/h",
+   "J/kg",
+   "kJ/kg",
+   "MJ/kg",
+   "kg/m**3",
+   "g/cm**3",
+   "m**2",
+   "cm**2",
+   "mm**2"
+  ]
+ }
+}
