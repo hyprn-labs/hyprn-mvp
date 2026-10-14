@@ -27,21 +27,21 @@ class StaticPreparation:
         from uuid import UUID,uuid5
         validate_frozen_configuration(frozen)
         if uses_polish_envelope(frozen['model_snapshot'],frozen.get('approach_closure')):
-            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponse',resources=[sid])
+            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponseRead2',resources=[sid])
             from .readiness import supports_descriptive_execution
             if status!=200 or not supports_descriptive_execution(response.get('data'),frozen['model_snapshot']):
                 raise ValueError('Modeling backend lacks exact descriptive execution support')
         config=project_scientific_configuration(frozen['configuration']);mid=config['model_id']
         # Separate from public run/authoring commands; stable across crashes.
-        private_command=str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact2:'+sid))
+        private_command=str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact3:'+sid))
         body=dict(command_id=private_command,model_revision_id=config['model_revision_id'],
                   configuration_snapshot=config,configuration_digest=config['digest'])
         _,response=self.model.call(actor,sid,'POST',f'/models/{mid}/prepare-execution',body,
             request_schema='Prepare',resources=[mid])
         if set(response)!={'data'} or not isinstance(response['data'],dict):raise ValueError('Invalid preparation response')
         prepared=response['data']
-        if prepared.get('schema_version')!='2':raise ValueError('Unsupported preparation version; create a new schema2 run command')
-        closed('PreparedModelArtifact',prepared)
+        if prepared.get('schema_version') not in ('2','3'):raise ValueError('Unsupported preparation version; create a new schema2 run command')
+        closed('PreparedModelArtifactRead3',prepared)
         if len({f['file_id'] for f in prepared['files']})!=len(prepared['files']):raise ValueError('Duplicate file identity')
         files={};total=0
         for item in prepared['files']:
@@ -204,7 +204,7 @@ class Submissions:
             except DomainError as error:
                 self._preparation_failure(row,error.code,status=error.status)
                 return
-            if row['state']=='prepared' and payload['bundle']['manifest'].get('schema_version') not in ('2','3','4','5','6','8'):
+            if row['state']=='prepared' and payload['bundle']['manifest'].get('schema_version') not in ('2','3','4','5','6','8','9','10'):
                 self._preparation_failure(row, 'unsupported_execution_version')
                 return
             self.native.require_attestation()

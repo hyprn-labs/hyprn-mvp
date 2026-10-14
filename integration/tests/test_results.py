@@ -204,7 +204,7 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
     import hashlib
     import json
     from pathlib import Path
-    from execution_fixtures import fixture,uid
+    from execution_fixtures import current_fixture as fixture,uid
     from hyprn_mvp_app.store import digest
     from hyprn_mvp_app.execution import assemble_bundle
     from execution_fixtures import scoped_native_runtime
@@ -246,10 +246,9 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
     assert {k:native['results'][k] for k in ('run_id','bundle_digest')}=={
         k:bundle['manifest'][k] for k in ('run_id','bundle_digest')}
     assert native['process_state']=='finished'
-    assert native['results']['convergence']==dict(state='not_applicable',diagnostics_ref=None)
-    assert native['results']['optimization']==dict(termination='not_applicable',feasibility='not_applicable')
-    assert native['results']['applicability']==dict(state='unassessed',evidence_refs=[])
-    assert b'HYPRN_MVP_RESULT_V1 ' in raw
+    assert native['results']['schema_version'] == '2'
+    assert not {'convergence', 'optimization', 'applicability', 'completeness'} & native['results'].keys()
+    assert b'HYPRN_MVP_RESULT_V2 ' in raw
     assert runtime.retained_bundle(node.uuid)==bundle
     envelope=json.loads(raw)
     origins=[json.loads(line.removeprefix('HYPRN_MVP_NATIVE_ORIGINS_V1 '))
@@ -261,7 +260,6 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
         c['sha256']==hashlib.sha256(bundle['files'][c['path']]).hexdigest() for c in classes)
     if kind=='throw':
         assert native['exit_status']==301
-        assert native['results']['completeness']==dict(expected=2,available=1,failed=1,unavailable=1)
         by_target={(o['target']['instance_id'],o['target']['port_id']):o for o in native['results']['outputs']}
         upstream=by_target[tuple(case['targets']['linear']['u'][k] for k in ('instance_id','port_id'))]
         downstream=by_target[tuple(case['targets']['square']['y'][k] for k in ('instance_id','port_id'))]
@@ -276,3 +274,28 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
         assert [(o['value'],o['units'],o['availability']) for o in native['results']['outputs']]==[(2,'km','available')]
         assert native['results']['criteria'][0]['reason']=='threshold_comparison'
     assert (evidence/'result.json').read_bytes()==node.outputs.retrieved.base.repository.get_object_content('result.json',mode='rb')
+
+
+@pytest.mark.parametrize('fault', [None, 'legacy_field', 'missing', 'duplicate', 'nonfinite', 'unassigned', 'wrong_protocol'])
+def test_current_result_protocol_retains_scalar_guards_without_aggregate_status(fault):
+    import json
+    from hyprn_mvp_integration.results import validate_result, read_stored_result
+    case, request, legacy = record()
+    result = {k: copy.deepcopy(v) for k, v in legacy.items()
+              if k not in {'convergence', 'optimization', 'completeness', 'applicability'}}
+    result['schema_version'] = '2'
+    if fault == 'legacy_field':result['applicability'] = legacy['applicability']
+    if fault == 'missing':result['outputs'] = []
+    if fault == 'duplicate':result['outputs'] *= 2
+    if fault == 'nonfinite':result['outputs'][0]['value'] = float('inf')
+    if fault == 'unassigned':result['outputs'][0]['assigned'] = False
+    prefix = 'HYPRN_MVP_RESULT_V1 ' if fault == 'wrong_protocol' else 'HYPRN_MVP_RESULT_V2 '
+    raw = json.dumps(dict(reason='exited', exit_code=0, output=prefix + json.dumps(result)))
+    if fault:
+        with pytest.raises(ValueError):
+            validate_result(raw, request, case['frozen']['model_snapshot'], result_schema_version='2')
+    else:
+        assert validate_result(raw, request, case['frozen']['model_snapshot'], result_schema_version='2') == result
+        assert read_stored_result(result, request, case['frozen']['model_snapshot']) == result
+        assert read_stored_result(legacy, request, case['frozen']['model_snapshot']) == legacy
+        with pytest.raises(ValueError):validate_result(raw, request, case['frozen']['model_snapshot'])

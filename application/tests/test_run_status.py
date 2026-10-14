@@ -12,7 +12,7 @@ from hyprn_mvp_app.store import Store, uid
 from test_submission import Crash, submission, accepted
 from test_history import client, recording
 
-FACETS = ('execution', 'convergence', 'optimization', 'completeness', 'applicability')
+FACETS = ('execution',)
 
 
 def status(c, sid, *run_ids, extra=''):
@@ -134,12 +134,10 @@ def test_unavailable_outcome_is_null_with_its_reason_never_zero(submission):
     c, actor = client(store, actor)
     first, second = status(c, sid, pending['run_id'], failed['run_id']).json()['data']
     assert first['process_state'] is None and first['exit_status'] is None
-    assert first['facets']['completeness'] == dict(value=None, reason='not_recorded')
+    assert first['facets']['execution'] == dict(value=None, reason='not_recorded')
     assert first['criteria'] == dict(value=None, reason='not_recorded')
-    # Recorded zeros are explicit values, kept exactly as stored.
-    assert second['facets']['completeness'] == dict(
-        value=dict(expected=2, available=0, failed=2, unavailable=2), reason=None
-    )
+    assert second['facets']['execution']['value']['state'] == 'failed'
+    assert set(second['facets']) == {'execution'}
     assert second['criteria'] == dict(value=[], reason=None)
     for item in (first, second):
         assert (

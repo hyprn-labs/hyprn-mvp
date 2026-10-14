@@ -854,7 +854,7 @@ FAMILY_LITERALS = {('3', '4', '5', '6', '8'), ('5', '6', '8'), ('1', '2', '3', '
 # history produces (``ModifiedRuns.seed``, validated against ``ModifiedRunSeed<N>``).
 PRODUCER_MAPS = {
     ('application/src/hyprn_mvp_app/execution_bundle.py', "{'2': '3', '3': '4', '4': '5'}"),
-    ('application/src/hyprn_mvp_app/modified_runs.py', "{'3': '3', '4': '4', '6': '6'}"),
+    ('application/src/hyprn_mvp_app/modified_runs.py', "{'5': '3', '6': '4', '8': '6'}"),
 }
 
 
@@ -1368,6 +1368,11 @@ def test_an_import_outside_the_layer_table_fails_the_subgraph_check(tmp_path, mo
 SCHEMA_COMPUTED = {
     (
         'application/src/hyprn_mvp_app/execution_bundle.py',
+        'validate_retained_bundle',
+        "'ApproachClosure4' if version == '9' else 'ApproachClosure3'",
+    ): ('ApproachClosure4', 'ApproachClosure3'),
+    (
+        'application/src/hyprn_mvp_app/execution_bundle.py',
         'validate_frozen_configuration',
         "'FrozenConfiguration' + (version or 'Legacy')",
     ): (
@@ -1375,6 +1380,7 @@ SCHEMA_COMPUTED = {
         'FrozenConfiguration4',
         'FrozenConfiguration5',
         'FrozenConfiguration7',
+        'FrozenConfiguration8',
     ),
     (
         'application/src/hyprn_mvp_app/scientific_configuration.py',
@@ -1414,7 +1420,7 @@ SCHEMA_COMPUTED = {
 }
 SCHEMA_VERSION_GUARDS = {
     ('application/src/hyprn_mvp_app/execution_bundle.py', 'validate_frozen_configuration'): (
-        "version not in (None, '4', '5', '7')",
+        "version not in (None, '4', '5', '7', '8')",
         (
             "frozen['configuration']['schema_version'] == '4' and version != "
             "frozen_version(frozen['model_snapshot'], frozen['approach_closure'])"

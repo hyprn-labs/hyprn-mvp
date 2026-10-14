@@ -134,10 +134,38 @@ def _families(pairings):
 
 
 _FAMILIES = _families(RETAINED_PAIRINGS)
+_INPUT_FAMILIES = {**_FAMILIES, '9': BundleFamily('7', '4', frozenset({'2', '3', '4'}))}
+# Output format is independent of the immutable input bundle family.
+CURRENT_RESULT_PAIRINGS = frozenset(
+    ('7', '10', configuration, model)
+    for _, bundle, configuration, model in RETAINED_PAIRINGS if bundle != '1'
+)
+RESULT_PAIRINGS = RETAINED_PAIRINGS | CURRENT_RESULT_PAIRINGS
 
 
-def bundle_family(version):
+def result_history_version(bundle_version, result_version):
+    if result_version == '2' and bundle_version == '10':
+        return '7'
+    if result_version == '1' and bundle_version not in ('9', '10'):
+        return bundle_family(bundle_version).history
+    raise UnsupportedRetainedVersion('Unsupported bundle/result version pairing')
+
+
+def bundle_layout(manifest):
+    version = manifest.get('schema_version')
+    if version == '10':
+        layout = manifest.get('input_schema_version')
+        if layout not in ('2', '3', '4', '5', '6', '8', '9'):
+            raise UnsupportedRetainedVersion('Unsupported bundle input layout')
+        return layout
+    return version
+
+
+def bundle_family(version, input_schema_version=None):
     """The retained family of bundle ``version``; ``UnsupportedRetainedVersion`` if unlisted."""
+    if version == '10':
+        layout = bundle_layout(dict(schema_version=version, input_schema_version=input_schema_version))
+        return _INPUT_FAMILIES[layout]
     family = _FAMILIES.get(version) if isinstance(version, str) else None
     if family is None:
         raise UnsupportedRetainedVersion('Unsupported retained bundle version')
@@ -261,7 +289,9 @@ def uses_units_envelope(model, closure):
 
 def frozen_version(model, closure):
     return (
-        '7'
+        '8'
+        if closure is not None and closure['schema_version'] == '4'
+        else '7'
         if uses_polish_envelope(model, closure)
         else '5'
         if uses_units_envelope(model, closure)
@@ -271,7 +301,7 @@ def frozen_version(model, closure):
 
 def validate_frozen_configuration(frozen):
     version = frozen.get('schema_version')
-    if version not in (None, '4', '5', '7'):
+    if version not in (None, '4', '5', '7', '8'):
         raise ValueError('Unsupported frozen configuration version')
     closed('FrozenConfiguration' + (version or 'Legacy'), frozen)
     validate_scientific_snapshot(frozen)
@@ -546,6 +576,10 @@ def assemble_bundle(run_id, prepared, prepared_files, frozen, selected, dependen
         )
     if uses_polish_envelope(model, frozen.get('approach_closure')):
         manifest.update(schema_version='8', model_schema_version=model['schema_version'])
+    if frozen.get('schema_version') == '8':
+        manifest.update(schema_version='9', model_schema_version=model['schema_version'])
+    if prepared['schema_version'] == '3':
+        manifest.update(input_schema_version=manifest['schema_version'], schema_version='10')
     manifest['bundle_digest'] = digest(manifest)
     validate_bundle_shape(manifest)
     return dict(manifest=manifest, files=files)
@@ -553,7 +587,7 @@ def assemble_bundle(run_id, prepared, prepared_files, frozen, selected, dependen
 
 def validate_preparation(prepared, files, frozen, *, raw_snapshot=False):
     """Validate the closed real manifest, ancestry, raw bytes and frozen bindings."""
-    if prepared.get('schema_version') != '2':
+    if prepared.get('schema_version') not in ('2', '3'):
         raise ValueError('Unsupported preparation version; create a new schema2 run command')
     try:
         _validate_preparation(prepared, files, frozen, raw_snapshot=raw_snapshot)
@@ -562,7 +596,7 @@ def validate_preparation(prepared, files, frozen, *, raw_snapshot=False):
 
 
 def _validate_preparation(prepared, files, frozen, *, raw_snapshot=False):
-    closed('PreparedModelArtifact', prepared)
+    closed('PreparedModelArtifactRead3', prepared)
     check_digest(prepared, 'prepared_digest')
     verify_files(prepared['files'], files)
     model = frozen['model_snapshot']
@@ -920,7 +954,7 @@ def validate_unit_catalog(prepared, files, config, model, engine_unit):
 def validate_bundle_shape(manifest):
     # The execution contract is read and compiled once per process (contracts).
     try:
-        validate_execution('ExecutionBundleRead8', manifest)
+        validate_execution('ExecutionBundleRead10', manifest)
     except ContractError:
         raise ValueError('Invalid execution bundle manifest') from None
 
@@ -929,13 +963,13 @@ def validate_retained_bundle(bundle, request, frozen, *, raw_snapshot=False):
     manifest = bundle['manifest']
     files = bundle['files']
     # Admission (explicit, strict): bundle 1 predates retained re-admission.
-    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8'):
+    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8', '10'):
         raise ValueError('Unsupported bundle version; create a new run command')
     validate_bundle_shape(manifest)
     check_digest(manifest, 'bundle_digest')
     verify_files(manifest['files'], files)
-    version = manifest['schema_version']
-    family = bundle_family(version)
+    version = bundle_layout(manifest)
+    family = bundle_family(manifest['schema_version'], manifest.get('input_schema_version'))
     if raw_snapshot:
         expected = {'model_snapshot', 'configuration'} | (
             {'approach_closure'} if family.carries_approach else set()
@@ -950,27 +984,27 @@ def validate_retained_bundle(bundle, request, frozen, *, raw_snapshot=False):
         raise ValueError('Configuration version does not match bundle')
     if family.carries_approach:
         closure = frozen.get('approach_closure')
-        if version != '8' and uses_polish_envelope(model, closure):
+        if version not in ('8', '9') and uses_polish_envelope(model, closure):
             raise ValueError('Descriptive bundle downgrade')
         if version == '5':
             closed('ModelRevision2', model)
             if closure is not None:
                 closed('ApproachClosurePreUnits', closure)
-        elif version == '8':
+        elif version in ('8', '9'):
             if (
-                not uses_polish_envelope(model, closure)
+                (version == '8' and not uses_polish_envelope(model, closure))
                 or manifest['model_schema_version'] != model['schema_version']
             ):
                 raise ValueError('Bundle8 exact model/descriptive branch mismatch')
             if closure is not None:
-                closed('ApproachClosure3', closure)
+                closed('ApproachClosure4' if version == '9' else 'ApproachClosure3', closure)
         elif not uses_units_envelope(model, closure):
             raise ValueError('Invalid bundle6 version pairing')
         elif model.get('schema_version') == '2':
             closed('ApproachClosureWithModel3', closure)
-    if version in ('6', '8'):
+    if version in ('6', '8', '9'):
         if model['schema_version'] not in family.models or (
-            not raw_snapshot and frozen.get('schema_version') != ('5' if version == '6' else '7')
+            not raw_snapshot and frozen.get('schema_version') != {'6': '5', '8': '7', '9': '8'}[version]
         ):
             raise ValueError('Invalid bundle6 version pairing')
         for row in manifest['files']:

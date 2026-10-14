@@ -373,6 +373,7 @@ class Configurations:
             model_digest=model['digest'],compatibility=proof,changes=summaries,runtime_comparison=comparison)
         if version=='4':response['approach_closure']=closure
         if version=='4' and uses_polish_envelope(model,closure):response['schema_version']='6'
+        if version=='4' and closure is not None and closure['schema_version']=='4':response['schema_version']='7'
         validate('ConfigurationPreview'+response['schema_version'],response)
         if version in ('3','4'):
             with self.store.connection() as db:self._recheck3(db,actor,sid,request,model,study,pins,full)

@@ -641,7 +641,7 @@ class ApproachClosure:
                 'xts evidence digest'
             ),
         )
-        if self.value['schema_version'] not in ('1', '3'):
+        if self.value['schema_version'] not in ('1', '3', '4'):
             raise ValueError('Approach closure version')
         verify_object_digest(raw)
         self.tables = {}
@@ -1142,7 +1142,7 @@ class ApproachClosure:
                 'rrors digest'
             ),
         )
-        if r['schema_version'] != '1':
+        if r['schema_version'] not in ('1', '2'):
             raise ValueError('Approach run context version')
         node = 'run_contexts', r['run_id']
         c = self.edge(node, 'configurations', r['configuration_revision_id'])
@@ -1165,6 +1165,8 @@ class ApproachClosure:
         ):
             raise ValueError('Approach run correspondence')
         if r['results'] is not None:
+            if r['results']['schema_version'] != r['schema_version']:
+                raise ValueError('Approach context/result format mismatch')
             if (
                 r['results']['run_id'] != r['run_id']
                 or r['results']['bundle_digest'] != r['request']['bundle_digest']
@@ -1211,7 +1213,9 @@ class ApproachClosure:
 
     def envelope_digest(self, root, reached):
         version = (
-            '3'
+            '4'
+            if any(kind == 'run_contexts' and self.tables[kind][key]['schema_version'] == '2' for kind, key in reached)
+            else '3'
             if root['schema_version'] == '2'
             or any(
                 (kind == 'models' and self.tables[kind][key]['schema_version'] == '4')
@@ -1238,7 +1242,7 @@ def verify_approach(manifest, files, config):
     p = config['approach_binding']
     path = 'approach/closure.json'
     mixed = (
-        manifest['schema_version'] == '6'
+        bundle_layout(manifest) == '6'
         and frozen_json(files['model.json'])['schema_version'] == '2'
     )
     roles = [f for f in manifest['files'] if f.get('role') == 'approach']
@@ -1246,7 +1250,7 @@ def verify_approach(manifest, files, config):
     if p is None:
         if (
             mixed
-            or manifest['schema_version'] == '8'
+            or bundle_layout(manifest) in ('8', '9')
             and frozen_json(files['model.json'])['schema_version'] != '4'
         ):
             raise ValueError('Selected model requires descriptive approach closure')
@@ -1268,11 +1272,11 @@ def verify_approach(manifest, files, config):
     contains_units = any(m['schema_version'] == '3' for m in frozen_json(files[path])['models'])
     if mixed and not contains_units:
         raise ValueError('Legacy selected model requires mixed approach closure')
-    if manifest['schema_version'] not in ('6', '8') and contains_units:
+    if bundle_layout(manifest) not in ('6', '8', '9') and contains_units:
         raise ValueError('Approach model/bundle version mismatch')
     closure = ApproachClosure(files[path], config['study_id'])
     v = closure.pin(config)
-    if (manifest['schema_version'] == '8') != (closure.value['schema_version'] == '3'):
+    if (bundle_layout(manifest) in ('8', '9')) != (closure.value['schema_version'] in ('3', '4')) or (bundle_layout(manifest) == '9') != (closure.value['schema_version'] == '4'):
         raise ValueError('Approach descriptive bundle branch mismatch')
     if (
         v != closure.root
@@ -1291,7 +1295,7 @@ def verify_configuration_domains(manifest, files, prepared):
     config = frozen_json(raw)
     if verify_object_digest(raw) != manifest['configuration_digest']:
         raise ValueError('Full configuration digest mismatch')
-    version = manifest['schema_version']
+    version = bundle_layout(manifest)
     if (
         config['schema_version']
         != {'2': '1', '3': '2', '4': '3', '5': '4', '6': '4', '8': '4'}[version]
@@ -1306,17 +1310,17 @@ def verify_configuration_domains(manifest, files, prepared):
     exact_keys(
         config,
         keys
-        + (' context_source derivation' if version in ('3', '4', '5', '6', '8') else '')
+        + (' context_source derivation' if version in ('3', '4', '5', '6', '8', '9') else '')
         + (
             ' assumptions general_context_evidence_version_ids'
-            if version in ('4', '5', '6', '8')
+            if version in ('4', '5', '6', '8', '9')
             else ''
         )
-        + (' approach_binding' if version in ('5', '6', '8') else ''),
+        + (' approach_binding' if version in ('5', '6', '8', '9') else ''),
     )
-    if version in ('5', '6', '8'):
+    if version in ('5', '6', '8', '9'):
         verify_approach(manifest, files, config)
-    if version in ('4', '5', '6', '8'):
+    if version in ('4', '5', '6', '8', '9'):
         verify_assumption_closure(config, frozen_json(files['model.json']))
     targets = [port(i['target']) for i in config['inputs']]
     if len(targets) > 1000 or len(targets) != len(set(targets)):
@@ -1325,7 +1329,7 @@ def verify_configuration_domains(manifest, files, prepared):
         exact_keys(
             item,
             'target value units provenance'
-            + (' result_binding' if version in ('3', '4', '5', '6', '8') else ''),
+            + (' result_binding' if version in ('3', '4', '5', '6', '8', '9') else ''),
         )
         scalar(item['value'])
         if not isinstance(item['units'], str):
@@ -1337,10 +1341,10 @@ def verify_configuration_domains(manifest, files, prepared):
     fields = object_fields(raw)
     for key in ('context_source', 'derivation', 'digest'):
         fields.pop(key)
-    if version in ('4', '5', '6', '8'):
+    if version in ('4', '5', '6', '8', '9'):
         fields.pop('assumptions')
         fields.pop('general_context_evidence_version_ids')
-    if version in ('5', '6', '8'):
+    if version in ('5', '6', '8', '9'):
         fields.pop('approach_binding')
         fields['schema_version'] = b'"3"'
     inputs = []
@@ -1357,7 +1361,7 @@ def verify_configuration_domains(manifest, files, prepared):
             if frozen_json(r)
             not in (
                 {'result_linked_inputs/1', 'configuration_assumptions/1'}
-                if version in ('4', '5', '6', '8')
+                if version in ('4', '5', '6', '8', '9')
                 else {'result_linked_inputs/1'}
             )
         )
@@ -1735,6 +1739,18 @@ def verify_program_pins(manifest, files, prepared, model, config):
         raise ValueError('Incomplete source mapping')
 
 
+def bundle_layout(manifest):
+    version = manifest.get('schema_version')
+    if version == '10':
+        layout = manifest.get('input_schema_version')
+        if layout not in ('2', '3', '4', '5', '6', '8', '9') or manifest['result_protocol_version'] != '2':
+            raise ValueError('Unsupported bundle input layout or result protocol')
+        return layout
+    if manifest.get('result_protocol_version') != '1':
+        raise ValueError('Historical bundle result protocol mismatch')
+    return version
+
+
 def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
     root = Path(root)
     manifest_path = root / 'manifest.json'
@@ -1750,9 +1766,9 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
     if len(raw_manifest) > 1048576:
         raise ValueError('Manifest size exceeded')
     manifest = frozen_json(raw_manifest)
-    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8'):
+    if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9'):
         raise ValueError('Unsupported bundle version; create a new run command')
-    if manifest['schema_version'] in ('5', '6', '8'):
+    if bundle_layout(manifest) in ('5', '6', '8', '9'):
         exact_keys(
             manifest,
             (
@@ -1764,7 +1780,8 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
                 'ng_configuration_digest result_dependencies approach_di'
                 'gest approach_closure_digest'
             )
-            + (' model_schema_version' if manifest['schema_version'] == '8' else ''),
+            + (' model_schema_version' if bundle_layout(manifest) in ('8', '9') else '')
+            + (' input_schema_version' if manifest['schema_version'] == '10' else ''),
         )
     verify_object_digest(raw_manifest, 'bundle_digest')
     if expected_digest is not None and manifest['bundle_digest'] != expected_digest:
@@ -1779,7 +1796,7 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
         set(entry) != {'protocol', 'module_path', 'factory', 'bindings_path', 'source_map_path'}
         or entry['protocol'] != PROTOCOL
         or entry['factory'] != 'build_model'
-        or manifest['result_protocol_version'] != '1'
+        or manifest['result_protocol_version'] not in ('1', '2')
     ):
         raise ValueError('Unsupported entrypoint protocol or factory')
     files = {}
@@ -1826,23 +1843,23 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
             raise ValueError('Missing declared entrypoint file')
     prepared = frozen_json(files['preparation.json'])
     verify_object_digest(files['preparation.json'], 'prepared_digest')
-    if prepared.get('schema_version') != '2':
+    if (prepared.get('schema_version'), manifest['result_protocol_version']) not in (('2', '1'), ('3', '2')):
         raise ValueError('Unsupported preparation version')
     for key in ('entrypoint', 'prepared_digest', 'executable_content_digest'):
         if manifest[key] != prepared[key]:
             raise ValueError('Prepared execution binding mismatch')
     model = frozen_json(files['model.json'])
-    if manifest['schema_version'] == '6' and model['schema_version'] not in ('2', '3', '4'):
+    if bundle_layout(manifest) == '6' and model['schema_version'] not in ('2', '3', '4'):
         raise ValueError('Invalid configuration/model version pairing')
     if (
-        manifest['schema_version'] == '8'
+        bundle_layout(manifest) in ('8', '9')
         and manifest['model_schema_version'] != model['schema_version']
     ):
         raise ValueError('Exact Bundle8 model version mismatch')
     if model['schema_version'] in ('3', '4'):
-        if (model['schema_version'] == '4' and manifest['schema_version'] != '8') or manifest[
+        if (model['schema_version'] == '4' and bundle_layout(manifest) not in ('8', '9')) or manifest[
             'schema_version'
-        ] not in ('6', '8'):
+        ] not in ('6', '8', '9'):
             raise ValueError('Invalid configuration/model version pairing')
         verify_unit_declarations(model)
     if verify_object_digest(files['model.json']) != manifest['model_digest']:
@@ -1852,7 +1869,7 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
         raise ValueError('Invalid configuration/model version pairing')
     if configuration['schema_version'] == '4' and model['schema_version'] not in ('2', '3', '4'):
         raise ValueError('Invalid configuration/model version pairing')
-    if manifest['schema_version'] in ('4', '5', '6', '8'):
+    if bundle_layout(manifest) in ('4', '5', '6', '8', '9'):
         verify_program_pins(manifest, files, prepared, model, configuration)
     if uses_typed_units(model):
         verify_unit_catalog(manifest, files, prepared, model, configuration)
@@ -2230,10 +2247,9 @@ def execute(root, expected_digest, expected_manifest_sha256):
             )
         )
     available = sum(o['availability'] == 'available' for o in outputs)
-    failed = sum(not o['producer_completed'] for o in outputs)
     complete = available == len(outputs) and error is None
     result = dict(
-        schema_version='1',
+        schema_version=manifest['result_protocol_version'],
         run_id=manifest['run_id'],
         bundle_digest=manifest['bundle_digest'],
         execution=dict(
@@ -2241,19 +2257,17 @@ def execute(root, expected_digest, expected_manifest_sha256):
             exit_code=0 if complete else 1,
             message=error or ('completed' if complete else 'incomplete_outputs'),
         ),
-        convergence=dict(state='not_applicable', diagnostics_ref=None),
-        optimization=dict(termination='not_applicable', feasibility='not_applicable'),
-        completeness=dict(
-            expected=len(outputs),
-            available=available,
-            failed=failed,
-            unavailable=len(outputs) - available,
-        ),
         outputs=outputs,
         criteria=[],
-        applicability=dict(state='unassessed', evidence_refs=[]),
         artifacts=[],
     )
+    if manifest['result_protocol_version'] == '1':
+        result.update(
+            convergence=dict(state='not_applicable', diagnostics_ref=None),
+            optimization=dict(termination='not_applicable', feasibility='not_applicable'),
+            completeness=dict(expected=len(outputs), available=available,
+                failed=sum(not o['producer_completed'] for o in outputs), unavailable=len(outputs)-available),
+            applicability=dict(state='unassessed', evidence_refs=[]))
     result['criteria'] = evaluate_criteria(result, configuration['criteria'], unit_conversion)
     return result
 
@@ -2263,7 +2277,7 @@ def main():
         raise RuntimeError('Restricted fixed entrypoint and trusted input pins required')
     result = execute(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
     print(
-        '\nHYPRN_MVP_RESULT_V1 ' + json.dumps(result, allow_nan=False, separators=(',', ':')),
+        '\nHYPRN_MVP_RESULT_V' + result['schema_version'] + ' ' + json.dumps(result, allow_nan=False, separators=(',', ':')),
         flush=True,
     )
 

@@ -318,7 +318,7 @@ def test_models_http_and_portable_ancestry_keep_major_one():
         assert schema["$defs"]["PreparedModelArtifactResponse"]["properties"]["schema_version"] == {"enum": ["1"]}
     spec = json.loads((ROOT / "contracts/modeling.openapi.yaml").read_text())
     assert spec["openapi"] == "3.1.0"
-    assert spec["paths"]["/models/{model_id}/prepare-execution"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/PreparedModelArtifactResponse")
+    assert spec["paths"]["/models/{model_id}/prepare-execution"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/PreparedModelArtifactResponse3")
 
 
 def test_provenance_inventory_is_closed_and_separates_original_from_patched():

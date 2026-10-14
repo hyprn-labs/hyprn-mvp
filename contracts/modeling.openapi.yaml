@@ -99,7 +99,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponse"
+                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponseRead2"
                 }
               }
             }
@@ -598,7 +598,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse"
+                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse3"
                 }
               }
             }
@@ -614,7 +614,7 @@
             }
           }
         },
-        "description": "Closed Prepare request selects ConfigurationRevision1, ModelingConfigurationRevision2 or ModelingConfigurationRevision3 with its exact private projection digest. Version3 requires advertised support. PreparedModelArtifact2 binds that private digest and exact ModelRevision1/2; its package pins ModelPackage1/2. Envelope1 and generated program protocol1 are unchanged. Native static generation never executes candidate code."
+        "description": "Closed Prepare request selects ConfigurationRevision1, ModelingConfigurationRevision2 or ModelingConfigurationRevision3 with its exact private projection digest. Version3 requires advertised support. PreparedModelArtifact3 pins result protocol2 and binds that private digest and exact ModelRevision1/2; its package pins ModelPackage1/2. Envelope1 and generated program protocol1 are unchanged. Native static generation never executes candidate code."
       }
     },
     "/preparations/{preparation_id}/files/{file_id}": {

@@ -68,8 +68,8 @@ class ResultBindings:
                 source_configuration_digest=config['digest'], value=output['value'], units=output['units'],
                 labels=dict(run_name=config['name'], model_name=None, model_revision_id=model['model_revision_id'],
                     instance_name=instance['name'], output_name=port['name']),
-                outcomes={k:deepcopy(results[k]) for k in ('execution','criteria','applicability')}, native_availability='not_rechecked')
-            validate('ResultSource', value)
+                outcomes={k:deepcopy(results[k]) for k in ('execution','criteria')}, native_availability='not_rechecked')
+            validate('ResultSource2', value)
             return value
         except (StopIteration, ValueError, KeyError, TypeError, DomainError):
             raise DomainError('source_result_unavailable', 409) from None

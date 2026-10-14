@@ -20,6 +20,9 @@ def rewrite(value):
     if isinstance(value,list):return [rewrite(v) for v in value]
     return value
 schemas.update(rewrite(definitions()))
+# Current HTTP reads include new retained formats; authored historical schemas stay frozen.
+_PUBLIC_READ_SUCCESSORS = {'ApproachClosureRead3': 'ApproachClosureRead4', 'FrozenConfigurationRead7': 'FrozenConfigurationRead8', 'RunHistoryRead6': 'RunHistoryRead7', 'ApproachSavedRead3': 'ApproachSavedRead4', 'ApproachVersionSavedRead3': 'ApproachVersionSavedRead4', 'ApproachPreviewRead3': 'ApproachPreviewRead4', 'ApproachResolution3': 'ApproachResolution4', 'ApproachReceiptRead2': 'ApproachReceiptRead3', 'ConfigurationPreviewRead6': 'ConfigurationPreviewRead7', 'ModifiedRunSeedRead6': 'ModifiedRunSeedRead7', 'ResultSource': 'ResultSource2', 'ResultSourcePage': 'ResultSourcePage2'}
+
 schemas["Error"]["properties"]["error"]["properties"]["code"]["enum"] += ["rate_limited","internal_error","history_not_recorded","corrupt_retained_record","unsupported_record_version","missing_results","missing_artifacts","missing_or_invalid_artifact"]
 def ref(name):return {"$ref":"#/components/schemas/"+name}
 def obj(properties,required=None):return {"type":"object","properties":properties,"required":list(properties) if required is None else required,"additionalProperties":False}
@@ -101,7 +104,7 @@ schemas['RunStatus1']=obj(dict(run_id=uuid,configuration_revision_id=uuid,
     process_state=nullable(copy.deepcopy(schemas['PublicRun']['properties']['process_state'])),
     exit_status=copy.deepcopy(schemas['PublicRun']['properties']['exit_status']),
     facets=obj({k:reasoned(copy.deepcopy(retained[k]),['not_recorded'])
-        for k in ('execution','convergence','optimization','completeness','applicability')}),
+        for k in ('execution',)}),
     criteria=reasoned(copy.deepcopy(retained['criteria']),['not_recorded']),
     times=obj(dict(submitted_at=reasoned({'type':'string','format':'date-time'},['not_recorded']),
         **{k:reasoned({'type':'string','format':'date-time'},['not_projected'])
@@ -279,7 +282,7 @@ for path,methods in spec["paths"].items():
             schema=array(ref("FrozenConfigurationRead7")) if method=="get" else ref("FrozenConfigurationRead7");status="200" if method=="get" else "201"
             if method=='post':op['requestBody']['content']['application/json']['schema']=ref('PublicConfigurationCommit')
         elif path.endswith('/result-sources'):
-            schema=ref('ResultSourcePage')
+            schema=ref('ResultSourcePage2')
             for parameter in op['parameters']:
                 if parameter['name']=='limit':parameter['schema']={'type':'integer','minimum':1,'maximum':50,'default':25}
                 elif parameter['name']=='cursor':parameter['schema']={'type':'string','maxLength':2048}
@@ -438,6 +441,58 @@ OPERATION_NOTES={
 for (path,method),text in OPERATION_NOTES.items():
     op=spec['paths'][path][method]
     op['description']=(op['description']+' '+text) if op.get('description') else text
+
+# Project historical scientific records at the public boundary. An existing digest
+# identifies the retained source; record_view identifies the projected canonical JSON.
+# Persisted schemas remain in model.schema.json and exact artifact downloads.
+def public_views():
+    marker = obj(dict(schema_version={'const':'1'}, source_sha256=sha, view_sha256=sha))
+    marker['description'] = ('This object is a public view, not the exact retained record. '
+        'source_sha256 hashes the original object; view_sha256 hashes this object without '
+        'record_view. Existing digest fields identify original retained records.')
+    schemas['RecordView1'] = marker
+    legacy = schemas['RetainedResults']
+    for key in ('convergence', 'optimization', 'completeness', 'applicability'):
+        legacy['properties'].pop(key)
+        legacy['required'].remove(key)
+    legacy['properties']['record_view'] = ref('RecordView1')
+    legacy['required'].append('record_view')
+    legacy['description'] = 'Public projection of a retained format-1 result; exact source bytes are downloadable.'
+    affected = {'RetainedResults'}
+    def contains(value):
+        if isinstance(value, dict):
+            if value.get('$ref', '').removeprefix('#/components/schemas/') in affected:
+                return True
+            return any(contains(child) for child in value.values())
+        return isinstance(value, list) and any(contains(child) for child in value)
+    while True:
+        reached = {name for name, value in schemas.items() if contains(value)} | affected
+        if reached == affected: break
+        affected = reached
+    def mark(value):
+        if isinstance(value, dict):
+            if value.get('type') == 'object' and contains(value):
+                value.setdefault('properties', {})['record_view'] = ref('RecordView1')
+            for child in list(value.values()):mark(child)
+        elif isinstance(value, list):
+            for child in value:mark(child)
+    for value in schemas.values():mark(value)
+    # Snapshot prior definitions under private-to-this-document aliases before
+    # widening public read aliases, so unions never become self-referential.
+    for old in _PUBLIC_READ_SUCCESSORS:
+        schemas['Previous'+old] = copy.deepcopy(schemas[old])
+    def old_refs(value):
+        if isinstance(value, dict):
+            return {k:('#/components/schemas/Previous'+v.removeprefix('#/components/schemas/')
+                if k == '$ref' and v.removeprefix('#/components/schemas/') in _PUBLIC_READ_SUCCESSORS
+                else old_refs(v)) for k,v in value.items()}
+        if isinstance(value, list):return [old_refs(v) for v in value]
+        return value
+    # Only the new successor definitions need their embedded predecessor links frozen.
+    for old, new in _PUBLIC_READ_SUCCESSORS.items():
+        schemas[old] = old_refs(copy.deepcopy(schemas[new]))
+public_views()
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, default=ROOT / 'contracts/hyprn-mvp.openapi.yaml')
 parser.parse_args().output.write_text(json.dumps(spec,indent=2)+"\n")

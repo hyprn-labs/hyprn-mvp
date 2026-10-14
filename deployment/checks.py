@@ -228,6 +228,7 @@ GROUPS = {
         'integration/tests/test_results.py::test_retained_versions_read_without_worker_modeling_or_reassessment',
         'integration/tests/test_results.py::test_retained_reader_rejects_corruption_or_reports_unsupported',
         'integration/tests/test_results.py::test_unknown_stored_outcome_version_is_partial_diagnostic',
+        'integration/tests/test_results.py::test_current_result_protocol_retains_scalar_guards_without_aggregate_status',
     ),
     'runtime-observation': (
         'application/tests/test_readiness.py',

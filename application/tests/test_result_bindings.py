@@ -198,7 +198,8 @@ def test_criterion_failed_source_and_labels_survive_rename_and_model_outage(env)
         db.execute('DELETE FROM model_associations WHERE study_id=?',(env['sid'],))
     r=copy.deepcopy(env['request']['inputs'][0]);r['expected_results_digest']=digest(p['history']['results'])
     item=bindings(env).resolve(env['actor'],env['sid'],r)
-    assert item['outcomes']['criteria']==[criterion] and item['outcomes']['applicability']['state']=='unassessed'
+    assert item['outcomes']['criteria']==[criterion]
+    assert set(item['outcomes'])=={'execution','criteria'}
     assert item['labels']['model_name'] is None and item['labels']['run_name']==env['case']['frozen']['configuration']['name']
 
 

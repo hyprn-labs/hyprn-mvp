@@ -284,3 +284,24 @@ def test_run_list_name_uses_exact_revision_not_family_head_offline(submission):
     assert native.launches==0
     with store.connection(write=True) as db:db.execute('DELETE FROM memberships WHERE study_id=? AND actor_id=?',(sid,actor))
     assert c.get(f'/api/1/studies/{sid}/runs').status_code in (403,404)
+
+
+def test_public_historical_view_preserves_source_identity_and_exact_nested_records():
+    from hyprn_mvp_app.contracts import canonical, digest, public_record_view
+    from test_native_parser import record
+    _, _, result = record()
+    context = dict(schema_version='1', results=result)
+    context['digest'] = digest(context)
+    source = dict(closure=dict(run_contexts=[context], digest='a'*64), result=result)
+    before = canonical(source)
+    projected = public_record_view(source)
+    assert canonical(source) == before
+    assert projected['closure']['run_contexts'][0]['digest'] == context['digest']
+    for old, view in [(source, projected), (context, projected['closure']['run_contexts'][0]),
+                      (result, projected['result'])]:
+        assert view['record_view']['source_sha256'] == digest(old)
+        assert view['record_view']['view_sha256'] == digest({k:v for k,v in view.items() if k != 'record_view'})
+    assert not {'convergence','optimization','completeness','applicability'} & projected['result'].keys()
+    current = {k:v for k,v in result.items() if k not in {'convergence','optimization','completeness','applicability'}}
+    current['schema_version'] = '2'
+    assert public_record_view(current) == current

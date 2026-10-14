@@ -9,7 +9,7 @@ from typing import Any, Callable, Literal
 from uuid import UUID
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from .contracts import MAX_DIAGNOSTICS, DomainError, issue, uid
+from .contracts import MAX_DIAGNOSTICS, DomainError, issue, uid, public_record_view
 
 # Class names are schema names in the generated public contract: never rename them.
 class Closed(BaseModel):
@@ -126,7 +126,7 @@ def receipt_error_response(request,error,recovery):
     return JSONResponse(status_code=error.status,content=content)
 
 def response(request,data,status=200,**extra):
-    return JSONResponse(status_code=status,content=dict(schema_version="1",request_id=request.state.request_id,data=data,**extra))
+    return JSONResponse(status_code=status,content=dict(schema_version="1",request_id=request.state.request_id,data=public_record_view(data),**extra))
 
 def page(request,items,key,cursor,limit):
     if not 1<=limit<=100:raise DomainError("invalid_request",400)

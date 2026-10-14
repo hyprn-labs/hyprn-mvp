@@ -277,7 +277,7 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     spec = json.loads(public.read_text())
     source_route=spec['paths']['/studies/{study_id}/result-sources']
     assert set(source_route)=={'get'}
-    assert source_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={'$ref':'#/components/schemas/ResultSourcePage'}
+    assert source_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={'$ref':'#/components/schemas/ResultSourcePage2'}
     assert spec['paths']['/studies/{study_id}/configurations/preview']['post']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/PublicConfigurationRequest')
     seed_route=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']
     assert set(seed_route)=={'get'}
@@ -287,7 +287,7 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     assert seed_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={
         '$ref':'#/components/schemas/ModifiedRunSeedRead6'}
     assert spec['components']['schemas']['ModifiedRunSeedRead6']=={'oneOf':[
-        {'$ref':'#/components/schemas/ModifiedRunSeed'}, {'$ref':'#/components/schemas/ModifiedRunSeed6'}]}
+        {'$ref':'#/components/schemas/PreviousModifiedRunSeedRead6'}, {'$ref':'#/components/schemas/ModifiedRunSeed7'}]}
     assert spec['components']['schemas']['ModifiedRunSeed']=={'oneOf':[
         {'$ref':'#/components/schemas/ModifiedRunSeed1'}, {'$ref':'#/components/schemas/ModifiedRunSeed2'},
         {'$ref':'#/components/schemas/ModifiedRunSeed3'}, {'$ref':'#/components/schemas/ModifiedRunSeed4'}]}

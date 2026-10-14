@@ -49,7 +49,7 @@ def router(deps):
     @r.post('/api/1/studies/{study_id}/approach/preview')
     def approach_preview(study_id:str,request:Request,who:Actor,body:dict=Body(...)):
         sid=valid_id(study_id);approach_query(request,who,sid)
-        return approach_result(request,'ApproachPreviewRead3',approaches.preview(who,sid,body))
+        return approach_result(request,'ApproachPreviewRead4',approaches.preview(who,sid,body))
 
     @r.post('/api/1/studies/{study_id}/approach/draft')
     def approach_draft(study_id:str,request:Request,who:Actor,body:dict=Body(...)):
@@ -69,12 +69,12 @@ def router(deps):
     @r.post('/api/1/studies/{study_id}/approach/versions',status_code=201)
     def approach_save_version(study_id:str,request:Request,who:Actor,body:dict=Body(...)):
         sid=valid_id(study_id);approach_query(request,who,sid)
-        return approach_result(request,'ApproachVersionSavedRead3',approaches.save_version(who,sid,body),201)
+        return approach_result(request,'ApproachVersionSavedRead4',approaches.save_version(who,sid,body),201)
 
     @r.get('/api/1/studies/{study_id}/approach/versions/{version_id}')
     def approach_version(study_id:str,version_id:str,request:Request,who:Actor):
         sid=valid_id(study_id);approach_query(request,who,sid)
-        return approach_result(request,'ApproachSavedRead3',approaches.read(who,sid,valid_id(version_id)))
+        return approach_result(request,'ApproachSavedRead4',approaches.read(who,sid,valid_id(version_id)))
 
     @r.get('/api/1/studies/{study_id}/approach/versions/{version_id}/usage')
     def approach_usage(study_id:str,version_id:str,request:Request,who:Actor):

@@ -217,13 +217,13 @@ class _Resolver:
             if _retained(lambda: json.loads(stored['payload'])) != payload['frozen']:
                 raise DomainError('reference_conflict')
             config, model = payload['frozen']['configuration'], payload['frozen']['model_snapshot']
-            context = _signed(dict(schema_version='1', run_id=run_id, study_id=self.sid,
+            context = _signed(dict(schema_version='2' if history['results'] is not None and history['results']['schema_version']=='2' else '1', run_id=run_id, study_id=self.sid,
                 request=payload['request'], association=history['association'],
                 configuration_revision_id=revision, configuration_digest=config['digest'],
                 model_revision_id=model['model_revision_id'], model_digest=model['digest'],
                 context=config['context_snapshot'], results=history['results'], assessment=history['assessment'],
                 runtime=payload['bundle']['manifest']['runtime'], errors=history['errors']))
-            validate('ApproachRunContext1', context, remote=True)
+            validate('ApproachRunContextRead2', context, remote=True)
             self.add('run_contexts', context)
             self.frozen(payload['frozen'], revision)
         finally:
@@ -334,7 +334,7 @@ class Approaches:
         preview = dict(schema_version=closure_schema(version, resolution), expected_revision=body['expected_revision'], changes=changes,
             issues=issues, resolved=resolution, coverage=coverage,
             preview_digest=digest(dict(expected_revision=body['expected_revision'], content=content, resolved=resolution)))
-        validate('ApproachPreviewRead3', preview)
+        validate('ApproachPreviewRead4', preview)
         return preview, resolver, draft
 
     def preview(self, actor, sid, body):
@@ -495,5 +495,5 @@ class Approaches:
         validate('ApproachReceiptCategory1', category)
         row = self.store.receipt(actor, sid, category, command)
         result = {k: row[k] for k in ('command_id', 'state', 'result', 'error')}
-        validate('ApproachReceiptRead2', result, remote=True)
+        validate('ApproachReceiptRead3', result, remote=True)
         return result

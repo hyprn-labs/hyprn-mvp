@@ -552,7 +552,7 @@ class Export:
             # The archive envelope stays at version1. Its retained reader checks
             # the complete nested version pairing, projection and citation closure
             # before either native inventory or offline archive inspection.
-            if bundle['manifest']['schema_version'] not in ('3', '4', '5', '6', '8'):
+            if bundle['manifest']['schema_version'] not in ('3', '4', '5', '6', '8', '9', '10'):
                 raise ValueError('Current retained bundle required')
             expected_files[incoming['frozen_bundle'].uuid] = {
                 **bundle['files'],

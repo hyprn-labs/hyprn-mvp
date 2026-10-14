@@ -20,12 +20,16 @@ def evaluate_criteria(result, criteria, unit_conversion=None):
     No convergence or applicability is inferred from threshold satisfaction.
     Native conversion is injected only by the attested numerical worker.
     """
+    if result.get('schema_version') not in ('1', '2'):
+        raise ValueError('Unsupported result format')
     outputs = {(o['target']['instance_id'], o['target']['port_id']): o for o in result['outputs']}
     outcomes = []
     for criterion in criteria:
         outcome, reason = 'unresolved', 'required_output_unavailable'
         output = outputs.get((criterion['target']['instance_id'], criterion['target']['port_id']))
-        if result['convergence']['state'] not in ('converged', 'not_applicable'):
+        if result['schema_version'] == '1' and result['convergence']['state'] not in (
+            'converged', 'not_applicable'
+        ):
             reason = 'convergence_unresolved'
         elif output and output['availability'] == 'available':
             try:
@@ -211,7 +215,7 @@ def _result_unit(value, model_version):
     raise ValueError('Unresolved or malformed retained output unit')
 
 
-def validate_result(raw, request, model):
+def validate_result(raw, request, model, *, result_schema_version='1'):
     """Accept data only, bound to the immutable native inputs and port inventory."""
     envelope = bounded_json(raw)
     if (
@@ -220,31 +224,31 @@ def validate_result(raw, request, model):
         or envelope['exit_code'] != 0
     ):
         raise ValueError('Worker did not exit normally')
+    prefix = 'HYPRN_MVP_RESULT_V' + result_schema_version + ' '
     lines = [
-        line[len('HYPRN_MVP_RESULT_V1 ') :]
+        line[len(prefix) :]
         for line in envelope['output'].splitlines()
-        if line.startswith('HYPRN_MVP_RESULT_V1 ')
+        if line.startswith(prefix)
     ]
-    if len(lines) != 1:
+    if len(lines) != 1 or any(line.startswith('HYPRN_MVP_RESULT_V') and not line.startswith(prefix) for line in envelope['output'].splitlines()):
         raise ValueError('Ambiguous worker result')
     result = bounded_json(lines[0])
-    if result['schema_version'] != '1' or any(
+    if result_schema_version not in ('1', '2') or result['schema_version'] != result_schema_version or any(
         result[key] != request[key] for key in ('run_id', 'bundle_digest')
     ):
         raise ValueError('Result identity mismatch')
-    if set(result) != {
+    fields = {
         'schema_version',
         'run_id',
         'bundle_digest',
         'execution',
-        'convergence',
-        'optimization',
-        'completeness',
         'outputs',
         'criteria',
-        'applicability',
         'artifacts',
-    }:
+    }
+    if result_schema_version == '1':
+        fields |= {'convergence', 'optimization', 'completeness', 'applicability'}
+    if set(result) != fields:
         raise ValueError('Unexpected result field')
     if model.get('schema_version') not in ('1', '2', '3', '4'):
         raise ValueError('Unsupported result model version')
@@ -336,20 +340,23 @@ def validate_result(raw, request, model):
     if seen != set(expected):
         raise ValueError('Missing output record')
     available = sum(o['availability'] == 'available' for o in result['outputs'])
-    if result['completeness'] != dict(
-        expected=len(expected),
-        available=available,
-        failed=sum(not o['producer_completed'] for o in result['outputs']),
-        unavailable=len(expected) - available,
-    ):
-        raise ValueError('Inconsistent completeness')
-    # This workload has no candidate-produced files or independent applicability evidence.
-    if result['artifacts'] or result['applicability'] != dict(state='unassessed', evidence_refs=[]):
+    if result_schema_version == '1':
+        if result['completeness'] != dict(
+            expected=len(expected),
+            available=available,
+            failed=sum(not o['producer_completed'] for o in result['outputs']),
+            unavailable=len(expected) - available,
+        ):
+            raise ValueError('Inconsistent completeness')
+        if result['applicability'] != dict(state='unassessed', evidence_refs=[]):
+            raise ValueError('Untrusted scientific evidence claim')
+        if result['convergence'] != dict(state='not_applicable', diagnostics_ref=None) or result[
+            'optimization'
+        ] != dict(termination='not_applicable', feasibility='not_applicable'):
+            raise ValueError('Unsupported numerical status')
+    # This workload has no candidate-produced files.
+    if result['artifacts']:
         raise ValueError('Untrusted scientific evidence claim')
-    if result['convergence'] != dict(state='not_applicable', diagnostics_ref=None) or result[
-        'optimization'
-    ] != dict(termination='not_applicable', feasibility='not_applicable'):
-        raise ValueError('Unsupported numerical status')
     execution = result['execution']
     if (
         set(execution) != {'state', 'exit_code', 'message'}
@@ -370,21 +377,23 @@ class UnsupportedRecordVersion(ValueError):
     code = 'unsupported_record_version'
 
 
-def read_stored_result(result, request, model, assessment=None):
+def read_stored_result(result, request, model, assessment=None, *, result_schema_version=None):
     """Read recorded outcomes as data; never recompute using today's evaluator."""
-    if result.get('schema_version') != '1':
+    if result.get('schema_version') not in ('1', '2'):
         raise UnsupportedRecordVersion('Unsupported retained result version')
+    if result_schema_version is not None and result['schema_version'] != result_schema_version:
+        raise ValueError('Retained result does not match its bundle protocol')
     if assessment is not None and assessment.get('version') != 'fixed-threshold-1':
         raise UnsupportedRecordVersion('Unsupported retained assessment version')
     raw = json.dumps(
         dict(
             reason='exited',
             exit_code=0,
-            output='HYPRN_MVP_RESULT_V1 ' + json.dumps(result, allow_nan=False),
+            output='HYPRN_MVP_RESULT_V' + result['schema_version'] + ' ' + json.dumps(result, allow_nan=False),
         ),
         allow_nan=False,
     )
-    return validate_result(raw, request, model)
+    return validate_result(raw, request, model, result_schema_version=result['schema_version'])
 
 
 def _prepared_v1(manifest, prepared, files):
@@ -397,7 +406,7 @@ def _prepared_v1(manifest, prepared, files):
 
 
 def _prepared_v2(manifest, prepared, files):
-    if prepared.get('schema_version') != '2':
+    if prepared.get('schema_version') not in ('2', '3'):
         raise UnsupportedRecordVersion('Unsupported retained artifact version for bundle2/3/4')
     if manifest['generator'] != prepared['generator_identity']:
         raise ValueError('Retained generator mismatch')
@@ -407,7 +416,7 @@ def _prepared_v2(manifest, prepared, files):
     entry = prepared['entrypoint']
     if (
         entry['protocol'] != 'hyprn_mvp.openmdao.program/1'
-        or prepared['result_protocol_version'] != '1'
+        or (prepared['schema_version'], prepared['result_protocol_version']) not in (('2', '1'), ('3', '2'))
     ):
         raise UnsupportedRecordVersion('Unsupported retained program or result protocol')
     for key in ('module_path', 'bindings_path', 'source_map_path'):
@@ -431,10 +440,14 @@ def retained_bundle(repository, request):
         '5': _prepared_v2,
         '6': _prepared_v2,
         '8': _prepared_v2,
+        '9': _prepared_v2,
+        '10': _prepared_v2,
     }
     reader = readers.get(manifest.get('schema_version'))
     if reader is None:
         raise UnsupportedRecordVersion('Unsupported retained bundle version')
+    from hyprn_mvp_app.execution_bundle import bundle_layout
+    layout = bundle_layout(manifest)
     manifest_fields = {
         'schema_version',
         'bundle_id',
@@ -453,17 +466,18 @@ def retained_bundle(repository, request):
         'result_protocol_version',
         'bundle_digest',
     }
-    if manifest['schema_version'] in ('2', '3', '4', '5', '6', '8'):
+    if layout in ('2', '3', '4', '5', '6', '8', '9'):
         manifest_fields |= {'entrypoint', 'executable_content_digest'}
-    if manifest['schema_version'] in ('3', '4', '5', '6', '8'):
+    if layout in ('3', '4', '5', '6', '8', '9'):
         manifest_fields |= {'modeling_configuration_digest', 'result_dependencies'}
-    if manifest['schema_version'] in ('5', '6', '8'):
+    if layout in ('5', '6', '8', '9'):
         manifest_fields |= {'approach_digest', 'approach_closure_digest'}
-    if manifest['schema_version'] == '8':
+    if layout in ('8', '9'):
         manifest_fields.add('model_schema_version')
+    if manifest['schema_version'] == '10':manifest_fields.add('input_schema_version')
     if set(manifest) != manifest_fields:
         raise ValueError('Unexpected retained manifest fields')
-    if manifest['result_protocol_version'] != '1':
+    if manifest['result_protocol_version'] != ('2' if manifest['schema_version'] == '10' else '1'):
         raise UnsupportedRecordVersion('Unsupported retained result protocol')
     check_digest(manifest, 'bundle_digest')
     if any(manifest[k] != request[k] for k in ('run_id', 'bundle_digest')):
@@ -483,7 +497,7 @@ def retained_bundle(repository, request):
         with repository.open(item['path'], mode='rb') as stream:
             files[item['path']] = stream.read(size + 1)
     verify_files(manifest['files'], files)
-    if manifest['schema_version'] in ('3', '4', '5', '6', '8'):
+    if layout in ('3', '4', '5', '6', '8', '9'):
         # Data-only validation, imported here so worker results1 remains stdlib
         # at import time. No runtime attestation, native lookup or model fetch.
         from hyprn_mvp_app.execution_bundle import validate_retained_bundle

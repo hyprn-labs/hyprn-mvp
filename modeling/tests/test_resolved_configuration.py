@@ -61,11 +61,11 @@ puts 'PROJECTION_RESULT='+JSON.generate({'proof'=>proof,'candidate'=>candidate,'
     assert all(unit in result['catalog']['supported_units'] for unit in catalog['supported_units'])
     assert len(result['catalog']['supported_units']) == 29
     assert catalog['engine'] == 'OpenMDAO' and catalog['version'] == '3.45.1'
-    assert artifact['schema_version'] == result['legacy']['schema_version'] == '2'
+    assert artifact['schema_version'] == result['legacy']['schema_version'] == '3'
     assert artifact['configuration_digest'] == projected['digest']
     assert artifact['entrypoint']['protocol'] == 'hyprn_mvp.openmdao.program/1'
     assert artifact['generator_identity']['name'] == 'WhatsOpt::OpenmdaoGenerator'
-    assert artifact['result_protocol_version'] == '1'
+    assert artifact['result_protocol_version'] == '2'
     assert any(c['id']=='resolved_configuration' and c['version']=='3' and c['supported'] for c in result['capabilities']['capabilities'])
     files = {p: base64.b64decode(raw) for p, raw in result['files'].items()}
     from test_native_program_contract import check_program

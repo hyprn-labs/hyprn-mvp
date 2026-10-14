@@ -19,7 +19,7 @@ export function ConfigurationApproachRecord({ selection, closure, actions }: { a
   const version = closure?.approach_versions.find(v => v.approach_version_id === selection.approach_version_id);
   if (!version || !closure) return <section className="configuration-section configuration-approach"><SectionHeader level={3} title="Modeling approach" actions={actions}/><p role="status">The linked modeling approach could not be loaded. The link to its version is unchanged.</p></section>;
   // Correlate the exact ancestor with its closure branch; never promote old bytes.
-  const record: ApproachSavedRead3 | null = closure.schema_version === '3' ? {version,closure} :
+  const record: ApproachSavedRead3 | null = closure.schema_version === '3' || closure.schema_version === '4' ? {version,closure} :
     version.schema_version === '1' ? {version,closure} : null;
   if (!record) return <p>The linked modeling approach is unavailable.</p>;
   const item = version.content.cases.find(c => c.case_id === selection.case_id);

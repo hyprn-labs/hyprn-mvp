@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from execution_fixtures import fixture, uid
+from execution_fixtures import current_fixture as fixture, uid
 from hyprn_mvp_app.store import digest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -125,7 +125,7 @@ def test_native_affine_conversion_rejected_without_available_output():
     record, _ = execute_case(case)
     assert record['exit_status'] == 301
     assert record['results']['execution']['message'] == 'ValueError'
-    assert record['results']['completeness']['available'] == 0
+    assert all(output['availability'] != 'available' for output in record['results']['outputs'])
     assert all(o['value'] is None for o in record['results']['outputs'])
 
 

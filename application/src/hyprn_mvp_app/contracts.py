@@ -132,12 +132,13 @@ class ContractError(DomainError):
 
 EXECUTION_ROOTS = (
     'ApproachClosure3',
+    'ApproachClosure4',
     'ApproachClosurePreUnits',
-    'ApproachClosureRead3',
+    'ApproachClosureRead4',
     'ApproachClosureWithModel3',
     'ApproachResolution1',
-    'ApproachResolution3',
-    'ApproachSavedRead3',
+    'ApproachResolution4',
+    'ApproachSavedRead4',
     'ApproachVersionRead2',
     'ConfigurationCandidate1',
     'ConfigurationCandidate2',
@@ -148,10 +149,11 @@ EXECUTION_ROOTS = (
     'ConfigurationRevision2',
     'ConfigurationRevision3',
     'ConfigurationRevision4',
-    'ExecutionBundleRead8',
+    'ExecutionBundleRead10',
     'FrozenConfiguration4',
     'FrozenConfiguration5',
     'FrozenConfiguration7',
+    'FrozenConfiguration8',
     'FrozenConfigurationLegacy',
     'ModelDraftRead4',
     'ModelRevision2',
@@ -162,7 +164,7 @@ EXECUTION_ROOTS = (
     'ModelingConfigurationRevision3',
     'NativeSource',
     'PortRef',
-    'PreparedModelArtifact',
+    'PreparedModelArtifactRead3',
     'ProgramBindings',
     'ProgramProvenance',
     'ProgramSourceMap',
@@ -452,3 +454,33 @@ def _explain(error):
     if keyword in ('not', None, False):
         return [issue(parts, 'Value is not allowed here.')]
     return [issue(parts, 'Invalid value.')]
+
+
+# These fields existed only in the first HYPRN deterministic result format.
+LEGACY_RESULT_FIELDS = frozenset({'convergence', 'optimization', 'completeness', 'applicability'})
+
+
+def public_record_view(value):
+    """Project historical results without changing their retained source identities.
+
+    Every changed enclosing object carries both source and view canonical JSON hashes.
+    Existing digest fields still identify their exact retained sources; they never
+    claim to authenticate this projection. Exact artifacts and exports bypass this
+    HTTP presentation projection and remain independently verifiable.
+    """
+    if isinstance(value, list):
+        return [public_record_view(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {key: public_record_view(item) for key, item in value.items()}
+    if (value.get('schema_version') == '1'
+            and {'run_id', 'bundle_digest', 'outputs', 'execution', 'criteria', 'artifacts'} <= value.keys()
+            and LEGACY_RESULT_FIELDS <= value.keys()):
+        # Closed validation prevents applying a scientific projection to an
+        # arbitrary object that happens to contain similarly named keys.
+        validate('RetainedResults', value)
+        result = {key: item for key, item in result.items() if key not in LEGACY_RESULT_FIELDS}
+    if result != value:
+        result['record_view'] = dict(schema_version='1', source_sha256=digest(value),
+                                    view_sha256=digest(result))
+    return result

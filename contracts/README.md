@@ -17,11 +17,11 @@ Domain language is defined in `CONTEXT.md`. Several persisted wire names predate
 | `fixed-threshold-1` | value of `assessment.version` | Criterion evaluator version | Fixed-threshold comparison of a stored output with a criterion |
 | `ASSESSMENT_VERSION` | `hyprn_mvp_integration` `results.py`, `calculation.py` | Criterion evaluator version constant | Part of the attested execution sources; renaming it would change the worker image |
 | AiiDA output link `assessment` | `calculation.py` | Criterion evaluator identity node | Stored native provenance; renaming would break reads of stored runs |
-| `applicability: {state: 'unassessed'}` | stored results | Applicability not evaluated | A run never evaluates applicability |
+| `applicability: {state: 'unassessed'}` | exact historical result1 artifacts only | Applicability not evaluated | Omitted from current results and public read views |
 | `ModelPackage`, `ModelPackage1..4`, `PublicModelPackageRead3`, `ModelPackageResponse` | `model.schema.json`, model export and import | **Portable model record** | Exact versions, definitions, source bytes and identity relationships. Not a method package, an execution bundle or an XDSM file |
 | `package` request field | `ImportModel` (`POST /studies/{id}/model-imports`), private `/imports` | Portable model record being imported | |
 | `model_package_manifest` | `preparation.json` inside the execution bundle | Manifest of the portable model record the bundle was prepared from | |
-| `ExecutionBundle2..8`, `ExecutionBundleRead*`, `BundleFile*`, `bundle_versions` | `execution.schema.json`, `model.schema.json` | **Execution bundle** | `hyprn_mvp_app.execution_bundle` owns assembly and admission |
+| `ExecutionBundle2..8`, `ExecutionBundle10`, `ExecutionBundleRead*`, `BundleFile*`, `bundle_versions` | `execution.schema.json`, `model.schema.json` | **Execution bundle** | `hyprn_mvp_app.execution_bundle` owns assembly and admission |
 | `bundle`, `bundle_digest`, `bundle_id`, `prepared_bundle` | run history, stored results, receipts | Execution bundle summary or digest | `history.bundle` identifies the bundle a run used; it is not the bundle bytes |
 | `approach_*` (`approach_binding`, `approach_closure`, `approach_digest`, `ApproachContent*`, …) | configurations, bundles, history | **Modeling approach** references | Explanatory references to exact versions. The closure validates references only; it is never an executable graph |
 | `case_id`, `case_name`, `RunCaseContext1`, `ApproachCase1` | approach content, run history items | **Case** | The case is the situation; the configuration specifies it |
@@ -105,3 +105,19 @@ The execution and modeling inventories retain both model and execution schemas. 
 belongs only to the application inventory. Changing a retained input requires the reviewed
 rebuild and re-attestation. Historical prepared artifacts keep their own schema identities,
 source bytes and generator digests; admission never substitutes current schema content.
+
+## Current results and exact historical records
+
+Prepared artifact3 pins result protocol2. Bundle10 explicitly records its input layout;
+result2 and history7 omit aggregate convergence, optimization, completeness and applicability.
+Execution, all output values/availability/reasons and criterion outcomes remain closed and
+validated. Per-output missing values remain null and cannot satisfy a criterion.
+
+Historical result1, preparations and bundles retain their exact schemas and bytes. Public
+read views omit obsolete result fields recursively, including prior-run contexts in saved
+approaches and configurations. Each changed enclosing object carries `record_view` with
+`source_sha256` and `view_sha256`: canonical JSON identities, not an authenticity claim.
+Existing pinned digest fields identify the unchanged source. Exact artifact downloads and
+computational archives retain historical bytes. Public views cannot replace exact saved
+records or their hashes. New run contexts use format2, and closures containing them use
+format4; these formats do not rewrite prior contexts.

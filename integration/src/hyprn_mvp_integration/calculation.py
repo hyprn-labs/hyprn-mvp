@@ -13,6 +13,7 @@ from aiida.engine import CalcJob
 from aiida.parsers.parser import Parser
 from hyprn_mvp_app.contracts import canonical, check_digest, data_json, digest
 from hyprn_mvp_app.execution_bundle import (
+    bundle_layout,
     verify_files,
     closed,
     MAX_BYTES,
@@ -89,9 +90,9 @@ class ScalarCalculation(CalcJob):
                 actual = {
                     label: node.uuid for label, node in inputs.get('upstream_results', {}).items()
                 }
-                if manifest['schema_version'] == '2':
+                if bundle_layout(manifest) == '2':
                     expected = {}
-                elif manifest['schema_version'] in ('3', '4', '5', '6', '8'):
+                elif bundle_layout(manifest) in ('3', '4', '5', '6', '8', '9'):
                     descriptor = manifest['result_dependencies']
                     with repository.open('result-dependencies.json', mode='rb') as stream:
                         raw = stream.read(min(descriptor['size'], MAX_BYTES) + 1)
@@ -111,7 +112,7 @@ class ScalarCalculation(CalcJob):
                     raise ValueError('Upstream inputs differ from frozen dependency mapping')
                 if inputs['metadata'].get('disable_cache') is not True:
                     raise ValueError('Fresh execution requires disabled cache')
-                if manifest['schema_version'] in ('2', '3', '4', '5', '6', '8'):
+                if bundle_layout(manifest) in ('2', '3', '4', '5', '6', '8', '9'):
                     files = {}
                     total = 0
                     if not 0 < len(manifest['files']) <= 2000:
@@ -173,7 +174,7 @@ class ScalarParser(Parser):
             request = self.node.inputs.request.get_dict()
             bundle = retained_bundle(self.node.inputs.frozen_bundle.base.repository, request)
             model = json.loads(bundle['files']['model.json'])
-            result = validate_result(raw, request, model)
+            result = validate_result(raw, request, model, result_schema_version=bundle['manifest']['result_protocol_version'])
             config = json.loads(bundle['files']['configuration.json'])
             validate_criteria(result, config)
             self.out('results', orm.Dict(dict=result))
@@ -312,10 +313,10 @@ class NativeExecution:
             if len(raw) > 1048576:
                 raise ValueError('Source manifest bound')
             manifest = data_json(raw)
-            if manifest.get('schema_version') == '1':
+            if bundle_layout(manifest) == '1':
                 bundle = retained_bundle(repository, request)  # Historical data only.
             else:
-                if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8'):
+                if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9'):
                     raise ValueError('Unsupported source bundle')
                 files = {}
                 total = 0
@@ -334,7 +335,8 @@ class NativeExecution:
             if digest(raw_result) != source['results_digest']:
                 raise ValueError('Source results digest mismatch')
             result = read_stored_result(
-                raw_result, request, data_json(bundle['files']['model.json'])
+                raw_result, request, data_json(bundle['files']['model.json']),
+                result_schema_version=bundle['manifest'].get('result_protocol_version', '1')
             )
             if result['execution']['state'] != 'finished' or result['execution']['exit_code'] != 0:
                 raise ValueError('Successful source execution required')
@@ -385,7 +387,7 @@ class NativeExecution:
         return archive_record(self, preflight)
 
     def _upstream_results(self, bundle):
-        if bundle['manifest']['schema_version'] == '2':
+        if bundle_layout(bundle['manifest']) == '2':
             return {}
         dependencies = data_json(bundle['files']['result-dependencies.json'])
         nodes = {}
@@ -458,7 +460,7 @@ class NativeExecution:
         return selected
 
     def launch(self, bundle, request):
-        if bundle['manifest'].get('schema_version') not in ('2', '3', '4', '5', '6', '8'):
+        if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9'):
             raise ValueError('Unsupported bundle version; create a new run command')
         if (
             set(request) != REQUEST_KEYS
@@ -562,6 +564,7 @@ class NativeExecution:
                     request,
                     json.loads(bundle['files']['model.json']),
                     assessment,
+                    result_schema_version=bundle['manifest'].get('result_protocol_version', '1'),
                 )
             except UnsupportedRecordVersion:
                 result['result_error'] = dict(code='unsupported_record_version', partial=True)
@@ -629,6 +632,7 @@ class NativeExecution:
                     request,
                     json.loads(record['bundle']['files']['model.json']),
                     record['assessment'],
+                    result_schema_version=record['bundle']['manifest'].get('result_protocol_version', '1'),
                 )
             else:
                 partial('missing_results')

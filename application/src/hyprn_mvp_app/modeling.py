@@ -105,8 +105,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponse",resources=[sid])
-            caps=validate("Capabilities",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead2",resources=[sid])
+            caps=validate("CapabilitiesRead2",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             supported=("1.2" in caps["contract_versions"] and "2" in caps["schema_versions"]
                 and any(c["id"]=="model_assumptions" and c["version"]=="1" and c["supported"] for c in caps["capabilities"]))
@@ -130,8 +130,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponse",resources=[sid])
-            caps=validate("Capabilities",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead2",resources=[sid])
+            caps=validate("CapabilitiesRead2",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             if not self.supports_units(caps):raise DomainError("unsupported_capability",422)
         finally:
@@ -145,7 +145,7 @@ class Coordinator:
     def _require_quantities(self,actor,sid):
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
-            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponse",resources=[sid])
+            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponseRead2",resources=[sid])
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             if not self.supports_quantities(result["data"]):raise DomainError("unsupported_capability",422)
         finally:

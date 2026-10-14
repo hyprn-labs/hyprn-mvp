@@ -109,7 +109,8 @@ def deps():return dict(schema_version='1',sources=[],mappings=[])
 
 
 def assemble(case, dependencies=None):
-    b=assemble_bundle(uid(),case['prepared'],case['files'],case['frozen'],runtime_fixture(),dependencies or deps())
+    b=assemble_bundle(uid(),case['prepared'],case['files'],case['frozen'],runtime_fixture(),
+        None if case['frozen']['configuration']['schema_version']=='1' else dependencies or deps())
     r=dict(run_id=b['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest='a'*64,bundle_digest=b['manifest']['bundle_digest'])
     return b,r
 
@@ -677,3 +678,43 @@ def test_polish_model2_root_with_unresolved_model4_ancestor(catalog):
     assert b['manifest']['model_schema_version']=='2' and b['manifest']['schema_version']=='8'
     validate_retained_bundle(b,r,case['frozen'])
     assert json.loads(b['files']['modeling-configuration.json'])['required_capabilities']==['flat_explicit_scalar']
+
+
+@pytest.mark.parametrize('layout', ['2', '3', '4', '5', '6', '8'])
+def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(catalog, layout):
+    from hyprn_mvp_app.execution_bundle import bundle_layout, result_history_version
+    if layout in ('5', '6'):
+        case = case6(catalog, linked=True, legacy=layout == '5')
+    elif layout == '8':
+        case = case8(catalog)
+    else:
+        case = fixture()
+        config = case['frozen']['configuration']
+        if layout != '2':
+            config.update(schema_version='2' if layout == '3' else '3',
+                          context_source=dict(kind='current_study', expected_study_revision='fixture:1'),
+                          derivation=None)
+            for item in config['inputs']:
+                item['result_binding'] = None
+            if layout == '4':
+                config.update(assumptions=[], general_context_evidence_version_ids=[])
+                config['required_capabilities'].append('configuration_assumptions/1')
+    case['prepared'].update(schema_version='3', result_protocol_version='2')
+    repin(case)
+    bundle, request = assemble(case)
+    manifest = bundle['manifest']
+    assert manifest['schema_version'] == '10'
+    assert manifest['input_schema_version'] == bundle_layout(manifest) == layout
+    assert manifest['result_protocol_version'] == '2'
+    assert result_history_version('10', '2') == '7'
+    validate_retained_bundle(bundle, request, case['frozen'])
+    for field, value in [('result_protocol_version', '1'), ('input_schema_version', '1')]:
+        altered, altered_request = deepcopy((bundle, request))
+        altered['manifest'][field] = value
+        reseal(altered, altered_request)
+        with pytest.raises((ValueError, DomainError)):
+            validate_retained_bundle(altered, altered_request, case['frozen'])
+    with pytest.raises(ValueError):
+        result_history_version('10', '1')
+    with pytest.raises(ValueError):
+        result_history_version(layout, '2')

@@ -78,7 +78,7 @@
     "native": "sha256:a861510d56c094d6b51fc3dae896333497fab183f5afe918dcfd2da06a8e553c",
     "control": "sha256:705035e20b788e9c32c8518d4a3998156013f59861fc5f25ebca36b4eb99b02c"
   },
-  "native_patch_sha256": "e46c48b507d0f375560bfb33b4a0c78f81800592666e6ff7ccf602ef4e1ac192",
+  "native_patch_sha256": "051e1068e637487850e33490b3ce8a02b062255a7e85cbbe03a3503241f151a0",
   "image_bases": {
     "python": {
       "index": "python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258",

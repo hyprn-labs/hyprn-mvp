@@ -217,6 +217,12 @@ class RecordedApi:
                 'error': {'code': refused.code, 'message': refused.code, 'request_id': REQUEST_ID}
             }
             return ApiResponse(refused.status, body, REQUEST_ID)
+        from hyprn_mvp_app.contracts import public_record_view
+        if '/run-status' in path:
+            data = [{**item, 'facets': {'execution': item['facets']['execution']}} for item in data]
+        if '/result-sources' in path:
+            data = {**data, 'items': [{**item, 'outcomes': {k:v for k,v in item['outcomes'].items() if k != 'applicability'}} for item in data['items']]}
+        if self.validate:data = public_record_view(data)
         body = dict(schema_version='1', request_id=REQUEST_ID, data=data, **extra)
         if self.validate:
             assert contract_problems(path, body) == [], path

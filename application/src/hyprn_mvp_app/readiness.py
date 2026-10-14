@@ -182,7 +182,7 @@ def execution_readiness(store, model, actor, study):
     model_reason = None
     try:
         status, payload = model.call(actor, study, 'GET', '/capabilities',
-                                     response_schema='CapabilitiesResponse', resources=[study])
+                                     response_schema='CapabilitiesResponseRead2', resources=[study])
         if status != 200:
             raise ValueError('Unexpected capabilities status')
         capabilities = [c for c in payload['data']['capabilities'] if c['id']==CAPABILITY]
@@ -212,7 +212,8 @@ def supports_descriptive_execution(capabilities, model):
     """Check the exact backend contract; operational readiness remains separate."""
     if not isinstance(capabilities,dict):return False
     execution=capabilities.get('execution_versions',{})
-    if ('8' not in execution.get('bundle_versions',[]) or '2' not in execution.get('artifact_versions',[])
+    pairs = [('8','2'), ('10','3')]
+    if (not any(bundle in execution.get('bundle_versions',[]) and artifact in execution.get('artifact_versions',[]) for bundle,artifact in pairs)
             or 'hyprn_mvp.openmdao.program/1' not in execution.get('program_protocols',[])):
         return False
     if model['schema_version'] not in capabilities.get('schema_versions',[]):return False

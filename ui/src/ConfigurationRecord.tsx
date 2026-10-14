@@ -2,7 +2,7 @@ import { AttributionDetail } from './attribution';
 import { ConfigurationApproachRecord } from './ConfigurationApproach';
 import type { ApproachClosureRead3 } from './contract';
 import { Assumptions } from './Assumptions';
-import type { ConfigurationRevision, EvidenceSnapshot, ModelRevisionRead4, PortRef, RetainedResults } from './contract';
+import type { ConfigurationRevision, EvidenceSnapshot, ModelRevisionRead4, PortRef, RetainedResultsRead2 } from './contract';
 import { ActionDialog, Button, DataTable, Field, SectionHeader, CriterionRecord, formatNumber } from './design';
 import { EvidenceReferences } from './EvidenceView';
 import { criterionOperators } from './criterionLabels';
@@ -13,7 +13,7 @@ import type { Selection } from './workspaceModel';
 import { configurationContext, linkedApproach, modelAssumptions, recordLimitations, unreadableModelAssumptions } from './recordViews';
 
 /** Shared read-only layout. It cannot query current models or submit a run. */
-export function ConfigurationRecord({ configuration: c, model, results, approachClosure,  onViewSourceResult }: { approachClosure?: ApproachClosureRead3 | null; configuration: ConfigurationRevision; model: ModelRevisionRead4 | null; results?: RetainedResults | null; onViewSourceResult?: (runId: string, output: PortRef) => void }) {
+export function ConfigurationRecord({ configuration: c, model, results, approachClosure,  onViewSourceResult }: { approachClosure?: ApproachClosureRead3 | null; configuration: ConfigurationRevision; model: ModelRevisionRead4 | null; results?: RetainedResultsRead2 | null; onViewSourceResult?: (runId: string, output: PortRef) => void }) {
   const quantity = (target: PortRef) => {
     const instance = model?.instances.find(i => i.instance_id === target.instance_id);
     const port = model?.definitions.find(d => d.definition_version_id === instance?.definition_version_id)?.ports.find(p => p.port_id === target.port_id);

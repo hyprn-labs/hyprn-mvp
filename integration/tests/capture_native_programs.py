@@ -171,6 +171,8 @@ def capture(kind, blobs):
     body = dict(command_id=uid(), model_revision_id=model['model_revision_id'],
                 configuration_snapshot=config, configuration_digest=config['digest'])
     prepared = client.call('POST', path + '/prepare-execution', body)['data']
+    assert prepared['schema_version'] == '3'
+    assert prepared['result_protocol_version'] == '2'
     # Preparing a committed revision after a current draft edit must be invariant.
     client.edit(draft, [dict(kind='rename_instance', instance_id=model['instances'][0]['instance_id'],
                              name='Edited current draft after commit')])

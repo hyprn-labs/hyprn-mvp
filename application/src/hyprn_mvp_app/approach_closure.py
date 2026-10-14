@@ -78,7 +78,9 @@ def _links(rows):
 def closure_schema(version, resolution):
     """Select from exact reachable records; an ancestor keeps its own family."""
     return (
-        '3'
+        '4'
+        if any(v['schema_version'] == '2' for v in resolution['run_contexts'])
+        else '3'
         if (
             version['schema_version'] == '2'
             or any(v['schema_version'] == '2' for v in resolution['approach_versions'])
@@ -106,7 +108,7 @@ def _envelope(root, tables, reached):
 class _Closure:
     def __init__(self, value, study_id):
         _require(len(canonical(value)) <= MAX_BYTES, 'Closure byte limit')
-        _closed('ApproachClosureRead3', value)
+        _closed('ApproachClosureRead4', value)
         _require(sum(len(value[k]) for k in KEYS) <= MAX_ENTITIES, 'Closure entity limit')
         _require(
             len(value['configurations']) + len(value['run_contexts']) <= 64, 'Prior record limit'
@@ -581,7 +583,7 @@ def validate_closure(value, *, study_id=None):
 def build_closure(version, resolution, *, study_id=None):
     """Build from authorized immutable records; coalesce only identical IDs."""
     _closed('ApproachVersionRead2', version)
-    _closed('ApproachResolution3', resolution)
+    _closed('ApproachResolution4', resolution)
     if closure_schema(version, resolution) == '1':
         _closed('ApproachResolution1', resolution)
     tables = {}
@@ -603,7 +605,7 @@ def build_closure(version, resolution, *, study_id=None):
 
 def validate_saved(value, *, study_id=None):
     """Authenticate the noncircular version + closure saved envelope."""
-    _closed('ApproachSavedRead3', value)
+    _closed('ApproachSavedRead4', value)
     closure = validate_closure(value['closure'], study_id=study_id)
     root = next(
         v

@@ -8,11 +8,11 @@ export type OutcomeLabel = { label: string; tone: Tone };
  * Run outcomes shown to readers.
  *
  * A run headline shows only the facets the runtime actually computes today:
- * Execution and Criteria. Convergence, Termination, Constraints/Feasibility,
- * Sample completeness and Applicability are constant for every real run (the
- * result contract declares them `const`), so readers do not see them. They stay
- * in the stored record and in exports, unchanged. The two facets are never
- * merged into one badge. Per-output availability stays in the outputs table.
+ * Execution and Criteria. Current results omit unsupported scientific status
+ * placeholders and aggregate output counts. Exact historical artifacts retain
+ * their recorded fields; public historical views identify their source and view
+ * separately. Execution and criteria are never merged into one badge. Missing
+ * outputs keep an explicit reason and are never treated as zero.
  */
 export type RunOutcomeFacets = { execution: OutcomeLabel; criteria: OutcomeLabel };
 

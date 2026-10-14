@@ -25,7 +25,7 @@ A run's headline shows only the outcome facets the runtime actually computes: **
 
 - "Recorded" describes storage only; it is never shown as a successful execution or a met criterion. A state the reader cannot confirm reads "Unknown" or "Status unavailable", never success.
 - Several criteria get one count summary; each criterion's own outcome stays with the configuration the run used.
-- Convergence, optimization termination, constraints and feasibility, sample completeness and applicability are recorded separately and stay separate in the stored run and its exports. They are not shown in the headline while the runtime produces only constant values for them, and they return to the headline when a numerical method computes them. A finished optimizer is then a termination fact; it does not mean a criterion is met. "Not applicable" (inert hollow circle) is a valid answer and is shown, not hidden.
+- Current explicit scalar results record execution, every output with its availability and reason, and criterion outcomes. They omit aggregate convergence, optimization, completeness and applicability fields. Output inventory validation remains strict; unavailable is never zero. Exact frozen historical artifacts retain their original fields, while public read views omit those fields and identify both source and view with canonical JSON hashes. Any future numerical method must define computed facets separately: termination or a met criterion does not establish validity.
 - Per-output availability stays visible in the outputs table ("not computed").
 - Execution completion never means a criterion is met or the result is scientifically valid.
 

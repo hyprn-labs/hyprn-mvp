@@ -34,7 +34,7 @@ def router(deps):
     def modified_run_seed(study_id:str,run_id:str,request:Request,who:Actor):
         if request.query_params:raise DomainError('invalid_request',400)
         result=modified_runs.seed(who,valid_id(study_id),valid_id(run_id))
-        validate("ModifiedRunSeedRead6",result,remote=True)
+        validate("ModifiedRunSeedRead7",result,remote=True)
         return response(request,result)
     @r.get('/api/1/studies/{study_id}/result-sources')
     def result_sources(study_id:str,request:Request,who:Actor,limit:str='25',cursor:str|None=None):
