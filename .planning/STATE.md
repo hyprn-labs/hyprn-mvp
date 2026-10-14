@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** Finish the committed result-format/API cleanup and the approved continuous modeling-approach reader with persistent case/study answers. The final producer and capture are pinned; integrated native checks are running before worker re-attestation and demo refresh. Core scientific guidance is now in the packaged playbook; independent behavioral review and the combined reader journey remain pending. Preserve the live study and all authoring records. Full mission/cost closure and release qualification remain separate.
+**Current focus:** Deliver the current local demo: cleaned continuous reader, fresh real calculation and persistent scientific answers. The user authorized deleting old data and explicitly stopped historical-preservation ceremony; the DELIVERY-PLAN amendment removes those checks from this batch. API/static checks, native workers and attestation checks pass. A focused current-page browser check and direct demo refresh remain. Full mission/cost closure and release qualification stay separate.
 
 ## Current Position
 

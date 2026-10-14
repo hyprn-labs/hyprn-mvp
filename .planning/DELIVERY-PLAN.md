@@ -1,5 +1,19 @@
 # Delivery plan — restore the local fuel workflow through the cleaned API
 
+## Current demo amendment — disposable earlier study data
+
+The product owner explicitly authorized deletion of old study/run data and asked
+to stop the historical-preservation ceremony. For the current continuous-reader
+batch, historical data preservation, compatibility-matrix reruns, durable-fixture
+regeneration and backup comparisons are removed from the critical path. Existing
+code and useful records may remain; deleting them is permitted, not required.
+Verify the current page, a fresh real calculation and persistent scientific answers
+through the public API and UI. Retain current execution containment/attestation,
+explicit scientific inputs and truthful claim boundaries. Record interrupted or
+deferred checks honestly; this remains a local demo, not full release qualification.
+This amendment supersedes conflicting live-record preservation requirements in the
+continuous-approach plan and its earlier integration checkpoint.
+
 ## Current instruction — simplest working demo, 2026-10-14
 
 The product owner explicitly rejected the preceding subset-heavy demo plan. The
