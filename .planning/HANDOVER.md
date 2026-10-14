@@ -2,6 +2,27 @@
 
 Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Session Continuity") and `.planning/ROADMAP.md`. Each phase plan and its checkpoints are under `.planning/phases/`.
 
+## Demo target approved by the product owner (2026-10-14)
+
+For the 2026-10-15 demo, prioritize completion of Phase 2 and Phase 3 through the
+live full-workflow checkpoint 3.35 and status recording 3.36. Then freeze feature
+work and rehearse on the exact demo machine and committed tree. Defer Phase 4
+Documents and the broader Phase 5 release process until after the demo; the
+first-release roadmap and its qualification requirements remain in force.
+
+The target is a working local installation connected to the user's local Codex
+and Claude Code clients: study folder, tool discovery, model authoring, explicit
+configurations, real run submission, result inspection, and a saved conclusion,
+with attribution and Agent activity visible in the UI. Rehearse the planned
+pressure-loss example (110 kPa met and 121 kPa violated against a 120 kPa limit)
+on each claimed client. Record live human evaluation separately from automation.
+
+Keep all task dependencies, acceptance checks and decision gates, including
+PD-2.4 and the client and write-control checkpoints. The date is a target, not
+evidence of completion. If the full workflow is unfinished, 3.19 (read-only
+client connection) and 3.30 (authoring) are fallback demo checkpoints, with their
+scope stated explicitly; neither satisfies the full workflow target.
+
 ## Where the work is
 
 - Work branch: `feat/local-edition-continued`, branched from `main`, with no upstream. The next pull request to `main` comes from it. Push or open a pull request only when the product owner asks.
@@ -17,7 +38,7 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | In progress on `agent-modeling-image-build`, from `3d2d813`. | Acquisition, locks and source/modeling recipes run beside 2.7. Final producer pin and fixture recapture wait for verified 2.7; 2.6 alone uses the fixed scratch folder groups. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Independent implementation `5c58720` and incomplete checkpoint `5ec1de4` on `agent-modeling-image-build`. | No-cache runtime equivalence passed; 25 upstream tests pass. Final combined inventory, producer pin and fixture capture wait for verified 2.7; two strict inventory-count failures remain. 2.6 alone uses the fixed scratch folder groups. |
 | 2.7 (engine, worker and application images) | In progress on `agent-runtime-image-build`, from `3d2d813`. | Owns `deployment/pins.json` until merged and verified; 2.6 then rebases before its final pin and fixture work. |
 
 After 2.6 and 2.7: task 2.8a needs the product owner's decision PD-2.4 on the contract schema split. Its default is recorded in STATE. Then come 2.8b, 2.8c, 2.8, and 2.9–2.14. Task 2.11 covers the store schema version, refusal on mismatch and `setup --reset-data`, with no migrations.
