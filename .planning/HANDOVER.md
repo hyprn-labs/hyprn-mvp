@@ -26,8 +26,7 @@ demo has eight current successful cases (all 11 outputs each), eight case answer
 and a study synthesis, authored through the public API and inspected in the real UI.
 Every selected mass is below 575 tonnes and expense uses 100 occupied seats. The
 original engineering question remains intact; aircraft optimization, complete-mission
-feasibility and ticket price are explicitly unresolved. Stop adding features and await
-product feedback. Exact current identities are in the integration checkpoint.
+feasibility and ticket price are explicitly unresolved. The latest UI refinement makes Overview the saved approach, with section boxes and visible case filtering; model details share the method explanation and edit its draft. Port-metadata paste is removed. See [overview-refinement.md](phases/03-agent-tools-for-coding-agents/checkpoints/overview-refinement.md). Stop adding features and await product feedback. Exact current identities are in the integration checkpoint.
 
 Latest user instruction: old studies and runs are disposable. Historical preservation,
 backups and broad compatibility verification are not prerequisites for this demo.
