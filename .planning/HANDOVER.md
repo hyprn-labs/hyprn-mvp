@@ -9,7 +9,7 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 - Merged and verified on the work branch:
   - Phase 1: complete.
   - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5.
-  - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.8, 3.9, 3.10.
+  - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10.
   - Each task has a checkpoint.
 - Combined-tree results are in STATE "Stopped at". Every listed group is green.
 
@@ -17,8 +17,7 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 
 | Task | State | Next step |
 |---|---|---|
-| 3.6 (attribution read, study-shell placements, `agent-ui` group) | Three commits on the local branch `worktree-agent-ae23a0576dad43a25`, worktree `.claude/worktrees/agent-ae23a0576dad43a25`, based on `50a03d0`: `fbdb62d` in-browser doubles, `49b9a2b` attribution read and chips, `a87c572` `agent-ui` group. Not verified, and there is no checkpoint. The executor stopped while adding the group's fixture module. | Rebase or cherry-pick onto the work branch head. Compare against the 3.6 acceptance list, finish any missing pieces, then run the 3.6 acceptance commands, the browser groups, the design checks and the UI build. Write `checkpoints/3.6.md`, then merge. |
-| 3.7 (attribution chip on the record views) | Not started. | Run after 3.6, in the same UI area. |
+| 3.7 (attribution chip on the record views) | Not started. | Run next; 3.6 is merged and verified at `088e528`. |
 | 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Not started; an earlier attempt left no commits. | Run in parallel with 2.7 (disjoint files). 2.6 alone uses the fixed scratch folder groups. |
 | 2.7 (engine, worker and application images) | Not started; an earlier attempt left no commits. | Run in parallel with 2.6. |
 

@@ -5,14 +5,14 @@
 See: `PROJECT.md` (planning directory)
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** Phase 1 — Repository baseline
+**Current focus:** Phases 2 and 3 — Local edition and agent tools
 
 ## Current Position
 
-Phase: 1 of 5 (Repository baseline)
-Plan: `phases/01-repository-baseline/01-PLAN.md`, tasks 1.1–1.10; 1.1–1.9 done and verified
+Phase: 3 of 5 (Agent tools), alongside Phase 2 (Local edition)
+Plan: `phases/03-agent-tools-for-coding-agents/03-PLAN.md`; 3.6 verified, 3.7 next
 Status: Phase 1 complete — gate 102/103 on a66a1f3, and the remaining findings chain (preflight, findings-native, findings-native-read) passes through `./hyprn-mvp dev check` on the continuation branch after the harness fixes; Phase 2 and Phase 3 in progress
-Last activity: task 1.9 verified — durable native fixture recaptured from a passing producer run with a tracked capture tool and pinned; guard fixture built in its own scope; remaining failing cases repaired as test drift; every `PENDING` table empty (checkpoint `phases/01-repository-baseline/checkpoints/1.9.md`)
+Last activity: task 3.6 merged at `088e528` and verified: paginated attribution reads, study/model placements, 10 agent-ui cases and all six browser regression groups green.
 
 Progress: [██████████] 100% (Phase 1)
 
@@ -105,5 +105,5 @@ Progress: [██████████] 100% (Phase 1)
 ## Session Continuity
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
-Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 is partly done on an unmerged worktree branch; 2.6, 2.7 and 3.7 not started. See `.planning/HANDOVER.md`
-Resume: follow `.planning/HANDOVER.md` (finish and verify 3.6, then 3.7; 2.6 ∥ 2.7; then 2.8a after the product owner's PD-2.4 decision)
+Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 merged at `088e528`; all 18 task and baseline groups, design checks, build and term scan pass on the merged tree; 18 verification scopes released. Tasks 2.6, 2.7 and 3.7 not started. See `.planning/HANDOVER.md`
+Resume: follow `.planning/HANDOVER.md` (3.7 next; then 2.6 ∥ 2.7; stop before 2.8a for the product owner's PD-2.4 decision)
