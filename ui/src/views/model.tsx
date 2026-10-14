@@ -3,7 +3,7 @@ import { ModelEditor } from '../ModelEditor';
 import { ModelView } from '../ModelView';
 import { ActionDialog } from '../Presentation';
 import { AttributionDetail, RecordAttribution } from '../attribution';
-import { ComponentWhatWhy } from '../SelectionInspector';
+import { ModelMethodDetails } from '../ModelMethodDetails';
 import { UnitGuidance } from '../UnitEditor';
 import { unresolvedModelUnits } from '../unitLabels';
 import { resourceViewLink } from '../workspaceModel';
@@ -51,7 +51,8 @@ export function modelWorkspace(ctx: ViewContext) {
                   }
                   hosts={hosts}
                   explain={(id, source) => (
-                    <ComponentWhatWhy
+                    <ModelMethodDetails
+                      controller={ctx.approach}
                       snapshot={model}
                       instanceId={id}
                       methods={methods}

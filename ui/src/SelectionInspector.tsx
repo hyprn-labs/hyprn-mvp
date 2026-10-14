@@ -1,9 +1,9 @@
 import { unitLabel } from './unitLabels';
 import { Assumptions } from './Assumptions';
 import { EvidenceReferences } from './EvidenceView';
-import { ActionDialog, Button, Panel, SectionHeader } from './design';
-import { useEffect, useId, useState, type ReactNode } from 'react';
-import type { EvidenceSnapshot, PortRef, Source } from './contract';
+import { ActionDialog, Button, Disclosure, Panel, SectionHeader } from './design';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { ApproachStep1, EvidenceSnapshot, PortRef, Source } from './contract';
 import { sourceText } from './api';
 import { groupSelected, type Projection, type Snapshot } from './GraphView';
 import { modelAssumptions, recordLimitations } from './recordViews';
@@ -15,117 +15,248 @@ import { quantityKey, variableRows, type VariableContext } from './VariablesTabl
 export type ComponentExplanation = (instanceId: string, source: ReactNode) => ReactNode;
 
 export function instanceLabel(snapshot: Snapshot, id: string) {
-  const item = snapshot.instances.find(i => i.instance_id === id), peers = snapshot.instances.filter(i => i.name === item?.name);
-  return item ? `${item.name}${peers.length > 1 ? ` · instance ${peers.findIndex(i => i.instance_id === id) + 1}` : ''}` : 'Unavailable component';
+  const item = snapshot.instances.find((i) => i.instance_id === id),
+    peers = snapshot.instances.filter((i) => i.name === item?.name);
+  return item
+    ? item.name +
+        (peers.length > 1 ? ` · instance ${peers.findIndex((i) => i.instance_id === id) + 1}` : '')
+    : 'Unavailable component';
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** "3 components · 2 connections · select a component to inspect its source and method". */
 export function modelSummary(snapshot: Snapshot) {
-  const components = snapshot.instances.filter(i => i.instance_id !== snapshot.root_instance_id).length;
-  const counts = `${plural(components, 'component', 'components')} · ` +
+  const components = snapshot.instances.filter(
+    (i) => i.instance_id !== snapshot.root_instance_id,
+  ).length;
+  const counts =
+    `${plural(components, 'component', 'components')} · ` +
     plural(snapshot.connections.length, 'connection', 'connections');
   return `${counts} · select a component to inspect its source and method`;
 }
-type SourceRead ={ kind: 'text'; text: string } | { kind: 'limit' } | { kind: 'mismatch' } | { kind: 'undecodable' };
+type SourceRead =
+  | { kind: 'text'; text: string }
+  | { kind: 'limit' }
+  | { kind: 'mismatch' }
+  | { kind: 'undecodable' };
 /** Verifies retained bytes against their SHA256, then decodes them as text only. Never run. */
 export async function verifySource(source: Source, hash: string): Promise<SourceRead> {
   if (source.bytes.length > 350000) return { kind: 'limit' };
-  const raw = Uint8Array.from(atob(source.bytes), c => c.charCodeAt(0));
-  const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', raw)), b => b.toString(16).padStart(2, '0')).join('');
+  const raw = Uint8Array.from(atob(source.bytes), (c) => c.charCodeAt(0));
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', raw)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
   if (digest !== hash || source.sha256 !== hash) return { kind: 'mismatch' };
-  try { return { kind: 'text', text: sourceText(source) }; } catch { return { kind: 'undecodable' }; }
+  try {
+    return { kind: 'text', text: sourceText(source) };
+  } catch {
+    return { kind: 'undecodable' };
+  }
 }
 /** One source file of a component version, SHA-checked and shown as text. */
-function VerifiedSource({ source, hash, position, count }: { source?: Source; hash: string; position: number; count: number }) {
+function VerifiedSource({
+  source,
+  hash,
+  position,
+  count,
+}: {
+  source?: Source;
+  hash: string;
+  position: number;
+  count: number;
+}) {
   const [value, setValue] = useState<{ source: Source; read: SourceRead } | null>(null);
   useEffect(() => {
-    let current = true; setValue(null); if (!source) return;
-    verifySource(source, hash).then(read => { if (current) setValue({ source, read }); }, () => { if (current) setValue({ source, read: { kind: 'mismatch' } }); });
-    return () => { current = false; };
+    let current = true;
+    setValue(null);
+    if (!source) return;
+    verifySource(source, hash).then(
+      (read) => {
+        if (current) setValue({ source, read });
+      },
+      () => {
+        if (current) setValue({ source, read: { kind: 'mismatch' } });
+      },
+    );
+    return () => {
+      current = false;
+    };
   }, [source, hash]);
-  const identity = <p className="context-line source-identity">File {position} of {count} · SHA-256 {hash}</p>;
-  if (!source) return <>{identity}<p role="alert">This source file is missing from the model version.</p></>;
+  const identity = (
+    <p className="context-line source-identity">
+      File {position} of {count} · SHA-256 {hash}
+    </p>
+  );
+  if (!source)
+    return (
+      <>
+        {identity}
+        <p role="alert">This source file is missing from the model version.</p>
+      </>
+    );
   const read = value?.source === source ? value.read : null;
-  if (!read) return <>{identity}<p role="status">Checking source…</p></>;
-  if (read.kind === 'limit') return <>{identity}<p role="alert">This source file is too large to show here.</p></>;
-  if (read.kind === 'mismatch') return <>{identity}<p role="alert">This file does not match its SHA-256. It is not shown.</p></>;
-  if (read.kind === 'undecodable') return <>{identity}<p role="alert">These bytes are not valid UTF-8 text and are not shown.</p></>;
-  return <>{identity}<pre tabIndex={0} aria-label="Read-only authored source">{read.text}</pre></>;
+  if (!read)
+    return (
+      <>
+        {identity}
+        <p role="status">Checking source…</p>
+      </>
+    );
+  if (read.kind === 'limit')
+    return (
+      <>
+        {identity}
+        <p role="alert">This source file is too large to show here.</p>
+      </>
+    );
+  if (read.kind === 'mismatch')
+    return (
+      <>
+        {identity}
+        <p role="alert">This file does not match its SHA-256. It is not shown.</p>
+      </>
+    );
+  if (read.kind === 'undecodable')
+    return (
+      <>
+        {identity}
+        <p role="alert">These bytes are not valid UTF-8 text and are not shown.</p>
+      </>
+    );
+  return (
+    <>
+      {identity}
+      <pre tabIndex={0} aria-label="Read-only authored source">
+        {read.text}
+      </pre>
+    </>
+  );
 }
-/** Read-only source of one component version: every file, checked against its SHA256. */
-export function ComponentSource({ snapshot, instanceId }: { snapshot: Snapshot; instanceId: string }) {
-  const instance = snapshot.instances.find(i => i.instance_id === instanceId);
-  const definition = snapshot.definitions.find(d => d.definition_version_id === instance?.definition_version_id);
+/** Source bytes belong to the exact model shown, including in saved approach views. */
+export function ComponentSourceContent({
+  snapshot,
+  instanceId,
+}: {
+  snapshot: Snapshot;
+  instanceId: string;
+}) {
+  const instance = snapshot.instances.find((i) => i.instance_id === instanceId);
+  const definition = snapshot.definitions.find(
+    (d) => d.definition_version_id === instance?.definition_version_id,
+  );
   const hashes = definition?.source_refs ?? [];
-  return <ActionDialog title={'Source · ' + instanceLabel(snapshot, instanceId)} label="View source" size="sm" width="workspace">
-    <p className="context-line">Shown as text; never run.</p>
-    {!hashes.length && <p>This component version has no source file.</p>}
-    {hashes.map((hash, i) => <VerifiedSource key={hash} hash={hash} position={i + 1} count={hashes.length} source={snapshot.source_files.find(s => s.sha256 === hash)} />)}
-  </ActionDialog>;
+  return (
+    <>
+      {!hashes.length && <p>This component version has no source file.</p>}
+      {hashes.map((hash, i) => (
+        <VerifiedSource
+          key={hash}
+          hash={hash}
+          position={i + 1}
+          count={hashes.length}
+          source={snapshot.source_files.find((s) => s.sha256 === hash)}
+        />
+      ))}
+    </>
+  );
+}
+export function ComponentSource({
+  snapshot,
+  instanceId,
+}: {
+  snapshot: Snapshot;
+  instanceId: string;
+}) {
+  return (
+    <ActionDialog
+      title={'Source · ' + instanceLabel(snapshot, instanceId)}
+      label="View source"
+      size="sm"
+      width="workspace"
+    >
+      <ComponentSourceContent snapshot={snapshot} instanceId={instanceId} />
+    </ActionDialog>
+  );
 }
 
-/** Linked method context is not a component-level computation description.
- * The authored explanation and its navigation retain the exact approach/model pins. */
-export function ComponentWhatWhy({ instanceId, methods, onOpenStep, source }: {
-  snapshot: Snapshot; instanceId: string; methods: MethodLinks;
-  onOpenStep?: (link: MethodLink) => void; source: ReactNode;
+/** One presentation for the authored method, in Overview and Models. */
+export function MethodExplanation({ step, source }: { step: ApproachStep1; source?: ReactNode }) {
+  return (
+    <div className="method-explanation">
+      {step.purpose && (
+        <section className="inspector-section">
+          <h4>Purpose</h4>
+          <p className="context-copy">{step.purpose}</p>
+        </section>
+      )}
+      {step.rationale && (
+        <section className="inspector-section">
+          <h4>Basis and reasoning</h4>
+          <p className="context-copy">{step.rationale}</p>
+        </section>
+      )}
+      {step.intent.transformation && (
+        <section className="inspector-section">
+          <h4>Calculation in plain words</h4>
+          <p className="context-copy">{step.intent.transformation}</p>
+        </section>
+      )}
+      {source && (
+        <Disclosure className="component-source">
+          <summary>Python function</summary>
+          {source}
+        </Disclosure>
+      )}
+    </div>
+  );
+}
+
+/** Explanation shared by all components referenced by a method; not duplicated metadata. */
+export function ComponentWhatWhy({
+  instanceId,
+  methods,
+  onOpenStep,
+  onEditStep,
+  source,
+}: {
+  snapshot: Snapshot;
+  instanceId: string;
+  methods: MethodLinks;
+  onOpenStep?: (link: MethodLink) => void;
+  onEditStep?: (link: MethodLink) => void;
+  source: ReactNode;
 }) {
-  const id = useId();
   const links =
     methods.kind === 'loaded'
       ? methods.links.filter((link) => link.instanceIds.includes(instanceId))
       : [];
   return (
     <>
-      <section className="inspector-section" aria-labelledby={id + '-method'}>
-        <h4 id={id + '-method'}>Method context</h4>
-        {methods.kind === 'loading' && (
-          <p role="status" className="context-line">
-            Loading method steps…
-          </p>
-        )}
-        {methods.kind === 'unavailable' && (
-          <p className="context-line">Method steps can't be loaded.</p>
-        )}
-        {methods.kind !== 'loading' && methods.kind !== 'unavailable' && !links.length && (
-          <p className="context-line">No modeling approach step is linked to this component.</p>
-        )}
-        {links.map((link) => (
-          <div className="inspector-step" key={link.key}>
-            {links.length > 1 && (
-              <p className="context-line">{link.step.title || 'Untitled step'}</p>
-            )}
-            {link.step.intent.transformation && (
-              <p className="context-copy">{link.step.intent.transformation}</p>
-            )}
-          </div>
-        ))}
-        {source}
-      </section>
+      {methods.kind === 'loading' && <p role="status">Loading method…</p>}
+      {methods.kind === 'unavailable' && <p>Method can't be loaded.</p>}
       {links.map((link) => (
-        <section className="inspector-section" key={link.key}>
-          {(link.step.purpose || link.step.rationale) && (
-            <>
-              <h4>Why this method</h4>
-              {links.length > 1 && (
-                <p className="context-line">{link.step.title || 'Untitled step'}</p>
-              )}
-              {link.step.purpose && <p className="context-copy">{link.step.purpose}</p>}
-              {link.step.rationale && <p className="context-copy">{link.step.rationale}</p>}
-            </>
+        <section key={link.key}>
+          {links.length > 1 && <h4>{link.step.title || 'Untitled method'}</h4>}
+          {link.instanceIds.length > 1 && (
+            <p className="context-line">Shared method · {link.step.title}</p>
           )}
+          <MethodExplanation step={link.step} />
           <div className="section-actions">
+            {onEditStep && (
+              <Button size="sm" onClick={() => onEditStep(link)}>
+                Edit explanation
+              </Button>
+            )}
             {onOpenStep && (
               <Button size="sm" variant="quiet" onClick={() => onOpenStep(link)}>
-                Open step {link.stepNumber} in modeling approach →
+                View method in overview
               </Button>
             )}
             <ActionDialog title="Method record" size="sm">
               <dl className="hf-record-details">
-                <dt>Method step</dt>
+                <dt>Method</dt>
                 <dd>
-                  {link.stepNumber} · {link.step.title || 'Untitled step'}
+                  {link.stepNumber} · {link.step.title || 'Untitled method'}
                 </dd>
                 <dt>Approach version</dt>
                 <dd>{link.versionNumber ?? 'Draft'}</dd>
@@ -140,6 +271,10 @@ export function ComponentWhatWhy({ instanceId, methods, onOpenStep, source }: {
           </div>
         </section>
       ))}
+      <Disclosure className="component-source">
+        <summary>Python function</summary>
+        {source}
+      </Disclosure>
     </>
   );
 }
@@ -148,29 +283,103 @@ export function ComponentWhatWhy({ instanceId, methods, onOpenStep, source }: {
  * model and its assumptions; a component → what it computes, why, and its assumptions;
  * a connection → its endpoints. No ports table, incoming/outgoing lists or notes: the
  * quantities table below the canvas is the one place quantities are listed. */
-export function SelectionInspector({ snapshot, projection, selection, onSelect, context, evidence, draftHost, methods, onOpenStep }: { snapshot: Snapshot; projection: Projection; selection: Selection; onSelect: (value: Selection) => void; context: VariableContext; evidence: EvidenceSnapshot[];
+export function SelectionInspector({
+  snapshot,
+  projection,
+  selection,
+  onSelect,
+  context,
+  evidence,
+  draftHost,
+  methods,
+  onOpenStep,
+}: {
+  snapshot: Snapshot;
+  projection: Projection;
+  selection: Selection;
+  onSelect: (value: Selection) => void;
+  context: VariableContext;
+  evidence: EvidenceSnapshot[];
   /** Current model draft: the model editor renders the editable model or component details here. */
-  draftHost?: (element: HTMLDivElement | null) => void; methods: MethodLinks; onOpenStep?: (link: MethodLink) => void }) {
+  draftHost?: (element: HTMLDivElement | null) => void;
+  methods: MethodLinks;
+  onOpenStep?: (link: MethodLink) => void;
+}) {
   const rows = variableRows(snapshot, projection, context);
-  const node = projection.nodes.find(n => (selection.kind === 'instance' || selection.kind === 'variable') && n.instance.instance_id === selection.instance_id);
-  const row = selection.kind === 'variable' ? rows.find(r => r.key === quantityKey(selection)) : undefined;
-  const definition = snapshot.definitions.find(d => d.definition_version_id === node?.instance.definition_version_id);
-  const groups = projection.groups.filter(g => groupSelected(g, selection));
-  const selectedIds = new Set([node?.instance.instance_id, row?.port.port_id, ...groups.flatMap(g => [g.source, g.target, ...g.links.map(l => l.connection_id)])].filter(Boolean));
+  const node = projection.nodes.find(
+    (n) =>
+      (selection.kind === 'instance' || selection.kind === 'variable') &&
+      n.instance.instance_id === selection.instance_id,
+  );
+  const row =
+    selection.kind === 'variable' ? rows.find((r) => r.key === quantityKey(selection)) : undefined;
+  const definition = snapshot.definitions.find(
+    (d) => d.definition_version_id === node?.instance.definition_version_id,
+  );
+  const groups = projection.groups.filter((g) => groupSelected(g, selection));
+  const selectedIds = new Set(
+    [
+      node?.instance.instance_id,
+      row?.port.port_id,
+      ...groups.flatMap((g) => [g.source, g.target, ...g.links.map((l) => l.connection_id)]),
+    ].filter(Boolean),
+  );
   // Notes (annotations) are kept in the record but not shown.
   const assumptions = modelAssumptions(snapshot);
-  const related = evidence.filter(e => 'resource_scope' in e && ('model_revision_id' in snapshot) && 'model_revision_id' in e.resource_scope && e.resource_scope.model_revision_id === snapshot.model_revision_id &&
-    (e.resource_scope.kind === 'model_revision' || ('instance_id' in e.resource_scope && selectedIds.has(e.resource_scope.instance_id) && (e.resource_scope.kind !== 'port' || !row || e.resource_scope.port_id === row.port.port_id)) || (e.resource_scope.kind === 'definition_version' && e.resource_scope.definition_version_id === definition?.definition_version_id) || (e.resource_scope.kind === 'connection' && selectedIds.has(e.resource_scope.connection_id))));
-  const endpoint = (ref: PortRef) => { const entry = rows.find(r => r.key === quantityKey(ref)); return <Button onClick={() => onSelect({ kind: 'instance', instance_id: ref.instance_id })}>{entry ? `${instanceLabel(snapshot, entry.instance.instance_id)} · ${entry.port.name}${entry.port.name === entry.port.code_symbol ? '' : ` (${entry.port.code_symbol})`} · ${unitLabel(entry.port.units)}` : 'Unavailable endpoint'}</Button>; };
-  const explain: ComponentExplanation = (instanceId, source) => <ComponentWhatWhy snapshot={snapshot} instanceId={instanceId} methods={methods} onOpenStep={onOpenStep} source={source} />;
-  const componentAssumptions = assumptions.kind === 'recorded' ? assumptions.items.filter(a => a.owner.kind === 'instance').length : 0;
+  const related = evidence.filter(
+    (e) =>
+      'resource_scope' in e &&
+      'model_revision_id' in snapshot &&
+      'model_revision_id' in e.resource_scope &&
+      e.resource_scope.model_revision_id === snapshot.model_revision_id &&
+      (e.resource_scope.kind === 'model_revision' ||
+        ('instance_id' in e.resource_scope &&
+          selectedIds.has(e.resource_scope.instance_id) &&
+          (e.resource_scope.kind !== 'port' ||
+            !row ||
+            e.resource_scope.port_id === row.port.port_id)) ||
+        (e.resource_scope.kind === 'definition_version' &&
+          e.resource_scope.definition_version_id === definition?.definition_version_id) ||
+        (e.resource_scope.kind === 'connection' &&
+          selectedIds.has(e.resource_scope.connection_id))),
+  );
+  const endpoint = (ref: PortRef) => {
+    const entry = rows.find((r) => r.key === quantityKey(ref));
+    return (
+      <Button onClick={() => onSelect({ kind: 'instance', instance_id: ref.instance_id })}>
+        {entry
+          ? `${instanceLabel(snapshot, entry.instance.instance_id)} · ${entry.port.name}` +
+            (entry.port.name === entry.port.code_symbol ? '' : ` (${entry.port.code_symbol})`) +
+            ` · ${unitLabel(entry.port.units)}`
+          : 'Unavailable endpoint'}
+      </Button>
+    );
+  };
+  const explain: ComponentExplanation = (instanceId, source) => (
+    <ComponentWhatWhy
+      snapshot={snapshot}
+      instanceId={instanceId}
+      methods={methods}
+      onOpenStep={onOpenStep}
+      source={source}
+    />
+  );
+  const componentAssumptions =
+    assumptions.kind === 'recorded'
+      ? assumptions.items.filter((a) => a.owner.kind === 'instance').length
+      : 0;
   const selectedAssumptions =
     assumptions.kind === 'recorded'
       ? assumptions.items.filter(
           (a) => a.owner.kind === 'instance' && a.owner.instance_id === node?.instance.instance_id,
         )
       : [];
-  const unreadable = (text: ReactNode) => <><SectionHeader title="Assumptions" level={4} /><p className="context-line">{text}</p></>;
+  const unreadable = (text: ReactNode) => (
+    <>
+      <SectionHeader title="Assumptions" level={4} />
+      <p className="context-line">{text}</p>
+    </>
+  );
   return (
     <Panel
       label="Selection inspector"
@@ -221,7 +430,7 @@ export function SelectionInspector({ snapshot, projection, selection, onSelect, 
           {explain(
             node.instance.instance_id,
             <div className="section-actions">
-              <ComponentSource snapshot={snapshot} instanceId={node.instance.instance_id} />
+              <ComponentSourceContent snapshot={snapshot} instanceId={node.instance.instance_id} />
             </div>,
           )}
           {(assumptions.kind !== 'recorded' || selectedAssumptions.length > 0) && (

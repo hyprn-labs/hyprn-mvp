@@ -308,8 +308,9 @@ for file in ('src/views/model.tsx','src/ApproachMethod.tsx','src/ConfigurationRe
  assert '<ModelView' in (ROOT/file).read_text(),(file,'Reuses the canonical model view')
 inspector_text=(ROOT/'src/SelectionInspector.tsx').read_text()
 for term in (
- 'Method context', '>Why this method<', 'label="View source"', 'verifySource(',
- 'Shown as text; never run.', 'modelAssumptions(snapshot)',
+ 'MethodExplanation', '>Purpose<', '>Basis and reasoning<',
+ '>Calculation in plain words<', '>Python function<', 'verifySource(',
+ 'ComponentSourceContent', 'modelAssumptions(snapshot)',
 ):
  assert term in inspector_text,('src/SelectionInspector.tsx','Details: what, why, assumptions',term)
 removed_view={'src/SelectionInspector.tsx':('tiny-table','Incoming quantities','Outgoing quantities','DetailTabs','<DataTable'),
@@ -367,7 +368,7 @@ for term in (
     'approach-method-rows',
     '<ApproachStepContext step={active} />',
     "'Implemented in Model version '",
-    'label="Open model version"',
+    'label="View model details"',
     'Edit definitions in model',
 ):
     assert term in method_text, ('src/ApproachMethod.tsx', 'Expandable method explanation', term)
@@ -512,7 +513,10 @@ for path in sorted([*(ROOT/'src').glob('*.ts'),*(ROOT/'src').glob('*.tsx'),
   assert phrase not in text,(str(path.relative_to(ROOT)),'Retired reader-facing phrase (design-system/Naming.md)',phrase)
 for file,terms in {'src/runStatus.tsx':('label="Run status"',),'src/RunPanel.tsx':('title="Outputs"','label="Full-precision values"','Values at full precision.','title="Run files"','>View case</CaseContextLink>','<dt>Execution bundle SHA-256</dt>'),
  'src/ComputationalExportDialog.tsx':("'Create record export'","'Download record export'",'<h3>Computational record export</h3>'),'src/ComparisonView.tsx':('Download portable model record','label="Portable model record file"',"'Quantities CSV'"),
- 'src/ApproachMethod.tsx':('<h3>Earlier work</h3>','>Add earlier work</Button>'),'src/OverviewRecords.tsx':('>Version {c.configuration_revision_id.slice(0, 8)} · read-only</StatusTag>',)}.items():
+ 'src/ApproachMethod.tsx':('<h3>Earlier work</h3>','Add earlier work'),
+ 'src/OverviewRecords.tsx':(
+   '>Version {c.configuration_revision_id.slice(0, 8)} · read-only</StatusTag>',
+ )}.items():
  text=(ROOT/file).read_text()
  for term in terms:assert term in text,(file,'Plain-language name (design-system/Naming.md)',term)
 assert 'evaluation?: {' in (ROOT/'src/design/primitives.tsx').read_text() and 'assessment' not in (ROOT/'src/design/primitives.tsx').read_text(),('src/design/primitives.tsx','CriterionRecord takes a criterion evaluation, not an assessment')
