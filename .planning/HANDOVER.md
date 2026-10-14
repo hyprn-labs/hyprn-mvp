@@ -17,8 +17,8 @@ Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Ses
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Not started; an earlier attempt left no commits. | Run in parallel with 2.7 (disjoint files). 2.6 alone uses the fixed scratch folder groups. |
-| 2.7 (engine, worker and application images) | Not started; an earlier attempt left no commits. | Run in parallel with 2.6. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | In progress on `codex/modeling-image-build`, from `3d2d813`. | Acquisition, locks and source/modeling recipes run beside 2.7. Final producer pin and fixture recapture wait for verified 2.7; 2.6 alone uses the fixed scratch folder groups. |
+| 2.7 (engine, worker and application images) | In progress on `codex/runtime-image-build`, from `3d2d813`. | Owns `deployment/pins.json` until merged and verified; 2.6 then rebases before its final pin and fixture work. |
 
 After 2.6 and 2.7: task 2.8a needs the product owner's decision PD-2.4 on the contract schema split. Its default is recorded in STATE. Then come 2.8b, 2.8c, 2.8, and 2.9–2.14. Task 2.11 covers the store schema version, refusal on mismatch and `setup --reset-data`, with no migrations.
 
