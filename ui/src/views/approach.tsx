@@ -29,20 +29,22 @@ function renderApproach(ctx: ViewContext) {
   const { returnToApproachEntry, newConfiguration } = ctx;
   return (
     <>
-      {view !== 'approach' && approachReturn?.study === study.study_id && (
-        <Button
-          className="link back-link"
-          onClick={() =>
-            navigate(() => {
-              const target = approachReturn;
-              setApproachReturn(null);
-              void openLink(target);
-            })
-          }
-        >
-          Return to modeling approach
-        </Button>
-      )}
+      {view !== 'approach' &&
+        view !== approachReturn?.view &&
+        approachReturn?.study === study.study_id && (
+          <Button
+            className="link back-link"
+            onClick={() =>
+              navigate(() => {
+                const target = approachReturn;
+                setApproachReturn(null);
+                void openLink(target);
+              })
+            }
+          >
+            Return to modeling approach
+          </Button>
+        )}
       {view === 'approach' && caseReturn?.link.study === study.study_id && (
         <Button className="link back-link" onClick={returnFromCase}>
           {caseReturn.link.run
