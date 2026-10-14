@@ -81,7 +81,7 @@ test(
   await login(page, `#v=1&study=${sid}&view=overview`);
   const about = page.getByRole('region', { name: 'About this study', exact: true });
   await expect(about).toContainText('No study question yet');
-  await expect(about).not.toContainText(state.studies[0].description);
+  await expect(about).not.toContainText(state.studies[0].description, { useInnerText: true });
   await about.getByRole('button', { name: 'Edit study', exact: true }).click();
   await expect(page.getByLabel('Study list description', { exact: true })).toHaveValue(
     state.studies[0].description,

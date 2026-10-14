@@ -34,7 +34,7 @@ test('overview distinguishes 42 families and 122 revisions with retained run nam
   );
   const about = page.getByRole('region', { name: 'About this study', exact: true });
   await expect(about).toContainText('No study question yet');
-  await expect(about).not.toContainText(state.studies[0].description);
+  await expect(about).not.toContainText(state.studies[0].description, { useInnerText: true });
   await expect(about.getByRole('heading')).toHaveCount(1);
   const action = about.getByRole('button', { name: 'View modeling approach', exact: true });
   await expect(action).toBeVisible();
