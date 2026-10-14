@@ -232,7 +232,7 @@ function OwnedAssumptions({
       ) : (
         addButton
       )}
-      {!items.length && !brief && <p className="context-line">No assumptions</p>}
+      {!items.length && !brief && !editable && <p className="context-line">No assumptions</p>}
       {items.map((item) => (
         <article className="evidence-record assumption-item" key={item.assumption_id}>
           <p className="evidence-content">{item.statement}</p>

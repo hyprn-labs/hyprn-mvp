@@ -143,12 +143,18 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
   await expect(dirty).toBeVisible();
   await dirty.getByRole('button',{name:'Keep editing',exact:true}).click();
-  await expect(page.getByRole('region',{name:'Component · Component A assumptions'}).getByText('No assumptions',{exact:true})).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Component · Component A assumptions' })
+      .getByText('No assumptions', { exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('button',{name:'2 Component B',exact:true}).click();
   await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(revised);
   // Explicit graph selection changes the instance, never the shared definition's ownership.
-  await expect(page.getByRole('region',{name:'Component · Component B assumptions'}).getByText('No assumptions',{exact:true})).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Component · Component B assumptions' })
+      .getByText('No assumptions', { exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByText('Revised condition for A',{exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
   const modelDialog=await modelDetails(page);
@@ -199,9 +205,9 @@ test('@ae-model component assumptions show statement and evidence rows with one 
   const draftPath=`/api/1/studies/${props.sid}/models/${props.mid}`;
   const before=(await (await page.request.get(draftPath)).json()).data;
   const region=page.getByRole('region',{name:'Component · Component A assumptions',exact:true});
-  // Empty: the heading, one phrase and the action. The component name is not repeated under the heading.
+  // Empty authoring keeps its heading and action without filler or a repeated component name.
   await expect(region.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
-  await expect(region.getByText('No assumptions',{exact:true})).toBeVisible();
+  await expect(region.getByText('No assumptions', { exact: true })).toHaveCount(0);
   await expect(region.getByRole('button',{name:'Add assumption',exact:true})).toBeVisible();
   await expect(region.getByText('Component · Component A',{exact:true})).toHaveCount(0);
   await expect(region).not.toContainText('No assumptions recorded');
