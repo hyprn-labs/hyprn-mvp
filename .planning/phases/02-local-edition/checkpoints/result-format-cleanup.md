@@ -165,3 +165,24 @@ No producer input, schema, pin or captured program changed. results.py is an
 attested runtime source, so root must include1f98c91 in worker rebuild/attestation
 and rerun the failed native group. Root received the implementation commit before
 this checkpoint. Full native success remains unverified by this executor.
+
+## Current demo configuration capability correction
+
+The refreshed demo producer returned200 for capabilities, but Configurations still
+used the old CapabilitiesResponse/Capabilities schemas. A read-only authenticated
+capability probe against the current scoped service found11 old-schema violations
+(preparation3/bundle10 and retained version inventory) and zero violations against
+CapabilitiesRead2. Model reads already used the current read union. No authoring
+record was changed during diagnosis; the scoped credential was not printed.
+
+Commit5c19b90 switches the two configuration capability reads to the existing
+CapabilitiesResponseRead2/CapabilitiesRead2 aliases. Existing HTTP configuration
+preview/save regression now covers the current producer capability matrix and
+rejects unknown preparation99 with503 and zero allocated configurations/outbox.
+approach-configuration passed61/0 (gfulo8f2,14.5s); style-ratchet passed33/0 (8.9s).
+Both scopes archived/released, zero remaining; cumulative executor ledger50 scopes.
+
+This changes application configuration code only, no schema, producer input,
+capture, worker or attested source. Root owns app refresh and real demo retry;
+this lane did not restart the demo or save any live configuration. The focused
+HTTP tests use an explicit private-service transport, not native numerical proof.
