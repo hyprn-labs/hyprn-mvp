@@ -40,12 +40,20 @@ these expectations, and a successful live agent run are different evidence.
 
 ## Evaluation record
 
-At foundation creation, these seven exercises were inspected against the guidance
-as a static design review. Each expected decision has an explicit rule in the
-entrypoint; this establishes intended coverage only. No independent model response,
-automated behavioral score, live application result or human acceptance is claimed.
+At foundation creation, the first seven exercises received a static design review.
+After runtime integration at `5cd430f`, an independent agent received the nine raw
+requests, this skill's entrypoint and the served playbook, without this expected
+decision table or the implementation conversation. The orchestrator reviewed its
+actual responses: all nine preserved the required distinctions and none exhibited
+the listed material failures. Responses explicitly distinguished proposed actions
+from saves or execution that had not occurred. The retained response artifact and
+guidance hashes are recorded in the continuous-approach checkpoint.
 
-Before runtime integration, run the exercises independently and retain the actual
+This is a qualitative reasoning exercise, not an automated score, an actual
+application authoring run or human acceptance. The existing public-client demo and
+the persistent-answer API/browser checks provide separate integration evidence.
+
+When revising runtime guidance, run the exercises independently and retain the actual
 responses, guidance revision, evaluator, failures and fixes outside the repository's
 study data. Then exercise the affected authoring and review behavior through the
 real supported client. Use those observations to refine the guidance; do not make
