@@ -50,7 +50,6 @@ LABEL = 'org.hyprn-mvp.owner'
 OWNER = NAMES['modeling_owner']
 # Environment of every docker command: the installation's engine endpoint, or None (ambient).
 DOCKER_ENVIRONMENT = local_paths.docker_environment()
-RUBY_IMAGE = 'ruby@sha256:bceec7582aaa80630bb51a04e2df3af658e64c0640c174371776928ad3bd57b4'
 UPSTREAM = json.loads((REPO / 'deployment/locks/upstream.json').read_text())
 ARCHIVE_SHA256 = UPSTREAM['sha256']
 # Content-addressed location of the pinned upstream archive: an owner-private read-only copy
@@ -719,25 +718,29 @@ def build(root=None, *, evidence=None, no_cache=False, source_no_cache=None):
         (notices / 'upstream.tar.gz').write_bytes(upstream_archive().getvalue())
         for name in ('deployment/images/whatsopt-source.Dockerfile',
                      'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
-                     'deployment/modeling_runtime.py', 'deployment/pins.json'):
+                     'deployment/modeling_runtime.py'):
             shutil.copyfile(REPO / name, notices / Path(name).name)
         shutil.copytree(REPO / 'upstream/whatsopt-patches', notices / 'patches')
         for name in ('modeling/provenance.md', 'deployment/modeling_policy.rb', 'deployment/modeling.Dockerfile'):
             shutil.copyfile(REPO / name, notices / Path(name).name)
-        pins = json.loads((REPO / 'deployment/pins.json').read_text())
-        identity = dict(upstream=pins['verified_sources']['WhatsOpt'], source_image=image,
-                        source_hashes=hashes, source_build_inputs=source_inputs)
+        pins_snapshot = (REPO / 'deployment/pins.json').read_bytes()
+        (notices / 'pins.json').write_bytes(pins_snapshot)
+        pins_snapshot_sha256 = hashlib.sha256(pins_snapshot).hexdigest()
+        identity = dict(upstream=dict(repository=UPSTREAM['repository'],
+                                      commit=UPSTREAM['commit'], archive_sha256=UPSTREAM['sha256']),
+                        source_image=image, source_hashes=hashes, source_build_inputs=source_inputs,
+                        pins_snapshot_sha256=pins_snapshot_sha256)
         (notices / 'source-identity.json').write_text(json.dumps(identity, indent=2))
         readable_context(ctx, executables=(ctx / 'start.sh',))
         # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
         if source_hashes() != hashes or source_build_inputs() != source_inputs:
             raise ValueError('Modeling build inputs changed during staging')
-        inputs = dict(source_image=image, ruby_image=RUBY_IMAGE, source_hashes=hashes,
+        inputs = dict(source_image=image, ruby_image=source_inputs['ruby_image'], source_hashes=hashes,
                       source_build_inputs=source_inputs)
         tag = 'hyprn-mvp-modeling:' + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
         with base_reference(image) as reference:
             command = ['docker', 'build', '--network', 'none', '--build-arg',
-                       'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE=' + RUBY_IMAGE,
+                       'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE=' + source_inputs['ruby_image'],
                        '--build-arg', 'NODE_IMAGE=' + source_inputs['node_image'], '-t', tag]
             if no_cache:
                 command.append('--no-cache')
@@ -749,7 +752,7 @@ def build(root=None, *, evidence=None, no_cache=False, source_no_cache=None):
         raise ValueError('Modeling build inputs changed during build')
     image = run('docker', 'image', 'inspect', '--format', '{{.Id}}', tag)
     run('docker', 'tag', image, 'hyprn-mvp-modeling:built-' + image.split(':', 1)[1])
-    record = dict(image=image, inputs=inputs)
+    record = dict(image=image, inputs=inputs, pins_snapshot_sha256=pins_snapshot_sha256)
     (evidence / 'modeling-build-identity.json').write_text(json.dumps(record, indent=2) + '\n')
     return image
 
@@ -777,6 +780,11 @@ def image_identity(image):
     recorded = json.loads(run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
                               '--security-opt', 'no-new-privileges', '--user', '10001:10001', '--entrypoint', 'cat',
                               image, SOURCE_NOTICE + '/source-identity.json'))
+    bundled_digest = run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+                         '--security-opt', 'no-new-privileges', '--user', '10001:10001',
+                         '--entrypoint', 'sha256sum', image, SOURCE_NOTICE + '/pins.json').split()[0]
+    if recorded.get('pins_snapshot_sha256') != bundled_digest:
+        raise ValueError('Modeling image bundled pins snapshot identity mismatch')
     source = recorded.get('source_image')
     if not isinstance(source, str) or source_image(recorded=source) != source:
         raise ValueError('Modeling image source identity mismatch')

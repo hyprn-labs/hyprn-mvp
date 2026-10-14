@@ -8,10 +8,13 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
 import live_fence  # noqa: E402
 
 live_runtime_fence = live_fence.pytest_fixture('unit')
+import contextlib  # noqa: E402
 import hashlib  # noqa: E402
 import io  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
 from pathlib import Path  # noqa: E402
 from unittest.mock import Mock  # noqa: E402
 
@@ -236,3 +239,80 @@ def test_recorded_source_identity_is_checked_without_latest_tag_substitution(mon
     assert all(call.args[0] == info['Id'] for call in inspect.call_args_list)
     with pytest.raises(ValueError, match='Recorded source image identity mismatch'):
         runtime.source_image(recorded='sha256:' + 'b' * 64)
+
+
+def test_modeling_build_uses_selected_base_and_records_exact_bundled_snapshot(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / 'repo'
+    for name in (*runtime.source_hashes(), 'deployment/pins.json', 'modeling/provenance.md'):
+        target = repo / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(runtime.REPO / name, target)
+    pins_path = repo / 'deployment/pins.json'
+    pins = json.loads(pins_path.read_text())
+    selected = 'ruby@sha256:' + 'b' * 64
+    pins['ruby_base_image'] = selected
+    pins['verified_sources']['WhatsOpt']['commit'] = 'stale duplicate'
+    pins_path.write_text(json.dumps(pins) + '\n')
+    monkeypatch.setattr(runtime, 'REPO', repo)
+    monkeypatch.setattr(runtime.local_paths, 'scratch_root', lambda: tmp_path)
+    monkeypatch.setattr(runtime, 'source_image', lambda **kwargs: 'sha256:' + 'a' * 64)
+    monkeypatch.setattr(runtime, 'stage_native_inputs', lambda context: None)
+    monkeypatch.setattr(runtime, 'upstream_archive', lambda: io.BytesIO(b'archive'))
+    monkeypatch.setattr(runtime, 'base_reference', contextlib.nullcontext)
+    monkeypatch.setattr(runtime, 'run', lambda *args: 'sha256:' + 'c' * 64)
+    calls = []
+
+    def build(command, **kwargs):
+        context = Path(command[-1])
+        identity = json.loads((context / 'notices/source-identity.json').read_text())
+        snapshot = (context / 'notices/pins.json').read_bytes()
+        calls.append((command, identity, snapshot))
+        return subprocess.CompletedProcess(command, 0, '', '')
+
+    monkeypatch.setattr(runtime.subprocess, 'run', build)
+    evidence = tmp_path / 'evidence'
+    evidence.mkdir()
+    runtime.build(evidence=evidence)
+    command, identity, snapshot = calls[0]
+    assert command[command.index('RUBY_IMAGE=' + selected) - 1] == '--build-arg'
+    assert identity['source_build_inputs']['ruby_image'] == selected
+    assert identity['upstream']['commit'] == runtime.UPSTREAM['commit']
+    assert identity['upstream']['archive_sha256'] == runtime.UPSTREAM['sha256']
+    assert snapshot == pins_path.read_bytes()
+    digest = hashlib.sha256(snapshot).hexdigest()
+    assert identity['pins_snapshot_sha256'] == digest
+    record = json.loads((evidence / 'modeling-build-identity.json').read_text())
+    assert record['inputs']['ruby_image'] == selected
+    assert record['pins_snapshot_sha256'] == digest
+    assert 'pins_snapshot_sha256' not in record['inputs']
+
+
+def test_image_identity_refuses_changed_bundled_pins(monkeypatch):
+    image = 'sha256:' + 'c' * 64
+    recorded = dict(pins_snapshot_sha256='a' * 64)
+    responses = iter([image, json.dumps(recorded), 'b' * 64 + '  pins.json'])
+    monkeypatch.setattr(runtime, 'run', lambda *args: next(responses))
+    with pytest.raises(ValueError, match='bundled pins snapshot identity mismatch'):
+        runtime.image_identity(image)
+
+
+@pytest.mark.parametrize('field', ['source_hashes', 'source_build_inputs'])
+def test_image_identity_refuses_stale_recorded_inputs(monkeypatch, field):
+    image = 'sha256:' + 'c' * 64
+    source = 'sha256:' + 'a' * 64
+    recorded = dict(
+        source_image=source,
+        source_hashes=runtime.source_hashes(),
+        source_build_inputs=runtime.source_build_inputs(),
+        pins_snapshot_sha256='d' * 64,
+    )
+    recorded[field] = {}
+    responses = iter([image, json.dumps(recorded), 'd' * 64 + '  pins.json'])
+    monkeypatch.setattr(runtime, 'run', lambda *args: next(responses))
+    lookup = Mock(return_value=source)
+    monkeypatch.setattr(runtime, 'source_image', lookup)
+    with pytest.raises(ValueError, match='current reviewed sources'):
+        runtime.image_identity(image)
+    lookup.assert_called_once_with(recorded=source)
