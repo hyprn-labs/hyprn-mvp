@@ -1,0 +1,61 @@
+# Handover — orchestration of Phases 2–4
+
+Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Session Continuity") and `.planning/ROADMAP.md`. Each phase plan and its checkpoints are under `.planning/phases/`.
+
+## Where the work is
+
+- Work branch: `feat/local-edition-continued`, branched from `main`, with no upstream. The next pull request to `main` comes from it. Push or open a pull request only when the product owner asks.
+- Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
+- Merged and verified on the work branch:
+  - Phase 1: complete.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5.
+  - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.8, 3.9, 3.10.
+  - Each task has a checkpoint.
+- Combined-tree results are in STATE "Stopped at". Every listed group is green.
+
+## In flight
+
+| Task | State | Next step |
+|---|---|---|
+| 3.6 (attribution read, study-shell placements, `agent-ui` group) | Three commits on the local branch `worktree-agent-ae23a0576dad43a25`, worktree `.claude/worktrees/agent-ae23a0576dad43a25`, based on `50a03d0`: `fbdb62d` in-browser doubles, `49b9a2b` attribution read and chips, `a87c572` `agent-ui` group. Not verified, and there is no checkpoint. The executor stopped while adding the group's fixture module. | Rebase or cherry-pick onto the work branch head. Compare against the 3.6 acceptance list, finish any missing pieces, then run the 3.6 acceptance commands, the browser groups, the design checks and the UI build. Write `checkpoints/3.6.md`, then merge. |
+| 3.7 (attribution chip on the record views) | Not started. | Run after 3.6, in the same UI area. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Not started; an earlier attempt left no commits. | Run in parallel with 2.7 (disjoint files). 2.6 alone uses the fixed scratch folder groups. |
+| 2.7 (engine, worker and application images) | Not started; an earlier attempt left no commits. | Run in parallel with 2.6. |
+
+After 2.6 and 2.7: task 2.8a needs the product owner's decision PD-2.4 on the contract schema split. Its default is recorded in STATE. Then come 2.8b, 2.8c, 2.8, and 2.9–2.14. Task 2.11 covers the store schema version, refusal on mismatch and `setup --reset-data`, with no migrations.
+
+Phase 3 after 3.7: 3.12 (`/mcp` server), then the plan's waves. Checkpoints 3.17, 3.18 and 3.28 need the product owner. Phase 4 follows `04-PLAN.md`.
+
+## Decisions waiting for the product owner
+
+- PD-2.4: contract schema split, before 2.8a.
+- 3.28: read literally, the queue cap of 10 waiting or running runs makes the 20-runs-per-call cap unreachable. Should the queue rule count only the runs waiting before the call?
+- Old unpinned durable-fixture folders in the development data root: keep or remove.
+
+## Facts a new orchestrator needs
+
+- Every check runs through `./hyprn-mvp dev check <group>` (see `AGENTS.md`, "Running checks"). The phase gate is `./hyprn-mvp dev check qualification --jobs 3` on a fixed commit. Hold heavy work (native groups, browser groups, image builds) while the gate runs.
+- Per-task verification by the orchestrator, after merging:
+  - review the commits: explicit paths, and the files match the task's list;
+  - run `naming`, `hygiene`, `guard`, `units-guards` and `style-ratchet`;
+  - run the task's fast contract and application groups, and the term scan;
+  - spot-check one long native or browser group that is relevant to the task.
+- Modeling images are not reproducible. Any change to a modeling source needs:
+  - a rebuild;
+  - a new `modeling_producer` pin in `deployment/pins.json`;
+  - a recapture of `integration/tests/fixtures/native-programs.json.gz`.
+  The durable native fixture is pinned in `deployment/tests/durable_fixture.py`; recapture it with its `capture` command. The durable-fixture groups and `units-native` need `HYPRN_MVP_SCRATCH_ROOT` set to the scratch folder inside the data root. Only one task at a time may use that folder.
+- `./hyprn-mvp` runs with umask 077. Build contexts need explicit file modes.
+- `style-ratchet` (ruff 0.16.10, prettier 3.9.10, line-level baseline `deployment/style_baseline.json`) fails on long lines in any file a task touches.
+- `native-environment` downloads its packages, so it needs network.
+- Build backend: flit_core 4.1.0, pinned in `deployment/locks/build-backend.json`.
+- Executors run one task, or a batch of 2–4, each in its own worktree. They never edit `STATE.md` or `ROADMAP.md`; the orchestrator records each merge there.
+- Development variables are listed in `AGENTS.md`. Their values are specific to the development host, are confirmed with the product owner, and never go into the repository.
+
+## Small open items
+
+- Regenerate `ui/dependency-audit.json` for the prettier addition.
+- `ui/tests/approach.spec.ts`, case "Overview reads the exact saved version": an in-flight read can consume the one-shot 503 route, so the test is racy and needs fixing.
+- `units-native` failed with `unsafe_export` once, when run from a worktree folder. It passes from the primary checkout.
+- Section 5.4 of `docs/agents/tooling-spec.md` mentions a run-read cache that no tool has; fix it in 3.32.
+- Agent runtime client names (`claude-code`, `codex-mcp-client`) are unconfirmed until the client-facts probe (3.17/3.19).
