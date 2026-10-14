@@ -64,7 +64,7 @@ Each section opens with a **Load when** line and the **Tools** it governs. Loadi
 8. **When a source is ambiguous**, test the plausible readings as labelled cases (for example "structural index in kg/m²" and "structural index in g/m²") rather than stopping or silently picking one. When the choice changes the answer, ask the user.
 9. **Save configurations** with `preview_configuration` and `save_configuration`, giving every input a typed source. **Run one baseline per option** with `submit_runs` before any sweep (`configuration_and_runs`).
 10. **Sweep only what answers the question**; keep runs few and meaningful. Wait with `wait_for_runs` or end your turn; never poll in a tight loop.
-11. **Read results** with `get_run_results` and `compare_runs`, keeping execution, convergence, feasibility, criteria and your interpretation separate.
+11. **Read results** with `get_run_results` and `compare_runs`, keeping execution, criterion outcomes, model outputs and your interpretation separate.
 12. **Conclude** in one place with `record_conclusion` (`conclusion`).
 13. **Self-review as an engineer** before declaring the work done (`checklist`).
 
@@ -140,7 +140,7 @@ Each section opens with a **Load when** line and the **Tools** it governs. Loadi
 - **Run one baseline per option** before any sweep; sweep only what answers the question, with runs few and meaningful. There is no sweep construct: save up to 20 configurations and submit them in one `submit_runs` call.
 - A run whose configuration is not ready is refused with the reasons; fix the configuration instead of resubmitting.
 - Wait with `wait_for_runs` (up to 45 seconds per call on local clients) or end your turn and tell the user; never poll in a tight loop. Read full results only when a run has finished, using `get_run_status` meanwhile. If `wait_for_runs` reports "stalled", do not resubmit; tell the user.
-- Keep execution, convergence, feasibility, criteria and your interpretation separate when you read results. An infeasible design is reported as infeasible, not as a failure or a zero.
+- Keep execution, criterion outcomes, model outputs and your interpretation separate when you read results. An infeasible design is reported as infeasible, not as a failure or a zero.
 - There is no run cancellation: tell the user; never resubmit a run to "replace" one.
 
 ---

@@ -1952,14 +1952,6 @@
   ],
   "exit_status": 1,
   "facets": {
-   "applicability": "unassessed",
-   "completeness": {
-    "available": 1,
-    "expected": 3,
-    "failed": 2,
-    "unavailable": 2
-   },
-   "convergence": "not_applicable",
    "execution": {
     "exit_code": 1,
     "message": {
@@ -1971,9 +1963,7 @@
     },
     "message_truncated": false,
     "state": "failed"
-   },
-   "feasibility": "not_applicable",
-   "termination": "not_applicable"
+   }
   },
   "model_declared_feasibility": {
    "note": "Declared by the model in a quantity meaning; this is the model's own output, not a HYPRN MVP feasibility outcome.",
@@ -2110,20 +2100,10 @@
   ],
   "exit_status": 0,
   "facets": {
-   "applicability": "unassessed",
-   "completeness": {
-    "available": 3,
-    "expected": 3,
-    "failed": 0,
-    "unavailable": 0
-   },
-   "convergence": "not_applicable",
    "execution": {
     "exit_code": 0,
     "state": "finished"
-   },
-   "feasibility": "not_applicable",
-   "termination": "not_applicable"
+   }
   },
   "model_declared_feasibility": {
    "note": "Declared by the model in a quantity meaning; this is the model's own output, not a HYPRN MVP feasibility outcome.",
@@ -2209,12 +2189,7 @@
    "missing": "not_recorded"
   },
   "facets": {
-   "applicability": "not evaluated",
-   "completeness": "not evaluated",
-   "convergence": "not evaluated",
-   "execution": "not evaluated",
-   "feasibility": "not evaluated",
-   "termination": "not evaluated"
+   "execution": "not evaluated"
   },
   "outputs": {
    "missing": "no_retained_results"
@@ -2253,22 +2228,7 @@
      "missing": "not_recorded"
     },
     "facets": {
-     "applicability": {
-      "missing": "not_recorded"
-     },
-     "completeness": {
-      "missing": "not_recorded"
-     },
-     "convergence": {
-      "missing": "not_recorded"
-     },
      "execution": {
-      "missing": "not_recorded"
-     },
-     "feasibility": {
-      "missing": "not_recorded"
-     },
-     "termination": {
       "missing": "not_recorded"
      }
     },
@@ -2328,20 +2288,10 @@
     ],
     "exit_status": 0,
     "facets": {
-     "applicability": "unassessed",
-     "completeness": {
-      "available": 3,
-      "expected": 3,
-      "failed": 0,
-      "unavailable": 0
-     },
-     "convergence": "not_applicable",
      "execution": {
       "exit_code": 0,
       "state": "finished"
-     },
-     "feasibility": "not_applicable",
-     "termination": "not_applicable"
+     }
     },
     "id": "5c000000-0000-4000-8000-000000000001",
     "kind": "run",
@@ -2399,20 +2349,10 @@
     ],
     "exit_status": 1,
     "facets": {
-     "applicability": "unassessed",
-     "completeness": {
-      "available": 1,
-      "expected": 3,
-      "failed": 2,
-      "unavailable": 2
-     },
-     "convergence": "not_applicable",
      "execution": {
       "exit_code": 1,
       "state": "failed"
-     },
-     "feasibility": "not_applicable",
-     "termination": "not_applicable"
+     }
     },
     "id": "5c000000-0000-4000-8000-000000000002",
     "kind": "run",
@@ -3072,7 +3012,6 @@
   "next_cursor": null,
   "sources": [
    {
-    "applicability": "unassessed",
     "criteria": [
      "met",
      "met"
@@ -3123,7 +3062,6 @@
     "value": 22500.0
    },
    {
-    "applicability": "unassessed",
     "criteria": [
      "met",
      "met"

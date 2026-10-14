@@ -180,7 +180,7 @@ WORKFLOW = Section(
         '10. **Sweep only what answers the question**; keep runs few and meaningful. '
         'Wait with `wait_for_runs` or end your turn; never poll in a tight loop.\n'
         '11. **Read results** with `get_run_results` and `compare_runs`, keeping '
-        'execution, convergence, feasibility, criteria and your interpretation separate.\n'
+        'execution, criterion outcomes, model outputs and your interpretation separate.\n'
         '12. **Conclude** in one place with `record_conclusion` (`conclusion`).\n'
         '13. **Self-review as an engineer** before declaring the work done (`checklist`).'
     ),
@@ -367,7 +367,7 @@ CONFIGURATION_AND_RUNS = Section(
         'your turn and tell the user; never poll in a tight loop. Read full results only '
         'when a run has finished, using `get_run_status` meanwhile. If `wait_for_runs` '
         'reports "stalled", do not resubmit; tell the user.\n'
-        '- Keep execution, convergence, feasibility, criteria and your interpretation '
+        '- Keep execution, criterion outcomes, model outputs and your interpretation '
         'separate when you read results. An infeasible design is reported as infeasible, '
         'not as a failure or a zero.\n'
         '- There is no run cancellation: tell the user; never resubmit a run to '

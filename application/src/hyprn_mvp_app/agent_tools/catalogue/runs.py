@@ -4,8 +4,8 @@ Run state is owned by ``execution`` (receipts and run associations) and the reta
 by ``history``; AiiDA owns the process lifecycle, which the owners project. These tools read
 the owners on every call and keep nothing between calls: ``get_run_status`` makes exactly one
 light run-status read per call (no status cache, no run state of its own), and results are
-read from the stored run, never recomputed or re-run. Execution, convergence, termination,
-feasibility, completeness, applicability and criterion outcomes stay separate fields.
+read from the stored run, never recomputed or re-run. Execution and criterion outcomes
+stay separate from the interpretation of model outputs.
 """
 
 import re
@@ -35,8 +35,7 @@ LIST = ('GET', '/api/1/studies/{study_id}/runs')
 ONE = ('GET', '/api/1/studies/{study_id}/runs/{run_id}')
 STATUS = ('GET', '/api/1/studies/{study_id}/run-status')
 OWNERS = ('execution', 'history')
-FACETS = ('execution', 'convergence', 'optimization', 'completeness', 'applicability')
-COMPLETENESS = ('expected', 'available', 'failed', 'unavailable')
+FACETS = ('execution',)
 NOT_EVALUATED = 'not evaluated'
 DIAGNOSTICS_CHARS = 1200
 REASON_CHARS = 300
@@ -114,25 +113,7 @@ def _facets(facets):
             'message': untrusted('execution diagnostics', text=message),
             'message_truncated': cut,
         }
-    optimization = stored['optimization']
-    return {
-        'execution': execution,
-        'convergence': stored['convergence']['state']
-        if isinstance(stored['convergence'], dict) and 'state' in stored['convergence']
-        else stored['convergence'],
-        'termination': optimization['termination']
-        if isinstance(optimization, dict) and 'termination' in optimization
-        else optimization,
-        'feasibility': optimization['feasibility']
-        if isinstance(optimization, dict) and 'feasibility' in optimization
-        else optimization,
-        'completeness': {k: stored['completeness'][k] for k in COMPLETENESS}
-        if isinstance(stored['completeness'], dict) and 'missing' not in stored['completeness']
-        else stored['completeness'],
-        'applicability': stored['applicability']['state']
-        if isinstance(stored['applicability'], dict) and 'state' in stored['applicability']
-        else stored['applicability'],
-    }
+    return {'execution': execution}
 
 
 def _time(value):
@@ -205,8 +186,7 @@ GET_RUN_STATUS = ToolSpec(
         'Returns the current status of 1 to 20 runs in one light read of the execution owner, '
         'in the order asked: the run and its configuration, state (accepted_run, prepared, '
         'preparation_failed, dispatching, recorded or uncertain), process state and exit '
-        'status, the outcome facets (execution, convergence, termination, feasibility, '
-        'completeness, applicability) and criterion outcomes once results are retained, the '
+        'status, execution and criterion outcomes once results are retained, the '
         'submission time and seconds waited. A value not yet recorded or not projected is '
         'shown as missing with its reason, never as zero. run_ids: runs of this study; if one '
         'is not, nothing is answered. It never resubmits; an uncertain run is reported to the '
@@ -292,17 +272,7 @@ async def get_run_results(arguments, ctx):
     results = history.get('results')
     projection = dict(head)
     if results is None:
-        projection['facets'] = {
-            key: NOT_EVALUATED
-            for key in (
-                'execution',
-                'convergence',
-                'termination',
-                'feasibility',
-                'completeness',
-                'applicability',
-            )
-        }
+        projection['facets'] = {'execution': NOT_EVALUATED}
         projection['outputs'] = missing('no_retained_results')
         projection['criteria'] = missing('no_retained_results')
         projection['record_problems'] = [e['code'] for e in history.get('errors', ())]
@@ -371,8 +341,7 @@ GET_RUN_RESULTS = ToolSpec(
     name='get_run_results',
     title='Read the results of a run',
     description=(
-        "Returns one run's recorded outcome as separate fields: execution (state and exit "
-        'code), convergence, termination, feasibility, completeness and applicability, each '
+        "Returns one run's recorded execution (state and exit code), or "
         '"not evaluated" while no results are retained; every output as "Component.port" with '
         'value and unit, or unavailable with its reason (never 0); criteria as met, violated '
         'or unresolved with their threshold; and a feasibility output the model declares in a '

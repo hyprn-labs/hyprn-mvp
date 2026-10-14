@@ -280,7 +280,6 @@ async def list_result_sources(arguments, ctx):
                 ),
                 execution=outcomes['execution']['state'],
                 criteria=[c['outcome'] for c in outcomes['criteria']],
-                applicability=outcomes['applicability']['state'],
             )
         )
     after = data['next_cursor']
@@ -299,8 +298,8 @@ LIST_RESULT_SOURCES = ToolSpec(
     description=(
         'Returns one page of recorded run outputs that a configuration can take as a '
         'result-linked input: the output "Component.port" with its value and unit, the run '
-        "and model version it comes from, and the run's execution, criteria and "
-        'applicability outcomes as recorded. limit: items per page (1 to 25, default 10); '
+        "and model version it comes from, and the run's execution and criterion "
+        'outcomes as recorded. limit: items per page (1 to 25, default 10); '
         'cursor: the next_cursor of the previous page, passed back unchanged. Values are the '
         'recorded ones at full precision, never recomputed. '
         'Guidance: get_playbook("configuration_and_runs").'

@@ -646,7 +646,6 @@ def test_every_quantity_has_a_unit_and_no_unavailable_value_is_a_number():
             if 'value' in value and isinstance(value['value'], (int, float)):
                 assert isinstance(value.get('unit'), str) and value['unit'], (case, path)
             if isinstance(value.get('unavailable'), str):
-                # (a completeness facet counts unavailable outputs as an integer)
                 unavailable += 1
                 assert 'value' not in value and value['unavailable'], (case, path)
     assert unavailable >= 5
@@ -664,16 +663,9 @@ def test_every_quantity_has_a_unit_and_no_unavailable_value_is_a_number():
     assert 9000.000000000002 in [o.get('value') for o in recorded]
 
 
-def test_outcome_facets_stay_separate_and_unevaluated_facets_say_so():
+def test_execution_and_criteria_stay_separate_without_invented_scientific_status():
     golden = json.loads(GOLDEN_PATH.read_text(encoding='utf-8'))
-    keys = {
-        'execution',
-        'convergence',
-        'termination',
-        'feasibility',
-        'completeness',
-        'applicability',
-    }
+    keys = {'execution'}
     for case in (
         'get_run_results_recorded',
         'get_run_results_failed_with_diagnostics',
@@ -693,6 +685,45 @@ def test_outcome_facets_stay_separate_and_unevaluated_facets_say_so():
     declared = recorded['model_declared_feasibility']
     assert [o['value'] for o in declared['outputs']] == [1.0]
     assert 'not a HYPRN MVP feasibility outcome' in declared['note']
+
+
+@pytest.mark.parametrize(
+    'case',
+    [
+        'get_run_status',
+        'get_run_results_recorded',
+        'get_run_results_failed_with_diagnostics',
+        'get_run_results_without_results',
+        'list_result_sources',
+    ],
+)
+def test_result_tools_do_not_require_or_recreate_removed_status_fields(case):
+    data = copy.deepcopy(RECORDED)
+    for detail in data['run_details'].values():
+        results = (detail.get('history') or {}).get('results')
+        if results:
+            for key in ('convergence', 'optimization', 'completeness', 'applicability'):
+                results.pop(key, None)
+    for item in data['run_status'].values():
+        item['facets'] = {'execution': item['facets']['execution']}
+    for item in data['result_sources']:
+        item['outcomes'].pop('applicability', None)
+    # The handler boundary accepts the reduced API shape without filling old fields.
+    # Complete recorded responses are contract-validated by the golden cases above.
+    actual, _ = run_case(case, data, validate=False)
+    expected = json.loads(GOLDEN_PATH.read_text(encoding='utf-8'))[case]
+    assert actual == expected
+    removed = {
+        'convergence',
+        'optimization',
+        'termination',
+        'feasibility',
+        'completeness',
+        'applicability',
+    }
+    for _, value in walk(actual):
+        if isinstance(value, dict):
+            assert not removed.intersection(value)
 
 
 def test_diagnostics_are_bounded_to_1200_characters():
