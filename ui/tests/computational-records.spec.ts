@@ -18,7 +18,20 @@ async function openRecord(page: Page) {
   await page.getByLabel('Username',{exact:true}).fill('owner');
   await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByRole('button',{name:'Export computational record',exact:true}).click();
+  const exports = page.getByRole('group', { name: 'Run exports', exact: true });
+  await expect(exports.getByRole('button')).toHaveText([
+    'Export model and data',
+    'Export computational record',
+  ]);
+  const boxes = await exports.getByRole('button').evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, right: rect.right };
+    }),
+  );
+  expect(boxes[1].x).toBeGreaterThan(boxes[0].right);
+  expect(boxes[1].y).toBe(boxes[0].y);
+  await exports.getByRole('button', { name: 'Export computational record', exact: true }).click();
   return props;
 }
 

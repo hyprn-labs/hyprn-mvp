@@ -1,4 +1,4 @@
-import { Button, Disclosure, Panel, Tabs, TextInput } from './design';
+import { Button, Panel, Tabs, TextInput } from './design';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { EvidenceSnapshot, PortRead3 } from './contract';
 import { GraphView, project, type Node, type RevealTarget, type Snapshot } from './GraphView';
@@ -30,11 +30,10 @@ export function ModelView({ snapshot, selection, onSelect, values = { kind: 'mod
 }) {
   const views = ['Graph', 'XDSM'] as const;
   const [view, setView] = useState<typeof views[number]>('Graph');
-  const [componentsOpen, setComponentsOpen] = useState(false), [detailsOpen, setDetailsOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [authoringHost, setAuthoringHost] = useState<HTMLDivElement | null>(null);
-  const [order, setOrder] = useState<string[]>([]), [search, setSearch] = useState('');
+  const [search, setSearch] = useState('');
   useEffect(() => { if (selection.kind !== 'none') setDetailsOpen(true); }, [selection]);
-  const dragging = useRef<string | null>(null);
   const [pendingReveal, setPendingReveal] = useState<RevealTarget | undefined>();
   const [reveal, setReveal] = useState<RevealTarget | undefined>();
   const searchRequest = useRef(0);
@@ -46,38 +45,158 @@ export function ModelView({ snapshot, selection, onSelect, values = { kind: 'mod
     setPendingReveal({ instance_id, port_id, request: ++searchRequest.current });
     onSelect({ kind: 'instance', instance_id });
   }
-  const raw = useMemo(() => project(snapshot), [snapshot]);
-  const projection = { ...raw, nodes: [...raw.nodes].sort((a, b) => { const rank = (id: string) => { const index = order.indexOf(id); return index < 0 ? order.length + raw.nodes.findIndex(n => n.instance.instance_id === id) : index; }; return rank(a.instance.instance_id) - rank(b.instance.instance_id); }) };
+  const projection = useMemo(() => project(snapshot), [snapshot]);
   const trace = { nodes: focus?.instances ?? new Set<string>(), links: focus?.links ?? new Set<string>() };
-  function move(id: string, target: number) { const ids = projection.nodes.map(n => n.instance.instance_id), at = ids.indexOf(id); if (at < 0 || target < 0 || target >= ids.length) return; ids.splice(at, 1); ids.splice(target, 0, id); setOrder(ids); }
   const needle = search.trim().toLocaleLowerCase();
   const findings: Array<{ node: Node; port: PortRead3 | undefined }> = needle ? projection.nodes.flatMap(n => [
     ...(`${n.instance.name} ${n.instance.instance_id}`.toLocaleLowerCase().includes(needle) ? [{ node: n, port: undefined }] : []),
     ...n.ports.filter(p => `${p.name} ${p.code_symbol}`.toLocaleLowerCase().includes(needle)).map(port => ({ node: n, port }))]) : [];
   const [detailsHost, setDetailsHost] = useState<HTMLDivElement | null>(null);
   const id = (name: string) => idPrefix + name;
-  return <section className="connected-views model-view" aria-label="Model view">
-    <div className="connected-toolbar">
-      <Tabs variant="segmented" label="Model projections" value={view} onChange={value => setView(value as typeof view)}
-        items={views.map(name => ({ id: name, label: name, tabId: id('projection-' + name), panelId: id('panel-' + name) }))} />
-      <div className="panel-toggles">{selection.kind !== 'none' && <Button variant="quiet" onClick={() => onSelect({ kind: 'none' })}>Clear selection</Button>}<Button aria-label="Components" aria-controls={id('model-components')} aria-expanded={componentsOpen} onClick={() => setComponentsOpen(!componentsOpen)}>{componentsOpen ? 'Hide' : 'Show'} Components</Button><Button aria-label="Details" aria-controls={id('model-details')} aria-expanded={detailsOpen} onClick={() => setDetailsOpen(!detailsOpen)}>{detailsOpen ? 'Hide' : 'Show'} Details</Button></div>
-    </div>
-    <div className={`connected-workbench ${componentsOpen ? '' : 'components-closed'} ${detailsOpen ? '' : 'details-closed'}`}>
-      <Panel id={id('model-components')} className="components-panel" label="Model components" hidden={!componentsOpen} title={<>Components <small>{projection.nodes.length}</small></>}>
-        <ol className="component-order">{projection.nodes.map((n, i) => <li key={n.instance.instance_id} data-order-id={n.instance.instance_id} draggable onDragStart={() => { dragging.current = n.instance.instance_id; }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (dragging.current) move(dragging.current, i); dragging.current = null; }}><Button aria-pressed={selection.kind === 'instance' && selection.instance_id === n.instance.instance_id} onClick={() => onSelect({ kind: 'instance', instance_id: n.instance.instance_id })}>{i + 1}. {n.instance.name}</Button>{n.incomplete && <small>⚠ Incomplete declaration</small>}<Disclosure><summary>Arrange component</summary><p>Presentation order only.</p><div className="order-actions"><Button disabled={i === 0} onClick={() => move(n.instance.instance_id, i - 1)}>Move up</Button><Button disabled={i === projection.nodes.length - 1} onClick={() => move(n.instance.instance_id, i + 1)}>Move down</Button></div></Disclosure></li>)}</ol>
-        {!projection.nodes.length && <p>No components yet.</p>}
-      </Panel>
-      <Panel className="connected-main" bodyClassName="canvas-body" label="Model canvas"><div className="canvas-toolbar"><label className="canvas-search"><span className="sr-only">Search loaded model</span><TextInput placeholder="Search this model…" type="search" value={search} onChange={e => { setSearch(e.target.value); setPendingReveal(undefined); }} /></label>
-        {needle && <div className="search-findings" role="region" aria-label="Loaded model search results"><Button onClick={() => setSearch('')}>Clear search</Button>{findings.map(({ node, port }) => <Button key={node.instance.instance_id + (port?.port_id ?? '')} onClick={() => revealSearch(node.instance.instance_id, port?.port_id)}>{node.instance.name}{port && ` · ${port.name} (${port.code_symbol})`}</Button>)}{!findings.length && <p>No matches in this model.</p>}</div>}
-        <div className="model-creation" ref={setAuthoringHost} /></div>
-        <div hidden={view !== 'Graph'} role="tabpanel" id={id('panel-Graph')} aria-labelledby={id('projection-Graph')}><GraphView projection={projection} selection={selection} onSelect={onSelect} trace={trace} highlightedPorts={focus?.ports} reveal={view === 'Graph' ? reveal : undefined} /></div>
-        <div hidden={view !== 'XDSM'} role="tabpanel" id={id('panel-XDSM')} aria-labelledby={id('projection-XDSM')}><XdsmView projection={projection} selection={selection} onSelect={onSelect} trace={trace} reveal={view === 'XDSM' ? reveal : undefined} /></div>
-        <div className="canvas-footer"><span>{projection.nodes.length} {projection.nodes.length === 1 ? 'component' : 'components'} · {snapshot.connections.length} {snapshot.connections.length === 1 ? 'connection' : 'connections'}</span><span>Select a component to see what it computes and why</span></div>
-      </Panel>
-      <div id={id('model-details')} className="connected-inspector" hidden={!detailsOpen}><SelectionInspector snapshot={snapshot} projection={projection} selection={selection} onSelect={onSelect} context={values} evidence={evidence} draftHost={authoring ? setDetailsHost : undefined} methods={methods} onOpenStep={onOpenStep} /></div>
-    </div>
-    {authoring?.({ toolbar: authoringHost, details: detailsHost })}
-    {!!projection.invalid.length && <div role="alert"><p>⚠ {projection.invalid.length} invalid links have unavailable or incompatible endpoints.</p>{projection.invalid.map(l => <p key={l.connection_id}>Connection {l.connection_id}: {l.source_ref.instance_id}/{l.source_ref.port_id} → {l.target_ref.instance_id}/{l.target_ref.port_id}</p>)}</div>}
-    <QuantitiesTable snapshot={snapshot} projection={projection} selection={selection} onSelect={onSelect} context={values} focus={focus?.instances} onPastePorts={onPastePorts} onPasteHandle={onPasteHandle} />
-  </section>;
+  return (
+    <section className="connected-views model-view" aria-label="Model view">
+      <div className="connected-toolbar">
+        <Tabs
+          variant="segmented"
+          label="Model projections"
+          value={view}
+          onChange={(value) => setView(value as typeof view)}
+          items={views.map((name) => ({
+            id: name,
+            label: name,
+            tabId: id('projection-' + name),
+            panelId: id('panel-' + name),
+          }))}
+        />
+        <div className="panel-toggles">
+          {selection.kind !== 'none' && (
+            <Button variant="quiet" onClick={() => onSelect({ kind: 'none' })}>
+              Clear selection
+            </Button>
+          )}
+          <Button
+            aria-label="Details"
+            aria-controls={id('model-details')}
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen(!detailsOpen)}
+          >
+            {detailsOpen ? 'Hide' : 'Show'} Details
+          </Button>
+        </div>
+      </div>
+      <div className={`connected-workbench ${detailsOpen ? '' : 'details-closed'}`}>
+        <Panel className="connected-main" bodyClassName="canvas-body" label="Model canvas">
+          <div className="canvas-toolbar">
+            <label className="canvas-search">
+              <span className="sr-only">Search loaded model</span>
+              <TextInput
+                placeholder="Search this model…"
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPendingReveal(undefined);
+                }}
+              />
+            </label>
+            {needle && (
+              <div
+                className="search-findings"
+                role="region"
+                aria-label="Loaded model search results"
+              >
+                <Button onClick={() => setSearch('')}>Clear search</Button>
+                {findings.map(({ node, port }) => (
+                  <Button
+                    key={node.instance.instance_id + (port?.port_id ?? '')}
+                    onClick={() => revealSearch(node.instance.instance_id, port?.port_id)}
+                  >
+                    {node.instance.name}
+                    {port && ` · ${port.name} (${port.code_symbol})`}
+                  </Button>
+                ))}
+                {!findings.length && <p>No matches in this model.</p>}
+              </div>
+            )}
+            <div className="model-creation" ref={setAuthoringHost} />
+          </div>
+          <div
+            hidden={view !== 'Graph'}
+            role="tabpanel"
+            id={id('panel-Graph')}
+            aria-labelledby={id('projection-Graph')}
+          >
+            <GraphView
+              projection={projection}
+              selection={selection}
+              onSelect={onSelect}
+              trace={trace}
+              highlightedPorts={focus?.ports}
+              reveal={view === 'Graph' ? reveal : undefined}
+            />
+          </div>
+          <div
+            hidden={view !== 'XDSM'}
+            role="tabpanel"
+            id={id('panel-XDSM')}
+            aria-labelledby={id('projection-XDSM')}
+          >
+            <XdsmView
+              projection={projection}
+              selection={selection}
+              onSelect={onSelect}
+              trace={trace}
+              reveal={view === 'XDSM' ? reveal : undefined}
+            />
+          </div>
+          <div className="canvas-footer">
+            <span>
+              {projection.nodes.length}{' '}
+              {projection.nodes.length === 1 ? 'component' : 'components'}{' '}
+              · {snapshot.connections.length}{' '}
+              {snapshot.connections.length === 1 ? 'connection' : 'connections'}
+            </span>
+            <span>Select a component to inspect its source and method</span>
+          </div>
+        </Panel>
+        <div id={id('model-details')} className="connected-inspector" hidden={!detailsOpen}>
+          <SelectionInspector
+            snapshot={snapshot}
+            projection={projection}
+            selection={selection}
+            onSelect={onSelect}
+            context={values}
+            evidence={evidence}
+            draftHost={authoring ? setDetailsHost : undefined}
+            methods={methods}
+            onOpenStep={onOpenStep}
+          />
+        </div>
+      </div>
+      {authoring?.({ toolbar: authoringHost, details: detailsHost })}
+      {!!projection.invalid.length && (
+        <div role="alert">
+          <p>
+            ⚠ {projection.invalid.length} invalid links have unavailable or incompatible endpoints.
+          </p>
+          {projection.invalid.map((l) => (
+            <p key={l.connection_id}>
+              Connection {l.connection_id}: {l.source_ref.instance_id}/{l.source_ref.port_id} →{' '}
+              {l.target_ref.instance_id}/{l.target_ref.port_id}
+            </p>
+          ))}
+        </div>
+      )}
+      <QuantitiesTable
+        snapshot={snapshot}
+        projection={projection}
+        selection={selection}
+        onSelect={onSelect}
+        context={values}
+        focus={focus?.instances}
+        onPastePorts={onPastePorts}
+        onPasteHandle={onPasteHandle}
+      />
+    </section>
+  );
 }

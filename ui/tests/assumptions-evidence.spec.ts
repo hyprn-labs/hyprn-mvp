@@ -986,8 +986,10 @@ test('@ae-configuration configuration lists its own assumptions and links once t
   await dialog.getByRole('button',{name:'Inspect component '+component,exact:true}).first().click();
   await expect(details.getByRole('heading',{name:component,exact:true})).toBeVisible();
   await expect(details.getByRole('region',{name:'Component · '+component+' assumptions',exact:true})).toContainText('Retained component condition');
-  await expect(details.getByRole('heading',{name:'What it computes',exact:true})).toBeVisible();
-  await expect(details.getByRole('heading',{name:'Why',exact:true})).toBeVisible();
+  await expect(details.getByRole('heading', { name: 'Method context', exact: true })).toBeVisible();
+  await expect(details.getByRole('heading', { name: 'Why this method', exact: true })).toHaveCount(
+    0,
+  );
   await expect(dialog.getByRole('table',{name:'Ports'})).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Add assumption',exact:true})).toHaveCount(0);
   await s3Shots(page,'s3-configuration-model-assumptions-dialog');

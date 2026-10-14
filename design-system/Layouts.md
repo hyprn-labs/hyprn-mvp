@@ -29,11 +29,11 @@ The Models tab lists models ("New model" as the primary action, one row per mode
 
 1. A back link "← All models", then the heading: the model name for the draft, or "Model version <short ID>" for a saved version. Below it one state tag: "Draft · saved", "Unsaved local edits" or "Read-only model version".
 2. Right-aligned on the same row, in this order: the version select (`<short ID> (draft)` or `<short ID> (read-only)`), the primary "Save model version" (draft only), "Create configuration", and the labelled "Model actions" menu (rename, reload, import, export).
-3. A toolbar row: the view switch (`Tabs`, segmented: **Graph | XDSM**) on the left; on the right "Clear selection" (when something is selected) and the panel toggles "Show/Hide Components" and "Show/Hide Details".
-4. The workbench: `[components panel-outline (190px), hidden by default] [canvas, fluid] [details panel-inspector (350px)]`, `space-3` gaps, every panel `radius-md`. Its height is fixed on desktop so the details never move off-screen.
-5. The canvas panel has its own toolbar (search "Search this model…" on the left; component and connection authoring actions on the right for a draft), a dotted `canvas` ground with `ModelNode`s, and a footer line: "N components · M connections" (singular for one) on the left, "Select a component to see what it computes and why" on the right.
-6. The details panel describes the selection. For a component: its name and definition tags, then **What it computes** (with its source), **Why** (the linked method step and its rationale) and **Assumptions**. There is no ports table, no incoming/outgoing lists and no notes section. Creation and editing open as dialogs or in-panel editors, never as forms above the workbench.
-7. Below the workbench, full width: the **quantities table** (each quantity's symbol, meaning, units and, in a configuration or run context, its value), linked to the selection.
+3. A toolbar row: the view switch (`Tabs`, segmented: **Graph | XDSM**) on the left; on the right "Clear selection" (when something is selected) and the "Show/Hide Details" toggle.
+4. The workbench: `[canvas, fluid] [details panel-inspector (350px)]`, `space-3` gaps, every panel `radius-md`. Its height is fixed on desktop so the details never move off-screen.
+5. The canvas panel has its own toolbar (search "Search this model…" on the left; component and connection authoring actions on the right for a draft), a dotted `canvas` ground with `ModelNode`s, and a footer line: "N components · M connections" (singular for one) on the left, "Select a component to inspect its source and method" on the right.
+6. The details panel describes the selection. For a component: its name once, then **Method context** (the linked step's transformation and component source), **Why this method** (authored purpose and rationale) and nonempty **Assumptions**. The shared method explanation is not presented as a component-specific computation description. The direct step link preserves its saved approach; exact pins remain in Method record. Empty read-only sections are omitted, while draft assumption authoring stays available. There is no ports table, no incoming/outgoing lists and no notes section. Creation and editing open as dialogs or in-panel editors, never as forms above the workbench.
+7. Below the workbench, full width: the **quantities table** (each quantity's symbol, meaning, units and, in a configuration or run context, its value), linked to the selection. Filters cover search, component and direction; unavailable values keep their reasons in the table.
 
 ## Configurations
 
@@ -51,7 +51,7 @@ The Models tab lists models ("New model" as the primary action, one row per mode
 
 A single `Panel` list, newest first: one row per run (name from its configuration plus short run ID as a link, model version and configuration as `small` metadata, Execution and Criteria tags at the right), with the intro "Newest first. Failed and incomplete runs stay listed." Opening a run replaces the list; history and detail are never side by side.
 
-The run detail shows the "Run record · Read-only" record bar and a heading with the run's actions grouped together (Record details, "Export computational record", "Create modified run"), shared by all its tabs, and the run tabs **Results · Model · Configuration · Evidence**:
+The run detail shows the "Run record · Read-only" record bar and a heading with the run's actions grouped together (the side-by-side "Export model and data" and "Export computational record" group, Record details, "Create modified run"), shared by all its tabs, and the run tabs **Results · Model · Configuration · Evidence**:
 
 - **Results** leads with the run headline (the "Run status" `Ledger` with Execution and Criteria; see [Scientific states](Scientific-states.md)), then the complete "Outputs" table and a "Full-precision values" dialog. Each output appears once; no arbitrary subset is promoted. The table has Output, Value and Units columns. An unavailable value reads "not computed" with its reason in the Value cell.
 - **Model** shows the model version the run used, in the canonical model view, read-only.
@@ -82,4 +82,4 @@ Opening a saved model version, or the model or configuration used by a run, show
 
 ## Narrow screens and 200% zoom
 
-Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then components, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the wordmark shrinks to `subheading` size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.
+Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the wordmark shrinks to `subheading` size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.

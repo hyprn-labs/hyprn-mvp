@@ -98,7 +98,7 @@ function recordedUnit(units: string, row: VariableRow) {
   const recorded = units || 'Dimensionless';
   return recorded.toLocaleLowerCase() === unitLabel(row.port.units).toLocaleLowerCase() ? '' : recorded;
 }
-const availabilityLabels: Record<string, string> ={ not_computed: 'Not computed', explicit: 'Explicit value', missing: 'Unassigned', available: 'Computed', unavailable: 'Not computed in this run' };
+
 
 /** Quantities of the canonical model view: one table below the canvas, in its
  * own scroll region. A selected component (or an approach step's components) filters and
@@ -125,7 +125,8 @@ export function QuantitiesTable({ snapshot, projection, selection, onSelect, con
   useEffect(() => { onPasteHandle?.({ dirty: !!paste, save: () => savePaste(true), discard: discardPaste }); });
   useEffect(() => () => { handleCallback.current?.({ dirty: false, save: async () => true, discard: () => {} }); }, []);
   const rows = useMemo(() => variableRows(snapshot, projection, context), [snapshot, projection, context]);
-  const [search, setSearch] = useState(''), [direction, setDirection] = useState(''), [availability, setAvailability] = useState('');
+  const [search, setSearch] = useState(''),
+    [direction, setDirection] = useState('');
   const [sort, setSort] = useState<'variable' | 'component'>('component'), [descending, setDescending] = useState(false);
   // A selected component (or the approach step's components when nothing is selected) scopes the rows.
   const focusKey = [...(focus ?? [])].join('/');
@@ -148,23 +149,269 @@ export function QuantitiesTable({ snapshot, projection, selection, onSelect, con
   const instanceName = (id: string) => { const node = projection.nodes.find(n => n.instance.instance_id === id); const peers = projection.nodes.filter(n => n.instance.name === node?.instance.name); return `${node?.instance.name ?? 'Unavailable component'}${peers.length > 1 ? ' · instance ' + (peers.findIndex(n => n.instance.instance_id === id) + 1) : ''}`; };
   const endpoint = (ref: PortRef) => { const row = rows.find(r => r.key === quantityKey(ref)); return row ? `${instanceName(ref.instance_id)} · ${row.port.code_symbol}` : 'Unavailable quantity'; };
   const values = new Map(rows.map(r => [r.key, quantityValue(r, rows, context, instanceName)]));
-  const visible = rows.filter(r => `${r.port.name} ${r.port.code_symbol} ${r.instance.name}`.toLocaleLowerCase().includes(needle) && (!scope.length || scope.includes(r.instance.instance_id)) && (!direction || r.port.direction === direction) && (!hasValues || !availability || r.availability === availability)).sort((a, b) => ((sort === 'variable' ? a.port.name.localeCompare(b.port.name) : a.instance.name.localeCompare(b.instance.name)) || a.key.localeCompare(b.key)) * (descending ? -1 : 1));
+  const visible = rows
+    .filter(
+      (r) =>
+        `${r.port.name} ${r.port.code_symbol} ${r.instance.name}`
+          .toLocaleLowerCase()
+          .includes(needle) &&
+        (!scope.length || scope.includes(r.instance.instance_id)) &&
+        (!direction || r.port.direction === direction),
+    )
+    .sort(
+      (a, b) =>
+        ((sort === 'variable'
+          ? a.port.name.localeCompare(b.port.name)
+          : a.instance.name.localeCompare(b.instance.name)) || a.key.localeCompare(b.key)) *
+        (descending ? -1 : 1),
+    );
   function order(next: typeof sort) { setDescending(sort === next ? !descending : false); setSort(next); }
   const flow = (row: VariableRow) => row.port.direction === 'input' ? <>Input<span className="quantity-flow">{row.incoming.length ? row.incoming.map(c => 'from ' + endpoint(c.source_ref)).join(', ') : 'set in configuration'}</span></>
     : row.port.direction === 'output' ? <>Output<span className="quantity-flow">{row.outgoing.length ? row.outgoing.map(c => 'to ' + endpoint(c.target_ref)).join(', ') : 'model result'}</span></> : <>Residual</>;
   const highlighted = (row: VariableRow) => selectionHas(row, selection) || (!pasteInstance && focused.length < projection.nodes.length && focused.includes(row.instance.instance_id));
   const scopeName = scope.length ? scope.map(instanceName).join(', ') : '';
-  return <Panel className="quantities-panel" label="Quantities" title="Quantities" headingLevel={3} actions={scope.length ? <Button size="sm" onClick={() => setShowAll(true)}>Show all quantities</Button> : undefined}>
-    <section aria-label="Quantities view" className="variables-view">
-    <div className="variable-filters"><label>Find a quantity<TextInput type="search" value={search} onChange={e => setSearch(e.target.value)} /></label><label>Component<Select aria-label="Component filter" value={scope.length === 1 ? scope[0] : ''} onChange={e => { if (e.target.value) onSelect({ kind: 'instance', instance_id: e.target.value }); else setShowAll(true); }}><option value="">All components</option>{projection.nodes.map(n => <option key={n.instance.instance_id} value={n.instance.instance_id}>{instanceName(n.instance.instance_id)}</option>)}</Select></label><label>Direction<Select aria-label="Direction filter" value={direction} onChange={e => setDirection(e.target.value)}><option value="">All directions</option>{['input', 'output', 'residual'].map(d => <option key={d}>{d}</option>)}</Select></label>{hasValues && <label>Availability<Select aria-label="Availability filter" value={availability} onChange={e => setAvailability(e.target.value)}><option value="">All states</option>{['not_computed', 'explicit', 'missing', 'available', 'unavailable'].map(a => <option key={a} value={a}>{availabilityLabels[a]}</option>)}</Select></label>}{(search || direction || availability) && <Button variant="quiet" onClick={() => { setSearch(''); setDirection(''); setAvailability(''); }}>Clear filters</Button>}</div>
-    <p className="context-line" aria-live="polite">Showing {visible.length} of {rows.length} quantities{scopeName && ' · ' + scopeName}</p>
-    <div ref={scroll} className="table-scroll variables-scroll quantities-scroll" role="region" aria-label="Quantities table" tabIndex={0}><DataTable label="Quantities" dense className="quantities-table"><thead><tr><th scope="col" aria-sort={sort === 'variable' ? descending ? 'descending' : 'ascending' : 'none'}><Button variant="quiet" size="sm" onClick={() => order('variable')}>Quantity</Button></th><th scope="col" aria-sort={sort === 'component' ? descending ? 'descending' : 'ascending' : 'none'}><Button variant="quiet" size="sm" onClick={() => order('component')}>Component</Button></th><th scope="col">Direction</th><th scope="col">Definition</th><th scope="col">Unit</th>{hasValues && <><th scope="col" className="hf-th--num">Value</th><th scope="col">Provenance</th></>}</tr></thead><tbody>{visible.map(row => { const value = values.get(row.key)!; return <tr key={row.key} data-variable={row.key} aria-selected={highlighted(row) ? 'true' : undefined}><th scope="row"><code>{row.port.code_symbol}</code>{row.port.name !== row.port.code_symbol && <span className="variable-description">{row.port.name}</span>}</th><td><Button variant="quiet" size="sm" aria-label={`Inspect component ${instanceName(row.instance.instance_id)}`} onClick={() => onSelect({ kind: 'instance', instance_id: row.instance.instance_id })}>{instanceName(row.instance.instance_id)}</Button></td><td className="quantity-direction">{flow(row)}</td><td>{row.definition ?? <span className="context-line">No definition</span>}</td><td className="unit">{unitLabel(row.port.units)}</td>{hasValues && <><td className={value.missing ? 'missing' : 'num'}>{value.value === null ? value.text : <><span className="numeric-value" title={`Full precision: ${value.text}`}>{formatNumber(value.value)}</span>{recordedUnit(value.units, row) && <span className="quantity-value-unit"> {recordedUnit(value.units, row)}</span>}</>}</td><td className="quantity-provenance">{value.provenance || 'No provenance specified'}</td></>}</tr>; })}{!visible.length && <tr><td colSpan={hasValues ? 7 : 5} className="quantities-empty">No quantities match these filters.</td></tr>}</tbody></DataTable></div>
-    {onPastePorts && context.kind === 'model' && <Disclosure><summary>Paste port metadata</summary><fieldset disabled={pasting}><legend>Port metadata for the selected component</legend><p>Component instance: {pasteScope?.instance_id ?? (pasteInstance || 'Select a component or variable first')}. Other instances keep their version.</p>{pasteScope && <p className="identity">Paste scope: {pasteScope.study_id} / {pasteScope.model_id} · draft {pasteScope.draft_revision} · version {pasteScope.definition_version_id}</p>}<label>Port metadata paste<TextArea value={paste} onChange={e => {
-      const value = e.target.value;
-      if (!value) { discardPaste(); return; }
-      if (!paste) { const target = snapshot.instances.find(i => i.instance_id === pasteInstance); setPasteScope(target && 'draft_revision' in snapshot ? { study_id: snapshot.study_id, model_id: snapshot.model_id, draft_revision: snapshot.draft_revision, instance_id: target.instance_id, definition_version_id: target.definition_version_id } : null); }
-      setPaste(value);
-    }} placeholder="port_id&#9;name&#9;code_symbol&#9;units" /></label><p>Tab-separated header: port_id, then name, code_symbol or units. Values and provenance are not editable here.</p>{pasteError && <p role="alert">{pasteError}</p>}<Button disabled={!paste} onClick={() => void savePaste()}>Preview port metadata</Button><Button disabled={!paste} onClick={discardPaste}>Discard port metadata paste</Button></fieldset></Disclosure>}
-    </section>
-  </Panel>;
+  return (
+    <Panel
+      className="quantities-panel"
+      label="Quantities"
+      title="Quantities"
+      headingLevel={3}
+      actions={
+        scope.length ? (
+          <Button size="sm" onClick={() => setShowAll(true)}>
+            Show all quantities
+          </Button>
+        ) : undefined
+      }
+    >
+      <section aria-label="Quantities view" className="variables-view">
+        <div className="variable-filters">
+          <label>
+            Find a quantity
+            <TextInput type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <label>
+            Component
+            <Select
+              aria-label="Component filter"
+              value={scope.length === 1 ? scope[0] : ''}
+              onChange={(e) => {
+                if (e.target.value) onSelect({ kind: 'instance', instance_id: e.target.value });
+                else setShowAll(true);
+              }}
+            >
+              <option value="">All components</option>
+              {projection.nodes.map((n) => (
+                <option key={n.instance.instance_id} value={n.instance.instance_id}>
+                  {instanceName(n.instance.instance_id)}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label>
+            Direction
+            <Select
+              aria-label="Direction filter"
+              value={direction}
+              onChange={(e) => setDirection(e.target.value)}
+            >
+              <option value="">All directions</option>
+              {['input', 'output', 'residual'].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </Select>
+          </label>
+          {(search || direction) && (
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setSearch('');
+                setDirection('');
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+        <p className="context-line" aria-live="polite">
+          Showing {visible.length} of {rows.length} quantities{scopeName && ' · ' + scopeName}
+        </p>
+        <div
+          ref={scroll}
+          className="table-scroll variables-scroll quantities-scroll"
+          role="region"
+          aria-label="Quantities table"
+          tabIndex={0}
+        >
+          <DataTable label="Quantities" dense className="quantities-table">
+            <thead>
+              <tr>
+                <th
+                  scope="col"
+                  aria-sort={
+                    sort === 'variable' ? (descending ? 'descending' : 'ascending') : 'none'
+                  }
+                >
+                  <Button variant="quiet" size="sm" onClick={() => order('variable')}>
+                    Quantity
+                  </Button>
+                </th>
+                <th
+                  scope="col"
+                  aria-sort={
+                    sort === 'component' ? (descending ? 'descending' : 'ascending') : 'none'
+                  }
+                >
+                  <Button variant="quiet" size="sm" onClick={() => order('component')}>
+                    Component
+                  </Button>
+                </th>
+                <th scope="col">Direction</th>
+                <th scope="col">Definition</th>
+                <th scope="col">Unit</th>
+                {hasValues && (
+                  <>
+                    <th scope="col" className="hf-th--num">
+                      Value
+                    </th>
+                    <th scope="col">Provenance</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((row) => {
+                const value = values.get(row.key)!;
+                return (
+                  <tr
+                    key={row.key}
+                    data-variable={row.key}
+                    aria-selected={highlighted(row) ? 'true' : undefined}
+                  >
+                    <th scope="row">
+                      <code>{row.port.code_symbol}</code>
+                      {row.port.name !== row.port.code_symbol && (
+                        <span className="variable-description">{row.port.name}</span>
+                      )}
+                    </th>
+                    <td>
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        aria-label={`Inspect component ${instanceName(row.instance.instance_id)}`}
+                        onClick={() =>
+                          onSelect({ kind: 'instance', instance_id: row.instance.instance_id })
+                        }
+                      >
+                        {instanceName(row.instance.instance_id)}
+                      </Button>
+                    </td>
+                    <td className="quantity-direction">{flow(row)}</td>
+                    <td>{row.definition ?? <span className="context-line">No definition</span>}</td>
+                    <td className="unit">{unitLabel(row.port.units)}</td>
+                    {hasValues && (
+                      <>
+                        <td className={value.missing ? 'missing' : 'num'}>
+                          {value.value === null ? (
+                            value.text
+                          ) : (
+                            <>
+                              <span
+                                className="numeric-value"
+                                title={`Full precision: ${value.text}`}
+                              >
+                                {formatNumber(value.value)}
+                              </span>
+                              {recordedUnit(value.units, row) && (
+                                <span className="quantity-value-unit">
+                                  {' '}
+                                  {recordedUnit(value.units, row)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="quantity-provenance">
+                          {value.provenance || 'No provenance specified'}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+              {!visible.length && (
+                <tr>
+                  <td colSpan={hasValues ? 7 : 5} className="quantities-empty">
+                    No quantities match these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </DataTable>
+        </div>
+        {onPastePorts && context.kind === 'model' && (
+          <Disclosure>
+            <summary>Paste port metadata</summary>
+            <fieldset disabled={pasting}>
+              <legend>Port metadata for the selected component</legend>
+              <p>
+                Component instance:{' '}
+                {pasteScope?.instance_id ??
+                  (pasteInstance || 'Select a component or variable first')}
+                . Other instances keep their version.
+              </p>
+              {pasteScope && (
+                <p className="identity">
+                  Paste scope: {pasteScope.study_id} / {pasteScope.model_id} · draft{' '}
+                  {pasteScope.draft_revision} · version {pasteScope.definition_version_id}
+                </p>
+              )}
+              <label>
+                Port metadata paste
+                <TextArea
+                  value={paste}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) {
+                      discardPaste();
+                      return;
+                    }
+                    if (!paste) {
+                      const target = snapshot.instances.find(
+                        (i) => i.instance_id === pasteInstance,
+                      );
+                      setPasteScope(
+                        target && 'draft_revision' in snapshot
+                          ? {
+                              study_id: snapshot.study_id,
+                              model_id: snapshot.model_id,
+                              draft_revision: snapshot.draft_revision,
+                              instance_id: target.instance_id,
+                              definition_version_id: target.definition_version_id,
+                            }
+                          : null,
+                      );
+                    }
+                    setPaste(value);
+                  }}
+                  placeholder="port_id&#9;name&#9;code_symbol&#9;units"
+                />
+              </label>
+              <p>
+                Tab-separated header: port_id, then name, code_symbol or units. Values and
+                provenance are not editable here.
+              </p>
+              {pasteError && <p role="alert">{pasteError}</p>}
+              <Button disabled={!paste} onClick={() => void savePaste()}>
+                Preview port metadata
+              </Button>
+              <Button disabled={!paste} onClick={discardPaste}>
+                Discard port metadata paste
+              </Button>
+            </fieldset>
+          </Disclosure>
+        )}
+      </section>
+    </Panel>
+  );
 }

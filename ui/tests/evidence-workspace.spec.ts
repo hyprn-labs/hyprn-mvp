@@ -52,10 +52,10 @@ test('model header groups secondary actions and connections occur in Ports only'
     await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
   await capture(page, 'model-actions');
   await page.keyboard.press('Escape');
-  // Quantities and connections appear once below the inspector, which summarizes them.
+  // The selected name appears once; quantities remain in the table below.
   await page.locator('.connected-graph [data-instance="a"]').click();
   await expect(
-    details(page).getByText('Affine · 3 quantities · shown below', { exact: true }),
+    details(page).getByRole('heading', { name: 'Linear response', exact: true }),
   ).toBeVisible();
   await openSource(page);
   await expect(

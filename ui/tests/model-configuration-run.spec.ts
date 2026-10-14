@@ -27,9 +27,11 @@ test('model quantities inspect their component; tables, XDSM and portability sta
   await page.locator('.hf-node__port').first().click();
   // Details explain the component (What it computes · Why · Assumptions); no ports table or tabs.
   await expect(
-    details(page).getByRole('heading', { name: 'What it computes', exact: true }),
+    details(page).getByRole('heading', { name: 'Method context', exact: true }),
   ).toBeVisible();
-  await expect(details(page).getByRole('heading', { name: 'Why', exact: true })).toBeVisible();
+  await expect(
+    details(page).getByRole('heading', { name: 'Why this method', exact: true }),
+  ).toHaveCount(0);
   await expect(details(page).locator('[data-selected-variable]')).toHaveCount(0);
   await expect(details(page).locator('table')).toHaveCount(0);
   await expect(details(page).getByRole('tab')).toHaveCount(0);
@@ -318,11 +320,28 @@ test('run Model tab and saved configuration View model version reuse the canonic
   await expect(table.locator('[data-variable="b/u"]')).toContainText('From Linear response · u');
   await expect(table.locator('[data-variable="b/y"] td.missing')).toHaveText('not computed');
   await expect(table.locator('[data-variable="b/y"]')).toContainText('Producer failed');
+  await expect(
+    view.getByRole('combobox', { name: 'Availability filter', exact: true }),
+  ).toHaveCount(0);
+  await expect(view.getByRole('button', { name: 'Components', exact: true })).toHaveCount(0);
+  await expect(view.getByRole('region', { name: 'Model components', exact: true })).toHaveCount(0);
+  await view
+    .getByRole('combobox', { name: 'Direction filter', exact: true })
+    .selectOption('output');
+  await expect(table.locator('[data-variable]')).toHaveCount(2);
+  await expect(table.locator('[data-variable="b/y"]')).toContainText('Producer failed');
+  await view.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(table.locator('[data-variable]')).toHaveCount(5);
   await s4Shot(page, 'run-model', view);
   await table.getByRole('button', { name: 'Inspect component Squared response', exact: true }).first().click();
   await expect(inspector.getByRole('heading', { name: 'Squared response', exact: true })).toBeVisible();
-  for (const heading of ['What it computes', 'Why']) await expect(inspector.getByRole('heading', { name: heading, exact: true })).toBeVisible();
-  await expect(inspector.getByText('No method step describes what this component computes.', { exact: true })).toBeVisible(); await expect(inspector.getByText('No method step explains why this component is used.', { exact: true })).toBeVisible();
+  await expect(
+    inspector.getByRole('heading', { name: 'Method context', exact: true }),
+  ).toBeVisible();
+  await expect(
+    inspector.getByRole('heading', { name: 'Why this method', exact: true }),
+  ).toHaveCount(0);
+  await expect(inspector).toContainText('No modeling approach step is linked to this component.');
   await expect(inspector.locator('table')).toHaveCount(0);
   await expect(table.locator('[data-variable]')).toHaveCount(2);
   await expect(view.getByRole('button', { name: 'Show all quantities', exact: true })).toBeVisible();

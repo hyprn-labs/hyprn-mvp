@@ -11,7 +11,7 @@ import type { MethodLink, MethodLinks } from './modelMethods';
 import type { Selection } from './workspaceModel';
 import { quantityKey, variableRows, type VariableContext } from './VariablesTable';
 
-/** Renders "What it computes" (with the given source control) and "Why" for one component. */
+/** Renders linked method context, the source control and rationale for one component. */
 export type ComponentExplanation = (instanceId: string, source: ReactNode) => ReactNode;
 
 export function instanceLabel(snapshot: Snapshot, id: string) {
@@ -20,18 +20,13 @@ export function instanceLabel(snapshot: Snapshot, id: string) {
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-/** "3 components · 2 connections · select a component to see what it computes and why". */
+/** "3 components · 2 connections · select a component to inspect its source and method". */
 export function modelSummary(snapshot: Snapshot) {
   const components = snapshot.instances.filter(i => i.instance_id !== snapshot.root_instance_id).length;
-  return `${plural(components, 'component', 'components')} · ${plural(snapshot.connections.length, 'connection', 'connections')} · select a component to see what it computes and why`;
+  const counts = `${plural(components, 'component', 'components')} · ` +
+    plural(snapshot.connections.length, 'connection', 'connections');
+  return `${counts} · select a component to inspect its source and method`;
 }
-/** "Definition · 4 quantities · shown below": quantities are listed once, in the table below. */
-export function componentSummary(snapshot: Snapshot, instanceId: string) {
-  const instance = snapshot.instances.find(i => i.instance_id === instanceId);
-  const definition = snapshot.definitions.find(d => d.definition_version_id === instance?.definition_version_id);
-  return `${definition?.name ?? 'Unavailable definition'} · ${plural(definition?.ports.length ?? 0, 'quantity', 'quantities')} · shown below`;
-}
-
 type SourceRead ={ kind: 'text'; text: string } | { kind: 'limit' } | { kind: 'mismatch' } | { kind: 'undecodable' };
 /** Verifies retained bytes against their SHA256, then decodes them as text only. Never run. */
 export async function verifySource(source: Source, hash: string): Promise<SourceRead> {
@@ -70,32 +65,83 @@ export function ComponentSource({ snapshot, instanceId }: { snapshot: Snapshot; 
   </ActionDialog>;
 }
 
-/** What the component encodes and why it is used: the linked method steps' authored
- * Transformation, Purpose and rationale, each with its exact approach version. */
-export function ComponentWhatWhy({ snapshot, instanceId, methods, onOpenStep, source }: { snapshot: Snapshot; instanceId: string; methods: MethodLinks; onOpenStep?: (link: MethodLink) => void; source: ReactNode }) {
+/** Linked method context is not a component-level computation description.
+ * The authored explanation and its navigation retain the exact approach/model pins. */
+export function ComponentWhatWhy({ instanceId, methods, onOpenStep, source }: {
+  snapshot: Snapshot; instanceId: string; methods: MethodLinks;
+  onOpenStep?: (link: MethodLink) => void; source: ReactNode;
+}) {
   const id = useId();
-  const links = methods.kind === 'loaded' ? methods.links.filter(l => l.instanceIds.includes(instanceId)) : [];
-  const exact = 'model_revision_id' in snapshot ? snapshot.model_revision_id : null;
-  const status = (none: string) => methods.kind === 'loading' ? <p role="status" className="context-line">Loading method steps…</p>
-    : methods.kind === 'unavailable' ? <p className="context-line">Method steps can't be loaded.</p>
-    : !links.length ? <p className="context-line">{none}</p> : null;
-  const stepLine = (l: MethodLink) => <p className="context-line">Method step {l.stepNumber} · {l.step.title || 'Untitled step'}</p>;
-  return <>
-    <section className="inspector-section" aria-labelledby={id + '-what'}><h4 id={id + '-what'}>What it computes</h4>
-      {status('No method step describes what this component computes.')}
-      {links.map(l => <div className="inspector-step" key={l.key}>{stepLine(l)}<p className="context-copy">{l.step.intent.transformation || 'No transformation described.'}</p></div>)}
-      {source}
-    </section>
-    <section className="inspector-section" aria-labelledby={id + '-why'}><h4 id={id + '-why'}>Why</h4>
-      {status('No method step explains why this component is used.')}
-      {links.map(l => <div className="inspector-step" key={l.key}>
-        <p className="context-line">Method step {l.stepNumber} · {l.step.title || 'Untitled step'} · {l.versionNumber === null ? 'approach draft' : 'Approach version ' + l.versionNumber}{exact !== null && l.modelRevisionIds.includes(exact) ? '' : ' · linked to Model version ' + l.modelRevisionIds.map(r => r.slice(0, 8)).join(', ')}</p>
-        <p><strong>Purpose. </strong>{l.step.purpose || 'No purpose described.'}</p>
-        <p><strong>Why this method. </strong>{l.step.rationale || 'No rationale described.'}</p>
-        {onOpenStep && <Button size="sm" variant="quiet" onClick={() => onOpenStep(l)}>Open step {l.stepNumber} in modeling approach →</Button>}
-      </div>)}
-    </section>
-  </>;
+  const links =
+    methods.kind === 'loaded'
+      ? methods.links.filter((link) => link.instanceIds.includes(instanceId))
+      : [];
+  return (
+    <>
+      <section className="inspector-section" aria-labelledby={id + '-method'}>
+        <h4 id={id + '-method'}>Method context</h4>
+        {methods.kind === 'loading' && (
+          <p role="status" className="context-line">
+            Loading method steps…
+          </p>
+        )}
+        {methods.kind === 'unavailable' && (
+          <p className="context-line">Method steps can't be loaded.</p>
+        )}
+        {methods.kind !== 'loading' && methods.kind !== 'unavailable' && !links.length && (
+          <p className="context-line">No modeling approach step is linked to this component.</p>
+        )}
+        {links.map((link) => (
+          <div className="inspector-step" key={link.key}>
+            {links.length > 1 && (
+              <p className="context-line">{link.step.title || 'Untitled step'}</p>
+            )}
+            {link.step.intent.transformation && (
+              <p className="context-copy">{link.step.intent.transformation}</p>
+            )}
+          </div>
+        ))}
+        {source}
+      </section>
+      {links.map((link) => (
+        <section className="inspector-section" key={link.key}>
+          {(link.step.purpose || link.step.rationale) && (
+            <>
+              <h4>Why this method</h4>
+              {links.length > 1 && (
+                <p className="context-line">{link.step.title || 'Untitled step'}</p>
+              )}
+              {link.step.purpose && <p className="context-copy">{link.step.purpose}</p>}
+              {link.step.rationale && <p className="context-copy">{link.step.rationale}</p>}
+            </>
+          )}
+          <div className="section-actions">
+            {onOpenStep && (
+              <Button size="sm" variant="quiet" onClick={() => onOpenStep(link)}>
+                Open step {link.stepNumber} in modeling approach →
+              </Button>
+            )}
+            <ActionDialog title="Method record" size="sm">
+              <dl className="hf-record-details">
+                <dt>Method step</dt>
+                <dd>
+                  {link.stepNumber} · {link.step.title || 'Untitled step'}
+                </dd>
+                <dt>Approach version</dt>
+                <dd>{link.versionNumber ?? 'Draft'}</dd>
+                <dt>Approach version ID</dt>
+                <dd>{link.approachVersionId ?? 'Current draft'}</dd>
+                <dt>Step ID</dt>
+                <dd>{link.stepId}</dd>
+                <dt>Linked model versions</dt>
+                <dd>{link.modelRevisionIds.join(', ')}</dd>
+              </dl>
+            </ActionDialog>
+          </div>
+        </section>
+      ))}
+    </>
+  );
 }
 
 /** Details panel of the canonical model view: nothing selected → the
@@ -118,24 +164,115 @@ export function SelectionInspector({ snapshot, projection, selection, onSelect, 
   const endpoint = (ref: PortRef) => { const entry = rows.find(r => r.key === quantityKey(ref)); return <Button onClick={() => onSelect({ kind: 'instance', instance_id: ref.instance_id })}>{entry ? `${instanceLabel(snapshot, entry.instance.instance_id)} · ${entry.port.name}${entry.port.name === entry.port.code_symbol ? '' : ` (${entry.port.code_symbol})`} · ${unitLabel(entry.port.units)}` : 'Unavailable endpoint'}</Button>; };
   const explain: ComponentExplanation = (instanceId, source) => <ComponentWhatWhy snapshot={snapshot} instanceId={instanceId} methods={methods} onOpenStep={onOpenStep} source={source} />;
   const componentAssumptions = assumptions.kind === 'recorded' ? assumptions.items.filter(a => a.owner.kind === 'instance').length : 0;
+  const selectedAssumptions =
+    assumptions.kind === 'recorded'
+      ? assumptions.items.filter(
+          (a) => a.owner.kind === 'instance' && a.owner.instance_id === node?.instance.instance_id,
+        )
+      : [];
   const unreadable = (text: ReactNode) => <><SectionHeader title="Assumptions" level={4} /><p className="context-line">{text}</p></>;
-  return <Panel label="Selection inspector" className="selection-inspector" title="Details" bodyClassName="panel-body">
-    {draftHost && (selection.kind === 'none' || node) && <div ref={draftHost} className="inspector-draft" />}
-    {!draftHost && selection.kind === 'none' && <section className="inspector-model" aria-label="Model details">
-      <h3>Model</h3>
-      <p className="context-line">{modelSummary(snapshot)}</p>
-      <div className="inspector-section">{assumptions.kind === 'recorded' ? <Assumptions ownerKey={('model_revision_id' in snapshot ? snapshot.model_revision_id : snapshot.draft_revision) + '/model'} headingLevel={4} ownerLabel="Model" items={assumptions.modelOwned} records={evidence} />
-        : unreadable(assumptions.kind === 'not_in_format' ? recordLimitations.modelAssumptionsNotInFormat : recordLimitations.modelAssumptionsUnreadable)}</div>
-      {assumptions.kind === 'recorded' && <p className="context-line">Component assumptions: {componentAssumptions} · shown with each component</p>}
-    </section>}
-    {node && !draftHost && <>
-      <h3>{instanceLabel(snapshot, node.instance.instance_id)}</h3>
-      <p className="context-line">{componentSummary(snapshot, node.instance.instance_id)}</p>
-      {explain(node.instance.instance_id, <div className="section-actions"><ComponentSource snapshot={snapshot} instanceId={node.instance.instance_id} /></div>)}
-      <div className="inspector-section">{assumptions.kind === 'recorded' ? <Assumptions headingLevel={4} ownerKey={snapshot.model_id + '/' + node.instance.instance_id} ownerLabel={'Component · ' + instanceLabel(snapshot, node.instance.instance_id)} items={assumptions.items.filter(a => a.owner.kind === 'instance' && a.owner.instance_id === node.instance.instance_id)} records={evidence} />
-        : unreadable(assumptions.kind === 'not_in_format' ? recordLimitations.modelAssumptionsNotInFormat : recordLimitations.modelAssumptionsUnreadable)}</div>
-    </>}
-    {groups.map(group => <div key={group.key}><h3>Connections · {group.links.length}</h3>{group.links.map(link => <article key={link.connection_id} data-selected-link={link.connection_id}><Button aria-pressed={selection.kind === 'connection' && selection.connection_id === link.connection_id} onClick={() => onSelect({ kind: 'connection', connection_id: link.connection_id })}>Connection {group.links.indexOf(link) + 1}: {rows.find(r => r.key === quantityKey(link.source_ref))?.port.code_symbol ?? 'Unavailable'} → {rows.find(r => r.key === quantityKey(link.target_ref))?.port.code_symbol ?? 'Unavailable'}</Button><p>From</p>{endpoint(link.source_ref)}<p>To</p>{endpoint(link.target_ref)}</article>)}</div>)}
-    {!!related.length && <p>Related evidence</p>}<EvidenceReferences records={related} ids={related.map(e => e.evidence_version_id)} />
-  </Panel>;
+  return (
+    <Panel
+      label="Selection inspector"
+      className="selection-inspector"
+      title="Details"
+      bodyClassName="panel-body"
+    >
+      {draftHost && (selection.kind === 'none' || node) && (
+        <div ref={draftHost} className="inspector-draft" />
+      )}
+      {!draftHost && selection.kind === 'none' && (
+        <section className="inspector-model" aria-label="Model details">
+          <h3>Model</h3>
+          <p className="context-line">{modelSummary(snapshot)}</p>
+          {(assumptions.kind !== 'recorded' || assumptions.modelOwned.length > 0) && (
+            <div className="inspector-section">
+              {assumptions.kind === 'recorded' ? (
+                <Assumptions
+                  ownerKey={
+                    ('model_revision_id' in snapshot
+                      ? snapshot.model_revision_id
+                      : snapshot.draft_revision) + '/model'
+                  }
+                  headingLevel={4}
+                  ownerLabel="Model"
+                  items={assumptions.modelOwned}
+                  records={evidence}
+                />
+              ) : (
+                unreadable(
+                  assumptions.kind === 'not_in_format'
+                    ? recordLimitations.modelAssumptionsNotInFormat
+                    : recordLimitations.modelAssumptionsUnreadable,
+                )
+              )}
+            </div>
+          )}
+          {componentAssumptions > 0 && (
+            <p className="context-line">
+              Component assumptions: {componentAssumptions} · shown with each component
+            </p>
+          )}
+        </section>
+      )}
+      {node && !draftHost && (
+        <>
+          <h3>{instanceLabel(snapshot, node.instance.instance_id)}</h3>
+          {explain(
+            node.instance.instance_id,
+            <div className="section-actions">
+              <ComponentSource snapshot={snapshot} instanceId={node.instance.instance_id} />
+            </div>,
+          )}
+          {(assumptions.kind !== 'recorded' || selectedAssumptions.length > 0) && (
+            <div className="inspector-section">
+              {assumptions.kind === 'recorded' ? (
+                <Assumptions
+                  headingLevel={4}
+                  ownerKey={snapshot.model_id + '/' + node.instance.instance_id}
+                  ownerLabel={'Component · ' + instanceLabel(snapshot, node.instance.instance_id)}
+                  items={selectedAssumptions}
+                  records={evidence}
+                />
+              ) : (
+                unreadable(
+                  assumptions.kind === 'not_in_format'
+                    ? recordLimitations.modelAssumptionsNotInFormat
+                    : recordLimitations.modelAssumptionsUnreadable,
+                )
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {groups.map((group) => (
+        <div key={group.key}>
+          <h3>Connections · {group.links.length}</h3>
+          {group.links.map((link) => (
+            <article key={link.connection_id} data-selected-link={link.connection_id}>
+              <Button
+                aria-pressed={
+                  selection.kind === 'connection' && selection.connection_id === link.connection_id
+                }
+                onClick={() => onSelect({ kind: 'connection', connection_id: link.connection_id })}
+              >
+                Connection {group.links.indexOf(link) + 1}:{' '}
+                {rows.find((r) => r.key === quantityKey(link.source_ref))?.port.code_symbol ??
+                  'Unavailable'}{' '}
+                →{' '}
+                {rows.find((r) => r.key === quantityKey(link.target_ref))?.port.code_symbol ??
+                  'Unavailable'}
+              </Button>
+              <p>From</p>
+              {endpoint(link.source_ref)}
+              <p>To</p>
+              {endpoint(link.target_ref)}
+            </article>
+          ))}
+        </div>
+      ))}
+      {!!related.length && <p>Related evidence</p>}
+      <EvidenceReferences records={related} ids={related.map((e) => e.evidence_version_id)} />
+    </Panel>
+  );
 }

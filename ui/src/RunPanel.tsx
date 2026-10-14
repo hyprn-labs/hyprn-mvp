@@ -338,7 +338,18 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
               </p>
     </div>
             <div className="section-actions">
-              <div className="section-actions" ref={resourceActionsRef} />
+              <div className="section-actions" role="group" aria-label="Run exports">
+                <div className="section-actions" ref={resourceActionsRef} />
+                {history?.configuration && detail && !runPending(detail) && (
+                  <ComputationalExportDialog
+                    key={selected}
+                    api={api}
+                    studyId={studyId}
+                    runId={selected}
+                    name={history.configuration.name}
+                  />
+                )}
+              </div>
               {history && <>
                   <ActionDialog title="Run record" label="Record details">
                     {submittedBy && <p>Submitted by {attributionText(submittedBy)}</p>}
@@ -368,13 +379,6 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                       </ul> : <p>Unavailable</p>}
                   </ActionDialog>
       </>}
-              {history?.configuration && detail && !runPending(detail) && <ComputationalExportDialog
-                  key={selected}
-                  api={api}
-                  studyId={studyId}
-                  runId={selected}
-                  name={history.configuration.name}
-                />}
               {history?.configuration && history.model_snapshot && <Button
                   disabled={!modifiedSeed}
                   onClick={() =>

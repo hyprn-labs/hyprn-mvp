@@ -182,7 +182,7 @@ test('approved composition: two complete nodes, contextual details and first-scr
   await expect(components(page)).toBeHidden();
   await expect(details(page).getByRole('tab')).toHaveCount(0);
   await expect(
-    details(page).getByRole('heading', { name: 'What it computes', exact: true }),
+    details(page).getByRole('heading', { name: 'Method context', exact: true }),
   ).toBeVisible();
   await expect(details(page).locator('table')).toHaveCount(0);
   const canvas = await page.locator('.graph-viewport').boundingBox();
@@ -694,10 +694,9 @@ test('Foundry model light and dark projections, details and historical source ar
     const capture = async (name: string) => page.screenshot({ path: process.env.HYPRN_MVP_UI_EVIDENCE_ROOT + '/model-' + name + '-' + theme + '.png' });
     await page.getByRole('tab', { name: 'Graph', exact: true }).click();
     await capture('graph');
-    await page.getByRole('button', { name: 'Components', exact: true }).click(); await capture('components');
+    await expect(page.getByRole('button', { name: 'Components', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Details', exact: true }).click(); await capture('without-details');
     await page.getByRole('button', { name: 'Details', exact: true }).click();
-    await page.getByRole('button', { name: 'Components', exact: true }).click();
     for (const view of ['XDSM', 'Graph']) { await page.getByRole('tab', { name: view, exact: true }).click(); await capture(view.toLowerCase()); }
     for (const tab of ['Source', 'Assumptions']) { if (tab === 'Source') await openSource(page); await capture(tab.toLowerCase()); }
     await page.getByLabel('Component assumptions', { exact: true }).fill('Fixture assumption retained locally');

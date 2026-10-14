@@ -275,7 +275,10 @@ assert "'Variables'" not in view_text,('src/ModelView.tsx','No Variables project
 for file in ('src/views/model.tsx','src/ApproachMethod.tsx','src/ConfigurationRecord.tsx'):
  assert '<ModelView' in (ROOT/file).read_text(),(file,'Reuses the canonical model view')
 inspector_text=(ROOT/'src/SelectionInspector.tsx').read_text()
-for term in ('What it computes','>Why<','label="View source"','verifySource(','Shown as text; never run.','modelAssumptions(snapshot)'):
+for term in (
+ 'Method context', '>Why this method<', 'label="View source"', 'verifySource(',
+ 'Shown as text; never run.', 'modelAssumptions(snapshot)',
+):
  assert term in inspector_text,('src/SelectionInspector.tsx','Details: what, why, assumptions',term)
 removed_view={'src/SelectionInspector.tsx':('tiny-table','Incoming quantities','Outgoing quantities','DetailTabs','<DataTable'),
  'src/ModelEditor.tsx':('tiny-table','DetailTabs','<DataTable','title="Model assumptions"','{connections}','connections?: ReactNode'),
