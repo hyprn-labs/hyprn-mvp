@@ -181,3 +181,44 @@ root owns the current live Overview-to-saved-answer inspection. Automated checks
 do not imply human acceptance. Both new scopes were archived with verified hashes
 and released: executor totals 21 scopes and 507 evidence/metadata files, no remaining
 executor scopes. No live authoring records or other executor scopes were touched.
+
+## Continuous Overview and grouped answer support
+
+Implementation `35ceed6` makes Overview the read-only continuous reader for its
+exact latest saved approach. The existing question loader supplies the loaded
+saved record; no current draft is substituted. Question and details precede three
+section panels. The case filter is always visible. Supporting results group exact
+run, configuration and cited case-answer links; Sources remain separate. Cited
+records open on demand in fenced dialogs, without recursive answer prose in the
+main reader. Technical identities remain available in Record details.
+
+The shared approach guard now saves draft edits from Models, Overview and the
+approach editor. Model method links with no saved approach version open the draft
+and retain its selected step. Existing saved links keep their exact version.
+Root owns the shared method/model implementation and the integrated browser proof;
+this executor updated related source-control assertions and added direct Overview
+section/filter coverage to the focused method scenario.
+
+Verification on the implementation candidate, before the source-identical commit:
+
+- `./hyprn-mvp dev check combined-static`: 6 stages passed, 0 failed, 3.14 seconds;
+  scope `f5f9c58e-4999-4669-bf3e-8b7c1e878f1f`. Earlier candidate and baseline
+  checks also passed all 6 stages in scopes `78258f7f-8758-490a-b3bd-524a6839f881`
+  and `d97ef41d-c58a-4e19-ae7b-1c645f491b2e`.
+- `./hyprn-mvp dev check style-ratchet`: initially 32 passed, 1 failed because
+  changed lines retained formatting violations; scope
+  `5571328f-4afd-4ea2-8586-ac97b341de46`. After scoped formatting, 33 passed,
+  0 failed, 0 skipped in 8.61 seconds; scope
+  `faf03065-ac3a-4479-a266-00a5ff435786`.
+- `git diff --check`: passed after removing one trailing whitespace line.
+- No browser, native execution, deployment or live-data mutation by this executor.
+  Root retains the focused integrated method group and live Overview inspection.
+  Automated checks do not establish human acceptance or full-phase completion.
+
+All five new scopes were identity-checked, their evidence and scope metadata copied
+to the existing external archive, each copied file verified by SHA-256, and their
+stores released. Archive totals: 26 released scopes, 541 verified files. Release
+ledger SHA-256: `0fd76be94e6d2fb4fbb8a71017f681d6b9d86295bb1bac3814ce0e2f86478a12`.
+No root-owned scopes were targeted. Baseline merge `ad2dea6` preserves the prior
+executor history and has the same tree as primary `6a97a66`; only implementation
+`35ceed6` and this checkpoint are integration candidates.
