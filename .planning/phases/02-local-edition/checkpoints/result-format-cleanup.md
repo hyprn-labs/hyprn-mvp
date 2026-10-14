@@ -142,3 +142,26 @@ worker rebuild/attestation, integrated native checks and guarded demo refresh.
 The earlier producer build before the receipt correction is intermediate evidence.
 The exact protocol1 and pre-split captures remain retained. No live deployment,
 human acceptance or complete phase/release qualification is claimed by this lane.
+
+## Native retained-input regression correction
+
+Root's integrated units-worker run at57679bc failed5 and passed162 in wpe0feod.
+All five failures (affine rejection, kelvin alias, direct mapping, HTTP/restart and
+original-template reference) reached the same independent retained_bundle field
+guard. Current bundle10/input2 carries preparation3 with entrypoint, executable
+digest and result protocol; the guard incorrectly tested outer bundle2 instead of
+resolved input layout2. Commit1f98c91 corrects that one condition without relaxing
+the exact field set, protocol pairing, byte inventories or digests.
+
+Existing registered retained-reader success and corruption cases now also cover
+an inert bundle10/input2 fixture. It is data-only and never executed; the current
+native capture remains exact and unchanged. bridge-history passed128/0
+(w9q7l0s5,224.6s). Style initially passed32/failed1 for two new helper formatting
+lines; only formatting changed, then style-ratchet passed33/0
+(ib5jgekz,9.6s). All three additional scopes archived/released, zero remaining;
+the executor's cumulative ledger now covers48 scopes. No native resources used.
+
+No producer input, schema, pin or captured program changed. results.py is an
+attested runtime source, so root must include1f98c91 in worker rebuild/attestation
+and rerun the failed native group. Root received the implementation commit before
+this checkpoint. Full native success remains unverified by this executor.
