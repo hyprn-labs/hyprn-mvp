@@ -74,3 +74,19 @@ runtime inputs or other worktrees were changed. Opt-in ui-fidelity was not invok
 its required design-system/reference directory is absent. Full qualification and
 release acceptance remain deferred. The orchestrator owns integration and its union
 of acceptance groups, plus the separately edited approach-reading regression.
+
+## Empty editable assumptions follow-up
+
+Implementation `88ec4346762db9ac6bed4129d347c7eed4d6fe69`, based on `7c57a6a`:
+remove the empty sentence from editable assumption lists, retaining their heading,
+Add assumption, saved items and edit guards. Read-only and unknown-format states
+remain unchanged. Three model authoring assertions now require no filler.
+`./hyprn-mvp dev check combined-static` passes all 6 commands;
+`./hyprn-mvp dev check style-ratchet` passes 33 tests; `git diff --check` passes.
+Initial static attempt passed 2 commands then failed the UI checker because a renamed
+test was referenced by the control map; restoring its registered title fixed it.
+Archives `hyprn-orchestration-verification-h5o4w6xy` (initial failure) and
+`hyprn-orchestration-verification-o5aimtqh` (passing checks) retain exact identities
+and release manifests. All 3 follow-up scopes released, 0 remain. No browser group
+was run alongside the orchestrator's active browser union; it owns the affected
+model/configuration/approach authoring checks and live visual acceptance.
