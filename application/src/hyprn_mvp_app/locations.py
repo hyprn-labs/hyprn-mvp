@@ -25,6 +25,7 @@ container, which carries neither the local edition nor the integration package.
 Host facts (operating system, WSL2, home folders) are read when a check runs, never at import;
 tests inject them through ``Host`` or ``current_host``'s arguments.
 """
+
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -37,10 +38,12 @@ LINUX = 'linux'
 SYNC_PREFIXES = ('Dropbox', 'OneDrive', 'Google Drive', 'GoogleDrive')
 SYNC_NAMES = ('My Drive',)
 # macOS folders below a home folder that the system or iCloud may sync, with their reasons.
-MACOS_SYNCED = ((('Library', 'CloudStorage'), 'it is inside ~/Library/CloudStorage (a cloud storage provider)'),
-                (('Library', 'Mobile Documents'), 'it is inside ~/Library/Mobile Documents (iCloud Drive)'),
-                (('Desktop',), 'it is inside ~/Desktop, which iCloud may sync'),
-                (('Documents',), 'it is inside ~/Documents, which iCloud may sync'))
+MACOS_SYNCED = (
+    (('Library', 'CloudStorage'), 'it is inside ~/Library/CloudStorage (a cloud storage provider)'),
+    (('Library', 'Mobile Documents'), 'it is inside ~/Library/Mobile Documents (iCloud Drive)'),
+    (('Desktop',), 'it is inside ~/Desktop, which iCloud may sync'),
+    (('Documents',), 'it is inside ~/Documents, which iCloud may sync'),
+)
 WINDOWS_DRIVE = re.compile(r'[A-Za-z]')
 WSL_KERNEL = 'microsoft'
 OSRELEASE = '/proc/sys/kernel/osrelease'
@@ -56,6 +59,7 @@ class Host:
     """The facts the rule depends on: ``system`` (``macos``, ``linux`` or another lower-case
     system name), whether Linux runs under WSL2, and the account's home folders (the password
     database entry and ``HOME``, each with its resolved form)."""
+
     system: str
     wsl: bool = False
     homes: tuple = ()
@@ -109,16 +113,24 @@ def normalized(path):
 def _synced(path, host):
     for part in path.parts[1:]:
         if part.startswith(SYNC_PREFIXES) or part in SYNC_NAMES:
-            return 'it is inside a ' + next((p for p in (*SYNC_PREFIXES, *SYNC_NAMES) if part.startswith(p)),
-                                            part) + ' folder, which a sync client may rewrite or upload'
+            return (
+                'it is inside a '
+                + next((p for p in (*SYNC_PREFIXES, *SYNC_NAMES) if part.startswith(p)), part)
+                + ' folder, which a sync client may rewrite or upload'
+            )
     if host.system == MACOS:
         for home in host.homes:
             if path.is_relative_to(home):
                 below = path.relative_to(home).parts
                 for prefix, reason in MACOS_SYNCED:
-                    if below[:len(prefix)] == prefix:
+                    if below[: len(prefix)] == prefix:
                         return reason
-    if host.wsl and len(path.parts) >= 3 and path.parts[1] == 'mnt' and WINDOWS_DRIVE.fullmatch(path.parts[2]):
+    if (
+        host.wsl
+        and len(path.parts) >= 3
+        and path.parts[1] == 'mnt'
+        and WINDOWS_DRIVE.fullmatch(path.parts[2])
+    ):
         return 'it is on a Windows drive mounted under /mnt (use a folder of the Linux file system)'
     return None
 

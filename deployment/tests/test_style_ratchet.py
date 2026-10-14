@@ -93,7 +93,7 @@ class TreeTests(unittest.TestCase):
             lock['packages']['node_modules/prettier']['integrity'].startswith('sha512-')
         )
 
-    def test_the_attested_exclusion_equals_its_owners(self):
+    def test_the_attested_sources_are_covered_and_match_their_owners(self):
         tree = ast.parse((REPO / ratchet.ATTESTED_OWNER[0]).read_text())
         value = ratchet.assigned(tree, 'ATTESTED_PROJECT_FILES')
         attested = ast.literal_eval(value.args[0])
@@ -104,6 +104,10 @@ class TreeTests(unittest.TestCase):
         literal = ast.literal_eval(ratchet.assigned(function, 'paths'))
         self.assertTrue(attested <= set(literal))
         self.assertEqual(ratchet.attested_files(REPO), set(literal) | attested)
+        tracked = ratchet.tracked_files(REPO)
+        covered = set(ratchet.covered_files(REPO, tracked))
+        self.assertTrue({p for p in set(literal) | attested if ratchet.covered_suffix(p)} <= covered)
+
 
     def test_the_hash_pinned_exclusion_equals_the_pin_tables(self):
         named = set()
@@ -181,12 +185,15 @@ class SeededTests(unittest.TestCase):
         self.assertEqual(baseline['app/legacy.py'], {'E501': 1, 'E702': 1})
         self.assertEqual(baseline['ui/src/legacy.ts'], {'long-line': 1})
         for excluded in (
-            'application/src/pkg/attested.py',
             'contracts/tests/test_pinned.py',
             'application/tests/fixtures/captured.py',
         ):
             self.assertNotIn(excluded, baseline)
         self.assertEqual(self.failures(), [])
+
+    def test_new_attested_violations_are_not_exempt(self):
+        self.append('application/src/pkg/attested.py', 'c = 3; d = 4\n')
+        self.assert_fails('application/src/pkg/attested.py:3: E702 on a line changed')
 
     def test_a_new_long_python_line_fails(self):
         self.append('app/clean.py', LONG_PYTHON)
@@ -261,10 +268,8 @@ class SeededTests(unittest.TestCase):
         with self.assertRaisesRegex(ratchet.StyleError, 'baseline exists'):
             ratchet.create(self.repo, self.tool)
 
-    def test_excluded_attested_and_hash_pinned_files_pass_unformatted(self):
+    def test_hash_pinned_and_generated_files_still_pass_unformatted(self):
         for path in (
-            'application/src/pkg/attested.py',
-            'deployment/runtime.py',
             'contracts/tests/test_pinned.py',
             'application/tests/fixtures/captured.py',
             'ui/src/contract.ts',
@@ -278,11 +283,7 @@ class SeededTests(unittest.TestCase):
         pinned = ratchet.pinned_test_files(self.repo, tracked)
         self.assertEqual(pinned, {'contracts/tests/test_pinned.py'})
 
-    def test_a_missing_exclusion_owner_or_excluded_file_refuses(self):
-        (self.repo / ratchet.ATTESTED_OWNER[0]).unlink()
-        with self.assertRaisesRegex(ratchet.StyleError, 'exclusion owner missing'):
-            self.failures()
-        self.write(ratchet.ATTESTED_OWNER[0], SEED[ratchet.ATTESTED_OWNER[0]])
+    def test_a_missing_generated_file_refuses(self):
         (self.repo / 'ui/src/contract.ts').unlink()
         with self.assertRaisesRegex(ratchet.StyleError, 'excluded files missing'):
             self.failures()

@@ -23,9 +23,7 @@ refuses while the check fails or a covered file has uncommitted changes, so it n
 count. ``--create`` writes the first baseline and refuses when one exists.
 
 Excluded files are never checked. Each exclusion is read from its owner, never copied here:
-the attested execution sources (``ATTESTED_PROJECT_FILES`` and the ``execution_source_hashes()``
-literal, until they are reformatted before their next attestation, which removes this
-exclusion), test files whose bytes are pinned by hash (every module-level table in a test
+test files whose bytes are pinned by hash (every module-level table in a test
 module that maps repository paths to SHA-256 digests), the generated files whose bytes are
 asserted elsewhere, and captured fixtures (any file below a ``fixtures`` folder). A missing
 owner, excluded file, tool, baseline or base commit fails the check; it never skips.
@@ -57,7 +55,7 @@ PYTHON_SUFFIXES = ('.py',)
 SCRIPT_SUFFIXES = ('.ts', '.tsx', '.mjs', '.cjs', '.js')
 PRETTIER = 'ui/node_modules/prettier/bin/prettier.cjs'
 PRETTIER_CONFIG = 'ui/.prettierrc.json'
-# Owners of the attested execution sources, excluded until their format-only re-attestation.
+# Owners of the attested execution inventory, which is covered by the ratchet.
 ATTESTED_OWNER = ('application/tests/test_module_boundaries.py', 'ATTESTED_PROJECT_FILES')
 LAUNCHER_OWNER = ('integration/src/hyprn_mvp_integration/launcher.py', 'execution_source_hashes')
 # Generated files whose bytes are asserted by their generators' checks.
@@ -244,7 +242,6 @@ def exclusions(repo, tracked):
     fixtures are excluded by their location (``captured``)."""
     excluded = {}
     for reason, paths in (
-        ('attested execution source', attested_files(repo)),
         ('hash-pinned test file', pinned_test_files(repo, tracked)),
         ('generated file', GENERATED),
     ):
