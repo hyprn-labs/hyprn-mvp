@@ -559,13 +559,18 @@ async function main() {
   assert.equal(api.pending.body.command_id,'original');
   await assert.rejects(api.reviseEvidence('study','family',{...command,expected_revision:'head'}),/original command/);
   assert.equal(sent.length,1);
-  global.fetch=async(url)=>{assert.equal(url,'/api/1/studies/study/commands/original?category=evidence');return response({command_id:'original',state:'committed',result:{title:'Original'},error:null});};
+  const adopted={command_id:'original',state:'committed',result:{title:'Original'},error:null,
+    recovery:'adopt'};
+  global.fetch=async(url)=>{
+    assert.equal(url,'/api/1/studies/study/commands/original?category=evidence');
+    return response(adopted);
+  };
   const receipt=await api.reconcile();assert.equal(receipt.result.title,'Original');assert.equal(api.pending,null);
   const abort=new AbortController();
   global.fetch=async(_url, options)=>new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason)));
   const mutation=api.reviseEvidence('study','family',{...command,expected_revision:'head'},abort.signal);
   abort.abort();await assert.rejects(mutation);assert.equal(api.pending.path,'/studies/study/evidence-families/family/versions');
-  global.fetch=async()=>response({command_id:'original',state:'committed',result:{title:'Original'},error:null});await api.reconcile();
+  global.fetch=async()=>response(adopted);await api.reconcile();
   const stale=new AbortController();let deliver;
   global.fetch=async()=>({ok:true,status:200,json:()=>new Promise(resolve=>{deliver=resolve;})});
   const read=api.evidenceVersion('study','version',stale.signal);await new Promise(resolve=>setImmediate(resolve));

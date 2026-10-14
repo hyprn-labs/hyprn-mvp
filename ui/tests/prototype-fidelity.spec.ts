@@ -555,7 +555,11 @@ test('Foundry configuration stale preview retains pin and uncertain save reconci
  await expect(page.getByRole('button',{name:'Check original command',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeDisabled();
  const held=latch();let receiptPath='';
- await page.route('**/commands/**',async route=>{receiptPath=route.request().url();await held.promise;return route.fulfill({json:{schema_version:'1',data:{state:'rejected',result:null}}});});
+ await page.route('**/commands/**',async route=>{
+  receiptPath=route.request().url();await held.promise;
+  const data={state:'rejected',result:null,recovery:'refused'};
+  return route.fulfill({json:{schema_version:'1',data}});
+ });
  await page.getByRole('button',{name:'Check original command',exact:true}).click();
  await expect(page.getByRole('button',{name:'Check original command',exact:true})).toBeDisabled();
  await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Pinned proposal');

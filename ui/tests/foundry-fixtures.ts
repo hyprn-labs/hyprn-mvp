@@ -82,7 +82,9 @@ export async function harness(page: Page) {
       const study = { study_id: sid2, revision: 'new-study-r1', name: body.name, description: '', boundary: '' };
       state.studies.push(study); return ok(study);
     }
-    if (path.includes('/commands/')) return ok({ state: 'rejected', result: null });
+    if (path.includes('/commands/')) {
+      return ok({ state: 'rejected', result: null, recovery: 'refused' });
+    }
     const id = path.split('/')[2], study = state.studies.find(s => s.study_id === id);
     if (path === `/studies/${id}` && study) {
       if (method === 'PATCH') Object.assign(study, { name: body.name, description: body.description, boundary: body.boundary, revision: 'study-r2' });

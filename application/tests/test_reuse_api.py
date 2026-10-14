@@ -239,7 +239,12 @@ const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES20
  const api=new PublicApi();api.actor='owner';api.csrf='csrf';const calls=[];
  const command={command_id:'original-command',expected_revision:null,configuration_id:null,expected_preview_digest:'a'.repeat(64),configuration:{schema_version:'2',study_id:'study',name:'Exact original',inputs:[{kind:'run_result',source_run_id:'source'}]}};
  const original=structuredClone(command);let retry=false;
- global.fetch=async(url,options)=>{calls.push({url,body:options.body});if(options.method==='GET')return new Response(JSON.stringify({error:{code:'resource_not_found',outcome:'unchanged'}}),{status:404});if(!retry)throw new Error('Lost acknowledgement');return new Response(JSON.stringify({data:{configuration:{}}}),{status:201});};
+ const missing={error:{code:'resource_not_found',outcome:'unchanged',
+   recovery:'resend_same_command'}};
+ global.fetch=async(url,options)=>{calls.push({url,body:options.body});
+   if(options.method==='GET')return new Response(JSON.stringify(missing),{status:404});
+   if(!retry)throw new Error('Lost acknowledgement');
+   return new Response(JSON.stringify({data:{configuration:{}}}),{status:201});};
  await assert.rejects(api.commitConfiguration2(command),/Lost acknowledgement/);
  command.configuration.name='Edited after request';command.command_id='replacement';
  assert.deepEqual(api.pending.body,original);await api.reconcile();assert.equal(api.retryReady,true);
@@ -247,7 +252,10 @@ const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES20
  assert.equal(writes.length,2);assert.equal(writes[0].body,writes[1].body);assert.equal(api.pending,null);
  retry=false;calls.length=0;await assert.rejects(api.submitRun('study','revision'),/Lost acknowledgement/);
  const accepted=structuredClone(api.pending.body);assert.equal(accepted.configuration_revision_id,'revision');
- global.fetch=async(url,options)=>{calls.push({url,body:options.body});return new Response(JSON.stringify({data:{command_id:accepted.command_id,state:'uncertain',result:{run_id:'run'},error:null}}));};
+ const uncertain={data:{command_id:accepted.command_id,state:'uncertain',result:{run_id:'run'},
+   error:null,recovery:'uncertain'}};
+ global.fetch=async(url,options)=>{calls.push({url,body:options.body});
+   return new Response(JSON.stringify(uncertain));};
  await api.reconcile();assert.deepEqual(api.pending.body,accepted);assert.equal(api.retryReady,false);
  await assert.rejects(api.retryOriginal(),/Check the original/);assert.equal(calls.filter(c=>c.body).length,1);
  console.log('Exact save retry and uncertain-run no redispatch verified');

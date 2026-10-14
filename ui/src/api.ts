@@ -6,11 +6,14 @@ import type { ConfigurationRequest4, ConfigurationPreview4, ConfigurationPreview
 import type { ApproachState2, ApproachPreviewRequestRead2, ApproachPreviewRead3, ApproachDraftWriteRead2, ApproachDraftRead2, ApproachVersionSave1, ApproachVersionSavedRead3, ApproachRestore1, ApproachSavedRead3, ApproachPageRequest1, ApproachVersionPage2, ApproachUsageRequest1, ApproachUsagePage1, ApproachReceiptRead2, ApproachReceiptCategory1 } from './contract';
 import type { UnitCatalog1, PublicNewModel } from './contract';
 import type { StudyArchiveCommand } from './contract';
+import type { ReceiptError } from './contract';
 export type * from './contract';
 export type Envelope<T> = { schema_version: '1'; data: T; next_cursor?: string | null };
 export type EvidencePage = Envelope<EvidenceRecord[]> & { next_cursor: string | null };
 export type EvidenceQuery = { view?: 'heads' | 'versions'; limit?: number; cursor?: string; scope_kind?: 'study' | 'model_revision' | 'definition_version' | 'instance' | 'port' | 'connection' | 'configuration' | 'run' | 'criterion' | 'legacy'; model_id?: string; model_revision_id?: string; instance_id?: string; port_id?: string; configuration_revision_id?: string; run_id?: string; legacy_scope?: string };
 export type EvidenceSelector = { model_revision_id: string; draft_revision?: never } | { draft_revision: string; model_revision_id?: never };
+/** The recovery members of a receipt read's answer or of its 404 error object. */
+type Recovery = Partial<Pick<ReceiptError['error'], 'recovery' | 'retry_after_s'>>;
 export type EvidenceReceipt = Omit<PublicReceipt, 'result'> & { result: EvidenceRecord | null };
 export class ApiError extends Error {
   constructor(public detail: ContractError['error']) { super(detail.message); }
@@ -207,26 +210,39 @@ export class HyprnMvpApi {
     } finally { this.onPendingChange(); }
   }
   async reconcile() {
-    const p = this.pending; if (!p) return;
+    const p = this.pending;
+    if (!p) return;
     this.retryReady = false;
-    const path = p.study ? `/studies/${p.study}/commands/${p.body.command_id}` : `/commands/${p.body.command_id}`;
+    const id = p.body.command_id;
+    const path = p.study ? `/studies/${p.study}/commands/${id}` : `/commands/${id}`;
     try {
       const receipt = (await this.request<PublicReceipt>(`${path}?category=${p.category}`)).data;
-      if (receipt.state === 'committed' || receipt.state === 'rejected' || (p.category === 'run' && receipt.result && 'run_id' in receipt.result && receipt.state !== 'uncertain')) this.pending = null;
-      else this.retryReady = p.category === 'model' && receipt.state === 'pending_remote';
+      this.follow(receipt.recovery);
       return receipt;
     } catch (error) {
-      if (error instanceof ApiError && error.detail.code === 'resource_not_found' && p.category !== 'run') {
-        // The mutation endpoint rechecks authorization and exact idempotency.
-        // A scoped 404 never grants authority or says anything about native work.
-        this.retryReady = true; return;
+      // A missing receipt in a scope this reader may see carries the owner's recovery; an
+      // error without one (access ended) keeps the command pending and never retry-ready.
+      const recovery = error instanceof ApiError ? (error.detail as Recovery).recovery : undefined;
+      if (recovery === undefined || recovery === 'wait') {
+        this.follow(recovery);
+        throw error;
       }
-      throw error;
-    } finally { this.onPendingChange(); }
+      this.follow(recovery);
+      return;
+    } finally {
+      this.onPendingChange();
+    }
+  }
+  /** The owner decides the recovery (ADR-0004): this client only follows it. adopt and
+   * refused settle the command; resend_same_command allows one resend of the exact original
+   * body; wait, uncertain or no recovery at all keep it pending and never resend. */
+  private follow(recovery: Recovery['recovery']) {
+    if (recovery === 'adopt' || recovery === 'refused') this.pending = null;
+    else this.retryReady = recovery === 'resend_same_command';
   }
   async retryOriginal() {
     const p = this.pending;
-    if (!p || !this.retryReady || p.category === 'run') throw new Error('Check the original command before retrying.');
+    if (!p || !this.retryReady) throw new Error('Check the original command before retrying.');
     await this.reconcile();
     if (!this.pending) return; // A lost acknowledgement may now be resolved.
     if (!this.retryReady) throw new Error('The original command cannot be retried yet.');
