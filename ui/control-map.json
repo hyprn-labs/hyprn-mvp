@@ -239,7 +239,7 @@
     },
     "model-view-01": {
       "spec": "approach.spec.ts",
-      "test": "@approach-method canonical model view explains each component with its linked method step and lists quantities once"
+      "test": "@approach-method model details share the method explanation"
     },
     "model-view-02": {
       "spec": "model-configuration-run.spec.ts",

@@ -245,6 +245,15 @@ function AnswerBasis({
       read.done();
     }
   }
+  useEffect(() => {
+    if (kind === 'evidence') void load();
+  }, [api, studyId, id, kind, api.actor, api.csrf]);
+  if (kind === 'evidence') return visibleRecord && !('answer_version_id' in visibleRecord)
+    ? <EvidenceRecordBody compact brief record={visibleRecord} />
+    : <div className="answer-evidence-loading">
+        <p role={error ? 'alert' : 'status'}>{error || 'Loading evidence…'}</p>
+        {error && <Button onClick={() => void load()}>Retry evidence</Button>}
+      </div>;
   return (
     <>
       <Button
@@ -256,7 +265,7 @@ function AnswerBasis({
         }}
       >
         {label ??
-          `View ${kind === 'evidence' ? 'source version' : 'case answer version'} ` +
+          'View case answer version ' +
             id.slice(0, 8)}
       </Button>
       <DialogFrame
@@ -512,9 +521,7 @@ function RecordedOutputs({ run }: { run: PublicRunDetail }) {
     <>
       <div className="section-actions">
         <h4>Outputs</h4>
-        <ActionDialog title="Full-precision values" label="Full-precision values">
-          {table(true)}
-        </ActionDialog>
+
       </div>
       {table(false)}
     </>
@@ -1065,7 +1072,9 @@ export function ApproachFindings({
   onCreateConfiguration,
   answerId,
   casesId,
+  section = 'both',
 }: {
+  section?: 'both' | 'cases' | 'answer';
   answerId?: string;
   casesId?: string;
   api: HyprnMvpApi;
@@ -1467,18 +1476,47 @@ export function ApproachFindings({
           aria-label={group.title + ' supporting results'}
         >
           <h4>{group.title}</h4>
-          <SupportingResults
-            rows={group.rows}
-            api={api}
-            studyId={studyId}
-            onOpen={onOpen}
-            complete={!incomplete}
-            heading={false}
-            caseAnswers={related.map((item) => ({
-              id: item.answer_version_id,
-              title: group.title,
-            }))}
-          />
+          <div className="study-support-actions">
+            {[...new Set(group.rows.map((row) => row.usage.configuration_revision_id))].map(
+              (id, index, ids) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  onClick={() =>
+                    onOpen({ study: studyId, view: 'configurations', configuration: id })
+                  }
+                >
+                  {ids.length === 1 ? 'View configuration' : 'View configuration ' + (index + 1)}
+                </Button>
+              ),
+            )}
+            {group.rows
+              .filter((row) => row.usage.kind === 'run')
+              .map((row, index, runs) => (
+                <Button
+                  key={identity(row.usage)}
+                  size="sm"
+                  onClick={() =>
+                    row.usage.kind === 'run' &&
+                    onOpen({ study: studyId, view: 'runs', run: row.usage.run_id })
+                  }
+                >
+                  {runs.length === 1 ? 'View run' : 'View run ' + (index + 1)}
+                </Button>
+              ))}
+            {related.map((item) => (
+              <AnswerBasis
+                key={item.answer_version_id}
+                kind="answer"
+                id={item.answer_version_id}
+                api={api}
+                studyId={studyId}
+                onOpen={onOpen}
+                label="View case answer"
+                title={group.title + ' · Case answer'}
+              />
+            ))}
+          </div>
         </section>
       );
     });
@@ -1515,7 +1553,7 @@ export function ApproachFindings({
   // Results first (recorded facts, exact coverage, no verdict), then one card per case.
   return (
     <section className="approach-usage" aria-label="Approach usage">
-      <Panel
+      {section !== 'answer' && <Panel
         id={casesId}
         className="approach-section"
         label="Cases and their answers"
@@ -1592,8 +1630,8 @@ export function ApproachFindings({
             Retry supporting results
           </Button>
         )}
-      </Panel>
-      <Panel
+      </Panel>}
+      {section !== 'cases' && <Panel
         id={answerId}
         className="approach-section approach-study-answer"
         label="Answer to the study question"
@@ -1604,7 +1642,7 @@ export function ApproachFindings({
         {answerState === 'error' && (
           <Button onClick={() => setAnswerReview((value) => value + 1)}>Retry answer read</Button>
         )}
-      </Panel>
+      </Panel>}
     </section>
   );
 }

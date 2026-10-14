@@ -69,7 +69,7 @@ export function ModelEditor({
   const guidance = useUnitCatalog(api, model.study_id, model.model_id);
   function parseMetadata(value: string, rows: Array<{ port_id: string }>): DefinitionChange[] {
     return parsePortMetadata(value, rows).map((change) => {
-      if (change.kind !== 'update_port') throw new Error('Only port metadata can be pasted.');
+      if (change.kind !== 'update_port') throw new Error('Only quantity metadata can be pasted.');
       const { units, ...fields } = change.fields;
       return {
         ...change,
@@ -466,7 +466,7 @@ export function ModelEditor({
       (d) => d.definition_version_id === target?.definition_version_id,
     );
     if (!target || !def || target.instance_id === model.root_instance_id)
-      throw new Error('Select one editable component for port metadata.');
+      throw new Error('Select one editable component for quantity metadata.');
     if (
       scope.study_id !== model.study_id ||
       scope.model_id !== model.model_id ||
@@ -474,7 +474,7 @@ export function ModelEditor({
       scope.definition_version_id !== def.definition_version_id
     )
       throw new Error(
-        'The port paste belongs to a different model draft or definition ' +
+        'The pasted quantity metadata belongs to a different model draft or definition ' +
           'version. Your text and original scope are preserved; ' +
           'review or discard the paste before retargeting.',
       );
@@ -546,7 +546,8 @@ export function ModelEditor({
         pasteTarget(tablePaste.scope);
         if (tablePaste.scope.instance_id !== selected || !instance || !definition)
           throw new Error(
-            'The port paste is bound to its original component. Your text is preserved.',
+            'The pasted quantity metadata is bound to its original component. ' +
+              'Your text is preserved.',
           );
         if (
           paste ||
@@ -554,7 +555,7 @@ export function ModelEditor({
           targets.some((id) => id !== selected)
         )
           throw new Error(
-            'Review conflicting inspector port edits or multiple instance ' +
+            'Review conflicting quantity edits or multiple instance ' +
               'targets before saving the table paste. All edits are preserved.',
           );
       }
@@ -688,8 +689,8 @@ export function ModelEditor({
       }
       const updated = await propose(
         edits,
-        removing ? 'Keep ports' : 'Keep editing',
-        removing ? 'Remove ports' : 'Apply changes',
+        removing ? 'Keep quantities' : 'Keep editing',
+        removing ? 'Remove quantities' : 'Apply changes',
       );
       if (!updated) {
         setStatus('Proposal kept locally');
@@ -756,7 +757,7 @@ export function ModelEditor({
       new Set([...ins, ...outs]).size !== ins.length + outs.length
     )
       throw new Error(
-        'Enter a component name and unique Python port symbols; declare at least one output.',
+        'Enter a component name and unique Python quantity symbols; declare at least one output.',
       );
     // No hidden physical defaults: starter declares access but requires authored output equations.
     const starter =
@@ -934,49 +935,38 @@ export function ModelEditor({
       ) : (
         <div className="inspector">
           {!instance || !definition || loaded !== selected ? (
-            <p>Select a component to inspect its code and ports.</p>
+            <p>Select a component to inspect its code and quantities.</p>
           ) : (
             <fieldset disabled={blocked}>
               <SectionHeader
                 title={componentLabel}
                 actions={
                   <>
-                    <ActionDialog title="Edit component version" label="Edit">
-                      <dl className="hf-identities">
-                        <dt>Component instance</dt>
-                        <dd>{instance.name}</dd>
-                        <dt>Definition</dt>
-                        <dd>{definition.name}</dd>
-                        <dt>Definition version ID</dt>
-                        <dd>
-                          <code>{definition.definition_version_id}</code>
-                        </dd>
-                      </dl>
-                      <fieldset>
-                        <legend>Instances receiving the next definition version</legend>
-                        {components
-                          .filter(
-                            (i) => i.definition_version_id === definition.definition_version_id,
-                          )
-                          .map((i) => (
-                            <label className="check" key={i.instance_id}>
-                              <TextInput
-                                type="checkbox"
-                                aria-label={`Upgrade instance ${i.instance_id}`}
-                                checked={targets.includes(i.instance_id)}
-                                onChange={() => setTargets(toggle(targets, i.instance_id))}
-                              />
-                              {i.name}{' '}
-                              <code title={`Instance ID: ${i.instance_id}`}>
-                                ({i.instance_id.slice(0, 8)})
-                              </code>
-                            </label>
-                          ))}
-                        <p>
-                          Unchecked instances keep their current definition version. Component name
-                          and assumptions apply only to the inspected instance.
-                        </p>
-                      </fieldset>
+                    <ActionDialog title="Edit component" label="Edit component">
+                      {components.filter(
+                        (i) => i.definition_version_id === definition.definition_version_id,
+                      ).length > 1 && (
+                        <fieldset className="form-stack">
+                          <legend>Also apply code and quantity changes to</legend>
+                          {components
+                            .filter(
+                              (i) =>
+                                i.definition_version_id === definition.definition_version_id &&
+                                i.instance_id !== instance.instance_id,
+                            )
+                            .map((i) => (
+                              <label className="check" key={i.instance_id}>
+                                <TextInput
+                                  type="checkbox"
+                                  aria-label={'Also update ' + i.name}
+                                  checked={targets.includes(i.instance_id)}
+                                  onChange={() => setTargets(toggle(targets, i.instance_id))}
+                                />
+                                {i.name}
+                              </label>
+                            ))}
+                        </fieldset>
+                      )}
                       <label>
                         Component name
                         <TextInput
@@ -986,13 +976,13 @@ export function ModelEditor({
                         />
                       </label>
                     </ActionDialog>
-                    <ActionDialog title="Edit ports">
+                    <ActionDialog title="Edit quantities" label="Edit quantities">
                       {error != null && <p role="alert">{message(error)}</p>}
                       {ports.map((p, i) => (
                         <div className="port" key={p.port_id ?? i}>
                           <p>{p.direction} · real scalar</p>
                           <label>
-                            Port {i + 1} name
+                            Quantity {i + 1} name
                             <TextInput
                               value={p.name}
                               onChange={(e) =>
@@ -1005,7 +995,7 @@ export function ModelEditor({
                             />
                           </label>
                           <label>
-                            Port {i + 1} symbol
+                            Quantity {i + 1} symbol
                             <TextInput
                               value={p.code_symbol}
                               onChange={(e) =>
@@ -1019,9 +1009,9 @@ export function ModelEditor({
                           </label>
                           {p.port_id ? (
                             <label>
-                              Port {i + 1} definition
+                              Quantity {i + 1} definition
                               <TextArea
-                                aria-label={'Port ' + (i + 1) + ' definition'}
+                                aria-label={'Quantity ' + (i + 1) + ' definition'}
                                 maxLength={4096}
                                 value={p.statement ?? ''}
                                 onChange={(e) =>
@@ -1034,10 +1024,10 @@ export function ModelEditor({
                               />
                             </label>
                           ) : (
-                            <p>Save this port before adding its definition.</p>
+                            <p>Save this quantity before adding its definition.</p>
                           )}
                           <UnitEditor
-                            label={`Port ${i + 1} units`}
+                            label={`Quantity ${i + 1} units`}
                             value={p.units}
                             catalog={guidance.catalog}
                             onChange={(units) =>
@@ -1048,7 +1038,7 @@ export function ModelEditor({
                             className="danger"
                             onClick={() => setPorts(ports.filter((_, n) => n !== i))}
                           >
-                            Remove port {i + 1}
+                            Remove quantity {i + 1}
                           </Button>
                         </div>
                       ))}
@@ -1246,8 +1236,9 @@ export function ModelEditor({
                     />
                   </label>
                   <p id="port-help">
-                    Comma-separated Python symbols. All ports are real scalars; new ports start Not
-                    specified. Choose units in Edit ports before creating a configuration.
+                    Comma-separated Python symbols. All quantities are real scalars; new quantities
+                    start Not specified. Choose units in Edit quantities before creating a
+                    configuration.
                   </p>
                   <UnitGuidance guidance={guidance} />
                   <Button
@@ -1261,7 +1252,7 @@ export function ModelEditor({
               </ActionDialog>
               <ActionDialog
                 title="Connections"
-                label="Connect ports"
+                label="Connect quantities"
                 completionKey={connectionSaved}
               >
                 <fieldset disabled={blocked || dirty || assumptionDirty || assumptionEditing}>
@@ -1308,7 +1299,7 @@ export function ModelEditor({
                           await commitBatch(
                             [connectionEdit({ from, to }, 0)],
                             'Keep editing',
-                            'Connect ports',
+                            'Connect quantities',
                           )
                         ) {
                           setFrom('');
@@ -1382,7 +1373,7 @@ export function ModelEditor({
                             })
                           }
                         >
-                          Reconnect to chosen ports
+                          Reconnect to chosen quantities
                         </Button>
                       </li>
                     ))}

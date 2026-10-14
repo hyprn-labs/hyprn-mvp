@@ -184,19 +184,19 @@ export function MethodExplanation({ step, source }: { step: ApproachStep1; sourc
   return (
     <div className="method-narrative">
       {step.purpose && (
-        <section className="inspector-section">
+        <section className="inspector-section method-purpose">
           <h4>Purpose</h4>
           <p className="context-copy">{step.purpose}</p>
         </section>
       )}
       {step.rationale && (
-        <section className="inspector-section">
+        <section className="inspector-section method-basis">
           <h4>Basis and reasoning</h4>
           <p className="context-copy">{step.rationale}</p>
         </section>
       )}
       {step.intent.transformation && (
-        <section className="inspector-section">
+        <section className="inspector-section method-calculation">
           <h4>Calculation in plain words</h4>
           <p className="context-copy">{step.intent.transformation}</p>
         </section>
@@ -247,12 +247,16 @@ export function ComponentWhatWhy({
                 Edit explanation
               </Button>
             )}
-            {onOpenStep && (
-              <Button size="sm" variant="quiet" onClick={() => onOpenStep(link)}>
-                View method in overview
-              </Button>
-            )}
-            <ActionDialog title="Method record" size="sm">
+
+          </div>
+        </section>
+      ))}
+      <Disclosure className="component-source">
+        <summary>Python function</summary>
+        {source}
+      </Disclosure>
+      <div className="method-record-actions">{links.map(link => (
+            <ActionDialog key={link.key} title="Method record" size="sm">
               <dl className="hf-record-details">
                 <dt>Method</dt>
                 <dd>
@@ -268,13 +272,7 @@ export function ComponentWhatWhy({
                 <dd>{link.modelRevisionIds.join(', ')}</dd>
               </dl>
             </ActionDialog>
-          </div>
-        </section>
-      ))}
-      <Disclosure className="component-source">
-        <summary>Python function</summary>
-        {source}
-      </Disclosure>
+      ))}</div>
     </>
   );
 }

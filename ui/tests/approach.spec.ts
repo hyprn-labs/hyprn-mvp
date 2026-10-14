@@ -356,12 +356,18 @@ test('@approach-method continuous sections preserve question and route', async (
   );
   for (const name of [
     'Reasoning and methods',
-    'Cases and their answers',
     'Answer to the study question',
   ]) {
     await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
   }
+  await expect(page.getByLabel('Findings case', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Evidence', exact: true })).toHaveCount(0);
+  const answerBox = page.getByRole('region', { name: 'Answer to the study question', exact: true });
+  const methodsBox = page.getByRole('region', { name: 'Reasoning and methods', exact: true });
+  expect((await answerBox.boundingBox())!.y).toBeLessThan((await methodsBox.boundingBox())!.y);
+  await page.getByRole('button', { name: 'Cases and their answers', exact: true }).click();
   await expect(page.getByLabel('Findings case', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add method step', exact: true })).toHaveCount(0);
   await readingShot(page, 'continuous-overview');
 });
@@ -433,10 +439,12 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
   await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   const study = page.getByRole('region', { name: 'Answer to the study question', exact: true });
   await expect(study).toContainText('The study question remains open.');
+  await page.getByRole('button', { name: 'Cases and their answers', exact: true }).click();
   const nominal = page.getByRole('article', { name: 'Nominal range', exact: true });
   await nominal.locator('summary').first().click();
   await expect(nominal).toContainText('The comparison needs an additional measurement.');
   await expect(nominal).toContainText('Compute the comparison.');
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(study.getByRole('heading', { name: 'Supporting results' })).toBeVisible();
   await study
     .getByRole('button', {
@@ -2389,26 +2397,46 @@ async function s4Shots(page:Page,name:string,target?:Locator){
   }finally{await cdp.send('Emulation.clearDeviceMetricsOverride');await cdp.detach();await page.evaluate(()=>document.documentElement.dataset.theme='light');}
 }
 
-test('@approach-method canonical model view explains each component with its linked method step and lists quantities once',async({page,browser,baseURL})=>{
+test('@approach-method model details share the method explanation', async ({
+  page, browser, baseURL,
+}) => {
   test.setTimeout(120000);
-  const data=await describedApproach(page,browser,baseURL),detail=page.getByRole('region',{name:'Selected method step',exact:true});
-  await page.setViewportSize({width:1440,height:1000});
+  const data = await describedApproach(page, browser, baseURL),
+    detail = page.getByRole('region', { name: 'Selected method step', exact: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   // Approach "Open model version": the canonical view, read-only, with the step's components in focus.
-  await detail.getByRole('button',{name:'View model details',exact:true}).click();
-  const open=page.getByRole('dialog',{name:'Model version '+data.model.model_revision_id.slice(0,8),exact:true}),view=open.getByRole('region',{name:'Model view',exact:true});
-  await expect(view.getByRole('tab',{name:'Graph',exact:true})).toHaveAttribute('aria-selected','true');await expect(view.getByRole('tab',{name:'XDSM',exact:true})).toBeVisible();
-  await expect(view.getByRole('tab',{name:'Variables',exact:true})).toHaveCount(0);
-  await expect(view.getByRole('button',{name:'＋ Component',exact:true})).toHaveCount(0);
-  const quantities=view.getByRole('table',{name:'Quantities',exact:true});
-  await expect(quantities.getByRole('columnheader')).toHaveText(['Quantity','Component','Direction','Definition','Unit']);
-  await open.getByRole('button',{name:'1 Response',exact:true}).click();
-  const details=view.getByRole('region',{name:'Selection inspector',exact:true});
-  await expect(details.getByRole('heading',{name:'Purpose',exact:true})).toBeVisible();
-  await expect(details).toContainText('Combine the operating quantities using the authored response law.');
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  const open = page.getByRole('dialog', {
+      name: 'Model version ' + data.model.model_revision_id.slice(0, 8),
+      exact: true,
+    }),
+    view = open.getByRole('region', { name: 'Model view', exact: true });
+  await expect(view.getByRole('tab', { name: 'Graph', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(view.getByRole('tab', { name: 'XDSM', exact: true })).toBeVisible();
+  await expect(view.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
+  await expect(view.getByRole('button', { name: '＋ Component', exact: true })).toHaveCount(0);
+  const quantities = view.getByRole('table', { name: 'Quantities', exact: true });
+  await expect(quantities.getByRole('columnheader')).toHaveText([
+    'Quantity',
+    'Component',
+    'Direction',
+    'Definition',
+    'Unit',
+  ]);
+  await open.getByRole('button', { name: '1 Response', exact: true }).click();
+  const details = view.getByRole('region', { name: 'Selection inspector', exact: true });
+  await expect(details.getByRole('heading', { name: 'Purpose', exact: true })).toBeVisible();
+  await expect(details).toContainText(
+    'Combine the operating quantities using the authored response law.',
+  );
   await expect(
     details.getByRole('heading', { name: 'Basis and reasoning', exact: true }),
   ).toBeVisible();
-  await expect(details).toContainText('Connect explicit operating quantities to response.');await expect(details).toContainText('Use the declared response law for a bounded screening.');
+  await expect(details).toContainText('Connect explicit operating quantities to response.');
+  await expect(details).toContainText('Use the declared response law for a bounded screening.');
   await details.getByRole('button', { name: 'Method record', exact: true }).click();
   const methodRecord = page.getByRole('dialog', { name: 'Method record', exact: true });
   await expect(methodRecord).toContainText('1 · Predict response');
@@ -2418,56 +2446,102 @@ test('@approach-method canonical model view explains each component with its lin
     String(data.saved.version.version_number),
   );
   await methodRecord.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(details.getByRole('heading',{name:'Assumptions',exact:true})).toHaveCount(0);
+  await expect(details.getByRole('heading', { name: 'Assumptions', exact: true })).toHaveCount(0);
   // No ports table, no incoming/outgoing lists, no notes: quantities are listed once, below.
-  await expect(details.locator('table')).toHaveCount(0);await expect(details.getByText(/^(Incoming|Outgoing) quantities/)).toHaveCount(0);await expect(details.getByRole('tab')).toHaveCount(0);
-  await expect(view.getByText(/^Showing 4 of \d+ quantities · Response · instance 1$/)).toBeVisible();
-  const row=quantityRow(page,quantities,'Response · instance 1','x');await expect(row).toContainText('Original definition of x');await expect(row).toContainText('Input');await expect(row).toContainText('Dimensionless');
-  await expect(row).toHaveAttribute('aria-selected','true');
-  await s4Shots(page,'s4-approach-open-model-version',view);
-  await view.getByRole('button',{name:'Show all quantities',exact:true}).click();await expect(view.getByText(/^Showing (\d+) of \1 quantities$/)).toBeVisible();
-  await expect(quantityRow(page,quantities,'Response · instance 2','x')).toContainText('Revised definition of x');
-  await details.getByText('Python function',{exact:true}).click();
-  const source=open.getByRole('region',{name:'Selection inspector',exact:true});
+  await expect(details.locator('table')).toHaveCount(0);
+  await expect(details.getByText(/^(Incoming|Outgoing) quantities/)).toHaveCount(0);
+  await expect(details.getByRole('tab')).toHaveCount(0);
+  await expect(
+    view.getByText(/^Showing 4 of \d+ quantities · Response · instance 1$/),
+  ).toBeVisible();
+  const row = quantityRow(page, quantities, 'Response · instance 1', 'x');
+  await expect(row).toContainText('Original definition of x');
+  await expect(row).toContainText('Input');
+  await expect(row).toContainText('Dimensionless');
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await s4Shots(page, 's4-approach-open-model-version', view);
+  await view.getByRole('button', { name: 'Show all quantities', exact: true }).click();
+  await expect(view.getByText(/^Showing (\d+) of \1 quantities$/)).toBeVisible();
+  await expect(quantityRow(page, quantities, 'Response · instance 2', 'x')).toContainText(
+    'Revised definition of x',
+  );
+  await details.getByText('Python function', { exact: true }).click();
+  const source = open.getByRole('region', { name: 'Selection inspector', exact: true });
   await expect(source.getByRole('textbox')).toHaveCount(0);
   await expect(source).toContainText('SHA-256 ' + data.model.source_files[0].sha256);
-  await expect(source.getByLabel('Read-only authored source').filter({hasText:"outputs['u'] = inputs['x'] + inputs['z']"})).toBeVisible();
+  await expect(
+    source
+      .getByLabel('Read-only authored source')
+      .filter({ hasText: "outputs['u'] = inputs['x'] + inputs['z']" }),
+  ).toBeVisible();
 
-  // The link returns to the exact step of this approach version.
-  await details.getByRole('button', { name: 'View method in overview', exact: true }).click();
+  // The model details closes back to the same method without a redundant link.
+  await expect(
+    details.getByRole('button', { name: 'View method in overview', exact: true }),
+  ).toHaveCount(0);
+  await open
+    .getByRole('button', {
+      name: 'Close Model version ' + data.model.model_revision_id.slice(0, 8),
+      exact: true,
+    })
+    .click();
   await expect(open).toBeHidden();
   await expect(page.getByRole('button', { name: 'Select step 1', exact: true })).toHaveAttribute(
     'aria-expanded',
     'true',
   );
   // Models: the same view; the latest saved approach version explains the draft's components.
-  await page.evaluate(({sid,mid})=>{location.hash=new URLSearchParams({v:'1',view:'model',study:sid,model:mid}).toString();},{sid:data.sid,mid:data.model.model_id});
-  const models=page.getByRole('region',{name:'Model view',exact:true}),md=models.getByRole('region',{name:'Selection inspector',exact:true});
-  await expect(md.getByRole('button',{name:'Edit ports',exact:true})).toBeVisible();
+  await page.evaluate(
+    ({ sid, mid }) => {
+      location.hash = new URLSearchParams({
+        v: '1',
+        view: 'model',
+        study: sid,
+        model: mid,
+      }).toString();
+    },
+    { sid: data.sid, mid: data.model.model_id },
+  );
+  const models = page.getByRole('region', { name: 'Model view', exact: true }),
+    md = models.getByRole('region', { name: 'Selection inspector', exact: true });
+  await expect(md.getByRole('button', { name: 'Edit quantities', exact: true })).toBeVisible();
   await expect(md).toContainText('Use the declared response law for a bounded screening.');
   await md.getByRole('button', { name: 'Method record', exact: true }).click();
   await expect(methodRecord).toContainText(data.model.model_revision_id);
   await methodRecord.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(md.getByText('Python function', { exact: true })).toBeVisible();
   await expect(md.locator('table')).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
-  await s4Shots(page,'s4-models-component',md);
-  await models.getByRole('tab',{name:'XDSM',exact:true}).click();await expect(models.getByRole('region',{name:'Component exchange matrix',exact:true})).toBeVisible();
-  await s4Shots(page,'s4-models-xdsm',models);
-  await models.getByRole('tab',{name:'Graph',exact:true}).click();
+  await expect(page.getByRole('button', { name: 'Model actions', exact: true })).toBeVisible();
+  await s4Shots(page, 's4-models-component', md);
+  await models.getByRole('tab', { name: 'XDSM', exact: true }).click();
+  await expect(
+    models.getByRole('region', { name: 'Component exchange matrix', exact: true }),
+  ).toBeVisible();
+  await s4Shots(page, 's4-models-xdsm', models);
+  await models.getByRole('tab', { name: 'Graph', exact: true }).click();
   // Nothing selected: the model and its own assumptions (Add assumption in a draft).
-  await page.getByRole('button',{name:'Clear selection',exact:true}).click();
-  await expect(md.getByRole('heading',{name:'Model',exact:true})).toBeVisible();
-  const own=md.getByRole('region',{name:'Model assumptions',exact:true});await expect(own.getByRole('button',{name:'Add assumption',exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+  await expect(md.getByRole('heading', { name: 'Model', exact: true })).toBeVisible();
+  const own = md.getByRole('region', { name: 'Model assumptions', exact: true });
+  await expect(own.getByRole('button', { name: 'Add assumption', exact: true })).toBeVisible();
   await expect(md).toContainText('select a component to inspect its source and method');
-  await expect(models.getByRole('button',{name:'Show all quantities',exact:true})).toHaveCount(0);
-  await s4Shots(page,'s4-models-nothing-selected',md);
+  await expect(
+    models.getByRole('button', { name: 'Show all quantities', exact: true }),
+  ).toHaveCount(0);
+  await s4Shots(page, 's4-models-nothing-selected', md);
   // The former ⋯ › Model assumptions dialog is gone; Model actions keep rename, reload and import/compare.
-  await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await expect(page.getByRole('dialog',{name:'Model actions',exact:true}).getByRole('button',{name:'Model assumptions',exact:true})).toHaveCount(0);
+  await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Model actions', exact: true })
+      .getByRole('button', { name: 'Model assumptions', exact: true }),
+  ).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'1 Response',exact:true}).click();
-  await md.getByRole('button', { name: 'View method in overview', exact: true }).click();
+  await page.getByRole('button', { name: '1 Response', exact: true }).click();
+  await expect(
+    md.getByRole('button', { name: 'View method in overview', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Select step 1', exact: true })).toHaveAttribute(
     'aria-expanded',
     'true',
@@ -2481,9 +2555,15 @@ test('@approach-method model-owned description edit rebinds only the selected in
   const commands:any[]=[];page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/models/'+m.model_id+'/edits'))commands.push(request.postDataJSON());});
   await page.evaluate(({sid,mid})=>{location.hash=new URLSearchParams({v:'1',view:'model',study:sid,model:mid}).toString();},{sid:data.sid,mid:m.model_id});
   await page.getByRole('tab',{name:'Graph',exact:true}).click();await page.locator('[data-instance="'+m.instances[1].instance_id+'"]').first().click();
-  await page.getByRole('button',{name:'Edit ports',exact:true}).click();const ports=page.getByRole('dialog',{name:'Edit ports',exact:true});
-  await expect(ports.getByLabel('Port 1 definition',{exact:true})).toHaveValue('Original definition of x');
-  await ports.getByLabel('Port 1 definition',{exact:true}).fill('Updated descriptive meaning for the selected instance');await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Edit quantities', exact: true }).click();
+  const ports = page.getByRole('dialog', { name: 'Edit quantities', exact: true });
+  await expect(ports.getByLabel('Quantity 1 definition', { exact: true })).toHaveValue(
+    'Original definition of x',
+  );
+  await ports
+    .getByLabel('Quantity 1 definition', { exact: true })
+    .fill('Updated descriptive meaning for the selected instance');
+  await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Save component',exact:true}).click();const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});
   await expect(preview).toContainText('Response · instance 1 · quantity definitions');await expect(preview).not.toContainText('Response · instance 2 · quantity definitions');
   await expect(preview).toContainText('x: Original definition of x');await expect(preview).toContainText('x: Updated descriptive meaning for the selected instance');
@@ -4239,14 +4319,14 @@ test('@approach-assumptions Shared limit evidence preserves its exact relationsh
   await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   await page.getByRole('button', { name: 'See more details', exact: true }).click();
   const limits = page.getByRole('region', { name: 'Study limits', exact: true });
-  await expect(limits.getByText('Evidence for limits 1, 2, 3', { exact: true })).toBeVisible();
-  // The shared citation is one row; differing relationships and versions remain separate.
+  await expect(limits.getByText('Evidence for limits 1, 2, 3', { exact: true })).toHaveCount(0);
+  // Every assertion keeps its own exact evidence link, including shared sources.
   await expect(
     limits.getByText('Screening measurements', { exact: true }).filter({ visible: true }),
-  ).toHaveCount(3);
+  ).toHaveCount(5);
   await expect(limits.getByText('Conflicting evidence', { exact: true })).toBeVisible();
   const shared = limits.getByRole('region', {
-    name: 'Evidence for limits 1, 2, 3 evidence', exact: true,
+    name: 'Cruise only. evidence', exact: true,
   });
   await shared.getByRole('button', { name: 'View evidence', exact: true }).click();
   const evidence = page.getByRole('dialog', { name: 'Evidence detail', exact: true });
@@ -4341,7 +4421,7 @@ test('@approach-method overview details edit all fields and preserve the saved q
   await expect(question.getByRole('button')).toHaveText(['See more details']);
   await question.getByRole('button', { name: 'See more details', exact: true }).click();
   const details = page.getByRole('dialog', { name: 'Study details', exact: true });
-  await details.getByRole('button', { name: 'Edit all', exact: true }).click();
+  await details.getByRole('button', { name: 'Edit study', exact: true }).click();
   await expect(details.getByRole('textbox', { name: 'Study question', exact: true })).toHaveValue(
     data.saved.version.content.question,
   );

@@ -31,7 +31,7 @@ test('numbered saved criterion is structured, exact values available, no invente
   assert.match(html, /at most/);
   assert.match(html, /12\.346/);
   assert.match(html, /12\.345678/);
-  assert.match(html, /Full-precision values/);
+  assert.doesNotMatch(html, /Full-precision values/);
   assert.doesNotMatch(html, /Not evaluated|Met|Not met|Actual value/);
 });
 test('zero is explicit, unset threshold unassigned, tiny nonzero remains nonzero', () => {
@@ -51,9 +51,9 @@ test('equality tolerances, evidence and real outcome retain separate meanings', 
   assert.match(html, /not computed/);
   assert.match(html, /hf-tag--advisory/);
 });
-test('record content is escaped; exact-value action has unique scope', () => {
+test('record content is escaped without an extra precision action', () => {
   const html = render({ target: '<script>alert(1)</script>', number: 2 });
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
-  assert.match(html, /Full-precision values for criterion 2/);
+  assert.doesNotMatch(html, /Full-precision values/);
 });

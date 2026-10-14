@@ -35,6 +35,7 @@ import {
 } from '../workspaceModel';
 import { approachView } from './approach';
 import { configurationsView } from './configurations';
+import { casesView } from './cases';
 import { evidenceView } from './evidence';
 import { modelView } from './model';
 import { overviewView } from './overview';
@@ -217,6 +218,7 @@ const entries: { readonly [Name in WorkspaceView]: ViewEntry<Name> } = {
   configurations: configurationsView,
   runs: runsView,
   evidence: evidenceView,
+  cases: casesView,
 };
 
 /** The study views in page order (the order their content is rendered in). */
@@ -227,6 +229,7 @@ export const viewRegistry: readonly ViewEntry[] = Object.freeze([
   entries.configurations,
   entries.runs,
   entries.evidence,
+  entries.cases,
 ]);
 
 /** Save and discard order of the views' unsaved-changes entries: the approach editors, the

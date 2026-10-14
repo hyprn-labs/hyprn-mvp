@@ -71,6 +71,20 @@ Use ordinary engineering language in study prose. Leave optional text empty when
 it adds nothing. Keep implementation labels, migration terminology, version hashes
 and progress messages out of that prose; use record links for traceability.
 
+## Match every citation to the assertion
+
+Before saving a configuration, inspect each input's attached evidence against its
+actual value, units, scenario and role. A source describing Mach 6 does not support
+an authored Mach 8 scenario. Label that input as an explicit scenario choice and
+cite the study requirement or case rationale that warrants exploring it; keep the
+Mach 6 source only with the correlation or reference case it actually supports.
+Apply the same check to criteria, assumptions, limits and answer statements.
+Topical relevance is not support for a numerical assignment. After changing a value,
+recheck its provenance statement and each citation; remove misplaced attachments
+or replace them with evidence that supports the revised assertion. General context
+belongs with the method or study statement it explains, not copied onto every input.
+Do not hide a mismatch by rewriting a source note to agree with the calculation.
+
 ## Establish what the sources actually say
 
 For each consequential equation, coefficient or interpretation, retain a source

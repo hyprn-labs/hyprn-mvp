@@ -334,3 +334,27 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 .study-details-edit-actions{display:flex;justify-content:flex-end;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-4)}
 .result-number{white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:600px){.support-record-row{flex-direction:column;align-items:flex-start}.support-record-actions{flex-shrink:1}.support-configuration>.approach-finding{margin-left:0}}
+
+/* Explanations have a clear purpose followed by reasoning and calculation. */
+.method-narrative{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4)}
+.method-narrative>.inspector-section{margin:0;padding:var(--space-4);border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-sunken);min-width:0}
+.method-narrative>.method-purpose{grid-column:1/-1;background:var(--surface);border-left:var(--space-1) solid var(--line)}
+.method-narrative>.component-source{grid-column:1/-1;margin:0;padding:var(--space-3);border:1px solid var(--line);border-radius:var(--radius-sm)}
+.method-narrative h4{margin:0 0 var(--space-2);font-size:var(--type-small-size);color:var(--ink-muted)}
+.method-purpose p{font-size:var(--type-subheading-size);line-height:var(--type-subheading-line)}
+.selection-inspector .method-narrative{grid-template-columns:minmax(0,1fr)}
+.method-record-actions,.study-support-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin-top:var(--space-3)}
+.study-support-case{padding:var(--space-4) 0;border-bottom:1px solid var(--line)}
+.study-support-case h4{margin:0}
+.study-details-dialog .study-details{display:grid;gap:var(--space-6)}
+.study-details-dialog .study-details-section{display:grid;gap:var(--space-3);margin:0;padding:0;min-width:0}
+.study-details-dialog .study-details-section>h3{margin:0}
+.study-details-dialog label{display:grid;gap:var(--space-2);min-width:0}
+.study-details-dialog .hf-textarea,.study-details-dialog .hf-input{width:100%;box-sizing:border-box}
+.study-details-dialog .form-stack{display:grid;gap:var(--space-4);margin-bottom:var(--space-6)}
+.study-details-dialog .assumption-evidence-row{display:block;margin-top:var(--space-3)}
+.study-details-dialog .study-limit-item{display:grid;gap:var(--space-3);padding-block:var(--space-4)}
+.study-details-dialog .study-limit-item>.section-actions{justify-content:flex-start}
+.study-details-dialog .assumption-evidence-row button{margin-block:var(--space-1)}
+.run-files{margin-top:var(--space-6)}
+@media(max-width:720px){.method-narrative{grid-template-columns:minmax(0,1fr)}}

@@ -306,7 +306,7 @@ export function Workspace() {
         setRequestedApproach(target.approach);
         setRequestedCase(target.case ? { approach: target.approach, id: target.case, token: ++caseToken.current } : undefined);
         await approach.open(sid, target.approach);
-      } else if (target.view === 'overview') {
+      } else if ((target.view === 'overview' || target.view === 'cases')) {
         // Overview and approach are application-owned; no mutable model read.
       } else if (target.run) {
         const run = await api.run(sid, target.run); if (token !== generation.current) return;

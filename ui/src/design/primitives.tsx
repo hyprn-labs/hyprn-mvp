@@ -98,17 +98,52 @@ export type CriterionRecordProps = {
 export function CriterionRecord({ number, target, comparison, threshold, units, tolerances, evidence, evaluation }: CriterionRecordProps) {
   const id = useId(), unit = units || 'dimensionless';
   const value = (n: number | null, missing = 'unassigned') => n === null ? missing : formatNumber(n);
-  const exact = (n: number | null, missing = 'unassigned') => n === null ? missing : Number.isFinite(n) ? String(n) : 'not computed';
-  return <article className="hf-criterion-record hf-criterion" aria-labelledby={id}>
-    <div className="hf-criterion__heading"><h4 id={id}>Criterion {number}</h4>{evaluation && <StatusTag tone={evaluation.tone}>{evaluation.label}</StatusTag>}</div>
-    <p className="hf-criterion__target">{target || 'Choose output'}</p>
-    <div className="hf-criterion__requirement"><span>{comparison}</span><span className="hf-criterion__number">{value(threshold)}</span><span className="hf-criterion__unit">{unit}</span></div>
-    {tolerances && <dl className="hf-criterion__facts"><div><dt>Absolute tolerance</dt><dd>{value(tolerances.absolute)} <span className="hf-criterion__unit">{unit}</span></dd></div><div><dt>Relative tolerance</dt><dd>{value(tolerances.relative)}</dd></div></dl>}
-    {evaluation?.actual !== undefined && <dl className="hf-criterion__facts"><div><dt>Actual value</dt><dd>{value(evaluation.actual, 'not computed')} <span className="hf-criterion__unit">{evaluation.units ?? unit}</span></dd></div></dl>}
-    {evaluation?.reason && <p className="hf-criterion__reason">{evaluation.reason}</p>}
-    {evidence && <div className="hf-criterion__evidence">{evidence}</div>}
-    <div className="hf-criterion__actions"><ActionDialog title={`Full-precision values for criterion ${number}`} label="Full-precision values" size="sm"><dl className="hf-record-details"><dt>Threshold</dt><dd>{exact(threshold)} {unit}</dd>{tolerances && <><dt>Absolute tolerance</dt><dd>{exact(tolerances.absolute)} {unit}</dd><dt>Relative tolerance</dt><dd>{exact(tolerances.relative)}</dd></>}{evaluation?.actual !== undefined && <><dt>Actual value</dt><dd>{exact(evaluation.actual, 'not computed')} {evaluation.units ?? unit}</dd></>}</dl></ActionDialog></div>
-  </article>;
+  return (
+    <article className="hf-criterion-record hf-criterion" aria-labelledby={id}>
+      <div className="hf-criterion__heading">
+        <h4 id={id}>Criterion {number}</h4>
+        {evaluation && <StatusTag tone={evaluation.tone}>{evaluation.label}</StatusTag>}
+      </div>
+      <p className="hf-criterion__target">{target || 'Choose output'}</p>
+      <div className="hf-criterion__requirement">
+        <span>{comparison}</span>
+        <span
+          className="hf-criterion__number"
+          title={threshold === null ? undefined : String(threshold)}
+        >
+          {value(threshold)}
+        </span>
+        <span className="hf-criterion__unit">{unit}</span>
+      </div>
+      {tolerances && (
+        <dl className="hf-criterion__facts">
+          <div>
+            <dt>Absolute tolerance</dt>
+            <dd>
+              {value(tolerances.absolute)} <span className="hf-criterion__unit">{unit}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Relative tolerance</dt>
+            <dd>{value(tolerances.relative)}</dd>
+          </div>
+        </dl>
+      )}
+      {evaluation?.actual !== undefined && (
+        <dl className="hf-criterion__facts">
+          <div>
+            <dt>Actual value</dt>
+            <dd>
+              {value(evaluation.actual, 'not computed')}{' '}
+              <span className="hf-criterion__unit">{evaluation.units ?? unit}</span>
+            </dd>
+          </div>
+        </dl>
+      )}
+      {evaluation?.reason && <p className="hf-criterion__reason">{evaluation.reason}</p>}
+      {evidence && <div className="hf-criterion__evidence">{evidence}</div>}
+    </article>
+  );
 }
 
 /** Closing hides rather than unmounts children, preserving the owning controller's draft. */

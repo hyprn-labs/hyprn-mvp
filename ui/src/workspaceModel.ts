@@ -68,7 +68,8 @@ export function useGuardSlot<T extends EditorGuard>(clean: () => T) {
 }
 export type GuardSlot<T extends EditorGuard> = ReturnType<typeof useGuardSlot<T>>;
 
-export type WorkspaceView = 'overview' | 'model' | 'configurations' | 'runs' | 'evidence' | 'approach';
+export type WorkspaceView =
+  'overview' | 'model' | 'configurations' | 'runs' | 'evidence' | 'approach' | 'cases';
 export type Selection = { kind: 'none' } | { kind: 'instance'; instance_id: string }
   | { kind: 'variable'; instance_id: string; port_id: string }
   | { kind: 'connection'; connection_id: string }

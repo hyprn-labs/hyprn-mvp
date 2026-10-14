@@ -25,10 +25,8 @@ function renderOverview(ctx: ViewContext) {
             const editStudy = (
               <ActionDialog title="Edit study" label="Edit study">
                 <p>
-                  Edit the study name and description used in the study list.{' '}
-                  {saved
-                    ? 'To edit the study question, use Edit all in Study details.'
-                    : 'To edit the study question, open the modeling approach.'}
+                  Edit the study name and description used in the study list. To edit the study
+                  question, open the modeling approach.
                 </p>
                 <RecordAttribution kind="study_context" id={study.revision} line />
                 <fieldset className="form-stack" disabled={busy || !!api.pending}>
@@ -73,6 +71,7 @@ function renderOverview(ctx: ViewContext) {
             );
             return saved ? (
               <ApproachReader
+                presentation="overview"
                 source={{ kind: 'saved', record: saved }}
                 api={api}
                 studyId={study.study_id}
@@ -83,16 +82,47 @@ function renderOverview(ctx: ViewContext) {
                   api,
                   studyId: study.study_id,
                   controller: ctx.approach,
+                  metadataBusy: busy,
+                  captureMetadataReset: () => {
+                    const before = { ...metadata };
+                    return () => setMetadata(before);
+                  },
+                  saveMetadata: async () => {
+                    if (metadataDirty) await saveMetadata();
+                  },
+                  metadataFields: (
+                    <fieldset className="form-stack" disabled={busy || !!api.pending}>
+                      <label>
+                        Study name
+                        <TextInput
+                          value={metadata.name}
+                          maxLength={4096}
+                          onChange={(e) => setMetadata({ ...metadata, name: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Study list description
+                        <TextArea
+                          value={metadata.description}
+                          maxLength={4096}
+                          onChange={(e) =>
+                            setMetadata({ ...metadata, description: e.target.value })
+                          }
+                        />
+                      </label>
+                      {error != null && <p role="alert">{message(error)}</p>}
+                    </fieldset>
+                  ),
                   onSaved: onSaved!,
                   onEditingChange: (dirty) => {
                     ctx.approachEditingRef.current = dirty;
                     ctx.setApproachEditing(dirty);
                   },
                 }}
-                detailsActions={editStudy}
                 findings={(slot) => (
                   <ApproachFindings
                     {...slot}
+                    section="answer"
                     api={api}
                     studyId={study.study_id}
                     saved={saved}

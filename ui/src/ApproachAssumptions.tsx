@@ -57,7 +57,7 @@ function Citations({
   links,
   label,
   onChange,
-  brief = false,
+  brief = true,
 }: {
   brief?: boolean;
   links: ApproachEvidenceLink1[];
@@ -235,7 +235,7 @@ function Citations({
 }
 export function ApproachAssumptions({
   showHeading = true,
-  brief = false,
+  brief = true,
 }: { showHeading?: boolean; brief?: boolean } = {}) {
   const ctx = useAnnotations(),
     { api, studyId, content, records, onChange, disabled, addRecords } = ctx;
@@ -406,6 +406,10 @@ type StudyDetailsEditorOptions = {
   studyId: string;
   controller: ApproachController;
   onSaved: () => void;
+  metadataFields?: ReactNode;
+  saveMetadata?: () => Promise<void>;
+  metadataBusy?: boolean;
+  captureMetadataReset?: () => () => void;
   onEditingChange?: (dirty: boolean) => void;
 };
 function StudyDetailsEditor({
@@ -421,6 +425,7 @@ function StudyDetailsEditor({
   const state = useApproachController(controller);
   const [nestedEditing, setNestedEditing] = useState(false);
   const beforeEdit = useRef<ApproachContent | null>(null);
+  const [resetMetadata] = useState(() => options.captureMetadataReset?.());
   useEffect(() => {
     const remember = () => {
       beforeEdit.current = structuredClone(controller.getSnapshot().local);
@@ -431,13 +436,14 @@ function StudyDetailsEditor({
       });
     else remember();
   }, [controller, studyId]);
-  const locked = controller.busy || !!api.pending || state.accessLost;
+  const locked = controller.busy || !!api.pending || state.accessLost || options.metadataBusy;
   return (
     <>
       {state.error && <p role="alert">{state.error}</p>}
       {controller.busy && <p role="status">Loading or saving study details…</p>}
       {state.studyId === studyId && state.local && !state.accessLost && (
         <>
+          {options.metadataFields}
           <ApproachAnnotations
             api={api}
             studyId={studyId}
@@ -463,6 +469,9 @@ function StudyDetailsEditor({
               disabled={locked || nestedEditing}
               onClick={() =>
                 void (async () => {
+                  try {
+                    await options.saveMetadata?.();
+                  } catch { return; }
                   if ((await controller.save()) && (await controller.saveVersion())) {
                     options.onSaved();
                     onFinish();
@@ -476,6 +485,7 @@ function StudyDetailsEditor({
               disabled={locked || nestedEditing}
               onClick={() => {
                 if (beforeEdit.current) controller.edit(beforeEdit.current);
+                resetMetadata?.();
                 onFinish();
               }}
             >
@@ -559,7 +569,7 @@ export function StudyDetailsDialog({
             <StudyDetails limitsHeading={limits} />
             <div className="study-details-edit-actions">
               {actions}
-              {editor && <Button onClick={() => setEditingAll(true)}>Edit all</Button>}
+              {editor && <Button onClick={() => setEditingAll(true)}>Edit study</Button>}
             </div>
           </>
         )}
@@ -576,20 +586,6 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
   const dialog=useRef<HTMLDialogElement>(null),invoker=useRef<HTMLElement|null>(null);
   useApproachEditGuard('limit',!!editing);
   const described=descriptiveApproach(content),limits=described.limit_items;
-  const citationKey = (link: ApproachEvidenceLink1) =>
-    JSON.stringify([link.evidence_version_id, link.relation, link.locator ?? null]);
-  const citedLimits = new Map<string, { link: ApproachEvidenceLink1; numbers: number[] }>();
-  if (!onChange) {
-    limits.forEach((item, index) => {
-      item.evidence_links.forEach((link) => {
-        const key = citationKey(link), entry = citedLimits.get(key);
-        if (entry) {
-          if (!entry.numbers.includes(index + 1)) entry.numbers.push(index + 1);
-        } else citedLimits.set(key, { link, numbers: [index + 1] });
-      });
-    });
-  }
-  const sharedCitations = [...citedLimits.values()].filter((entry) => entry.numbers.length > 1);
   function begin(item?:typeof editing){invoker.current=document.activeElement as HTMLElement;setEditing(item??{limit_id:crypto.randomUUID(),statement:'',evidence_links:[]});}
   useEffect(()=>{if(editing){dialog.current?.showModal();dialog.current?.querySelector('textarea')?.focus();}},[!!editing]);
   function close(){dialog.current?.close();setEditing(null);invoker.current?.focus();}
@@ -647,17 +643,14 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               Add limit
             </Button>
           )}
-          {limits.map((item, index) => (
+          {limits.map((item) => (
             <article className="study-limit-item" key={item.limit_id}>
               <p className="context-copy">
-                {sharedCitations.length > 0 && <strong>Limit {index + 1}. </strong>}
                 {item.statement}
               </p>
               <Citations
                 brief
-                links={item.evidence_links.filter(
-                  (link) => (citedLimits.get(citationKey(link))?.numbers.length ?? 0) < 2,
-                )}
+                links={item.evidence_links}
                 label={item.statement}
                 onChange={
                   onChange
@@ -699,15 +692,6 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               )}
             </article>
           ))}
-          {sharedCitations.map(({ link, numbers }) => {
-            const label = 'Evidence for limits ' + numbers.join(', ');
-            return (
-              <div className="study-limit-item" key={citationKey(link)}>
-                <p className="context-line">{label}</p>
-                <Citations brief links={[link]} label={label} />
-              </div>
-            );
-          })}
           {(content.limitations.trim() || onChange) && (
             <article className="study-limit-item">
               {onChange ? (

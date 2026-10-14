@@ -74,6 +74,7 @@ export type ApproachResultsSlot = (slot: {
 
 export function ApproachReader({
   source,
+  presentation = 'full',
   onAccessLost,
   questionActions,
   detailsEditor,
@@ -90,6 +91,7 @@ export function ApproachReader({
   onEditingChange,
   onCreateConfiguration,
 }: {
+  presentation?: 'full' | 'overview' | 'cases';
   onAccessLost?: () => void;
   onCreateConfiguration?: (caseId: string) => void;
   onEditingChange?: (dirty: boolean) => void;
@@ -131,6 +133,11 @@ export function ApproachReader({
       disabled={disabled}
     />
   );
+  const findingsContent = findings?.({
+    answerId: sectionId + '-answer', casesId: sectionId + '-cases', focusCase,
+    onViewStep: viewStep,
+    onStudyLimits: () => details.current?.open('limits'),
+  });
   // Retained and draft readers never navigate to live case usage.
   return (
     <CaseNavigation.Provider value={null}>
@@ -153,7 +160,7 @@ export function ApproachReader({
         onOpenModel={onOpenModel}
       >
         <div role="region" aria-label="The modeling approach">
-          <StudyQuestionBox
+          {presentation !== 'cases' && <StudyQuestionBox
             question={content.question}
             scope={content.scope}
             headingId={sectionId + '-question'}
@@ -173,8 +180,10 @@ export function ApproachReader({
               </>
             }
           />
+          }
           <StudyDetailsDialog ref={details} editor={detailsEditor} actions={detailsActions} />
-          <Panel
+          {presentation !== 'full' && findingsContent}
+          {presentation !== 'cases' && <Panel
             className="approach-section"
             id={sectionId + '-methods'}
             label="Reasoning and methods"
@@ -201,18 +210,9 @@ export function ApproachReader({
               onChange={onChange}
               disabled={disabled}
             />
-          </Panel>
-          {findings ? (
-            findings({
-              answerId: sectionId + '-answer',
-              casesId: sectionId + '-cases',
-              focusCase,
-              onViewStep: viewStep,
-              onStudyLimits:
-                content.limitations.trim() || descriptiveApproach(content).limit_items.length
-                  ? () => details.current?.open('limits')
-                  : undefined,
-            })
+          </Panel>}
+          {presentation === 'full' && (findings ? (
+            findingsContent
           ) : (
             <>
               <Panel
@@ -244,7 +244,7 @@ export function ApproachReader({
                 </p>
               </Panel>
             </>
-          )}
+          ))}
         </div>
       </ApproachAnnotations>
     </CaseNavigation.Provider>

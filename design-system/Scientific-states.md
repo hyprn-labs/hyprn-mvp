@@ -12,7 +12,7 @@ How HYPRN MVP words and marks results. These rules carry the product's scientifi
 | Converted unit | entered value, factor and received value: `150 % → 1.5 (1)` | silent conversion |
 | Incompatible unit | alarm on the field, the declared unit and the compatible list | auto-correct |
 
-Displayed numbers use up to three decimal places, with scientific notation below 0.001 or at and above 1e9; a nonzero quantity is never rounded to a displayed zero. Full-precision values stay available in a "Full-precision values" dialog and in exports; editing, thresholds and comparisons always use exact values.
+Displayed numbers use up to three decimal places, with scientific notation below 0.001 or at and above 1e9; a nonzero quantity is never rounded to a displayed zero. Full-precision values stay available in numeric tooltips and exports, without a separate precision dialog; editing, thresholds and comparisons always use exact values.
 
 ## Run headline
 

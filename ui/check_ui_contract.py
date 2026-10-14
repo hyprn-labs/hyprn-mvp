@@ -19,7 +19,10 @@ checks = {
     'src/Workspace.tsx': ['setModified({seed,source})'],
     'src/views/runs.tsx': ['onViewSourceResult', 'Return to configuration',
                            'onCreateModified={createModified}'],
-    'src/ConfigurationRecord.tsx': ['result_binding', 'derivation', 'onViewSourceResult', 'binding.source_output', 'Uses result from'],
+    'src/ConfigurationRecord.tsx': [
+        'result_binding', 'ConfigurationRecordDetails', 'onViewSourceResult',
+        'binding.source_output', 'Uses result from',
+    ],
     'src/RecordedConfiguration.tsx': ['<ConfigurationRecord onViewSourceResult={onViewSourceResult}'],
     'src/RunPanel.tsx': ['<ConfigurationRecord onViewSourceResult={onViewSourceResult}', 'data-source-output', 'button?.focus()', 'api.modifiedRunSeed', 'Create modified run', 'detail?.runtime_comparison'],
     'src/api.ts': ['result-sources', 'ConfigurationRequest2', 'ConfigurationCommit2', 'ModifiedRunSeed1', 'modified-run-seed'],
@@ -32,7 +35,7 @@ checks['src/api.ts'] += ['RecordPreviewRequest', 'RecordCreateRequest', 'computa
 # Assumptions and evidence wiring; behaviour and browser zoom are proven by the browser groups.
 checks['src/Assumptions.tsx'] = ['ownerKey', 'evidence_links', 'Statement', 'Apply assumption', 'Keep assumption', 'No evidence linked', 'EvidencePicker', 'onUnavailable']
 checks['src/ConfigurationPanel.tsx'] += ['ConfigurationRequest3', 'general_context_evidence_version_ids', 'assumptions:', 'commitConfiguration3', 'assumptionEvidence', 'This evidence reference could not be resolved.', 'Check original configuration command']
-checks['src/RunPanel.tsx'] += ['RunEvidence', 'history.evidence', 'history.model_snapshot', 'retainedRunAssumptions(history, open)', '<EvidenceIndex', 'Input provenance', 'Criterion evidence', 'General context', 'configurationContext(configuration)', 'criterionOperators[criterion.operator]', '<RetainedFiles']
+checks['src/RunPanel.tsx'] += ['history.model_snapshot', '<ConfigurationRecord', '<RetainedFiles']
 # A run's assumptions by owner (model, component, configuration, approach) live in the shared EvidenceIndex.
 checks['src/EvidenceIndex.tsx'] = ['export function retainedRunAssumptions(', "label: 'Model'", "'Whole model'", "'Component · '", "label: 'Configuration'", "label: 'Modeling approach'", 'context.assumptions.items', 'modelAssumptions(model)', 'history.evidence', 'closure.evidence']
 # The general context field is interpreted once, in recordViews.ts.
@@ -40,10 +43,14 @@ checks['src/recordViews.ts'] = ['c.general_context_evidence_version_ids', 'expor
 checks['src/ComparisonView.tsx'] = ['checkPackage(packageText)', '/model-imports', 'Preview model import', 'Download portable model record', 'expected_revision: preview.revision']
 checks['src/exports.ts'] = ["value.schema_version === '1'", 'revision.schema_version', 'revision.parent_model_revision_id !== parent', 'Model version identity, parent or SHA-256 mismatch.', 'exactSource(source)', '2 * 1024 * 1024 - 512']
 checks['src/contract.ts'] += ['ModelRevision2', 'ModelPackage2', 'ConfigurationRequest3', 'ModifiedRunSeed2', 'ExecutionBundle4', 'RunHistory2', 'AssumptionEvidenceLink']
-run_evidence = (ROOT/'src/RunPanel.tsx').read_text().split('function RunEvidence(',1)[1].split('export function RunPanel(',1)[0]
-for forbidden in ('api.', 'evidenceFamily(', 'assumptionEvidence(', 'useEffect(', 'fetch(', 'new HyprnMvpApi'):
-    assert forbidden not in run_evidence, ('Retained evidence must not resolve live content', forbidden)
-assert 'records={records}' in run_evidence
+# Saved evidence reads beside its owning configuration assertion without live fetching.
+configuration_record = (ROOT / 'src/ConfigurationRecord.tsx').read_text()
+for forbidden in ('api.', 'evidenceFamily(', 'assumptionEvidence(', 'fetch('):
+    assert forbidden not in configuration_record, (
+        'Saved evidence must not resolve live content',
+        forbidden,
+    )
+assert 'records={c.evidence_snapshots}' in configuration_record
 # The run's assumptions index is projected from the retained history only.
 retained_index = (ROOT/'src/EvidenceIndex.tsx').read_text().split('export function retainedRunAssumptions(',1)[1].split('function OwnerGroup(',1)[0]
 for forbidden in ('api.', 'evidenceFamily(', 'assumptionEvidence(', 'useEffect(', 'fetch(', 'HyprnMvpApi'):
@@ -324,7 +331,9 @@ for path in sorted((ROOT/'src'/'views').glob('*.tsx')):
 for file,terms in removed_view.items():
  text=(ROOT/file).read_text()
  for removed in terms:assert removed not in text,(file,'Removed by the canonical model view',removed)
-assert "const tabs = ['Results', 'Model', 'Configuration', 'Evidence'] as const;" in (ROOT/'src/RunPanel.tsx').read_text(),'Run tab is "Model" (one version)'
+assert "const tabs = ['Results', 'Model', 'Configuration'] as const;" in (
+    ROOT / 'src/RunPanel.tsx'
+).read_text(), 'Run tab is "Model" (one version)'
 table_text=(ROOT/'src/VariablesTable.tsx').read_text()
 for term in ('export function QuantitiesTable(','Show all quantities','aria-label="Quantities table"','label="Quantities"',"'not computed'","'unassigned'","'computed when run'"):
  assert term in table_text,('src/VariablesTable.tsx','Quantities table',term)
@@ -437,7 +446,9 @@ assert 'Saved notes and references' not in evidence_panel and 'title="Saved evid
 assert 'onOpen={target => navigate(() => void openLink(target))} />}</div>' in \
  (ROOT/'src/views/evidence.tsx').read_text(),\
  ('src/views/evidence.tsx','Evidence page owner links use guarded navigation')
-assert '<Assumptions regionless' not in (ROOT/'src/RunPanel.tsx').read_text() and 'function RunEvidence(' in run_text,('src/RunPanel.tsx','Run evidence renders through the shared index')
+assert 'function RunEvidence(' not in run_text, (
+    'src/RunPanel.tsx', 'Evidence stays with its owning assertion',
+)
 for file, terms in {
     'src/RunPanel.tsx': (
         'api.artifact(studyId, selected, artifact, read.signal)',
@@ -511,7 +522,12 @@ for path in sorted([*(ROOT/'src').glob('*.ts'),*(ROOT/'src').glob('*.tsx'),
  text=re.sub(r'(^|\s)//[^\n]*',r'\1',re.sub(r'/\*.*?\*/','',path.read_text(),flags=re.S))  # reader text, not comments
  for phrase in retired:
   assert phrase not in text,(str(path.relative_to(ROOT)),'Retired reader-facing phrase (design-system/Naming.md)',phrase)
-for file,terms in {'src/runStatus.tsx':('label="Run status"',),'src/RunPanel.tsx':('title="Outputs"','label="Full-precision values"','Values at full precision.','title="Run files"','>View case</CaseContextLink>','<dt>Execution bundle SHA-256</dt>'),
+for file,terms in {
+  'src/runStatus.tsx': ('label="Run status"',),
+  'src/RunPanel.tsx': (
+    'title="Outputs"', 'title="Run files"', '>View case</CaseContextLink>',
+    '<dt>Execution bundle SHA-256</dt>',
+  ),
  'src/ComputationalExportDialog.tsx':("'Create record export'","'Download record export'",'<h3>Computational record export</h3>'),'src/ComparisonView.tsx':('Download portable model record','label="Portable model record file"',"'Quantities CSV'"),
  'src/ApproachMethod.tsx':('<h3>Earlier work</h3>','Add earlier work'),
  'src/OverviewRecords.tsx':(

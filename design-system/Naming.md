@@ -54,7 +54,7 @@ Any change to a reader-facing name is made in this file together with the interf
 | Comparison (model version, configuration version or current draft) | "Compare", "Read comparison target", region "Comparison", "Right side identity", "Uses the loaded model; unsaved edits are excluded." | "snapshot" |
 | Criterion evaluation | "Criterion evaluator", "criterion evaluation" ("Display rounding never changes criterion evaluation or exported data.") | "assessment" for a threshold check. "Assessment" stays for the scientific interpretation ("No study answer has been assessed.") |
 | Run status ledger (accessible name) | "Run status" | "Scientific outcomes" |
-| Run outputs | "Outputs"; table "Output values"; dialog and action "Full-precision values"; "Values at full precision."; tooltip "Full precision: …" | "Recorded outputs", "Exact values", "Exact recorded values" |
+| Run outputs | "Outputs"; table "Output values"; full precision in numeric tooltips and exports; no precision dialog | "Recorded outputs", "Exact values", "Exact recorded values" |
 | Run files | "Run files" (table "Run files table"); "This run file is unavailable."; "Read-only run file"; "Execution diagnostics" | "Retained files", "retained artifact" |
 | Run history intro | "Newest first. Failed and incomplete runs stay listed." | "Recorded calculations, newest first." with a second "every attempt" note |
 | Run record bar | "Run record · Read-only" | "Read-only run record" with a line about retained inputs |
@@ -88,8 +88,8 @@ Any change to a reader-facing name is made in this file together with the interf
 
 ## Fixed labels
 
-- Study tabs: Overview, Models, Configurations, Runs, Evidence.
-- Run tabs: Results, Model, Configuration, Evidence.
+- Study tabs: Overview, Models, Configurations, Runs, Cases and their answers.
+- Run tabs: Results, Model, Configuration.
 - Model views: Graph, XDSM.
 - Footer link: "Third-party software notices".
 

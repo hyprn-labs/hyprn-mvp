@@ -77,3 +77,13 @@ three components. Its method text says only “Use standard engineering equation
 Ask the agent to improve the explanation from the linked source and explicit
 inputs. It should explain the calculation sequence, suitability and assumptions,
 without inventing validation or copying aircraft-specific case categories.
+
+## A changed scenario with stale input citations
+
+A supersonic reference describes Mach 6. The author sets Mach 8 for a deliberately
+chosen envelope case and attaches the reference to that input. Expected: distinguish
+the case choice from evidence supporting a correlation; cite the study requirement
+or case rationale for Mach 8, remove the misleading assignment citation, and inspect
+other changed inputs for the same mismatch. Do not claim the paper supports Mach 8
+or rewrite its evidence note to do so. This principle must also work for a changed
+pump speed or thermal boundary condition.

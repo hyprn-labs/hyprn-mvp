@@ -18,7 +18,7 @@ export function EvidenceRecordBody({
   onUnavailable,
   compact = false,
   relation,
-  brief = false,
+  brief = compact,
 }: {
   record: EvidenceSnapshot;
   action?: ReactNode;

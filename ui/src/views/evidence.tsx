@@ -31,7 +31,7 @@ function evidenceGuard({ evidenceSlot }: GuardContext) {
 
 export const evidenceView: ViewEntry<'evidence'> = {
   name: 'evidence',
-  placement: { kind: 'tab', label: 'Evidence', position: 5 },
+  placement: { kind: 'link', tab: 'overview', breadcrumb: 'Evidence' },
   parseLink: resourceViewLink,
   render: renderEvidence,
   guard: evidenceGuard,

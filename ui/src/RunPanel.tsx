@@ -8,18 +8,16 @@ import { CaseContextLink } from './ConfigurationApproach';
 import { runLabel } from './recordLabels';
 import { ComputationalExportDialog } from './ComputationalExportDialog';
 import { ConfigurationRecord, ConfigurationRecordDetails } from './ConfigurationRecord';
-import { EvidenceList } from './EvidenceView';
 import { RetainedFiles } from './RetainedFiles';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { HyprnMvpApi, accessLostText, accessUnverifiedText, message } from './api';
 import { useAccessLoss } from './accessLoss';
 import type { ConfigurationRevision, PublicRun, PublicRunDetail, RunHistoryRead6, RunHistoryItem, ModifiedRunSeedRead6 } from './api';
 import type { HistoryArtifact, ProgramSourceMapEntry } from './contract';
-import { EvidenceIndex, retainedRunAssumptions } from './EvidenceIndex';
 import { CaseNavigation, type Selection } from './workspaceModel';
 import {
   Button, Panel, Tabs, TextInput, Select, DataTable, RecordBar, StatusTag, Progress,
-  ActionDialog, SectionHeader, formatNumber,
+  ActionDialog, SectionHeader, Disclosure, formatNumber,
 } from './design';
 import { modelPorts, refKey, RuntimeComparisonView } from './ConfigurationPanel';
 import { criterionOperators } from './criterionLabels';
@@ -45,7 +43,7 @@ function progressLabel(run: PublicRun) {
 const present = (value: unknown, labels: Record<string, string>) => value == null ? 'Not available' : typeof value === 'string' && Object.hasOwn(labels, value) ? labels[value] : 'Unknown';
 const outputReasons = { producer_failed: 'Producer failed', unassigned: 'Not assigned', nonfinite: 'Non-finite value', unavailable: 'Unavailable' };
 const executionLabels = { finished: 'Completed', failed: 'Failed' };
-const tabs = ['Results', 'Model', 'Configuration', 'Evidence'] as const;
+const tabs = ['Results', 'Model', 'Configuration'] as const;
 type HistoryTab = typeof tabs[number];
 const previewLimit = 64 * 1024;
 
@@ -91,34 +89,6 @@ function RunCaseCell({ run, value }: { run: RunHistoryItem; value: RunCase }) {
   return <p className="run-case"><span className="run-case-label">Case</span>{value.linked
     ? <CaseContextLink target={{ approach_version_id: value.linked.approach_version_id, case_id: value.linked.case_id }} returnKey={'run-case:' + run.run_id} label={`${value.label}, open case for run ${run.run_id.slice(0, 8)}`}>{value.label}</CaseContextLink>
     : <span>{value.label}</span>}</p>;
-}
-
-// Recorded uses are resolved only against the verified retained snapshots. Assumptions are
-// listed by owner with the shared EvidenceIndex, from the approach version, model
-// version and configuration revision retained with this run; model formats without
-// assumptions are named by recordViews, never reported as empty.
-type RunEvidenceOpen = Parameters<typeof retainedRunAssumptions>[1];
-function RunEvidence({ history, open }: { history: RunHistoryRead6; open?: RunEvidenceOpen }) {
-  const configuration = history.configuration, model = history.model_snapshot;
-  const records = history.evidence;
-  const approachEvidence = "approach_closure" in history ? history.approach_closure?.evidence ?? [] : [];
-  if (!records) return <p>This run's evidence is unavailable.</p>;
-  const plain = <><SectionHeader title="Evidence used by this run" />{records.length ? <EvidenceList records={records} /> : <p>No evidence was attached to this run.</p>}</>;
-  if (!configuration) return plain;
-  const context = configurationContext(configuration);
-  if (context.kind === 'unsupported') return <><p role="status">{recordLimitations.configurationUnsupported} Evidence is listed without where it was used.</p>{plain}</>;
-  if (context.assumptions.kind !== 'recorded' || context.generalContext.kind !== 'explicit') return plain;
-  const generalContext = context.generalContext.evidenceVersionIds;
-  const ports = model ? modelPorts(model) : [];
-  const portName = (target: { instance_id: string; port_id: string }) => ports.find(port => refKey(port.target) === refKey(target))?.label ?? refKey(target);
-  return <EvidenceIndex state={{ owners: retainedRunAssumptions(history, open), unlisted: [] }} intro="Assumptions this run used, from its approach, model and configuration versions.">
-    <div className="run-evidence-uses">
-    {!!approachEvidence.length && <section aria-label="Modeling approach evidence"><SectionHeader title="Modeling approach" /><p>Evidence cited by the approach explanation and its earlier work.</p><EvidenceList records={approachEvidence} /></section>}
-    <section aria-label="Input provenance"><SectionHeader title="Input provenance" />{configuration.inputs.some(input => input.provenance.evidence_version_ids.length) ? configuration.inputs.filter(input => input.provenance.evidence_version_ids.length).map(input => <section key={refKey(input.target)} aria-label={portName(input.target)}><h3>{portName(input.target)}</h3><EvidenceList records={records} ids={input.provenance.evidence_version_ids} /></section>) : <p>No input evidence.</p>}</section>
-    <section aria-label="Criterion evidence"><SectionHeader title="Criterion evidence" />{configuration.criteria.some(criterion => criterion.evidence_version_ids.length) ? configuration.criteria.filter(criterion => criterion.evidence_version_ids.length).map(criterion => <section key={criterion.criterion_id} aria-label={portName(criterion.target)}><h3>{portName(criterion.target)} · {criterionOperators[criterion.operator]} {formatNumber(criterion.threshold)} {criterion.units || "dimensionless"}</h3>{criterion.operator === "eq" && <p>Absolute tolerance: {criterion.absolute_tolerance ?? "Not specified"} · Relative tolerance: {criterion.relative_tolerance ?? "Not specified"}</p>}<EvidenceList records={records} ids={criterion.evidence_version_ids} /></section>) : <p>No criterion evidence.</p>}</section>
-    <section aria-label="General context"><SectionHeader title="General context" />{generalContext.length ? <EvidenceList records={records} ids={generalContext} /> : <p>No general context evidence attached.</p>}</section>
-    </div>
-  </EvidenceIndex>;
 }
 
 export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, sourceOutput, resourceActionsRef, listEpoch = 0, api, studyId, submitted, onActive, onCreateModified, navigate, onInspection, onHistory, workspace, onSelect }: { onViewSourceResult?: (runId: string, output: { instance_id: string; port_id: string }) => void; sourceOutput?: { runId: string; output: { instance_id: string; port_id: string } }; resourceActionsRef?: (element: HTMLDivElement | null) => void; listEpoch?: number; api: HyprnMvpApi; studyId: string; submitted: PublicRun | null; onActive: (active: boolean) => void; onCreateModified: (seed: ModifiedRunSeedRead6, config: ConfigurationRevision) => void; navigate: (action: () => void) => void; onInspection?: (detail: PublicRunDetail | null) => void; /** The user explicitly returned to the run history list. */ onHistory?: () => void; workspace?: ReactNode; onSelect?: (selection: Selection) => void; filters?: RunFilters; onFilters?: (filters: RunFilters) => void }) {
@@ -416,41 +386,7 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                 <p className="context-copy">{results.execution.message}</p>
               </section>
             )}
-            <SectionHeader
-              title="Outputs"
-              actions={
-                <ActionDialog title="Full-precision values" label="Full-precision values">
-                  <p>
-                    Values at full precision. Display rounding never changes criterion
-                    evaluation or exported data.
-                  </p>
-                  <DataTable regionLabel="Full-precision output values">
-                    <thead>
-                      <tr>
-                        <th>Output</th>
-                        <th>Value</th>
-                        <th>Units</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.outputs.map((o) => (
-                        <tr key={refKey(o.target)}>
-                          <th scope="row">{label(o.target)}</th>
-                          <td className="hf-mono">
-                            {o.availability === 'available' &&
-                            o.value !== null &&
-                            Number.isFinite(o.value)
-                              ? String(o.value)
-                              : 'not computed'}
-                          </td>
-                          <td>{o.units || 'dimensionless'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </DataTable>
-                </ActionDialog>
-              }
-            />
+            <SectionHeader title="Outputs" />
             <DataTable regionLabel="Output values">
               <thead>
                 <tr>
@@ -521,12 +457,8 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
           </> : <p>This run's configuration can't be shown. The current configuration is not shown
             in its place.</p>}
         </Panel></CaseNavigation.Provider></section>
-        <section role="tabpanel" id="run-panel-3" aria-labelledby="run-tab-3" hidden={tab !== 'Evidence'}><Panel>
-          <RunEvidence history={history} open={{
-            approach: detailCase?.link && <CaseContextLink target={detailCase.link.target} returnKey={'run-evidence-approach:' + selected} label={`Open modeling approach version ${detailCase.link.version}`}>Open modeling approach</CaseContextLink>,
-            model: <Button size="sm" variant="quiet" onClick={() => openTab('Model')}>Open model version</Button>,
-            configuration: <Button size="sm" variant="quiet" onClick={() => openTab('Configuration')}>Open configuration</Button>,
-          }} />
+        <div hidden={tab !== 'Results'}><Disclosure className="run-files">
+          <summary>Run files and diagnostics</summary>
           <SectionHeader
             title="Run files"
             actions={
@@ -592,7 +524,7 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
           <RetainedFiles key={selected} artifacts={history.artifacts} busy={artifactBusy} read={(a, mode) => void readArtifact(a, mode)} />
           {preview && <section aria-label="Artifact preview" className="hf-artifact-preview"><SectionHeader title={preview.artifact.name} actions={<Button onClick={() => { artifactRequest.current++; setPreview(null); }}>Close preview</Button>} /><p className="evidence-content">SHA-256 {preview.artifact.sha256}</p><pre ref={previewElement} tabIndex={0} aria-label="Read-only run file">{preview.text}</pre></section>}
 
-        </Panel></section>
+        </Disclosure></div>
 
         </>}
       </>}
