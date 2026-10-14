@@ -13,6 +13,7 @@ go to a new folder below the scratch root (deployment/local_paths.py); the recor
 JSON. Static generation tests take the image id from HYPRN_MVP_NATIVE_STATIC_IMAGE; the reviewed
 producer image is pinned in deployment/pins.json (``modeling_producer``).
 """
+
 import json
 from pathlib import Path
 import sys
@@ -25,12 +26,18 @@ import modeling_runtime  # noqa: E402
 
 
 def build_native_static():
-    evidence = Path(tempfile.mkdtemp(prefix='hyprn-mvp-modeling-image-', dir=local_paths.scratch_root()))
+    evidence = Path(
+        tempfile.mkdtemp(prefix='hyprn-mvp-modeling-image-', dir=local_paths.scratch_root())
+    )
     image = modeling_runtime.build(evidence=evidence)
     identity = modeling_runtime.image_identity(image)
-    record = dict(image=image, source_image=identity['source_image'],
-                  ruby_image=identity['source_build_inputs']['ruby_image'],
-                  source_hashes=modeling_runtime.source_hashes(), evidence=str(evidence))
+    record = dict(
+        image=image,
+        source_image=identity['source_image'],
+        ruby_image=identity['source_build_inputs']['ruby_image'],
+        source_hashes=modeling_runtime.source_hashes(),
+        evidence=str(evidence),
+    )
     (evidence / 'image.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record))
     return record

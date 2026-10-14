@@ -2,6 +2,7 @@
 
 No candidate, dynamic registration, runtime parser or network is involved.
 """
+
 import hashlib
 import inspect
 import json
@@ -13,9 +14,37 @@ from openmdao.utils import units
 
 VERSION = '3.45.1'
 SOURCE_SHA256 = '9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92'
-NAMES = ['', 'm', 'km', 'cm', 'mm', 's', 'min', 'h', 'kg', 'g', 'N', 'Pa',
-         'kPa', 'MPa', 'K', 'degC', 'degF', 'rad', 'deg', 'm/s', 'km/h',
-         'J/kg', 'kJ/kg', 'MJ/kg', 'kg/m**3', 'g/cm**3', 'm**2', 'cm**2', 'mm**2']
+NAMES = [
+    '',
+    'm',
+    'km',
+    'cm',
+    'mm',
+    's',
+    'min',
+    'h',
+    'kg',
+    'g',
+    'N',
+    'Pa',
+    'kPa',
+    'MPa',
+    'K',
+    'degC',
+    'degF',
+    'rad',
+    'deg',
+    'm/s',
+    'km/h',
+    'J/kg',
+    'kJ/kg',
+    'MJ/kg',
+    'kg/m**3',
+    'g/cm**3',
+    'm**2',
+    'cm**2',
+    'mm**2',
+]
 
 
 def generate():
@@ -37,8 +66,13 @@ def generate():
                 raise ValueError('Invalid trusted conversion')
             if offset == 0:
                 pairs.append([a, b, factor, offset])
-    catalog = dict(engine='OpenMDAO', version=VERSION, source_sha256=source,
-                   supported_units=NAMES, linear_pairs=pairs)
+    catalog = dict(
+        engine='OpenMDAO',
+        version=VERSION,
+        source_sha256=source,
+        supported_units=NAMES,
+        linear_pairs=pairs,
+    )
     payload = json.dumps(catalog, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
     catalog['catalog_digest'] = hashlib.sha256(payload).hexdigest()
     return catalog
