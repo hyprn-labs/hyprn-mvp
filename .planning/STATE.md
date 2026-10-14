@@ -8,22 +8,24 @@ See: `PROJECT.md` (planning directory)
 **Current focus:** Phases 2 and 3 — Local edition and agent tools
 
 Delivery order and approved execution cadence: [DELIVERY-PLAN.md](DELIVERY-PLAN.md).
-A–D come first; 2.6 is verified, and PD-2.4 at 2.8a is the next stopping point.
+A–D come first; 2.6 is verified and PD-2.4 option a is approved. Next: 2.8b, then the schema/study-path attestation window.
 Related tasks may share a small executor batch with focused development checks and one
 combined acceptance run after integration; original final criteria and human gates remain.
 
 ## Current Position
 
 Phase: 3 of 5 (Agent tools), alongside Phase 2 (Local edition)
-Plan: `DELIVERY-PLAN.md`; 3.6, 3.7, 2.6 and 2.7 verified; awaiting PD-2.4 at 2.8a
+Plan: `DELIVERY-PLAN.md`; 3.6, 3.7, 2.6 and 2.7 verified; PD-2.4 approved; 2.8b ready
 Status: Phase 1 complete — gate 102/103 on a66a1f3, and the remaining findings chain (preflight, findings-native, findings-native-read) passes through `./hyprn-mvp dev check` on the continuation branch after the harness fixes; Phase 2 and Phase 3 in progress
-Last activity: task 2.6 merged at `94a631f`; all 17 integrated acceptance groups pass, including full native execution, browser authoring and durable-fixture restoration. Exact source/artifact identities and cleanup are recorded in checkpoint 2.6. No schema change or PD-2.4 answer is implied.
+Last activity: task 2.6 merged at `94a631f`; all 17 integrated acceptance groups pass, including full native execution, browser authoring and durable-fixture restoration. Exact source/artifact identities and cleanup are recorded in checkpoint 2.6. The product owner subsequently approved PD-2.4 option a and the exact decision packet; 2.8a is complete.
 
 Progress: [██████████] 100% (Phase 1)
 
 ## Accumulated Context
 
 ### Decisions
+
+- PD-2.4 (product owner, 2026-10-14): option a and the exact packet approved. Move 108 Documents-only definitions and registry; retain 11 shared citation definitions, 37 execution roots/140-definition closure and all 49 attested inputs. Preserve the exact pre-split capture and historical identities. Checkpoint 2.8a is authoritative.
 
 - Task 2.7 packaging decision (product owner, 2026-10-14): approve the three reviewed packaging-only transformations for openmdao_extensions 1.6.3, wop 2.6.1 and xdsmjs 2.1.0 to use the already approved flit_core 4.1.0. Runtime file bytes, dependencies and entry points must remain equivalent; only the proposal's enumerated build-metadata differences are allowed, and any unlisted difference blocks acceptance. No setuptools licence exception is granted. Proposal artifact `hyprn-flit-build-proposal/PROPOSAL.md` SHA-256 `e60ff64202d200fa085bef63270ec3457bd4362bc43e04991a576696f2afdcf7`; manifest SHA-256 `2faa1a433783ea23e8851d901f9e57d7b0f12ad69c147333969586167895bf91`. Task 2.7 records the exact transformations and equivalence results in its audit and checkpoint.
 
@@ -113,4 +115,4 @@ Progress: [██████████] 100% (Phase 1)
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
 Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 merged at `088e528`; all 18 task and baseline groups, design checks, build and term scan pass on the merged tree; 18 verification scopes released. Task 3.7 merged at `9546cc1`; all 15 required groups, design checks, build and term scan pass on the merged tree; 15 verification scopes released. Task 2.7 merged through `77f47a9`; all eleven verification groups pass (naming 9, hygiene 5, guard 115, units-guards 137, style 32, locality 125, contracts 115, deployment-hardening 67, api-a 119, units-attestation 74, image-built ui-a 9), term scan 0. A merged-tree mock regression was corrected before acceptance. Fifteen orchestrator scopes across the failed and successful attempts and three labeled Docker objects were released. Task 2.6 merged at `94a631f`; all 17 integrated groups passed (including units-native 14 with the existing one-test deselection, native-a 2, attestation 78, isolation 17 and fixture restoration 1). All 16 allocated verification scopes, the durable materialization and five exact scope-labelled Docker objects were released; immutable and historical fixtures remain. Checkpoint 2.6 records evidence and one resolved cleanup-helper reporting mismatch. See `.planning/HANDOVER.md`.
-Resume: present PD-2.4 at 2.8a, then follow `.planning/DELIVERY-PLAN.md` and its approved batch cadence. Do not change schemas before the decision.
+Resume: execute and verify 2.8b, then 2.8c and 3.16-paths within the approved attestation window; 2.8 closes it. Follow `.planning/DELIVERY-PLAN.md` and the approved batch cadence.

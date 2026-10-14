@@ -46,22 +46,21 @@ required no-cache builds, exact artifact checks and both-client live evidence re
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Complete at `94a631f`; 17 integrated acceptance groups passed. | Source-built producer, 49-file attestation inventory, native-program capture and durable fixture verified. All task scopes released. PD-2.4 is next. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Complete at `94a631f`; 17 integrated acceptance groups passed. | Source-built producer, 49-file attestation inventory, native-program capture and durable fixture verified. All task scopes released. PD-2.4 option a is approved. |
 | 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Approved Flit transformations preserve runtime equivalence. Combined 2.6 tree passed fresh attestation and native acceptance. |
 
-Tasks 2.6 and 2.7 are merged and verified. Present the concrete PD-2.4 decision at 2.8a.
+Tasks 2.6 and 2.7 are merged and verified. PD-2.4 option a and its exact packet are approved; checkpoint 2.8a is complete.
 Then follow DELIVERY-PLAN.md waves: 2.8b → 2.8c → 3.16-paths → 2.8, keeping the
 study-folder configuration change inside the same re-attestation window. Continue
 with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
 The amendment owns the detailed ordering and every dependency replacement.
 
-Product-owner gates remain at PD-2.4, 3.18, 3.28-evidence and 3.28-full; live
+Product-owner gates remain at 3.18, 3.28-evidence and 3.28-full; live
 both-client checkpoints remain mandatory. The queue-limit ambiguity is decided
 for D. Phase 4 is deferred until A–D and E are complete.
 
 ## Decisions waiting for the product owner
 
-- PD-2.4: contract schema split, before 2.8a.
 - 3.28: read literally, the queue cap of 10 waiting or running runs makes the 20-runs-per-call cap unreachable. Should the queue rule count only the runs waiting before the call?
 - Old unpinned durable-fixture folders in the development data root: keep or remove.
 
