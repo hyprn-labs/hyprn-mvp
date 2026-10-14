@@ -19,29 +19,23 @@ attestation, immutable records and receipt recovery remain. Focused changed-beha
 checks and required API/UI contract checks apply; full qualification, delegated-agent
 reviews, other clients/hosts, installation productization and release audits are later.
 
-The rehearsal is now demonstrated: see [DEMO-REHEARSAL.md](DEMO-REHEARSAL.md).
-Ten real runs, two model versions, two approach versions and a revised conclusion
-are retained and visible in the UI. Focused client/guard/style checks pass. The
-scientific conclusion is cruise screening only; complete-mission feasibility and
-ticket pricing remain unresolved. Preserve the running services and authoring scope;
-stop adding features until the next product-owner instruction. Optional batches are
-cleanly checkpointed and unmerged; their heads and remaining findings are in the
-rehearsal record.
+The follow-up is delivered: cleaned Study/Model/Run presentation, continuous
+approach reader, persistent case/study answer API and runtime scientific guidance.
+The focused reader test passes 17/17; answer/API/static groups pass. The refreshed
+demo has eight current successful cases (all 11 outputs each), eight case answers
+and a study synthesis, authored through the public API and inspected in the real UI.
+Every selected mass is below 575 tonnes and expense uses 100 occupied seats. The
+original engineering question remains intact; aircraft optimization, complete-mission
+feasibility and ticket price are explicitly unresolved. Stop adding features and await
+product feedback. Exact current identities are in the integration checkpoint.
 
-The subsequent authorized Study details follow-up is delivered: the running UI
-separates the engineering question, approach and limits, and hides empty sections
-and internal format labels. Approach version 3 corrects the authored framing;
-all ten historical runs remain unchanged. A repository-owned scientific guidance
-foundation and seven scenarios are available for later agent integration. They are
-not loaded by the runtime. The rehearsal follow-up records live UI evidence and
-the integration checkpoint; keep broader feature work deferred.
-
-The next requested presentation cleanup consolidates Overview into About this study,
-aligns evidence rows, removes the arbitrary first-four run preview and redundant
-availability column, and distinguishes model/data export from computational-record
-export. See the [presentation checkpoint](phases/02-local-edition/checkpoints/study-overview-run-cleanup.md).
-The existing demo dispatcher omits export processing: one retained preview is queued,
-identified in STATE. Preserve it and reconcile it before any future retry.
+Latest user instruction: old studies and runs are disposable. Historical preservation,
+backups and broad compatibility verification are not prerequisites for this demo.
+The prior queued computational export completed after export processing was enabled.
+The current calculation → saved answer → visible UI journey is verified; defer
+full qualification and nonessential work. See STATE and the continuous integration
+checkpoint for current evidence. The standalone scientific skill is repository-owned;
+its core guidance is now loaded by the runtime and nine independent scenarios passed.
 
 ## Earlier delivery priority — superseded for the current demo (2026-10-14)
 

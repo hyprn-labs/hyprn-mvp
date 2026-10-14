@@ -24,7 +24,7 @@ configuration/run links remain present. Outputs use the shared table, with units
 missing-value reasons and explicit zero; full precision and execution/criteria remain
 supporting details. Scientific prose comes only from exact-approach answer records;
 saved study answers open the exact case-answer versions they cite. Basis reads are
-bounded and fenced by study/session/access; denied or changed identities clear them.
+bounded by study, session and current access; denied or changed identities clear them.
 Historical records explicitly state that answers are not included in that record.
 
 Range formatting of changed functions accounts for much of the line delta. The

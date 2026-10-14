@@ -130,3 +130,20 @@ Its command is `3923d30a-a01b-48e9-92de-fa116c58cfdf`. No duplicate was submitte
 no archive download is claimed. Export-loop integration is deferred separately from
 this UI cleanup. Automated browser verification does not establish human acceptance
 or release qualification.
+
+## Current continuous-reader and answer follow-up
+
+Delivered on the continuation branch: original question, current approach and limits
+are separated; evidence and empty sections are cleaned; all outputs are visible;
+exports are grouped. Codex authored eight current real cases and eight persistent
+case answers plus the study synthesis through the public API. The actual UI verifies
+Overview → saved approach → answer → exact run. Each case uses 100 occupied seats
+and a mass below 575 tonnes. The conclusion remains conditional cruise screening,
+not aircraft optimization, full-mission feasibility or ticket pricing. Runtime
+scientific guidance and nine independent qualitative scenarios are integrated.
+
+See [the current integration checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/continuous-approach-integration.md)
+for identities, focused verification, corrected failures and compact external evidence.
+The latest user instruction makes old demo data disposable and stops preservation
+ceremony. Broad historical/native qualification is deferred; this is a working local
+demo, not a qualified release or human acceptance.
