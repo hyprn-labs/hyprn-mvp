@@ -527,7 +527,68 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
             model: <Button size="sm" variant="quiet" onClick={() => openTab('Model')}>Open model version</Button>,
             configuration: <Button size="sm" variant="quiet" onClick={() => openTab('Configuration')}>Open configuration</Button>,
           }} />
-          <SectionHeader title="Run files" actions={<ActionDialog title="Execution diagnostics and source mapping" label="Diagnostics">{results ? <><p>{present(results.execution.state, executionLabels)} · {results.execution.message}</p><pre tabIndex={0} aria-label="Execution diagnostics">{JSON.stringify({ execution: results.execution, completeness: results.completeness }, null, 2)}</pre></> : <p>No verified execution diagnostics.</p>}<p>Generated locations refer to the generated file this run used. Source maps identify authored blocks and their transformations; they never invent an authored line.</p>{sourceMap ? <Button disabled={artifactBusy} onClick={() => void readArtifact(sourceMap, 'map')}>Read source mapping</Button> : <p>No source mapping is available.</p>}{mappings && <ul>{mappings.map((m, i) => <li key={i}><p>{m.generated_path}:{m.generated_line_start}–{m.generated_line_end} → {m.source_path} · SHA-256 {m.source_sha256}</p><p>Transforms: {m.transforms.join(', ')}</p><Button onClick={() => inspect({ kind: 'instance', instance_id: m.instance_id })}>Inspect mapped source {history.model_snapshot?.instances.find(n => n.instance_id === m.instance_id)?.name ?? m.instance_id}</Button></li>)}</ul>}</ActionDialog>} />
+          <SectionHeader
+            title="Run files"
+            actions={
+              <ActionDialog
+                title="Execution diagnostics and source mapping"
+                label="Diagnostics"
+              >
+                {results ? (
+                  <>
+                    <p>
+                      {present(results.execution.state, executionLabels)} ·{' '}
+                      {results.execution.message}
+                    </p>
+                    <pre tabIndex={0} aria-label="Execution diagnostics">
+                      {JSON.stringify({ execution: results.execution }, null, 2)}
+                    </pre>
+                  </>
+                ) : (
+                  <p>No verified execution diagnostics.</p>
+                )}
+                <p>
+                  Generated locations refer to the generated file this run used. Source
+                  maps identify authored blocks and their transformations; they never
+                  invent an authored line.
+                </p>
+                {sourceMap ? (
+                  <Button
+                    disabled={artifactBusy}
+                    onClick={() => void readArtifact(sourceMap, 'map')}
+                  >
+                    Read source mapping
+                  </Button>
+                ) : (
+                  <p>No source mapping is available.</p>
+                )}
+                {mappings && (
+                  <ul>
+                    {mappings.map((m, i) => (
+                      <li key={i}>
+                        <p>
+                          {m.generated_path}:{m.generated_line_start}–
+                          {m.generated_line_end} → {m.source_path} · SHA-256{' '}
+                          {m.source_sha256}
+                        </p>
+                        <p>Transforms: {m.transforms.join(', ')}</p>
+                        <Button
+                          onClick={() =>
+                            inspect({ kind: 'instance', instance_id: m.instance_id })
+                          }
+                        >
+                          Inspect mapped source{' '}
+                          {history.model_snapshot?.instances.find(
+                            (n) => n.instance_id === m.instance_id,
+                          )?.name ?? m.instance_id}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </ActionDialog>
+            }
+          />
           <RetainedFiles key={selected} artifacts={history.artifacts} busy={artifactBusy} read={(a, mode) => void readArtifact(a, mode)} />
           {preview && <section aria-label="Artifact preview" className="hf-artifact-preview"><SectionHeader title={preview.artifact.name} actions={<Button onClick={() => { artifactRequest.current++; setPreview(null); }}>Close preview</Button>} /><p className="evidence-content">SHA-256 {preview.artifact.sha256}</p><pre ref={previewElement} tabIndex={0} aria-label="Read-only run file">{preview.text}</pre></section>}
 

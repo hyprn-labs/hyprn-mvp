@@ -1904,12 +1904,20 @@ test('@approach-method canonical model view explains each component with its lin
   await expect(quantities.getByRole('columnheader')).toHaveText(['Quantity','Component','Direction','Definition','Unit']);
   await open.getByRole('button',{name:'1 Response',exact:true}).click();
   const details=view.getByRole('region',{name:'Selection inspector',exact:true});
-  await expect(details.getByRole('heading',{name:'What it computes',exact:true})).toBeVisible();
+  await expect(details.getByRole('heading',{name:'Method context',exact:true})).toBeVisible();
   await expect(details).toContainText('Combine the operating quantities using the authored response law.');
-  await expect(details.getByRole('heading',{name:'Why',exact:true})).toBeVisible();
+  await expect(details.getByRole('heading',{name:'Why this method',exact:true})).toBeVisible();
   await expect(details).toContainText('Connect explicit operating quantities to response.');await expect(details).toContainText('Use the declared response law for a bounded screening.');
-  await expect(details).toContainText('Method step 1 · Predict response · Approach version '+data.saved.version.version_number);
-  await expect(details.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
+  await details.getByRole('button', { name: 'Method record', exact: true }).click();
+  const methodRecord = page.getByRole('dialog', { name: 'Method record', exact: true });
+  await expect(methodRecord).toContainText('1 · Predict response');
+  for (const id of [data.saved.version.approach_version_id, data.model.model_revision_id])
+    await expect(methodRecord).toContainText(id);
+  await expect(methodRecord.locator('dd').nth(1)).toHaveText(
+    String(data.saved.version.version_number),
+  );
+  await methodRecord.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(details.getByRole('heading',{name:'Assumptions',exact:true})).toHaveCount(0);
   // No ports table, no incoming/outgoing lists, no notes: quantities are listed once, below.
   await expect(details.locator('table')).toHaveCount(0);await expect(details.getByText(/^(Incoming|Outgoing) quantities/)).toHaveCount(0);await expect(details.getByRole('tab')).toHaveCount(0);
   await expect(view.getByText(/^Showing 4 of \d+ quantities · Response · instance 1$/)).toBeVisible();
@@ -1931,7 +1939,9 @@ test('@approach-method canonical model view explains each component with its lin
   const models=page.getByRole('region',{name:'Model view',exact:true}),md=models.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(md.getByRole('button',{name:'Edit ports',exact:true})).toBeVisible();
   await expect(md).toContainText('Use the declared response law for a bounded screening.');
-  await expect(md).toContainText('linked to Model version '+data.model.model_revision_id.slice(0,8));
+  await md.getByRole('button', { name: 'Method record', exact: true }).click();
+  await expect(methodRecord).toContainText(data.model.model_revision_id);
+  await methodRecord.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(md.getByText('Edit source',{exact:true})).toBeVisible();await expect(md.locator('table')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
   await s4Shots(page,'s4-models-component',md);
@@ -1942,7 +1952,7 @@ test('@approach-method canonical model view explains each component with its lin
   await page.getByRole('button',{name:'Clear selection',exact:true}).click();
   await expect(md.getByRole('heading',{name:'Model',exact:true})).toBeVisible();
   const own=md.getByRole('region',{name:'Model assumptions',exact:true});await expect(own.getByRole('button',{name:'Add assumption',exact:true})).toBeVisible();
-  await expect(md).toContainText('select a component to see what it computes and why');
+  await expect(md).toContainText('select a component to inspect its source and method');
   await expect(models.getByRole('button',{name:'Show all quantities',exact:true})).toHaveCount(0);
   await s4Shots(page,'s4-models-nothing-selected',md);
   // The former ⋯ › Model assumptions dialog is gone; Model actions keep rename, reload and import/compare.
@@ -3350,4 +3360,79 @@ test('@approach-assumptions Conflicting evidence stays visible in the study brie
   await expect(page.getByRole('dialog', { name: 'Evidence detail', exact: true })).toContainText(
     'Challenges this statement',
   );
+});
+
+test('@approach-assumptions Shared limit evidence preserves its exact relationships', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await page.request.post('/fixture/model-available');
+  const data = await seededConditions(page, browser, baseURL);
+  const context = await browser.newContext({ baseURL }), helper = await context.newPage();
+  await helper.goto('/ui/');
+  const saved = await helper.evaluate(async (sid) => {
+    const { api, controller: c } = (window as any).approachHarness;
+    await api.login('owner', 'correct horse battery staple');
+    await c.open(sid);
+    const content = c.getSnapshot().local;
+    const link = {
+      evidence_version_id: content.assumptions[0].evidence_links[0].evidence_version_id,
+      relation: 'supports',
+    };
+    const other = await api.createEvidence(sid, {
+      evidence_schema_version: '3', kind: 'note', title: 'Screening measurements',
+      content: 'Independent source record.', source_refs: [],
+      resource_scope: { scope_version: '1', kind: 'study', study_id: sid },
+    });
+    c.edit({
+      ...content,
+      schema_version: '2',
+      original_question: null,
+      elaboration: null,
+      limit_items: [
+        ...['Cruise only.', 'Candidate masses only.', 'Fuel expense only.'].map((statement) => ({
+          limit_id: crypto.randomUUID(), statement, evidence_links: [link],
+        })),
+        {
+          limit_id: crypto.randomUUID(), statement: 'Conflicting interpretation.',
+          evidence_links: [{ ...link, relation: 'challenges' }],
+        },
+        {
+          limit_id: crypto.randomUUID(), statement: 'Different source record.',
+          evidence_links: [{ ...link, evidence_version_id: other.evidence_version_id }],
+        },
+      ],
+    });
+    if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+    return c.getSnapshot().saved;
+  }, data.sid);
+  await context.close();
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await page.getByRole('button', { name: 'See more details', exact: true }).click();
+  const limits = page.getByRole('region', { name: 'Study limits', exact: true });
+  await expect(limits.getByText('Evidence for limits 1, 2, 3', { exact: true })).toBeVisible();
+  // The shared citation is one row; differing relationships and versions remain separate.
+  await expect(
+    limits.getByText('Screening measurements', { exact: true }).filter({ visible: true }),
+  ).toHaveCount(3);
+  await expect(limits.getByText('Conflicting evidence', { exact: true })).toBeVisible();
+  const shared = limits.getByRole('region', {
+    name: 'Evidence for limits 1, 2, 3 evidence', exact: true,
+  });
+  await shared.getByRole('button', { name: 'View evidence', exact: true }).click();
+  const evidence = page.getByRole('dialog', { name: 'Evidence detail', exact: true });
+  await expect(evidence).toContainText('Supports this statement');
+  await evidence.getByText('Record details', { exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Evidence record', exact: true })).toContainText(
+    data.evidence.evidence_version_id,
+  );
+  const response = await page.request.get(
+    `/api/1/studies/${data.sid}/approach/versions/${saved.version.approach_version_id}`,
+  );
+  expect((await response.json()).data).toEqual(saved);
 });

@@ -92,7 +92,7 @@ function Citations({
       {links.map((link, index) => (
         <div
           className={brief ? 'assumption-evidence-row' : 'evidence-record'}
-          key={link.evidence_version_id + link.relation}
+          key={JSON.stringify([link.evidence_version_id, link.relation, link.locator ?? null])}
         >
           <div className={brief ? undefined : 'section-actions'}>
             {!brief && (
@@ -425,6 +425,20 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
   const dialog=useRef<HTMLDialogElement>(null),invoker=useRef<HTMLElement|null>(null);
   useApproachEditGuard('limit',!!editing);
   const described=descriptiveApproach(content),limits=described.limit_items;
+  const citationKey = (link: ApproachEvidenceLink1) =>
+    JSON.stringify([link.evidence_version_id, link.relation, link.locator ?? null]);
+  const citedLimits = new Map<string, { link: ApproachEvidenceLink1; numbers: number[] }>();
+  if (!onChange) {
+    limits.forEach((item, index) => {
+      item.evidence_links.forEach((link) => {
+        const key = citationKey(link), entry = citedLimits.get(key);
+        if (entry) {
+          if (!entry.numbers.includes(index + 1)) entry.numbers.push(index + 1);
+        } else citedLimits.set(key, { link, numbers: [index + 1] });
+      });
+    });
+  }
+  const sharedCitations = [...citedLimits.values()].filter((entry) => entry.numbers.length > 1);
   function begin(item?:typeof editing){invoker.current=document.activeElement as HTMLElement;setEditing(item??{limit_id:crypto.randomUUID(),statement:'',evidence_links:[]});}
   useEffect(()=>{if(editing){dialog.current?.showModal();dialog.current?.querySelector('textarea')?.focus();}},[!!editing]);
   function close(){dialog.current?.close();setEditing(null);invoker.current?.focus();}
@@ -462,12 +476,17 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               Add limit
             </Button>
           )}
-          {limits.map((item) => (
+          {limits.map((item, index) => (
             <article className="study-limit-item" key={item.limit_id}>
-              <p className="context-copy">{item.statement}</p>
+              <p className="context-copy">
+                {sharedCitations.length > 0 && <strong>Limit {index + 1}. </strong>}
+                {item.statement}
+              </p>
               <Citations
                 brief
-                links={item.evidence_links}
+                links={item.evidence_links.filter(
+                  (link) => (citedLimits.get(citationKey(link))?.numbers.length ?? 0) < 2,
+                )}
                 label={item.statement}
                 onChange={
                   onChange
@@ -509,6 +528,15 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               )}
             </article>
           ))}
+          {sharedCitations.map(({ link, numbers }) => {
+            const label = 'Evidence for limits ' + numbers.join(', ');
+            return (
+              <div className="study-limit-item" key={citationKey(link)}>
+                <p className="context-line">{label}</p>
+                <Citations brief links={[link]} label={label} />
+              </div>
+            );
+          })}
           {content.limitations.trim() && (
             <article className="study-limit-item">
               <p className="context-copy">{content.limitations}</p>
