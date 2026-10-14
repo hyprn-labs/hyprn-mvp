@@ -378,6 +378,20 @@ export async function genuineZoom(evidence: string, origin: string) {
   return {
     context,
     page,
+    /** Capture Chromium's surface directly: Playwright's CSS clip is wrong at tab zoom. */
+    async screenshot(name: string) {
+      const cdp = await context.newCDPSession(page);
+      try {
+        const result = await cdp.send('Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          captureBeyondViewport: false,
+        });
+        await writeFile(join(evidence, name), Buffer.from(result.data, 'base64'));
+      } finally {
+        await cdp.detach();
+      }
+    },
     /** Sets the reference window, then the tab zoom; call after the page shows the UI. */
     async zoom(factor: number) {
       const cdp = await context.newCDPSession(page);

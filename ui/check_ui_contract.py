@@ -394,9 +394,13 @@ workspace_s6b=(ROOT/'src/Workspace.tsx').read_text()
 for term in ('Promise.all([api.studies(), api.archivedStudies()])','label="Study list"',"label: 'Studies'","label: 'Archived'",'label="Archived studies"','>Archived</StatusTag>',
  'aria-label={`Archive study ${s.name}`}','aria-label={`Restore study ${s.name}`}','It disappears from Home for everyone. Nothing is deleted; restore it from Archived.',
  '<Button data-safe-choice',"pending?.category === 'study_archive'",'.catch(archiveRefusal)',
- '<footer><a href="/ui/THIRD_PARTY_NOTICES.txt">Third-party software notices</a></footer>',
- '<div className="study-heading"><h1>{study.name}</h1>{creatorChip(studyCreator)}</div>'):
+ '<footer><a href="/ui/THIRD_PARTY_NOTICES.txt">Third-party software notices</a></footer>'):
  assert term in workspace_s6b,('src/Workspace.tsx','Home archive, study header and footer',term)
+assert re.search(
+ r'<div className="study-heading actions">\s*<h1>\{study.name\}</h1>\s*'
+ r'\{studyCreator && <AttributionChip \{\.\.\.studyCreator\} />\}\s*</div>',
+ workspace_s6b,
+), ('src/Workspace.tsx', 'Study heading names the study then conditionally shows its creator')
 for removed in ("'Study overview'",'Choose a study to continue your work.'):
  assert removed not in workspace_s6b,('src/Workspace.tsx','Removed shell element',removed)
 overview_s6b=(ROOT/'src/OverviewRecords.tsx').read_text()

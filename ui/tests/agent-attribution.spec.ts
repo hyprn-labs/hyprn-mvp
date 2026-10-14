@@ -1,5 +1,6 @@
 import { test, expect, type Page } from 'playwright/test';
 import { join } from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import { guardOrigin, login, mid, startFixture, stopFixture, version } from './foundry-fixtures';
 import {
   agentHarness,
@@ -61,6 +62,10 @@ test('a study heading names the agent that created it; a person-created study ha
   await login(page, studyLink(agentStudy));
   await expect(heading(page).getByRole('heading', { name: 'Heat exchanger sizing' })).toBeVisible();
   await expectChip(heading(page), names.codexForAda);
+  const titleBox = await heading(page).getByRole('heading').boundingBox();
+  const chipBox = await heading(page).locator('.hf-attr').boundingBox();
+  expect(chipBox!.x).toBeGreaterThan(titleBox!.x + titleBox!.width);
+  expect(chipBox!.y).toBeLessThan(titleBox!.y + titleBox!.height);
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await page.getByRole('button', { name: 'Open study Pump selection', exact: true }).click();
   await expect(heading(page).getByRole('heading', { name: 'Pump selection' })).toBeVisible();
@@ -180,6 +185,7 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
   const long = agentNames({ long: true });
   const zoomed = await genuineZoom(evidence, origin);
   const page = zoomed.page;
+  const observations: unknown[] = [];
   try {
     const state = await agentHarness(page, { long: true });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -193,11 +199,15 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
       await row.getByRole('button', { name: 'Open study Heat exchanger sizing' }).click();
       await expectWhole(page, await expectChip(heading(page), long.codexForAda), long.codexForAda);
       const line = about(page).locator('.context-line');
-      await expectWhole(page, await expectChip(line, long.codexForAda), long.codexForAda);
-      await page.screenshot({
-        fullPage: true,
-        path: join(evidence, `attribution-overview-${colorScheme}-200.png`),
+      observations.push({
+        theme: colorScheme,
+        overview: await expectWhole(
+          page,
+          await expectChip(line, long.codexForAda),
+          long.codexForAda,
+        ),
       });
+      await zoomed.screenshot(`attribution-overview-${colorScheme}-200.png`);
       await page.getByRole('button', { name: 'Models', exact: true }).click();
       await page.getByRole('button', { name: /^Open model / }).click();
       const context = modelHeading(page).locator('.model-context');
@@ -205,14 +215,19 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
       await expectWhole(page, await expectChip(context, long.claudeForBen), long.claudeForBen);
       await page.getByLabel('Model version', { exact: true }).selectOption(version);
       await expect(context.getByText('Read-only model version', { exact: true })).toBeVisible();
-      await expectWhole(page, await expectChip(context, long.codexForAda), long.codexForAda);
-      await page.screenshot({
-        fullPage: true,
-        path: join(evidence, `attribution-model-${colorScheme}-200.png`),
+      observations.push({
+        theme: colorScheme,
+        model: await expectWhole(
+          page,
+          await expectChip(context, long.codexForAda),
+          long.codexForAda,
+        ),
       });
+      await zoomed.screenshot(`attribution-model-${colorScheme}-200.png`);
     }
     expect(state.writes).toEqual([]);
     expect(state.unknown).toEqual([]);
+    await writeFile(join(evidence, 'attribution-zoom.json'), JSON.stringify(observations, null, 2));
   } finally {
     await zoomed.context.close();
   }

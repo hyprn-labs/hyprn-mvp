@@ -640,7 +640,10 @@ export function Workspace() {
       {page === 'study' && loading && <p aria-live="polite" aria-busy="true">Loading study/model…</p>}
       {study && <AttributionContext.Provider value={studyAttribution}>
         {(view !== 'model' || !selectedModel) && !(view === 'runs' && runInspection) ? (
-          <div className="study-heading"><h1>{study.name}</h1>{creatorChip(studyCreator)}</div>
+          <div className="study-heading actions">
+            <h1>{study.name}</h1>
+            {studyCreator && <AttributionChip {...studyCreator} />}
+          </div>
         ) : null}
         <Tabs
           navigation
