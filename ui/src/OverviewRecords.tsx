@@ -1,3 +1,4 @@
+import { RecordAttribution } from './attribution';
 import { configurationCounts, runLabel } from './recordLabels';
 import { Button, Panel, SectionHeader, StatusTag } from './design';
 import { useEffect, useState } from 'react';
@@ -58,7 +59,13 @@ export function OverviewRecords({ api, study, onOpen }: { api: HyprnMvpApi; stud
       {runs.state.kind === 'ready' && <>
         <p className="context-line">{runs.state.records.length} of {runs.state.total} runs · Latest added first</p>
         {runs.state.total === 0 ? <p>This study has no runs yet. Save a configuration, then run the model.</p> : <ol>{runs.state.records.map(run => <li key={run.run_id}>
-          <Button variant="quiet" aria-label={`Open run ${run.run_id}`} onClick={() => onOpen({ study: study.study_id, view: 'runs', run: run.run_id })}>{runLabel(run)} · {run.run_id.slice(0, 8)}</Button>
+          <div>
+            <Button variant="quiet" aria-label={`Open run ${run.run_id}`}
+              onClick={() => onOpen({ study: study.study_id, view: 'runs', run: run.run_id })}>
+              {runLabel(run)} · {run.run_id.slice(0, 8)}
+            </Button>
+            <RecordAttribution kind="run" id={run.run_id} line />
+          </div>
           <RecentRunOutcome api={api} studyId={study.study_id} run={run} />
         </li>)}</ol>}
       </>}
@@ -70,7 +77,15 @@ export function OverviewRecords({ api, study, onOpen }: { api: HyprnMvpApi; stud
       {configurations.state.kind === 'ready' && <>
         <p className="context-line">{configurationCounts(configurations.state.allRecords)} · Showing {configurations.state.records.length} recent versions</p>
         {configurations.state.total === 0 ? <p>No saved configurations in this study. Choose a model to prepare and save a configuration.</p> : <ol>{configurations.state.records.map(({ configuration: c }) => <li key={c.configuration_revision_id}>
-          <Button variant="quiet" aria-label={`${c.name} · Open configuration ${c.configuration_revision_id}`} onClick={() => onOpen({ study: study.study_id, view: 'configurations', configuration: c.configuration_revision_id })}>{c.name}</Button>
+          <div>
+            <Button variant="quiet"
+              aria-label={`${c.name} · Open configuration ${c.configuration_revision_id}`}
+              onClick={() => onOpen({ study: study.study_id, view: 'configurations',
+                configuration: c.configuration_revision_id })}>
+              {c.name}
+            </Button>
+            <RecordAttribution kind="configuration_version" id={c.configuration_revision_id} line />
+          </div>
           <StatusTag tone="inert">Version {c.configuration_revision_id.slice(0, 8)} · read-only</StatusTag>
         </li>)}</ol>}
       </>}

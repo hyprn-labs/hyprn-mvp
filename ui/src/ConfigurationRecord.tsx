@@ -1,3 +1,4 @@
+import { AttributionDetail } from './attribution';
 import { ConfigurationApproachRecord } from './ConfigurationApproach';
 import type { ApproachClosureRead3 } from './contract';
 import { Assumptions } from './Assumptions';
@@ -72,5 +73,20 @@ export function ModelAssumptionsLink({ model, records, configuration, closure }:
 
 /** Scoped configuration provenance action for saved and retained headers. */
 export function ConfigurationRecordDetails({ configuration: c }: { configuration: ConfigurationRevision }) {
-  return <ActionDialog title="Configuration record" label="Record details" size="sm"><dl className="hf-record-details"><dt>Configuration version</dt><dd>{c.configuration_revision_id}</dd><dt>Model version</dt><dd>{c.model_revision_id}</dd></dl><pre tabIndex={0} aria-label="Saved configuration JSON">{JSON.stringify(c, null, 2)}</pre></ActionDialog>;
+  return <ActionDialog title="Configuration record" label="Record details" size="sm">
+      <dl className="hf-record-details">
+        <AttributionDetail
+          kind="configuration_version"
+          id={c.configuration_revision_id}
+          label="Saved by"
+        />
+        <dt>Configuration version</dt>
+        <dd>{c.configuration_revision_id}</dd>
+        <dt>Model version</dt>
+        <dd>{c.model_revision_id}</dd>
+      </dl>
+      <pre tabIndex={0} aria-label="Saved configuration JSON">
+        {JSON.stringify(c, null, 2)}
+      </pre>
+    </ActionDialog>;
 }

@@ -1,3 +1,4 @@
+import { AttributionDetail, RecordAttribution } from './attribution';
 import type { ApproachResolution } from './api';
 import type { ApproachContent } from './api';
 import { CaseNavigation, type WorkspaceLink } from './workspaceModel';
@@ -74,6 +75,11 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
   const editor = useRef<HTMLDialogElement>(null), versionDialog = useRef<HTMLDialogElement>(null), restoreDialog = useRef<HTMLDialogElement>(null);
   const beforeEdit = useRef<ApproachContent | null>(null), invoker = useRef<HTMLElement | null>(null);
   const versionId = state.saved?.version.approach_version_id ?? requestedVersion;
+  const attributionKind = state.saved ? 'approach_version' : 'approach_draft';
+  const attributionId = state.accessLost
+    ? null
+    : state.saved?.version.approach_version_id ??
+      (controller.dirty ? null : state.server?.draft?.revision);
   const locked = controller.busy || !!api.pending || state.status === 'uncertain';
   // `guard` is the latest-list token (display only). Denial is confirmed against the
   // shared session fence, so a version switch cannot discard it.
@@ -125,16 +131,50 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
     <div className="approach-topline"><Button className="link back-link" aria-label="Back to overview" onClick={onBack}>← Overview</Button></div>
     <div className="page-heading"><div><h2 id="approach-heading" tabIndex={-1}>Modeling approach</h2></div><div className="section-actions">
       <Select aria-label="Approach version" value={lost ? 'draft' : versionId ?? 'draft'} disabled={locked} onChange={e => choose(e.target.value === 'draft' ? undefined : e.target.value)}><option value="draft">Draft</option>{versions.map(v => <option key={v.approach_version_id} value={v.approach_version_id}>v{v.version_number} (read-only)</option>)}{!lost && versionId && !versions.some(v => v.approach_version_id === versionId) && <option value={versionId}>{state.saved ? `v${state.saved.version.version_number}` : 'Selected version'} (read-only)</option>}</Select>
+          {state.saved && <RecordAttribution kind={attributionKind} id={attributionId} />}
       {!absent && !state.accessLost && (editing&&!state.saved ? <><Button disabled={locked} onClick={()=>navigate(()=>setEditing(false))}>Leave editing</Button><Button variant={controller.dirty?'primary':'secondary'} disabled={locked||!state.local||!controller.dirty&&!!state.server?.draft} onClick={()=>void controller.save()}>Save draft</Button><Button disabled={locked||controller.dirty||!state.server?.draft} onClick={()=>{invoker.current=document.activeElement as HTMLElement;void controller.preview().then(ok=>{if(ok){versionDialog.current?.showModal();versionDialog.current?.querySelector<HTMLButtonElement>('[data-safe-choice]')?.focus();}});}}>Save approach version</Button></>:<Button variant="primary" disabled={locked} onClick={beginEditing}>Edit approach</Button>)}
       {source&&!absent&&<ActionDialog title="Approach actions" label="…" triggerLabel="Approach actions"><div className="hf-action-list">
-        <ActionDialog title="Approach record" label="Record details"><pre tabIndex={0}>{JSON.stringify(state.saved??state.server?.draft,null,2)}</pre></ActionDialog>
+                <ActionDialog title="Approach record" label="Record details">
+                  <dl className="hf-record-details">
+                    <AttributionDetail
+                      kind={attributionKind}
+                      id={attributionId}
+                      label={state.saved ? "Saved by" : "Changed by"}
+                    />
+                  </dl>
+                  <pre tabIndex={0}>
+                    {JSON.stringify(state.saved ?? state.server?.draft, null, 2)}
+                  </pre>
+                </ActionDialog>
         <ActionDialog title="Earlier work"><ApproachAnnotations studyId={studyId} content={source.kind==='draft'?source.content:source.record.version.content} resolved={source.kind==='draft'?source.resolved:source.record.closure} onChange={editing&&state.local?controller.edit:undefined} disabled={locked} onEditingChange={setBasisEditing}><ApproachBasis closure={source.kind==='draft'?undefined:source.record.closure} api={editing?api:undefined} studyId={studyId} content={source.kind==='draft'?source.content:source.record.version.content} resolved={source.kind==='draft'?source.resolved:source.record.closure} onChange={editing&&state.local?controller.edit:undefined} disabled={locked}/></ApproachAnnotations></ActionDialog>
         {state.saved&&<Button disabled={locked} onClick={e=>{e.currentTarget.closest('dialog')?.close();show(restoreDialog.current);}}>Use this version in draft</Button>}
       </div></ActionDialog>}
 
     </div></div>
 
-    {state.local && !absent && <div className="section-actions approach-draft-status"><p role="status"><StatusTag tone={controller.dirty ? 'advisory' : 'inert'}>{controller.dirty ? 'Unsaved local edits' : state.server?.draft ? 'Draft · saved' : 'Draft · not saved'}</StatusTag></p>{editing && state.local && !!(state.local.assumptions.length || state.local.steps.length || state.local.cases.length || state.local.basis_refs.length || state.server?.draft?.content.basis_refs.length) && <Button disabled={locked} onClick={() => void controller.preview()}>{controller.dirty ? 'Review approach changes' : 'Load linked records'}</Button>}</div>}
+      {state.local && !absent && <div className="section-actions approach-draft-status">
+          <p role="status">
+            <StatusTag tone={controller.dirty ? 'advisory' : 'inert'}>
+              {controller.dirty
+                ? 'Unsaved local edits'
+                : state.server?.draft
+                  ? 'Draft · saved'
+                  : 'Draft · not saved'}
+            </StatusTag>
+          </p>
+          {!state.saved && <RecordAttribution kind={attributionKind} id={attributionId} />}
+          {editing &&
+            state.local &&
+            !!(
+              state.local.assumptions.length ||
+              state.local.steps.length ||
+              state.local.cases.length ||
+              state.local.basis_refs.length ||
+              state.server?.draft?.content.basis_refs.length
+            ) && <Button disabled={locked} onClick={() => void controller.preview()}>
+                {controller.dirty ? 'Review approach changes' : 'Load linked records'}
+              </Button>}
+        </div>}
     {controller.busy && <p role="status"><StatusTag tone="running">{state.status === 'loading' ? 'Loading modeling approach…' : 'Resolving and saving…'}</StatusTag></p>}
     {state.error && <div role="alert"><p>{state.error}</p>{!!state.diagnostics.length && <ul>{state.diagnostics.map((issue,i) => <li key={i}><p>{issue.message}</p><p className="context-line">Field: <code>{issue.path}</code></p></li>)}</ul>}{state.status === 'stale' && <Button onClick={() => void controller.reviewLatest()}>Review latest draft</Button>}{state.accessLost && controller.dirty && <p>Your unsaved approach edits are kept but cannot be saved. Discard them to read the approach again.</p>}{!source && <Button onClick={() => state.accessLost ? navigate(() => readAgain(versionId)) : readAgain(versionId)}>Retry this version</Button>}</div>}
 

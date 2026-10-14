@@ -255,7 +255,7 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 .run-case-label{font-size:var(--type-small-size);color:var(--ink-muted)}
 .run-list .run-case .hf-btn,.run-detail-case .hf-btn{white-space:normal;height:auto;text-align:left}
 .run-detail-case{overflow-wrap:anywhere}
-@media(max-width:600px){.run-list li{grid-template-columns:minmax(0,1fr)}.run-list li>.hf-tag{justify-self:start}}
+@media(max-width:1050px){.run-panel .recorded-configuration .section-header{flex-wrap:wrap}.run-list li{grid-template-columns:minmax(0,1fr)}.run-list li>.hf-tag{justify-self:start}}
 /* Assumptions: one list for every owner (statement, then evidence rows) and the configuration's model-assumptions line. */
 .assumption-list>.evidence-record.assumption-item:first-of-type{border-top:0}
 .assumption-list>.context-line{margin:var(--space-2) 0}

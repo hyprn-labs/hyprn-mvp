@@ -1,3 +1,4 @@
+import { RecordAttribution } from './attribution';
 import { ConfigurationRecord, ConfigurationRecordDetails } from './ConfigurationRecord';
 import { Button, Panel, StatusTag } from './design';
 import { useRef, useState, type ReactNode } from 'react';
@@ -26,7 +27,19 @@ export function RecordedConfiguration({ onViewSourceResult, resourceActionsRef, 
   if (lost === saved.configuration.configuration_revision_id) return <Panel label="Saved configuration" className="recorded-configuration"><p role="alert">{accessLostText}</p></Panel>;
   const c = saved.configuration, model = saved.model_snapshot;
   return <><Panel label="Saved configuration" className="recorded-configuration">
-<div className="page-heading configuration-heading"><div><h2>{c.name}</h2><p>Model version {c.model_revision_id.slice(0, 8)}</p></div><div className="section-actions"><StatusTag>Saved · read-only</StatusTag><div className="section-actions" ref={resourceActionsRef} /><ConfigurationRecordDetails configuration={c} /><Button onClick={onCopy}>Copy configuration to draft</Button></div></div>
+        <div className="page-heading configuration-heading">
+          <div>
+            <h2>{c.name}</h2>
+            <p>Model version {c.model_revision_id.slice(0, 8)}</p>
+          </div>
+          <div className="section-actions">
+            <StatusTag>Saved · read-only</StatusTag>
+            <RecordAttribution kind="configuration_version" id={c.configuration_revision_id} />
+            <div className="section-actions" ref={resourceActionsRef} />
+            <ConfigurationRecordDetails configuration={c} />
+            <Button onClick={onCopy}>Copy configuration to draft</Button>
+          </div>
+        </div>
     <ConfigurationRecord onViewSourceResult={onViewSourceResult} configuration={c} model={model} approachClosure={'approach_closure' in saved ? saved.approach_closure : undefined} />
     <div className="actions configuration-run"><Button variant="primary" disabled={!ready || activeRun || busy || !!api.pending} onClick={() => void run()}>Run this configuration</Button>{children}</div>
     {error && <p role="alert">{error}</p>}{activeRun && <p>A run is pending. Inspect its status before submitting another run.</p>}

@@ -1,3 +1,4 @@
+import { RecordAttribution } from '../attribution';
 import { ConfigurationPanel } from '../ConfigurationPanel';
 import { Button, Panel } from '../design';
 import { ActionDialog } from '../Presentation';
@@ -173,6 +174,11 @@ function configurationsPage(ctx: ViewContext) {
                     <h3>{c.configuration.name}</h3>
                     <p className="row-description">
                       Version {version} · Model version {modelVersion} · {inputs} inputs
+                      <RecordAttribution
+                        kind="configuration_version"
+                        id={c.configuration.configuration_revision_id}
+                        inline
+                      />
                     </p>
                   </div>
                   <Button

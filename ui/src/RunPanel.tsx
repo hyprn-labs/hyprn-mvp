@@ -1,3 +1,9 @@
+import {
+  AttributionDetail,
+  RecordAttribution,
+  attributionText,
+  useAttribution,
+} from './attribution';
 import { CaseContextLink } from './ConfigurationApproach';
 import { runLabel } from './recordLabels';
 import { ComputationalExportDialog } from './ComputationalExportDialog';
@@ -115,6 +121,7 @@ function RunEvidence({ history, open }: { history: RunHistoryRead6; open?: RunEv
 export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, sourceOutput, resourceActionsRef, listEpoch = 0, api, studyId, submitted, onActive, onCreateModified, navigate, onInspection, onHistory, workspace, onSelect }: { onViewSourceResult?: (runId: string, output: { instance_id: string; port_id: string }) => void; sourceOutput?: { runId: string; output: { instance_id: string; port_id: string } }; resourceActionsRef?: (element: HTMLDivElement | null) => void; listEpoch?: number; api: HyprnMvpApi; studyId: string; submitted: PublicRun | null; onActive: (active: boolean) => void; onCreateModified: (seed: ModifiedRunSeedRead6, config: ConfigurationRevision) => void; navigate: (action: () => void) => void; onInspection?: (detail: PublicRunDetail | null) => void; /** The user explicitly returned to the run history list. */ onHistory?: () => void; workspace?: ReactNode; onSelect?: (selection: Selection) => void; filters?: RunFilters; onFilters?: (filters: RunFilters) => void }) {
   const [runs, setRuns] = useState<RunHistoryItem[]>([]); const [listReady, setListReady] = useState(false); const [listBusy, setListBusy] = useState(false);
   const [selected, setSelected] = useState('');
+  const submittedBy = useAttribution('run', selected);
   useEffect(() => { setSelected(''); }, [listEpoch]); const [detail, setDetail] = useState<PublicRunDetail | null>(null); const [loading, setLoading] = useState(false);
   const [modifiedSeed, setModifiedSeed] = useState<ModifiedRunSeedRead6 | null>(null), [modifiedReason, setModifiedReason] = useState('Checking whether this run can be modified…');
   const [seedAttempt, setSeedAttempt] = useState(0), [seedRetry, setSeedRetry] = useState(false);
@@ -261,8 +268,125 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
     </div>
     {listBusy && <p aria-live="polite"><StatusTag tone="running">Loading run history…</StatusTag></p>}{listError != null && !selected && <p role="alert">{message(listError)}</p>}
     {listReady && !listBusy && !listError && !runs.length && <Panel><p>This study has no runs yet. Commit a configuration, then run the model. <a href="#configuration">Open configuration</a></p></Panel>}
-    {!!runs.length && <Panel className="run-history"><ol className="run-list">{visibleRuns.map(r => <li key={r.run_id}><div><Button variant="quiet" aria-label={`Inspect run ${r.run_id}`} aria-pressed={selected === r.run_id} onClick={() => navigate(() => setSelected(r.run_id))}>{runLabel(r)} · {r.run_id.slice(0, 8)}</Button><p>Configuration version {r.configuration_revision_id.slice(0, 8)}</p></div><RunCaseCell run={r} value={cases.get(r.run_id)!} /><StatusTag tone={r.state === 'preparation_failed' ? 'alarm' : r.state === 'uncertain' ? 'warning' : 'inert'}>{submissionLabels[r.state]}</StatusTag></li>)}</ol>{!visibleRuns.length && <p>No runs match these filters.</p>}</Panel>}
-    </div>{selected && <section aria-label="Run details"><p role="status">{modifiedReason}</p>{seedRetry && <Button onClick={() => setSeedAttempt(n => n + 1)}>Check modified run again</Button>}<RuntimeComparisonView comparison={detail?.runtime_comparison} /><RecordBar title="Run record · Read-only" returnLabel="Back to run history" onReturn={() => { generation.current++; setSelected(''); setDetail(null); onHistory?.(); }} /><div className="page-heading run-heading"><div><h2>{history?.configuration?.name ?? 'Run record'}</h2><p className="context-line">Run {selected.slice(0, 8)}{detailCase && <span className="run-detail-case"> · Case: {detailCase.label}{detailCase.link && <> <CaseContextLink target={detailCase.link.target} returnKey={'run-detail-case:' + selected} label={`View case ${detailCase.link.name} in approach v${detailCase.link.version}`}>View case</CaseContextLink></>}</span>}</p></div><div className="section-actions"><div className="section-actions" ref={resourceActionsRef} />{history && <><ActionDialog title="Run record" label="Record details"><dl className="hf-record-details"><dt>Run ID</dt><dd>{selected}</dd><dt>Configuration version</dt><dd>{history.configuration?.configuration_revision_id ?? 'Unavailable'}</dd><dt>Model version</dt><dd>{history.model_snapshot?.model_revision_id ?? 'Unavailable'}</dd><dt>Execution bundle SHA-256</dt><dd>{history.bundle?.bundle_digest ?? 'Unavailable'}</dd><dt>Criterion evaluator</dt><dd>{history.assessment?.evaluator_sha256 ?? 'Unavailable'}</dd><dt>Model SHA-256</dt><dd>{history.model_snapshot?.digest ?? 'Unavailable'}</dd><dt>Configuration SHA-256</dt><dd>{history.configuration?.digest ?? 'Unavailable'}</dd></dl><h3>Dependency versions</h3>{history.bundle ? <ul>{history.bundle.dependencies.map(d => <li key={d.name}>{d.name}: {d.version} · {d.lock_path}</li>)}</ul> : <p>Unavailable</p>}</ActionDialog></>}{history?.configuration && detail && !runPending(detail) && <ComputationalExportDialog key={selected} api={api} studyId={studyId} runId={selected} name={history.configuration.name} />}{history?.configuration && history.model_snapshot && <Button disabled={!modifiedSeed} onClick={() => modifiedSeed && navigate(() => onCreateModified(modifiedSeed, history.configuration!))}>Create modified run</Button>}{(!detail || runPending(detail)) && <Button disabled={loading} onClick={() => void refreshDetail()}>Refresh run status</Button>}</div></div>
+        {!!runs.length && <Panel className="run-history">
+            <ol className="run-list">
+              {visibleRuns.map(r => <li key={r.run_id}>
+                  <div>
+                    <Button
+                      variant="quiet"
+                      aria-label={`Inspect run ${r.run_id}`}
+                      aria-pressed={selected === r.run_id}
+                      onClick={() => navigate(() => setSelected(r.run_id))}
+                    >
+                      {runLabel(r)} · {r.run_id.slice(0, 8)}
+                    </Button>
+                    <p>
+                      Configuration version {r.configuration_revision_id.slice(0, 8)}
+                      <RecordAttribution kind="run" id={r.run_id} inline />
+                    </p>
+    </div>
+                  <RunCaseCell run={r} value={cases.get(r.run_id)!} />
+                  <StatusTag
+                    tone={
+                      r.state === 'preparation_failed'
+                        ? 'alarm'
+                        : r.state === 'uncertain'
+                          ? 'warning'
+                          : 'inert'
+}
+                  >
+                    {submissionLabels[r.state]}
+                  </StatusTag>
+                </li>
+              )}
+            </ol>
+            {!visibleRuns.length && <p>No runs match these filters.</p>}
+          </Panel>}
+    </div>
+      {selected && <section aria-label="Run details">
+          <p role="status">{modifiedReason}</p>
+          {seedRetry && <Button onClick={() => setSeedAttempt(n => n + 1)}>
+            Check modified run again</Button>}
+          <RuntimeComparisonView comparison={detail?.runtime_comparison} />
+          <RecordBar
+            title="Run record · Read-only"
+            returnLabel="Back to run history"
+            onReturn={() => {
+              generation.current++;
+              setSelected('');
+              setDetail(null);
+              onHistory?.();
+            }}
+          />
+          <div className="page-heading run-heading">
+            <div>
+              <h2>{history?.configuration?.name ?? 'Run record'}</h2>
+              <p className="context-line">
+                Run {selected.slice(0, 8)}
+                {detailCase && <span className="run-detail-case"> · Case: {detailCase.label}
+                    {detailCase.link && <> <CaseContextLink
+                          target={detailCase.link.target}
+                          returnKey={'run-detail-case:' + selected}
+              label={`View case ${detailCase.link.name} in approach v${detailCase.link.version}`}
+                        >View case</CaseContextLink>
+      </>}
+                  </span>}
+                <RecordAttribution kind="run" id={selected} inline />
+              </p>
+    </div>
+            <div className="section-actions">
+              <div className="section-actions" ref={resourceActionsRef} />
+              {history && <>
+                  <ActionDialog title="Run record" label="Record details">
+                    {submittedBy && <p>Submitted by {attributionText(submittedBy)}</p>}
+                    <dl className="hf-record-details">
+                      <AttributionDetail kind="run" id={selected} label="Submitted by" />
+                      <dt>Run ID</dt>
+                      <dd>{selected}</dd>
+                      <dt>Configuration version</dt>
+                      <dd>{history.configuration?.configuration_revision_id ?? 'Unavailable'}</dd>
+                      <dt>Model version</dt>
+                      <dd>{history.model_snapshot?.model_revision_id ?? 'Unavailable'}</dd>
+                      <dt>Execution bundle SHA-256</dt>
+                      <dd>{history.bundle?.bundle_digest ?? 'Unavailable'}</dd>
+                      <dt>Criterion evaluator</dt>
+                      <dd>{history.assessment?.evaluator_sha256 ?? 'Unavailable'}</dd>
+                      <dt>Model SHA-256</dt>
+                      <dd>{history.model_snapshot?.digest ?? 'Unavailable'}</dd>
+                      <dt>Configuration SHA-256</dt>
+                      <dd>{history.configuration?.digest ?? 'Unavailable'}</dd>
+                    </dl>
+                    <h3>Dependency versions</h3>
+                    {history.bundle ? <ul>
+                        {history.bundle.dependencies.map(d => <li key={d.name}>
+                            {d.name}: {d.version} · {d.lock_path}
+                          </li>
+                        )}
+                      </ul> : <p>Unavailable</p>}
+                  </ActionDialog>
+      </>}
+              {history?.configuration && detail && !runPending(detail) && <ComputationalExportDialog
+                  key={selected}
+                  api={api}
+                  studyId={studyId}
+                  runId={selected}
+                  name={history.configuration.name}
+                />}
+              {history?.configuration && history.model_snapshot && <Button
+                  disabled={!modifiedSeed}
+                  onClick={() =>
+                    modifiedSeed &&
+                    navigate(() => onCreateModified(modifiedSeed, history.configuration!))
+}
+                >
+                  Create modified run
+                </Button>}
+              {(!detail || runPending(detail)) && <Button
+                disabled={loading} onClick={() => void refreshDetail()}>
+                  Refresh run status
+                </Button>}
+    </div>
+    </div>
       {loading && <p aria-live="polite" aria-busy="true">Loading run…</p>}{error != null && <p role="alert">{message(error)}</p>}
       {detail && <>{runPending(detail) && detail.state !== 'uncertain' ? <Progress label={progressLabel(detail)} message="Status updates automatically. Results appear here when available." /> : detail.state === 'recorded' && !results && <p role="status"><StatusTag tone={['excepted', 'killed'].includes(detail.process_state ?? '') || (detail.exit_status != null && detail.exit_status !== 0) ? 'alarm' : 'inert'}>{detail.process_state === 'finished' ? 'Execution finished' : 'Execution stopped'}</StatusTag></p>}
         {error != null && runPending(detail) && <p role="status">Connection interrupted. Retrying status updates automatically.</p>}
@@ -282,7 +406,18 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
           {history.model_snapshot ? <><SectionHeader title={<>Model version {history.model_snapshot.model_revision_id.slice(0, 8)} <StatusTag>Read-only</StatusTag></>} />{workspace}</> : <p>This run's model version can't be shown. The current model is not shown in its place.</p>}
         </section>
         <section role="tabpanel" id="run-panel-2" aria-labelledby="run-tab-2" hidden={tab !== 'Configuration'}><CaseNavigation.Provider value={null}><Panel className="recorded-configuration">
-          {history.configuration ? <><SectionHeader title={history.configuration.name} actions={<><StatusTag>Read-only</StatusTag><ConfigurationRecordDetails configuration={history.configuration} /></>} /><ConfigurationRecord onViewSourceResult={onViewSourceResult} configuration={history.configuration} approachClosure={'approach_closure' in history ? history.approach_closure : undefined} model={history.model_snapshot} results={history.results} /></> : <p>This run's configuration can't be shown. The current configuration is not shown in its place.</p>}
+          {history.configuration ? <>
+            <SectionHeader title={history.configuration.name} actions={<>
+              <StatusTag>Read-only</StatusTag>
+            <RecordAttribution kind="configuration_version"
+              id={history.configuration.configuration_revision_id} />
+            <ConfigurationRecordDetails configuration={history.configuration} /></>} />
+            <ConfigurationRecord onViewSourceResult={onViewSourceResult}
+              configuration={history.configuration}
+              approachClosure={'approach_closure' in history ? history.approach_closure : undefined}
+              model={history.model_snapshot} results={history.results} />
+          </> : <p>This run's configuration can't be shown. The current configuration is not shown
+            in its place.</p>}
         </Panel></CaseNavigation.Provider></section>
         <section role="tabpanel" id="run-panel-3" aria-labelledby="run-tab-3" hidden={tab !== 'Evidence'}><Panel>
           <RunEvidence history={history} open={{

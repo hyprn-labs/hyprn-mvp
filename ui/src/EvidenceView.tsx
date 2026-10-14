@@ -1,3 +1,4 @@
+import { AttributionDetail, RecordAttribution } from './attribution';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, HyprnMvpApi, message, type EvidenceRecord, type EvidenceSnapshot } from './api';
 import { ActionDialog, Button, SectionHeader, StatusTag } from './design';
@@ -38,15 +39,55 @@ export function EvidenceRecordBody({ record, action, library, onSelectVersion, o
   const context = evidenceContext(inspected);
   const labels = 'recorded_context' in inspected && scope?.kind !== 'study' ? inspected.recorded_context.resource_labels : [];
   return <div className={'hf-evidence-card' + (compact ? ' hf-evidence-card--compact' : '')}>
-    <div className="hf-evidence-heading">{relation && <span className="hf-evidence-relation">{relation}</span>}<h3 className="hf-evidence-title">{evidenceTitle(record)}</h3><p className="hf-evidence-metadata">Version {record.evidence_version_id.slice(0, 8)}{!compact && evidenceContext(record) && <> · {evidenceContext(record)}</>}</p></div>
+      <div className="hf-evidence-heading">
+        {relation && <span className="hf-evidence-relation">{relation}</span>}
+        <h3 className="hf-evidence-title">{evidenceTitle(record)}</h3>
+        <p className="hf-evidence-metadata">
+          Version {record.evidence_version_id.slice(0, 8)}
+          {!compact && evidenceContext(record) && <> · {evidenceContext(record)}</>}
+          {library && <RecordAttribution
+            kind="evidence_version" id={record.evidence_version_id} inline />}
+        </p>
+      </div>
     {!compact && <p className="evidence-content hf-evidence-excerpt">{record.content}</p>}
     <div className="section-actions"><ActionDialog title="Evidence detail" label="View evidence" size="sm">
-      <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3><p className="hf-evidence-metadata">Version {inspected.evidence_version_id.slice(0, 8)}</p><p className="evidence-content">{inspected.content}</p>
+          <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3>
+          <p className="hf-evidence-metadata">
+            Version {inspected.evidence_version_id.slice(0, 8)}
+            <RecordAttribution kind="evidence_version" id={inspected.evidence_version_id} inline />
+          </p>
+          <p className="evidence-content">{inspected.content}</p>
       {inspected.source_refs.length > 0 && <><SectionHeader title="Source references" /><ol className="hf-evidence-references">{inspected.source_refs.map((ref, index) => <li key={index}><p className="evidence-content">{ref}</p></li>)}</ol></>}
       {labels.length ? <><SectionHeader title="Context" /><dl className="hf-record-details">{labels.map((label, i) => <div key={i}><dt>{resourceLabels[label.kind]}</dt><dd>{label.name}{label.version_id && <> · Version {label.version_id.slice(0, 8)}</>}</dd></div>)}</dl></> : context && <p className="hf-evidence-metadata">{context}</p>}
       <div className="actions"><ActionDialog title="Evidence record" label="Record details" size="sm">
         {!scope && <p>No scope.</p>}
-        <dl className="hf-record-details"><dt>Evidence version ID</dt><dd><code>{inspected.evidence_version_id}</code></dd>{'evidence_id' in inspected && <><dt>Evidence family ID</dt><dd><code>{inspected.evidence_id}</code></dd></>}{scope && Object.entries(scope).filter(([key]) => key in identityLabels).map(([key, value]) => <div key={key}><dt>{identityLabels[key]}</dt><dd><code>{value}</code></dd></div>)}</dl>
+              <dl className="hf-record-details">
+                <AttributionDetail
+                  kind="evidence_version"
+                  id={inspected.evidence_version_id}
+                  label="Saved by"
+                />
+                <dt>Evidence version ID</dt>
+                <dd>
+                  <code>{inspected.evidence_version_id}</code>
+                </dd>
+                {'evidence_id' in inspected && <>
+                    <dt>Evidence family ID</dt>
+                    <dd>
+                      <code>{inspected.evidence_id}</code>
+                    </dd>
+                  </>}
+                {scope &&
+                  Object.entries(scope)
+                    .filter(([key]) => key in identityLabels)
+                    .map(([key, value]) => <div key={key}>
+                        <dt>{identityLabels[key]}</dt>
+                        <dd>
+                          <code>{value}</code>
+                        </dd>
+                      </div>
+                    )}
+              </dl>
       </ActionDialog><Button size="sm" onClick={download}>Download evidence record</Button>{library && <Button disabled={loading} onClick={() => void loadVersions()}>Versions</Button>}{onSelectVersion && 'study_id' in inspected && <Button onClick={() => onSelectVersion(inspected as EvidenceRecord)}>Choose this version</Button>}</div>
       {loading && <p role="status">Loading versions…</p>}{error && <p role="alert">{error}<Button onClick={() => void inspect(inspected.evidence_version_id)}>Retry loading this version</Button></p>}
       {showVersions && <section aria-label="Evidence versions">{versions.map(version => <p key={version.evidence_version_id}><Button disabled={loading} onClick={() => void inspect(version.evidence_version_id)}>Inspect {evidenceTitle(version)} · Version {version.evidence_version_id.slice(0, 8)}</Button></p>)}{cursor && <Button disabled={loading} onClick={() => void loadVersions(true)}>Load more versions</Button>}</section>}

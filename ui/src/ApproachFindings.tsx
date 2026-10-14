@@ -1,3 +1,4 @@
+import { RecordAttribution } from './attribution';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, HyprnMvpApi, accessDenied, accessLostText, type ReadFailure, type ReadFence } from './api';
 import { useAccessLoss } from './accessLoss';
@@ -99,7 +100,9 @@ function FindingRow({row,saved,sources,load,retry,onOpen}:{row:Row;saved?:Config
     <div className="approach-finding-head"><h4>{configuration?.name??(usage.kind==='run'?'Run':'Configuration')} <span className="approach-finding-id">· {id.slice(0,8)}</span></h4><Button size="sm" onClick={()=>onOpen({view:usage.kind==='run'?'runs':'configurations',...(usage.kind==='run'?{run:usage.run_id}:{configuration:usage.configuration_revision_id})})}>{usage.kind==='run'?'View run':'View configuration'}</Button></div>
     {row.loading&&<p role="status">Loading record…</p>}{row.error&&<><p role="alert">{row.error}</p><Button onClick={retry}>Retry record</Button></>}
     {usage.kind==='configuration'&&configuration&&<p className="context-line">Saved configuration · no run loaded</p>}
-    {run&&<><RunOutcomes variant="inline" outcomes={runOutcomes(run)}/>
+      {run &&<>
+          <RecordAttribution kind="run" id={run.run_id} line />
+          <RunOutcomes variant="inline" outcomes={runOutcomes(run)} />
       {!run.history?.results&&<p className="context-line">{['accepted_run','prepared','dispatching'].includes(run.state)?'Results not yet available':'No results for this run'}</p>}
       <CriterionFacts run={run}/>
       <div className="section-actions approach-finding-actions"><Button size="sm" aria-expanded={details} onClick={()=>setDetails(value=>!value)}>Run details</Button></div>
