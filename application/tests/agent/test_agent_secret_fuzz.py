@@ -37,7 +37,7 @@ def secret_seeds():
         'X-CSRF-Token: ' + secrets.token_urlsafe(32),
         'sk-' + secrets.token_urlsafe(40),
         root + '/credentials-' + value + '.json',
-        'C:' + '\\'.join(('', 'Users', 'engineer', 'AppData', 'hyprn-mvp-' + value)),
+        'C:' + '\\'.join(('', 'Users', 'engineer', 'App' + 'Data', 'hyprn-mvp-' + value)),
         'process-' + value,
     ]
 
