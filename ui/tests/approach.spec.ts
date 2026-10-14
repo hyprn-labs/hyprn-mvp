@@ -1423,8 +1423,19 @@ test('@approach-reading Overview reads the exact saved version and fences outage
   await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/cr03-overview-saved-dark.png')});
   await dialog.getByRole('button',{name:'Done',exact:true}).click();
   // An outage of the exact version is named; a retry re-reads only that version.
-  await leave();await page.route(exact,route=>route.fulfill({status:503,json:{error:{code:'backend_unavailable',message:'Exact saved approach is temporarily unavailable',fields:[],outcome:'unchanged'}}}),{times:1});
+  await leave();
+  // The exact version stays unavailable until the reader explicitly retries.
+  // An earlier in-flight read cannot consume the outage intended for Overview.
+  const outage: Parameters<Page['route']>[1] = route => route.fulfill({
+    status: 503,
+    json: {error: {
+      code: 'backend_unavailable', message: 'Exact saved approach is temporarily unavailable',
+      fields: [], outcome: 'unchanged',
+    }},
+  });
+  await page.route(exact, outage);
   await overview();await expect(box.getByRole('alert')).toContainText('The study question is temporarily unavailable. Retry this read.');await expect(box).not.toContainText('Saved question A');await expect(box).not.toContainText('Draft question B');await expect(trigger).toHaveCount(0);
+  await page.unroute(exact, outage);
   const priorStateReads=stateReads,priorVersionReads=reads;await box.getByRole('button',{name:'Retry study question',exact:true}).click();await expect(box.getByRole('heading',{name:'Saved question A',exact:true})).toBeVisible();expect(stateReads).toBe(priorStateReads);expect(reads).toBe(priorVersionReads+1);
   // A reply that arrives after leaving Overview is discarded.
   let release!:()=>void,started=false,finished=false;const gate=new Promise<void>(resolve=>{release=resolve;});
