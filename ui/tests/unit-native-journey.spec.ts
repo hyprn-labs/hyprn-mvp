@@ -52,6 +52,43 @@ async function openRun(page:Page,f:any,row:any){
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+row.run_id);
   await expect(page.getByRole('button',{name:'Full-precision values',exact:true})).toBeVisible();
 }
+
+async function retainedScientificAnswers(page: Page, f: any) {
+  const answers = f.scientific_answers;
+  if (!answers) return;
+  await page.goto(
+    '/ui/#v=1&view=approach&study=' + f.study_id +
+      '&approach=' + answers.approach_version_id,
+  );
+  const study = page.getByRole('region', {
+    name: 'Answer to the study question', exact: true,
+  });
+  await expect(study).toContainText(answers.study_answer.interpretation);
+  const comparison = page.getByRole('article', {
+    name: 'Direct and retained-result comparison', exact: true,
+  });
+  await comparison.locator('summary').first().click();
+  await expect(comparison).toContainText(answers.revised_case_answer.qualifications[1]);
+  await study.getByText('Answer basis and record details', { exact: true }).click();
+  await study.getByRole('button', {
+    name: 'View case answer version ' + answers.case_answer.answer_version_id.slice(0, 8),
+    exact: true,
+  }).click();
+  await expect(study).toContainText(answers.case_answer.interpretation);
+  await expect(study).not.toContainText(answers.revised_case_answer.qualifications[1]);
+  const basis = study.getByRole('button', {
+    name: 'Run ' + answers.case_answer.basis.run_ids[0].slice(0, 8), exact: true,
+  });
+  await expect(basis.first()).toBeVisible();
+  await page.screenshot({
+    path: join(root, 'evidence/native-persistent-scientific-answers.png'), fullPage: true,
+  });
+  await basis.first().click();
+  await expect(page.getByRole('button', {
+    name: 'Full-precision values', exact: true,
+  })).toBeVisible();
+  expect(page.url()).toContain('run=' + answers.case_answer.basis.run_ids[0]);
+}
 test('@units-producer browser author commit and configuration use the real private producer without execution',async({page})=>{
   test.setTimeout(90000);const f=await fixture(),calls:any[]=[],errors:string[]=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -102,6 +139,7 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))calls.push({method:r.method(),path:new URL(r.url()).pathname});});
   expect(f.process_count).toBe(f.mixed?1:7);await login(page,f);
+  await retainedScientificAnswers(page, f);
   for(const row of f.records){
     await openRun(page,f,row);
     const response=await page.request.get('/api/1/studies/'+f.study_id+'/runs/'+row.run_id);

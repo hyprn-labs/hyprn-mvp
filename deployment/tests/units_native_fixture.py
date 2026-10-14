@@ -180,7 +180,8 @@ class UnitsJourney(ApproachJourney):
         self.validate_seed_contract([r[0] for r in records],mixed=mixed is not None)
         evidence=self.scope.root/'evidence'
         manifest=dict(study_id=self.sid,records=[dict(run_id=r,detail=h,configuration=c) for r,h,c,_ in records],
-            password=self.setup['password'],outage_expected=True,process_count=before,mixed=mixed)
+            password=self.setup['password'],outage_expected=True,process_count=before,mixed=mixed,
+            scientific_answers=getattr(self, 'scientific_answers', None))
         # Fixture-only credentials stay in private scoped artifacts, not reports.
         (self.scope.root/'artifacts/native-browser-input.json').write_text(json.dumps(manifest))
         (self.scope.root/'artifacts/package.json').write_text('{"type":"module"}')

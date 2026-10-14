@@ -327,6 +327,11 @@ def test_native_compounds_histories_and_archive():
         assert j.private('GET','/models/'+mixed['model_id']+'/revisions/'+mixed['model_revision_id'])==mixed
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
+        j.scientific_answers = dict(
+            approach_version_id=approach['version']['approach_version_id'],
+            case_answer=case_answer, revised_case_answer=revised_case_answer,
+            study_answer=study_answer,
+        )
         browser=j.browser(records)
         proof=dict(passed=True,browser=browser,analytical=EXPECT,records=[dict(run_id=r,history=h,configuration=s,payload_sha256=hashlib.sha256(b).hexdigest()) for r,h,s,b in records],
             scientific_answers=dict(
