@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "name": "WhatsOpt",
+  "repository": "https://github.com/WhatsOpt/WhatsOpt",
+  "commit": "597f5abf18d4a6335c2f3b9174ab16acdf1de4bd",
+  "url": "https://codeload.github.com/WhatsOpt/WhatsOpt/tar.gz/597f5abf18d4a6335c2f3b9174ab16acdf1de4bd",
+  "sha256": "4937188df6ea12daa8a2b00767005e3649d2974ab6e634409f7756043ef0b360",
+  "size": 2078870,
+  "license": "AGPL-3.0-only"
+}

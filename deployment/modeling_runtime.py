@@ -1,10 +1,9 @@
 """Set up, check and stop the owned modeling service deployment; never migrate stores.
 
 The compose file is JSON-compatible YAML. Setup has no implicit upgrade, delete, reset or
-execution action. Every location is below HYPRN_MVP_DATA_ROOT and the WhatsOpt source base
-image is HYPRN_MVP_MODELING_SOURCE_IMAGE (deployment/local_paths.py); the commands refuse while
-a value they need is unset, and a build refuses a source image that differs from the reviewed
-pin in deployment/pins.json.
+execution action. Every location resolves through deployment/local_paths.py. The WhatsOpt
+source image is built from the verified archive, gem lock and digest-pinned Ruby and Node
+bases. Its recorded build-input identity is required whenever an existing image is reused.
 
 The installation decides the deployment's identities (deployment/local_paths.py,
 configured_installation): its root <data root>/modeling, the verified upstream cache, the container
@@ -22,6 +21,7 @@ an existing image only when it was built from the current reviewed sources (revi
 """
 import argparse
 import contextlib
+import difflib
 import hashlib
 import io
 import json
@@ -37,6 +37,7 @@ import pwd
 import sys
 from typing import NamedTuple
 import uuid
+import urllib.request
 import local_paths
 
 REPO = Path(__file__).resolve().parents[1]
@@ -49,9 +50,9 @@ LABEL = 'org.hyprn-mvp.owner'
 OWNER = NAMES['modeling_owner']
 # Environment of every docker command: the installation's engine endpoint, or None (ambient).
 DOCKER_ENVIRONMENT = local_paths.docker_environment()
-SOURCE_IMAGE = local_paths.modeling_source_image(required=False)
 RUBY_IMAGE = 'ruby@sha256:bceec7582aaa80630bb51a04e2df3af658e64c0640c174371776928ad3bd57b4'
-ARCHIVE_SHA256 = '4937188df6ea12daa8a2b00767005e3649d2974ab6e634409f7756043ef0b360'
+UPSTREAM = json.loads((REPO / 'deployment/locks/upstream.json').read_text())
+ARCHIVE_SHA256 = UPSTREAM['sha256']
 # Content-addressed location of the pinned upstream archive: an owner-private read-only copy
 # below the verified upstream cache. upstream_archive() is the one resolver and fails closed
 # on any absence, type, permission or SHA256 mismatch.
@@ -164,6 +165,8 @@ def assert_owned(info, kind, deployment=INSTALLATION):
 
 def source_hashes():
     paths = ['deployment/modeling.Dockerfile', 'deployment/modeling_policy.rb', 'deployment/modeling-compose.yaml', 'deployment/modeling_runtime.py', 'modeling/provenance.md', 'modeling/generate_unit_catalog.py', 'modeling/rehearsal.py', 'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json', 'integration/worker-requirements.lock']
+    paths += ['deployment/images/whatsopt-source.Dockerfile',
+              'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json']
     paths += sorted(str(p.relative_to(REPO)) for p in (REPO / 'upstream/whatsopt-patches').glob('*.patch'))
     return {p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in paths}
 
@@ -286,7 +289,69 @@ def patch_sections(text):
 # or rewrites (controllers other than the contract controller, views, scripts, tests, the
 # authoring service, routes) and the schema copy (replaced from contracts/schemas) are not
 # replayed.
+# Existing model fields and ownership behavior recovered byte-for-byte from the reviewed
+# modeling reference. The patch records these inputs so no earlier image layer is required.
+BASELINE_SOURCES = {
+    'app/models/discipline.rb': (
+        '7ba0317e631e302c9aefc71c9086a436c5c900d8b16260ac2bcc39100fa5024d',
+        '4d9da03c6700b5bc9fe688d0492758eeba0207e5a4d52a18c00b1afbbed97d5c',
+    ),
+    'app/models/openmdao_analysis_impl.rb': (
+        '8f04bb65ea8b79c142434ef65826e6ec86aecf26e0511d853f335bb91fec0b18',
+        '931e505d3c1e54b08794894837024b6e9f65c00e07c290cbe1d49b5219c4456c',
+    ),
+    'app/models/openmdao_discipline_impl.rb': (
+        '794d06392db73074fa68581c0a0ddb56bcd4f557edbccd4e0a3d88cae738d4a4',
+        '1126b37908764c579d50194d5f799b09b086ca65ad3d3d6bcf6ac54def06f044',
+    ),
+    'app/serializers/discipline_attrs_serializer.rb': (
+        '1933dca2dc1e8a955fd6a21ba4dafa6e363938d88086c3cf077ce5db56f3aab8',
+        '79c393e3186a7d5374cb6cd2de314e742524fe61b33ca4e6d25cc9219b729304',
+    ),
+    'app/serializers/openmdao_discipline_impl_serializer.rb': (
+        'fca004ce2a1502395aaa49e3f6776605226c08d01c5a1717d4762c1a6f22dda6',
+        'eb2f0860161af83bf5bd5b4d9894519427655a0ce74e6c65d7c898e3df13ddc3',
+    ),
+    'db/migrate/20261008140000_add_probe_source.rb': (
+        None,
+        '0312e376caf96f675553f341641dc86c46cf19d4156186b061763918f2f3df96',
+    ),
+    'db/migrate/20261008140100_add_probe_receipts.rb': (
+        None,
+        '467eeb429337a6dc674c915e2528160d01d2f9e8ba911fc8ced273c761bcc240',
+    ),
+}
+
+
 REPLAYED_SOURCES = (
+    (
+        '005-model-source-baseline.patch',
+        'app/models/discipline.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'app/models/openmdao_analysis_impl.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'app/models/openmdao_discipline_impl.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'app/serializers/discipline_attrs_serializer.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'app/serializers/openmdao_discipline_impl_serializer.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'db/migrate/20261008140000_add_probe_source.rb',
+    ),
+    (
+        '005-model-source-baseline.patch',
+        'db/migrate/20261008140100_add_probe_receipts.rb',
+    ),
     ('020-authoring.patch', 'app/models/analysis.rb'),
     ('030-configuration.patch', 'app/lib/whats_opt/openmdao_generator.rb'),
     ('030-configuration.patch', 'app/lib/whats_opt/python_utils.rb'),
@@ -309,6 +374,8 @@ REPLAYED_MIGRATION_VERSIONS = ('20261008160000', '20261008175500')
 def stage_replayed_sources(ctx, upstream):
     """Write every REPLAYED_SOURCES file below ctx/replay: upstream bytes plus the file's
     sections of the named patch, applied with zero fuzz and no offset."""
+    if hashlib.sha256(upstream).hexdigest() != ARCHIVE_SHA256:
+        raise ValueError('Upstream archive identity mismatch')
     with tarfile.open(fileobj=io.BytesIO(upstream)) as archive:
         members = {str(Path(*Path(m.name).parts[1:])): m for m in archive.getmembers()
                    if m.isfile() and len(Path(m.name).parts) > 1}
@@ -316,7 +383,17 @@ def stage_replayed_sources(ctx, upstream):
                      for _, path in REPLAYED_SOURCES if path in members}
     replay = ctx / 'replay'
     for name, path in REPLAYED_SOURCES:
-        sections = [text for old, new, text in patch_sections((REPO / 'upstream/whatsopt-patches' / name).read_text())
+        patch = (REPO / 'upstream/whatsopt-patches' / name).read_text()
+        if name == '005-model-source-baseline.patch':
+            notice = '# SPDX-License-Identifier: AGPL-3.0-only\n'
+            if not patch.startswith(notice):
+                raise ValueError('Model source baseline patch must retain its licence notice')
+            patch = patch[len(notice):]
+            original = originals.get(path)
+            before = None if original is None else hashlib.sha256(original).hexdigest()
+            if before != BASELINE_SOURCES[path][0]:
+                raise ValueError('Model source baseline differs from the pinned original')
+        sections = [text for old, new, text in patch_sections(patch)
                     if new == 'b/' + path and old in ('a/' + path, '/dev/null')]
         if len(sections) != 1:
             raise ValueError('Replayed source must have exactly one section: ' + name + ' ' + path)
@@ -333,6 +410,10 @@ def stage_replayed_sources(ctx, upstream):
             output = result.stdout + result.stderr
             if result.returncode or any(word in output.lower() for word in ('fuzz', 'offset')):
                 raise ValueError('Replayed source patch failed: ' + name + ' ' + path)
+            if path in BASELINE_SOURCES:
+                actual = hashlib.sha256((stage / path).read_bytes()).hexdigest()
+                if actual != BASELINE_SOURCES[path][1]:
+                    raise ValueError('Model source baseline differs from the reviewed reference')
             destination = replay / path
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(stage / path, destination)
@@ -357,6 +438,47 @@ def stage_assumptions_native_patch(ctx):
     destination = ctx / 'assumptions.patch'
     destination.write_text(sections[1])
     return destination
+
+
+def stage_generation_patch(ctx, upstream):
+    """Apply native-only 050 sections; the complete adapter comes from the cumulative chain.
+
+    The discipline template is a full-file replacement in 050. Its historical preimage has
+    four authoring lines absent from the pinned upstream. Materialize its reviewed postimage
+    directly, verify the reference hash, and construct an exact patch against original bytes.
+    """
+    name = 'upstream/whatsopt-patches/050-native-generation.patch'
+    sections = patch_sections((REPO / name).read_text())
+    template = 'app/lib/whats_opt/templates/openmdao_discipline.py.erb'
+    adapter = 'b/app/services/modeling_contract.rb'
+    selected = [section for section in sections if section[1] == 'b/' + template]
+    if len(selected) != 1 or sum(new == adapter for _, new, _ in sections) != 1:
+        raise ValueError('Unexpected native generation patch sections')
+    lines = selected[0][2].splitlines(keepends=True)
+    if lines[2] != '@@ -1,77 +1,18 @@\n':
+        raise ValueError('Discipline template must remain a complete reviewed replacement')
+    replacement = ''.join(line[1:] for line in lines[3:] if line.startswith(('+', ' ')))
+    expected = 'd9c720054302de48dd43116b7dc4cc563d1ca120c5ce278a2708e1b981bfcec7'
+    if hashlib.sha256(replacement.encode()).hexdigest() != expected:
+        raise ValueError('Discipline template differs from the reviewed native reference')
+    if hashlib.sha256(upstream).hexdigest() != ARCHIVE_SHA256:
+        raise ValueError('Upstream archive identity mismatch')
+    with tarfile.open(fileobj=io.BytesIO(upstream)) as archive:
+        matches = [m for m in archive if m.isfile()
+                   and '/'.join(Path(m.name).parts[1:]) == template]
+        if len(matches) != 1:
+            raise ValueError('Upstream discipline template is not unique')
+        original = archive.extractfile(matches[0]).read().decode()
+    exact = ''.join(difflib.unified_diff(original.splitlines(keepends=True),
+                                       replacement.splitlines(keepends=True),
+                                       fromfile='a/' + template, tofile='b/' + template))
+    patch = ''.join(exact if new == 'b/' + template else text
+                    for _, new, text in sections if new != adapter)
+    (ctx / 'native.patch').write_text(patch)
+    discovery = patch_sections((REPO / 'upstream/whatsopt-patches/060-ui-discovery.patch')
+                               .read_text())
+    if len(discovery) != 1 or discovery[0][1] != adapter:
+        raise ValueError('Discovery patch must contain only the cumulative adapter')
 
 
 def stage_units_native_patch(ctx):
@@ -393,9 +515,60 @@ def upstream_archive(path=None):
             raw = stream.read()
     except OSError as error:
         raise ValueError('Upstream archive unavailable: ' + str(error)) from error
-    if hashlib.sha256(raw).hexdigest() != ARCHIVE_SHA256:
+    if len(raw) != UPSTREAM['size'] or hashlib.sha256(raw).hexdigest() != ARCHIVE_SHA256:
         raise ValueError('Upstream archive identity mismatch')
     return io.BytesIO(raw)
+
+def acquire_upstream(cache=None, *, opener=None):
+    """Fetch the pinned archive only when absent; never repair an invalid cached copy.
+
+    Download into an exclusive temporary file, verify bounded bytes, then publish without
+    replacing a concurrent acquisition. Cache parents and the final file reject symlinks.
+    """
+    cache = local_paths.require(ARCHIVE_ROOT) if cache is None else Path(cache)
+    if not cache.is_absolute() or cache.resolve() != cache:
+        raise ValueError('Upstream cache must be an absolute nonsymlink folder')
+    target = cache / ARCHIVE_SHA256 / 'WhatsOpt.tar.gz'
+    if target.parent.resolve() != target.parent:
+        raise ValueError('Upstream cache must not contain symlinks')
+    if target.exists() or target.is_symlink():
+        upstream_archive(target)
+        return target
+    target.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    if target.parent.resolve() != target.parent:
+        raise ValueError('Upstream cache must not contain symlinks')
+    info = target.parent.stat()
+    if info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError('Upstream cache folder must be owner-private')
+    opener = urllib.request.urlopen if opener is None else opener
+    fd, temporary = tempfile.mkstemp(prefix='.acquire-', dir=target.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            with opener(UPSTREAM['url'], timeout=60) as response:
+                remaining = UPSTREAM['size'] + 1
+                digest = hashlib.sha256()
+                total = 0
+                while remaining:
+                    chunk = response.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    stream.write(chunk)
+                    digest.update(chunk)
+                    total += len(chunk)
+                    remaining -= len(chunk)
+                if total != UPSTREAM['size'] or digest.hexdigest() != ARCHIVE_SHA256:
+                    raise ValueError('Upstream archive identity mismatch')
+                stream.flush()
+                os.fsync(stream.fileno())
+                os.fchmod(stream.fileno(), 0o400)
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            upstream_archive(target)
+        return target
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
 
 # The public contract schemas are build inputs, bound by hash in the build identity; each
 # prepared artifact records their identities (path, SHA-256, length) in this support record
@@ -435,8 +608,7 @@ def stage_native_inputs(ctx):
         shutil.copyfile(REPO / name, prov / 'support' / Path(name).name)
     (prov / 'support' / SCHEMA_IDENTITY_FILE).write_text(json.dumps(schema_identities(), indent=2, sort_keys=True) + '\n')
     shutil.copytree(REPO / 'upstream/whatsopt-patches', prov / 'patches')
-    shutil.copyfile(REPO / 'upstream/whatsopt-patches/050-native-generation.patch', ctx / 'native.patch')
-    shutil.copyfile(REPO / 'upstream/whatsopt-patches/060-ui-discovery.patch', ctx / 'discovery.patch')
+    stage_generation_patch(ctx, upstream.getvalue())
     stage_assumptions_native_patch(ctx)
     stage_units_native_patch(ctx)
     shutil.copyfile(REPO / 'contracts/schemas/model.schema.json', ctx / 'modeling.schema.json')
@@ -444,20 +616,99 @@ def stage_native_inputs(ctx):
     stage_modeling_contract(ctx)
     readable_context(ctx)
 
-def source_image():
-    """The reviewed WhatsOpt source base image; refused unless it is the pinned source image."""
-    image = local_paths.modeling_source_image() if SOURCE_IMAGE is None else SOURCE_IMAGE
-    if json.loads((REPO / 'deployment/pins.json').read_text())['modeling_source_image'] != image:
-        raise ValueError('Modeling source image differs from the reviewed pin')
-    if run('docker', 'image', 'inspect', '--format', '{{.Id}}', image) != image:
-        raise ValueError('Source image identity mismatch')
-    return image
+def source_build_inputs():
+    """Content identity of the source recipe, archive, gem lock and digest-pinned bases."""
+    pins = json.loads((REPO / 'deployment/pins.json').read_text())
+    paths = ('deployment/images/whatsopt-source.Dockerfile',
+             'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json')
+    return dict(ruby_image=pins['ruby_base_image'], node_image=pins['node_base_image'],
+                sources={p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in paths})
 
-def build(root=None, *, evidence=None):
+
+def source_image(*, evidence=None, no_cache=False, recorded=None):
+    """Read a recorded source build, or explicitly build it from verified acquisition inputs."""
+    inputs = source_build_inputs()
+    if json.loads((REPO / 'deployment/locks/upstream.json').read_text()) != UPSTREAM:
+        raise ValueError('Upstream pin changed during build; restart from a stable snapshot')
+    digest = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+    tag = 'hyprn-mvp-modeling-source:' + digest[:16]
+    if recorded is not None:
+        if (evidence is not None or not isinstance(recorded, str)
+                or not recorded.startswith('sha256:')):
+            raise ValueError('Recorded source identity requires a read-only image-id lookup')
+        tag = recorded
+    existing = inspect(tag, 'image')
+    if evidence is not None and (no_cache or existing is None):
+        evidence = Path(evidence)
+        evidence.mkdir(parents=True, exist_ok=True)
+        archive = acquire_upstream()
+        with tempfile.TemporaryDirectory(prefix='hyprn-mvp-source-build-',
+                                         dir=local_paths.scratch_root()) as temp:
+            ctx = Path(temp)
+            destination = ctx / 'upstream'
+            destination.mkdir()
+            with tarfile.open(fileobj=upstream_archive(archive)) as source:
+                for member in source.getmembers():
+                    parts = Path(member.name).parts
+                    if not parts or Path(member.name).is_absolute() or '..' in parts:
+                        raise ValueError('Invalid source member location')
+                    if not (member.isfile() or member.isdir()):
+                        raise ValueError('Unsupported upstream archive entry')
+                    if len(parts) == 1:
+                        continue
+                    target = destination.joinpath(*parts[1:])
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(source.extractfile(member).read())
+            shutil.copyfile(REPO / 'deployment/images/whatsopt-source.Dockerfile',
+                            ctx / 'Dockerfile')
+            shutil.copyfile(REPO / 'deployment/locks/whatsopt-gems.json',
+                            ctx / 'whatsopt-gems.json')
+            readable_context(ctx)
+            staged = {'deployment/images/whatsopt-source.Dockerfile': ctx / 'Dockerfile',
+                      'deployment/locks/whatsopt-gems.json': ctx / 'whatsopt-gems.json'}
+            if any(hashlib.sha256(path.read_bytes()).hexdigest() != inputs['sources'][name]
+                   for name, path in staged.items()) or source_build_inputs() != inputs:
+                raise ValueError('Source build inputs changed during staging')
+            command = ['docker', 'build', '--build-arg', 'RUBY_IMAGE=' + inputs['ruby_image'],
+                       '--build-arg', 'NODE_IMAGE=' + inputs['node_image'],
+                       '--build-arg', 'BUILD_INPUT_DIGEST=' + digest, '-t', tag]
+            if no_cache:
+                command.append('--no-cache')
+            result = subprocess.run([*command, str(ctx)], capture_output=True, text=True,
+                                    env=DOCKER_ENVIRONMENT)
+            (evidence / 'source-build.log').write_text(result.stdout + result.stderr)
+            result.check_returncode()
+            if source_build_inputs() != inputs:
+                raise ValueError('Source build inputs changed during build')
+    info = inspect(tag, 'image')
+    if info is None:
+        raise ValueError('Verified modeling source build is absent; build it explicitly')
+    if info['Config'].get('Labels', {}).get('org.hyprn-mvp.modeling-source-inputs') != digest:
+        raise ValueError('Modeling source build input identity mismatch')
+    if recorded is not None and info['Id'] != recorded:
+        raise ValueError('Recorded source image identity mismatch')
+    if evidence is not None:
+        evidence = Path(evidence)
+        evidence.mkdir(parents=True, exist_ok=True)
+        retained = 'hyprn-mvp-modeling-source:built-' + info['Id'].split(':', 1)[1]
+        run('docker', 'tag', info['Id'], retained)
+        record = dict(image=info['Id'], input_digest=digest, inputs=inputs)
+        (evidence / 'source-build-identity.json').write_text(json.dumps(record, indent=2) + '\n')
+    return info['Id']
+
+
+def build(root=None, *, evidence=None, no_cache=False, source_no_cache=None):
     """Build the modeling image from the reviewed inputs; the build log goes to ``evidence``
     (default ``<root>/evidence``). Returns the image id."""
     evidence = Path(evidence) if evidence is not None else Path(root) / 'evidence'
-    image = source_image()
+    if source_no_cache is None:
+        source_no_cache = no_cache
+    image = source_image(evidence=evidence, no_cache=source_no_cache)
+    hashes = source_hashes()
+    source_inputs = source_build_inputs()
     with tempfile.TemporaryDirectory(prefix='hyprn-mvp-modeling-build-', dir=local_paths.scratch_root()) as temp:
         ctx = Path(temp)
         stage_native_inputs(ctx)
@@ -465,19 +716,42 @@ def build(root=None, *, evidence=None):
             shutil.copyfile(REPO / src, ctx / dst)
         (ctx / 'start.sh').write_text(START)
         notices = ctx / 'notices'; notices.mkdir()
+        (notices / 'upstream.tar.gz').write_bytes(upstream_archive().getvalue())
+        for name in ('deployment/images/whatsopt-source.Dockerfile',
+                     'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
+                     'deployment/modeling_runtime.py', 'deployment/pins.json'):
+            shutil.copyfile(REPO / name, notices / Path(name).name)
         shutil.copytree(REPO / 'upstream/whatsopt-patches', notices / 'patches')
         for name in ('modeling/provenance.md', 'deployment/modeling_policy.rb', 'deployment/modeling.Dockerfile'):
             shutil.copyfile(REPO / name, notices / Path(name).name)
-        (notices / 'source-identity.json').write_text(json.dumps({'upstream': json.loads((REPO / 'deployment/pins.json').read_text())['verified_sources']['WhatsOpt'], 'source_image': image, 'source_hashes': source_hashes()}, indent=2))
+        pins = json.loads((REPO / 'deployment/pins.json').read_text())
+        identity = dict(upstream=pins['verified_sources']['WhatsOpt'], source_image=image,
+                        source_hashes=hashes, source_build_inputs=source_inputs)
+        (notices / 'source-identity.json').write_text(json.dumps(identity, indent=2))
         readable_context(ctx, executables=(ctx / 'start.sh',))
         # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
-        inputs = dict(source_image=image, ruby_image=RUBY_IMAGE, source_hashes=source_hashes())
+        if source_hashes() != hashes or source_build_inputs() != source_inputs:
+            raise ValueError('Modeling build inputs changed during staging')
+        inputs = dict(source_image=image, ruby_image=RUBY_IMAGE, source_hashes=hashes,
+                      source_build_inputs=source_inputs)
         tag = 'hyprn-mvp-modeling:' + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
         with base_reference(image) as reference:
-            result = subprocess.run(['docker', 'build', '--network', 'none', '--build-arg', 'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE='+RUBY_IMAGE, '-t', tag, str(ctx)], capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
+            command = ['docker', 'build', '--network', 'none', '--build-arg',
+                       'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE=' + RUBY_IMAGE,
+                       '--build-arg', 'NODE_IMAGE=' + source_inputs['node_image'], '-t', tag]
+            if no_cache:
+                command.append('--no-cache')
+            result = subprocess.run([*command, str(ctx)], capture_output=True, text=True,
+                                    env=DOCKER_ENVIRONMENT)
         (evidence / ('build-'+secrets.token_hex(4)+'.log')).write_text(result.stdout + result.stderr)
         result.check_returncode()
-    return run('docker', 'image', 'inspect', '--format', '{{.Id}}', tag)
+    if source_hashes() != hashes or source_build_inputs() != source_inputs:
+        raise ValueError('Modeling build inputs changed during build')
+    image = run('docker', 'image', 'inspect', '--format', '{{.Id}}', tag)
+    run('docker', 'tag', image, 'hyprn-mvp-modeling:built-' + image.split(':', 1)[1])
+    record = dict(image=image, inputs=inputs)
+    (evidence / 'modeling-build-identity.json').write_text(json.dumps(record, indent=2) + '\n')
+    return image
 
 def compose_environment(root, image):
     """Clean compose environment: no inherited COMPOSE_*/DOCKER_* (project name, file, host,
@@ -494,7 +768,7 @@ def compose_environment(root, image):
         environment['DOCKER_HOST'] = DOCKER_ENVIRONMENT['DOCKER_HOST']
     return environment
 
-def reviewed_image(image):
+def image_identity(image):
     """An existing modeling image may back a deployment only when it is exactly the image of the
     current reviewed sources: its recorded source identity (the corresponding-source notice)
     names the reviewed source image and the current source hashes."""
@@ -503,8 +777,18 @@ def reviewed_image(image):
     recorded = json.loads(run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
                               '--security-opt', 'no-new-privileges', '--user', '10001:10001', '--entrypoint', 'cat',
                               image, SOURCE_NOTICE + '/source-identity.json'))
-    if recorded.get('source_image') != source_image() or recorded.get('source_hashes') != source_hashes():
+    source = recorded.get('source_image')
+    if not isinstance(source, str) or source_image(recorded=source) != source:
+        raise ValueError('Modeling image source identity mismatch')
+    if (recorded.get('source_hashes') != source_hashes()
+            or recorded.get('source_build_inputs') != source_build_inputs()):
         raise ValueError('Modeling image was not built from the current reviewed sources; rebuild it')
+    return recorded
+
+
+def reviewed_image(image):
+    """Return an exact existing image only after its recorded inputs are verified."""
+    image_identity(image)
     return image
 
 
@@ -592,7 +876,10 @@ def setup(root, rebuild=False, *, deployment=INSTALLATION, image=None):
     image = build(root) if image is None else reviewed_image(image)
     # Identity precedes compose creation; failures retain evidence and require explicit
     # diagnosis, never automatic deletion or store reset.
-    identity = {'owner': deployment.owner, 'container': deployment.container, 'network': deployment.network, 'image': image, 'source_image': source_image(), 'source_hashes': source_hashes(), 'runtime': str(root)}
+    identity = {'owner': deployment.owner, 'container': deployment.container,
+                'network': deployment.network, 'image': image,
+                'source_image': image_identity(image)['source_image'],
+                'source_hashes': source_hashes(), 'runtime': str(root)}
     (root / 'identity.json').write_text(json.dumps(identity, indent=2)+'\n')
     start = compose_up if deployment == INSTALLATION else (lambda *a: start_scoped(*a, deployment))
     if start(root, image, root / 'evidence/setup.log'):

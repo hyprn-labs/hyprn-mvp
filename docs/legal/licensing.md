@@ -30,6 +30,10 @@ These are the obligations the project treats as applying to the modeling service
 4. **Generated model code: unresolved.** The native OpenMDAO code templates carry no generated-code exception, and the bodies they emit are substantive. Until counsel decides, generated files are treated as inside the AGPL scope, template licences are recorded per prepared artifact, and every prepared artifact carries a generated-code notice.
 5. **Separate licence sets per artifact.** Model-author declarations, generated-code and template licences, and runtime dependency licences are tracked as separate sets in every prepared artifact and execution bundle.
 
+### Local-edition corresponding source
+
+The local edition builds WhatsOpt under AGPL-3.0 from the commit, archive SHA-256 and length in `deployment/locks/upstream.json`. Setup fetches that archive by pin and refuses changed bytes. The modeling image ships the original archive, `upstream/whatsopt-patches/`, the modeling policy, both source and modeling Dockerfiles, the upstream and gem locks, and their build identity in `/usr/share/hyprn-mvp-modeling-source/`. These files, together with the repository's matching build code and pins, identify the corresponding source for recipients. `THIRD_PARTY_NOTICES.md` lists the shipped components. This inventory does not resolve the pending legal review under L1 and L4.
+
 ## 4. Other components
 
 | Component | Licence | Use and obligation |

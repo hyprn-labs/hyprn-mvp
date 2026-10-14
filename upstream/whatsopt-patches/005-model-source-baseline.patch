@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+--- a/app/models/discipline.rb
++++ b/app/models/discipline.rb
+@@ -23,7 +23,7 @@
+   belongs_to :analysis
+   acts_as_list scope: :analysis, top_of_list: 0
+
+-  has_one :openmdao_impl, class_name: "OpenmdaoDisciplineImpl", dependent: :destroy
++  has_one :openmdao_impl, class_name: "OpenmdaoDisciplineImpl", dependent: :destroy, autosave: true
+   has_one :endpoint, as: :service, dependent: :destroy
+
+   accepts_nested_attributes_for :variables, reject_if: proc { |attrs| attrs["name"].blank? }, allow_destroy: true
+@@ -234,6 +234,15 @@
+     end
+   end
+
++  def python_source
++    openmdao_impl&.python_source
++  end
++
++  def python_source=(value)
++    self.openmdao_impl ||= OpenmdaoDisciplineImpl.new
++    self.openmdao_impl.python_source = value
++  end
++
+   def impl
+     openmdao_impl || OpenmdaoDisciplineImpl.new(discipline: self)
+   end
+@@ -244,7 +253,7 @@
+       if name == WhatsOpt::Discipline::NULL_DRIVER_NAME
+         self.type = WhatsOpt::Discipline::NULL_DRIVER
+       end
+-      self.openmdao_impl = OpenmdaoDisciplineImpl.new
++      self.openmdao_impl ||= OpenmdaoDisciplineImpl.new
+     end
+
+     def _destroy_connections
+--- a/app/models/openmdao_analysis_impl.rb
++++ b/app/models/openmdao_analysis_impl.rb
+@@ -67,8 +67,11 @@
+     self.update(optimization_driver: optimization_driver) unless optimization_driver.nil?
+     packaging = impl_attrs[:packaging]
+     self.update(package_name: packaging[:package_name]) unless packaging.nil?
+-    impl_attrs[:nodes]&.each do |dattr|
+-      OpenmdaoDisciplineImpl.where(discipline_id: dattr[:discipline_id]).update(dattr.except(:discipline_id))
++    transaction do
++      impl_attrs[:nodes]&.each do |dattr|
++        owned = analysis.disciplines.find(dattr[:discipline_id])
++        owned.openmdao_impl.update!(dattr.except(:discipline_id))
++      end
+     end
+   end
+
+--- a/app/models/openmdao_discipline_impl.rb
++++ b/app/models/openmdao_discipline_impl.rb
+@@ -8,6 +8,7 @@
+   after_initialize :_ensure_default_impl
+
+   validates :discipline, presence: true
++  validates :python_source, length: { maximum: 65536 }
+
+   def name
+     self.discipline.name
+@@ -19,6 +20,7 @@
+
+   def build_copy
+     OpenmdaoDisciplineImpl.new(
++      python_source: python_source,
+       implicit_component: implicit_component,
+       support_derivatives: support_derivatives,
+       egmdo_surrogate: egmdo_surrogate,
+--- a/app/serializers/discipline_attrs_serializer.rb
++++ b/app/serializers/discipline_attrs_serializer.rb
+@@ -1,7 +1,7 @@
+ # frozen_string_literal: true
+
+ class DisciplineAttrsSerializer < ActiveModel::Serializer
+-  attributes :name, :type
++  attributes :name, :type, :python_source
+
+   has_many :variables, key: :variables_attributes
+ end
+--- a/app/serializers/openmdao_discipline_impl_serializer.rb
++++ b/app/serializers/openmdao_discipline_impl_serializer.rb
+@@ -1,5 +1,5 @@
+ # frozen_string_literal: true
+
+ class OpenmdaoDisciplineImplSerializer < ActiveModel::Serializer
+-  attributes :discipline_id, :implicit_component, :support_derivatives, :egmdo_surrogate, :jax_component
++  attributes :python_source, :discipline_id, :implicit_component, :support_derivatives, :egmdo_surrogate, :jax_component
+ end
+--- /dev/null
++++ b/db/migrate/20261008140000_add_probe_source.rb
+@@ -0,0 +1,5 @@
++class AddProbeSource < ActiveRecord::Migration[8.0]
++  def change
++    add_column :openmdao_discipline_impls, :python_source, :text
++  end
++end
+--- /dev/null
++++ b/db/migrate/20261008140100_add_probe_receipts.rb
+@@ -0,0 +1,5 @@
++class AddProbeReceipts < ActiveRecord::Migration[8.0]
++  def change
++    add_column :analyses, :probe_receipts, :text, default: "{}", null: false
++  end
++end

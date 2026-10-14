@@ -26,7 +26,8 @@ import modeling_runtime  # noqa: E402
 def build_native_static():
     evidence = Path(tempfile.mkdtemp(prefix='hyprn-mvp-modeling-image-', dir=local_paths.scratch_root()))
     image = modeling_runtime.build(evidence=evidence)
-    record = dict(image=image, source_image=modeling_runtime.source_image(), ruby_image=modeling_runtime.RUBY_IMAGE,
+    record = dict(image=image, source_image=modeling_runtime.image_identity(image)['source_image'],
+                  ruby_image=modeling_runtime.RUBY_IMAGE,
                   source_hashes=modeling_runtime.source_hashes(), evidence=str(evidence))
     (evidence / 'image.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record))

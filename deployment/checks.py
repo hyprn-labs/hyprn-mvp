@@ -658,6 +658,11 @@ NATIVE_ENVIRONMENT_PYTEST_GROUPS = frozenset({'native-environment'})
 GROUPS.update({'native-environment': ('deployment/tests/test_native_environment.py',)})
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
+UPSTREAM_PYTEST_GROUPS = frozenset({'upstream'})
+GROUPS['upstream'] = ('deployment/tests/test_upstream_acquisition.py',)
+PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | UPSTREAM_PYTEST_GROUPS
+CHILD_GROUPS = CHILD_GROUPS | UPSTREAM_PYTEST_GROUPS
+
 # Agent browser groups: the agent screens on the in-browser agent double, which is layered over
 # the foundry double. Closed specs, reviewed application interpreter, scope-bound build and
 # evidence; never a served installation, and no pytest collection or native import.
