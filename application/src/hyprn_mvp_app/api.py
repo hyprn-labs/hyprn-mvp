@@ -23,26 +23,29 @@ from .modified_runs import ModifiedRuns
 from .computational_export import records_for_store
 from .routes import (approach, capabilities, commands, configurations, evidence, models, readiness, records as record_routes,
                      runs, session as session_routes, studies)
+from .agent_runtime import routes as agent_routes, schema as agent_schema
 
 MALFORMED_BODY=("Request body must be one strict JSON value: no duplicate keys, non-finite or out-of-range "
     "numbers or invalid text, and at most 32 levels of nesting.")
 
 MUTATIONS=frozenset({"POST","PATCH","DELETE","PUT"})
 
-def agent_boundary(method,path,session):
+def agent_boundary(method,path,session,registry=None):
     """Refuse, before routing, what a delegated agent API session may never do: the session
     routes, any mutation from a read-only session, any route the agent allowlist refuses
     (403), and any study other than its delegation's study (the same undisclosed 404)."""
     if path=="/api/1/session":raise DomainError("forbidden",403)
     if session["read_only"] and method in MUTATIONS:raise DomainError("forbidden",403)
-    if not route_allowed(method,path,session["effects"]):raise DomainError("forbidden",403)
+    if not route_allowed(method,path,session["effects"],registry=registry):
+        raise DomainError("forbidden",403)
     parts=path.split("/")
     if len(parts)>4 and parts[1:4]==["api","1","studies"] and parts[4]!=session["study_id"]:
         raise DomainError("resource_not_found",404)
 
 # Inclusion order is registration order, which fixes the generated contract's path order and
 # every operation id: append a new owner's router, never reorder.
-ROUTERS=(session_routes,capabilities,studies,readiness,approach,models,evidence,configurations,record_routes,commands,runs)
+ROUTERS=(session_routes,capabilities,studies,readiness,approach,models,evidence,configurations,
+         record_routes,commands,runs,agent_routes)
 # Route options an owner router may not set: re-registration carries path, endpoint, method,
 # status code and name only, so any other declared option would be refused, never dropped.
 ROUTE_OPTIONS=("response_model","tags","dependencies","summary","description","responses","deprecated","operation_id",
@@ -58,7 +61,13 @@ def include(app,owner):
         added=app.router.routes[-1]
         if any(getattr(added,k)!=getattr(route,k) for k in ROUTE_OPTIONS):raise TypeError("unsupported route option: "+route.name)
 
-def create_app(store,auth,model):
+def create_app(store,auth,model,*,environ=None,registry=None):
+    """The application over its owners. ``environ`` is the process environment the agent
+    routes read (the kill switch; ``os.environ`` by default); ``registry`` is the tool
+    registry the agent route allowlist derives from (the packaged one by default)."""
+    if store is not None:
+        # Runtime-owned agent tables, through the store's connection (idempotent).
+        agent_schema.ensure(store)
     app=FastAPI(title="HYPRN MVP API",version="1.0.0",docs_url=None,redoc_url=None,openapi_url=None)
     app.state.store=store;app.state.auth=auth;app.state.model=model
     coordinator=Coordinator(store,model);configs=Configurations(store,coordinator)
@@ -87,7 +96,7 @@ def create_app(store,auth,model):
                 try:session=auth.authenticate(request.cookies.get("hyprn_mvp_session"))
                 except DomainError:session=None  # the route's actor dependency answers 401
             if session is not None and session["kind"]=="agent":
-                agent_boundary(request.method,path,session)
+                agent_boundary(request.method,path,session,registry)
             raw=bytearray()
             async for part in request.stream():
                 raw.extend(part)
@@ -137,7 +146,8 @@ def create_app(store,auth,model):
         return auth.authenticate(request.cookies.get("hyprn_mvp_session"))["actor_id"]
     deps=RouteDeps(store=store,auth=auth,model=model,coordinator=coordinator,configs=configs,approaches=approaches,
                    submissions=submissions,history=history,result_bindings=result_bindings,modified_runs=modified_runs,
-                   records=records,current_session=current_session,actor=actor)
+                   records=records,current_session=current_session,actor=actor,
+                   environ=os.environ if environ is None else environ)
     for owner in ROUTERS:include(app,owner.router(deps))
     return app
 

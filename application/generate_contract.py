@@ -7,6 +7,8 @@ import sys
 sys.path.insert(0,str(Path(__file__).parent/"src"))
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.modeling import SCHEMA
+from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
+from hyprn_mvp_app.store import AGENT_EFFECTS
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=create_app(None,None,None).openapi()
@@ -112,8 +114,48 @@ schemas['RunStatus1']['description']=(
     '(not_recorded for runs accepted '
     'before it was recorded); started_at and finished_at are held by the execution engine and '
     'not projected (not_projected).')
+# Agent administration: who wrote what, which agents have access, the Owner's tool tokens.
+# The agent and its delegating user are two separate objects; nothing names a confirmer.
+date_time={'type':'string','format':'date-time'}
+agent_ref=obj(dict(actor_id=uuid,display_name={'type':'string','minLength':1,'maxLength':128}))
+delegator_ref=obj(dict(actor_id=uuid,
+    display_name=nullable({'type':'string','minLength':1,'maxLength':128})))
+schemas['AgentAttribution1']=obj(dict(study_id=uuid,record_kind={'enum':list(RECORD_KINDS)},
+    record_id={'type':'string','minLength':1,'maxLength':4096},
+    version_id=nullable({'type':'string','minLength':1,'maxLength':4096}),
+    command_category={'type':'string','minLength':1,'maxLength':64},command_id=uuid,
+    agent=agent_ref,delegator=copy.deepcopy(delegator_ref),recorded_at=date_time))
+schemas['AgentAttribution1']['description']=(
+    'One record written through an agent, as its receipt attributes it: the agent and the '
+    'delegating user it acted for. A study an agent created has record_kind study, its id as '
+    'study_id and record_id, and command_category study_create.')
+schemas['AgentAttributionPage1']=obj(dict(items={**array(ref('AgentAttribution1')),'maxItems':100},
+    next_cursor=nullable({'type':'string','maxLength':512})))
+schemas['AgentAccess1']=obj(dict(installation_enabled={'type':'boolean'},
+    agents=array(obj(dict(agent=copy.deepcopy(agent_ref),delegator=copy.deepcopy(delegator_ref),
+        state={'enum':['active','ended']},
+        reason={'enum':['none','revoked','expired','membership_changed']},
+        expires_at=date_time,ended_at=nullable(date_time))))))
+schemas['AgentAccess1']['description']=(
+    'Agent access to this study. installation_enabled is the installation kill switch. Per '
+    'agent, the state of its latest delegation: active (reason none) or ended with revoked, '
+    'expired or membership_changed (the delegating user no longer holds the role the '
+    'delegation needs; ended_at is null because the change carries no time).')
+token_properties=dict(token_id=uuid,client_label={'type':'string','minLength':1,'maxLength':128},
+    created_at=date_time,expires_at=date_time,revoked_at=nullable(date_time),
+    effects={'type':'array','uniqueItems':True,'items':{'enum':sorted(AGENT_EFFECTS)}},
+    agent=copy.deepcopy(agent_ref),delegator=copy.deepcopy(delegator_ref))
+schemas['AgentToken1']=obj(copy.deepcopy(token_properties))
+schemas['AgentToken1']['description']='Tool token metadata; never the token or its hash.'
+schemas['AgentTokenRevoke1']=obj({**copy.deepcopy(token_properties),'revoked_at':date_time})
+schemas['AgentTokenRevoke1']['description']=(
+    'The revoked tool token; its delegation ended with reason revoked, so the agent loses '
+    'access to the study at its next call.')
+schemas['AgentTokenRevokeCommand']=obj(dict(command_id=uuid))
 schemas["PublicReceipt"]=obj(dict(command_id=uuid,state={"enum":["committed","rejected","pending_remote",*run_states]},
-    result={"anyOf":[ref("Study"),ref("EvidenceRecord"),ref("FrozenConfigurationRead7"),model_result,ref("PendingModel"),ref("PublicRun"),ref('RecordRequestRead'),ref('ApproachCommandResultRead2'),{"type":"null"}]},error=nullable(ref("StoredError"))))
+    result={"anyOf":[ref("Study"),ref("EvidenceRecord"),ref("FrozenConfigurationRead7"),model_result,
+        ref("PendingModel"),ref("PublicRun"),ref('RecordRequestRead'),ref('ApproachCommandResultRead2'),
+        ref('AgentTokenRevoke1'),{"type":"null"}]},error=nullable(ref("StoredError"))))
 schemas["ConfigurationCommit"]=ref("ConfigurationCommit1")
 schemas.pop('ConfigurationCommitV2',None)
 schemas['PublicConfigurationRequest']={'oneOf':[ref('ConfigurationCandidate1'),ref('ConfigurationRequest2'),ref('ConfigurationRequest3'),ref('ConfigurationRequest4')]}
@@ -137,6 +179,22 @@ for path,methods in spec["paths"].items():
             schema=ref("Session" if method=="post" else "EndedSession")
             if method=="post":op["security"]=[]
         elif path=="/capabilities":schema=ref("ApplicationCapabilities")
+        elif path.startswith(('/agent/','/studies/{study_id}/agent/')):
+            schema={'/agent/attribution/studies':ref('AgentAttributionPage1'),
+                '/studies/{study_id}/agent/attribution':ref('AgentAttributionPage1'),
+                '/studies/{study_id}/agent/access':ref('AgentAccess1'),
+                '/studies/{study_id}/agent/tokens':{**array(ref('AgentToken1')),'maxItems':100},
+                '/studies/{study_id}/agent/tokens/{token_id}/revoke':ref('AgentTokenRevoke1')}[path]
+            if path.endswith('/revoke'):
+                body=op['requestBody']['content']['application/json']
+                body['schema']=ref('AgentTokenRevokeCommand')
+            for parameter in op['parameters']:
+                if parameter['in']=='path':parameter['schema']=uuid
+                elif parameter['name']=='limit':
+                    parameter['schema']={'type':'integer','minimum':1,'maximum':100,'default':50}
+                elif parameter['name']=='cursor':
+                    parameter['schema']=uuid if path.endswith('/tokens') else {'type':'string',
+                        'maxLength':512}
         elif path=="/studies":
             schema=array(ref("Study")) if method=="get" else ref("Study");status="200" if method=="get" else "201"
             for parameter in op["parameters"]:
@@ -278,6 +336,9 @@ for path,methods in spec["paths"].items():
         if response and method=="get" and '/approach' not in path and (path=="/studies" or path.endswith(("/models","/configurations","/runs","/revisions","/evidence")) or "/evidence-families/" in path and path.endswith("/versions")):
             response["properties"]["next_cursor"]=nullable({"type":"string","maxLength":2048} if "/evidence" in path else uuid)
             response["required"].append("next_cursor")
+        if response and path.endswith('/agent/tokens'):
+            response['properties']['next_cursor']=nullable(uuid)
+            response['required'].append('next_cursor')
         if response:op["responses"][status]={"description":"Authorized typed result","content":{"application/json":{"schema":response}}}
         if '/runs/' in path and '/artifacts/' in path:
             op['responses']['200']={'description':'Authorized exact retained bytes; never execute or inline-render source',
@@ -330,6 +391,26 @@ OPERATION_NOTES={
         'evaluator (version, evaluator_sha256); it is not a scientific assessment. '
         'history.bundle identifies the execution bundle '
         'the run used (bundle_digest and its pins).'),
+    ('/studies/{study_id}/agent/attribution','get'):('Records of this study written through an '
+        'agent, newest first, each with the agent and the delegating user it acted for (separate '
+        'objects). Any member; agent sessions are refused (403). Every entry is checked against '
+        'its receipt and withheld when the receipt actor is not that agent. The cursor is the '
+        'opaque next_cursor of the previous page.'),
+    ('/studies/{study_id}/agent/access','get'):('Agent access to this study: the installation '
+        'kill switch and, per agent, whether its access is active or ended and why. Any member; '
+        'agent sessions are refused (403).'),
+    ('/studies/{study_id}/agent/tokens','get'):('Tool tokens of this study, newest first, as '
+        'metadata only (never a token or a hash). Study Owner only (writers and readers 403); '
+        'agent sessions are refused (403). No route mints a token: tokens are minted by the '
+        'operator command of the local edition.'),
+    ('/studies/{study_id}/agent/tokens/{token_id}/revoke','post'):('Revoke one tool token of '
+        'this study and end its delegation (reason revoked): the agent loses access to the '
+        'study at its next call. Study Owner only; agent sessions are refused (403). '
+        'Idempotent by command_id (receipt category agent_token_revoke); a repeat returns the '
+        'stored outcome. Saved records and submitted runs are unchanged.'),
+    ('/agent/attribution/studies','get'):('Studies an agent created that the signed-in person '
+        'is a current member of, newest first (record_kind study), each checked against the '
+        'agent\'s pre-study receipt. Agent sessions are refused (403).'),
     ('/studies/{study_id}/run-status','get'):('Light run status from the stored run state: state, '
         'lifecycle projection, '
         'outcome facets, criterion outcomes and recorded times; never the full history; '

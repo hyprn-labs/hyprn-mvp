@@ -65,7 +65,8 @@ class SubmitRun(Closed):
 @dataclass(frozen=True)
 class RouteDeps:
     """The owners ``create_app`` constructs, handed unchanged to every ``router(deps)``. A
-    router never constructs an owner, never reads the environment and never imports ``api``."""
+    router never constructs an owner, never imports ``api`` and never reads the process
+    environment itself: ``environ`` is the one the composition root was given."""
     store:Any
     auth:Any
     model:Any
@@ -79,6 +80,8 @@ class RouteDeps:
     records:Any
     current_session:Callable
     actor:Callable
+    # The process environment the composition root read (the agent kill switch).
+    environ:Any=None
 
 def valid_id(value):
     try:

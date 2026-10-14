@@ -9306,10 +9306,865 @@
         },
         "description": "Light run status from the stored run state: state, lifecycle projection, outcome facets, criterion outcomes and recorded times; never the full history; nothing is read from the execution engine."
       }
+    },
+    "/studies/{study_id}/agent/attribution": {
+      "get": {
+        "summary": "Study Attribution",
+        "operationId": "study_attribution_api_1_studies__study_id__agent_attribution_get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AgentAttributionPage1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Records of this study written through an agent, newest first, each with the agent and the delegating user it acted for (separate objects). Any member; agent sessions are refused (403). Every entry is checked against its receipt and withheld when the receipt actor is not that agent. The cursor is the opaque next_cursor of the previous page."
+      }
+    },
+    "/studies/{study_id}/agent/access": {
+      "get": {
+        "summary": "Agent Access",
+        "operationId": "agent_access_api_1_studies__study_id__agent_access_get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AgentAccess1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Agent access to this study: the installation kill switch and, per agent, whether its access is active or ended and why. Any member; agent sessions are refused (403)."
+      }
+    },
+    "/studies/{study_id}/agent/tokens": {
+      "get": {
+        "summary": "Agent Tokens",
+        "operationId": "agent_tokens_api_1_studies__study_id__agent_tokens_get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AgentToken1"
+                      },
+                      "maxItems": 100
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data",
+                    "next_cursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Tool tokens of this study, newest first, as metadata only (never a token or a hash). Study Owner only (writers and readers 403); agent sessions are refused (403). No route mints a token: tokens are minted by the operator command of the local edition."
+      }
+    },
+    "/studies/{study_id}/agent/tokens/{token_id}/revoke": {
+      "post": {
+        "summary": "Revoke Agent Token",
+        "operationId": "revoke_agent_token_api_1_studies__study_id__agent_tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentTokenRevokeCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AgentTokenRevoke1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Revoke one tool token of this study and end its delegation (reason revoked): the agent loses access to the study at its next call. Study Owner only; agent sessions are refused (403). Idempotent by command_id (receipt category agent_token_revoke); a repeat returns the stored outcome. Saved records and submitted runs are unchanged."
+      }
+    },
+    "/agent/attribution/studies": {
+      "get": {
+        "summary": "Created Studies",
+        "operationId": "created_studies_api_1_agent_attribution_studies_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AgentAttributionPage1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Studies an agent created that the signed-in person is a current member of, newest first (record_kind study), each checked against the agent's pre-study receipt. Agent sessions are refused (403)."
+      }
     }
   },
   "components": {
     "schemas": {
+      "AgentTokenRevokeCommand": {
+        "type": "object",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "command_id"
+        ],
+        "additionalProperties": false
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -49006,6 +49861,450 @@
         "additionalProperties": false,
         "description": "Light status of one run from the stored run state. process_state and exit_status are the stored lifecycle projection (null before recording). Facets and criteria are the stored results, each null with reason not_recorded while the run has no retained results. submitted_at is the acceptance time (not_recorded for runs accepted before it was recorded); started_at and finished_at are held by the execution engine and not projected (not_projected)."
       },
+      "AgentAttribution1": {
+        "type": "object",
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "record_kind": {
+            "enum": [
+              "study",
+              "study_context",
+              "evidence_version",
+              "model_draft",
+              "model_version",
+              "approach_draft",
+              "approach_version",
+              "configuration_version",
+              "run"
+            ]
+          },
+          "record_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "command_category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          },
+          "delegator": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "study_id",
+          "record_kind",
+          "record_id",
+          "version_id",
+          "command_category",
+          "command_id",
+          "agent",
+          "delegator",
+          "recorded_at"
+        ],
+        "additionalProperties": false,
+        "description": "One record written through an agent, as its receipt attributes it: the agent and the delegating user it acted for. A study an agent created has record_kind study, its id as study_id and record_id, and command_category study_create."
+      },
+      "AgentAttributionPage1": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentAttribution1"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "AgentAccess1": {
+        "type": "object",
+        "properties": {
+          "installation_enabled": {
+            "type": "boolean"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "agent": {
+                  "type": "object",
+                  "properties": {
+                    "actor_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "display_name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "actor_id",
+                    "display_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "delegator": {
+                  "type": "object",
+                  "properties": {
+                    "actor_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "display_name": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "actor_id",
+                    "display_name"
+                  ],
+                  "additionalProperties": false
+                },
+                "state": {
+                  "enum": [
+                    "active",
+                    "ended"
+                  ]
+                },
+                "reason": {
+                  "enum": [
+                    "none",
+                    "revoked",
+                    "expired",
+                    "membership_changed"
+                  ]
+                },
+                "expires_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "ended_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "agent",
+                "delegator",
+                "state",
+                "reason",
+                "expires_at",
+                "ended_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "installation_enabled",
+          "agents"
+        ],
+        "additionalProperties": false,
+        "description": "Agent access to this study. installation_enabled is the installation kill switch. Per agent, the state of its latest delegation: active (reason none) or ended with revoked, expired or membership_changed (the delegating user no longer holds the role the delegation needs; ended_at is null because the change carries no time)."
+      },
+      "AgentToken1": {
+        "type": "object",
+        "properties": {
+          "token_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effects": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "draft",
+                "outside_study",
+                "read",
+                "record",
+                "review",
+                "submit"
+              ]
+            }
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          },
+          "delegator": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "token_id",
+          "client_label",
+          "created_at",
+          "expires_at",
+          "revoked_at",
+          "effects",
+          "agent",
+          "delegator"
+        ],
+        "additionalProperties": false,
+        "description": "Tool token metadata; never the token or its hash."
+      },
+      "AgentTokenRevoke1": {
+        "type": "object",
+        "properties": {
+          "token_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effects": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "draft",
+                "outside_study",
+                "read",
+                "record",
+                "review",
+                "submit"
+              ]
+            }
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          },
+          "delegator": {
+            "type": "object",
+            "properties": {
+              "actor_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "actor_id",
+              "display_name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "token_id",
+          "client_label",
+          "created_at",
+          "expires_at",
+          "revoked_at",
+          "effects",
+          "agent",
+          "delegator"
+        ],
+        "additionalProperties": false,
+        "description": "The revoked tool token; its delegation ended with reason revoked, so the agent loses access to the study at its next call."
+      },
       "PublicReceipt": {
         "type": "object",
         "properties": {
@@ -49099,6 +50398,9 @@
               },
               {
                 "$ref": "#/components/schemas/ApproachCommandResultRead2"
+              },
+              {
+                "$ref": "#/components/schemas/AgentTokenRevoke1"
               },
               {
                 "type": "null"
