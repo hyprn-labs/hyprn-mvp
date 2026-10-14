@@ -1,0 +1,15 @@
+{
+  "schema": "hyprn_mvp.build-backend/1",
+  "format": "The one build backend of the checkout's packages (hyprn-mvp-app, hyprn-mvp-integration). Values come from docs/operations/dependency-audit.md; the wheel is fetched from url, verified by size and SHA-256, and builds run offline from the verified copy.",
+  "name": "flit-core",
+  "version": "4.1.0",
+  "licence": "BSD-3-Clause",
+  "requirement": "flit_core==4.1.0",
+  "build_backend": "flit_core.buildapi",
+  "wheel": {
+    "filename": "flit_core-4.1.0-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/38/2a/8ea4bd54734f0fcbb507c28cb6b79d72f528e40498178a01cb35fc5d686f/flit_core-4.1.0-py3-none-any.whl",
+    "size": 45622,
+    "sha256": "17398cdd2c38b24047a5a9c93089ec5c0bf12ec3d1469bbf69c27ed7965299db"
+  }
+}

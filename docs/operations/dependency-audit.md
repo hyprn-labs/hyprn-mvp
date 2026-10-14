@@ -1,6 +1,6 @@
 # Dependency audit
 
-Status: **approved by the product owner** (2026-10-13, decisions D-05, D-05a and D-05b of the local-edition plan). The decisions taken on §7 and what the repository applies are recorded in §10. The formatter and linter (ruff and prettier, decision D-13) are recorded in §11 to §13, approved by the product owner on 2026-10-13 before installation. Any package or version that is not in this record is a separate blocking review and is never approved automatically. Recorded 2026-10-13 from official upstream sources only (see "Sources"). It is a provenance, licence and advisory inventory, not legal advice.
+Status: **approved by the product owner** (2026-10-13, decisions D-05, D-05a and D-05b of the local-edition plan). The decisions taken on §7 and what the repository applies are recorded in §10. The formatter and linter (ruff and prettier, decision D-13) are recorded in §11 to §13, approved by the product owner on 2026-10-13 before installation. The build backend of the checkout's packages (flit_core, decision D6) is recorded in §14 and §15, approved by the product owner on 2026-10-14 before installation. Any package or version that is not in this record is a separate blocking review and is never approved automatically. Recorded 2026-10-13 from official upstream sources only (see "Sources"). It is a provenance, licence and advisory inventory, not legal advice.
 
 Every archive SHA-256 below was read from upstream release metadata and cross-checked against at least two independent published records, and all of them matched:
 
@@ -665,3 +665,82 @@ The SHA-256 values are those of the PyPI JSON API (`https://pypi.org/pypi/ruff/0
 - ruff: https://pypi.org/pypi/ruff/0.16.10/json, https://pypi.org/simple/ruff/, https://github.com/astral-sh/ruff/releases/tag/0.16.10 (API: https://api.github.com/repos/astral-sh/ruff/releases/tags/0.16.10), https://github.com/astral-sh/ruff/blob/0.16.10/LICENSE, release notes https://github.com/astral-sh/ruff/releases/tag/0.16.0, documentation https://docs.astral.sh/ruff/settings/ and https://docs.astral.sh/ruff/rules/line-too-long/
 - prettier: https://registry.npmjs.org/prettier/3.9.10, https://github.com/prettier/prettier/blob/3.9.10/LICENSE, https://github.com/prettier/prettier/blob/3.9.10/docs/options.md, https://github.com/prettier/prettier/blob/3.9.10/docs/cli.md
 - Advisories: OSV batch API https://api.osv.dev/v1/querybatch (PyPI `ruff` 0.16.10 and npm `prettier` 3.9.10: no results)
+
+## 14. flit_core 4.1.0 (build backend of the checkout's packages)
+
+Recorded 2026-10-14 from the PyPI JSON API, the PyPI integrity API and the GitHub tag. flit_core builds the `hyprn-mvp-app` and `hyprn-mvp-integration` wheels that the native host environment installs (task 2.5). It runs only inside the isolated build environment, offline. It is never installed into an environment that runs HYPRN MVP, never shipped in an image and never redistributed.
+
+### Identity
+
+| Field | Value |
+|---|---|
+| Project | flit_core, PyPA (`pypa/flit`); the backend part of Flit |
+| Version | **flit_core 4.1.0**, the latest release when recorded |
+| Official source | PyPI `flit-core`, https://pypi.org/project/flit-core/4.1.0/ (download base `https://files.pythonhosted.org/packages/`) |
+| Published | 2026-09-16 (wheel uploaded 10:46:56 UTC, sdist 10:46:58 UTC); not yanked |
+| Tag commit | `75b1c909d587c1ff5e0fd5f3df1046f74ee249d4` (tag `4.1.0` in `pypa/flit`; the project publishes no GitHub release page for it) |
+| Requires Python | `>=3.8`; the wheel is pure Python (`py3-none-any`, 22 files, 142,338 bytes unpacked) |
+| Dependencies (`requires_dist`) | **none**. A vendored tomli 1.2.3 (MIT) is used only on Python older than 3.11, so never on CPython 3.12.15 |
+| Contents | `flit_core` and its vendored tomli only. There is no startup path file (`.pth`), no executable and no other bundled code |
+| Known advisories | **none** (OSV batch API, ecosystem `PyPI`, `flit-core==4.1.0`, queried 2026-10-14; the control queries `setuptools==78.1.0` and `jinja2==2.10` returned advisories) |
+| Attestations | PEP 740 publish attestation on PyPI for the wheel (`https://pypi.org/integrity/flit-core/4.1.0/flit_core-4.1.0-py3-none-any.whl/provenance`). Publisher kind GitHub, repository `pypa/flit`, workflow `test.yml`. The attested subject digest equals the wheel SHA-256 below |
+
+### Artifacts
+
+| Artifact | Size (bytes) | SHA-256 |
+|---|---|---|
+| `flit_core-4.1.0-py3-none-any.whl` (pinned in `deployment/locks/build-backend.json`) | 45,622 | `17398cdd2c38b24047a5a9c93089ec5c0bf12ec3d1469bbf69c27ed7965299db` |
+| `flit_core-4.1.0.tar.gz` (recorded, never fetched or built) | 54,678 | `62e12b63ead8335b37f59fabb977c7167fe476dafb5e41785dfa8c9aff843bc6` |
+
+A copy of the wheel was downloaded into a scratch folder outside the repository and re-hashed. Its size and SHA-256 equal the PyPI values.
+
+### Licence
+
+| Field | Value |
+|---|---|
+| Licence | **BSD-3-Clause** (PyPI `license_expression`; `License-Expression: BSD-3-Clause` in the wheel metadata) |
+| Texts in the wheel | `flit_core-4.1.0.dist-info/licenses/LICENSE`: the BSD 3-clause text, "Copyright (c) 2015, Thomas Kluyver and contributors", 1,525 bytes, SHA-256 `35b4f1dec512e617077fd6980dbb43ef8c2887adc5d0185edb4c04da175dd816`. The vendored tomli's MIT text: 1,072 bytes, SHA-256 `b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe` |
+
+### Release history relevant to HYPRN MVP
+
+- **4.0 is a breaking series:** `[tool.flit.metadata]` is no longer read. Both packages already use the `[project]` table, so nothing else changes.
+- **4.0.3 fixes wheels written with mode 0600.** This matters because `./hyprn-mvp` runs with umask 077.
+- **4.1 accepts licence expressions with `WITH`.** No other change affects these packages.
+- **flit requires `description`** in `[project]`, or listed as dynamic, so `integration/pyproject.toml` gained one line.
+
+### Alternatives considered (not adopted)
+
+| Candidate | Why not |
+|---|---|
+| setuptools 84.0.0 (MIT; wheel `51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670`, 818,216 bytes) | Vendors autocommand 2.2.2 under **LGPL-3.0**, which conflicts with the permissive-licence rule even for a build-time tool. Also ships a startup path file (`distutils-precedence.pth`) and eight Windows launcher executables. No PyPI attestation |
+| uv_build 0.12.24 (`MIT OR Apache-2.0`, the same release as the audited uv) | Needs one native binary per platform. Its embedded CycloneDX inventory of 259 Rust crates contains one MPL-2.0 crate (`astral-version-ranges` 0.2.2). No PyPI attestation for the wheels |
+
+## 15. Build-backend decision and what the repository applies
+
+### Decision (product owner, 2026-10-14, before installation)
+
+D6 (b) of §10 is applied with **flit_core 4.1.0** instead of setuptools. The build backend is pinned exactly, verified by hash and audited here. Installing exactly this version needs no further checkpoint. Any other version or backend is a new blocking review.
+
+### Applied
+
+- **`deployment/locks/build-backend.json`** records the name, version and licence, the requirement `flit_core==4.1.0`, the backend `flit_core.buildapi`, and the wheel's URL, size and SHA-256 of §14.
+- **`application/pyproject.toml` and `integration/pyproject.toml`** both declare `requires = ["flit_core==4.1.0"]` and `build-backend = "flit_core.buildapi"`. Before this, the application package had no `[build-system]` and the integration package named an unpinned `setuptools>=61`.
+- **`deployment/native_environment.py` `prepare`** acquires and builds as follows:
+  1. It fetches the wheel from its pinned URL and refuses it unless its size and SHA-256 equal the pin.
+  2. It builds each package from a staged copy of the release snapshot with `uv build --wheel --offline --no-index --find-links <verified wheel folder> --build-constraints <hashed constraint> --require-hashes`.
+  3. `SOURCE_DATE_EPOCH` is fixed, so the wheels of one snapshot are byte-identical.
+
+  A package whose build system is not exactly this pin is refused before any effect.
+- **`deployment/locks/native-host.txt`** holds the reviewed native set N of §5: 89 distributions, the `native` group of `uv.lock` without ruff, exported from `uv.lock` with all its hashes. It contains no package or version outside this record. It is installed with `uv pip sync --require-hashes --no-build --strict`, and the project wheels are then installed with `--no-deps`.
+
+### First verified acquisition (macOS arm64)
+
+- **flit_core:** `prepare` fetched and verified it in a scratch installation. Two scratch builds of the same snapshot produced byte-identical wheels.
+- **Native host environment:** it held exactly the 89 distributions of N plus the two project wheels. The five `licenses/native/` METADATA files that `AUDITED_LICENSES` pins were byte-equal.
+
+### Sources
+
+- https://pypi.org/pypi/flit-core/json, https://pypi.org/project/flit-core/4.1.0/, https://pypi.org/integrity/flit-core/4.1.0/flit_core-4.1.0-py3-none-any.whl/provenance
+- https://github.com/pypa/flit (tag `4.1.0`, API https://api.github.com/repos/pypa/flit/git/ref/tags/4.1.0), release history https://github.com/pypa/flit/blob/main/doc/history.rst
+- Alternatives: https://pypi.org/pypi/setuptools/json, https://pypi.org/pypi/uv-build/0.12.24/json, and the integrity API for both
+- Advisories: OSV batch API https://api.osv.dev/v1/querybatch (PyPI `flit-core` 4.1.0, `setuptools` 84.0.0 and 83.0.0, `uv-build` 0.12.24: no results)
