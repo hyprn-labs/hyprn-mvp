@@ -541,7 +541,7 @@ def retained_bundle(repository, request):
         'license_notices',
         'prepared_digest',
     }
-    if manifest['schema_version'] == '2':
+    if layout == '2':
         prepared_fields |= {'entrypoint', 'executable_content_digest', 'result_protocol_version'}
     if set(prepared) != prepared_fields:
         raise ValueError('Unexpected retained preparation fields')

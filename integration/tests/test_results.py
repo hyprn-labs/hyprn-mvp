@@ -58,11 +58,19 @@ def test_truncated_missing_or_invalid_envelope_is_rejected(raw):
 
 
 def retained_record(version):
-    """Inert historical manifest fixture; never passed to an execution API."""
+    """Inert retained manifest fixture; never passed to an execution API."""
     from execution_fixtures import fixture,legacy_fixture,uid,raw_hash,runtime_fixture
     from hyprn_mvp_app.store import canonical,digest
     from test_execution import assemble
     if version=='2':return assemble()
+    if version == '10':
+        case = fixture()
+        prepared = case['prepared']
+        prepared.update(schema_version='3', result_protocol_version='2')
+        prepared['prepared_digest'] = digest(
+            {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+        )
+        return assemble(case)
     case=legacy_fixture();prepared=case['prepared'];config=case['frozen']['configuration'];selected=runtime_fixture()
     files={**case['files'],'preparation.json':canonical(prepared),'configuration.json':canonical(config),
            'context.json':canonical(config['context_snapshot']),'evidence/index.json':canonical(config['evidence_snapshots']),
@@ -135,7 +143,7 @@ def test_artifact_decoder_preserves_data_bounds(raw):
     with pytest.raises(ValueError):artifact_json(raw)
 
 
-@pytest.mark.parametrize('version',['1','2'])
+@pytest.mark.parametrize('version',['1','2','10'])
 def test_retained_versions_read_without_worker_modeling_or_reassessment(monkeypatch,version):
     import builtins,io
     from hyprn_mvp_app.store import canonical
@@ -159,7 +167,7 @@ def test_retained_versions_read_without_worker_modeling_or_reassessment(monkeypa
     assert raw==before
 
 
-@pytest.mark.parametrize('version',['1','2'])
+@pytest.mark.parametrize('version',['1','2','10'])
 @pytest.mark.parametrize('mode',['raw','request','snapshot','prepared_version','bundle_version','unissued_bundle_version','oversize','duplicate'])
 def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode):
     import io,json
