@@ -320,3 +320,17 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 .approach-case-toggle h3{display:inline}
 .approach-case-card{border-width:1px 0 0;border-radius:0;background:transparent;padding:var(--space-4) 0}
 .approach-case-cards{gap:0}
+
+/* Supporting records keep one stable action column and group runs by their configuration. */
+.support-configuration{border-top:1px solid var(--line);padding-block:var(--space-3);min-width:0}
+.support-record-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-block:var(--space-2);min-width:0}
+.support-record-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.support-record-row p{margin:var(--space-1) 0 0}
+.support-record-actions,.answer-source-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);justify-content:flex-start}
+.support-record-actions{flex-shrink:0}
+.support-configuration>.approach-finding{margin-left:var(--space-4)}
+.answer-source-actions{margin-block:var(--space-2)}
+.method-detail-footer{justify-content:flex-end;margin-top:var(--space-4)}
+.study-details-edit-actions{display:flex;justify-content:flex-end;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-4)}
+.result-number{white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.support-record-row{flex-direction:column;align-items:flex-start}.support-record-actions{flex-shrink:1}.support-configuration>.approach-finding{margin-left:0}}

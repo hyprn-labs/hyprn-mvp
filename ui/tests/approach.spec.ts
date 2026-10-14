@@ -430,7 +430,7 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
     },
   );
   await other.close();
-  await page.getByRole('button', { name: 'Refresh usage', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   const study = page.getByRole('region', { name: 'Answer to the study question', exact: true });
   await expect(study).toContainText('The study question remains open.');
   const nominal = page.getByRole('article', { name: 'Nominal range', exact: true });
@@ -440,11 +440,14 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
   await expect(study.getByRole('heading', { name: 'Supporting results' })).toBeVisible();
   await study
     .getByRole('button', {
-      name: 'View case answer version ' + answer.answer_version_id.slice(0, 8),
+      name: 'View case answer',
       exact: true,
     })
     .click();
-  const cited = page.getByRole('dialog', { name: 'Case answer record', exact: true });
+  const cited = page.getByRole('dialog', {
+    name: 'Case answer ' + answer.answer_version_id.slice(0, 8) + ' · Case answer',
+    exact: true,
+  });
   await expect(cited).toContainText('The comparison is unresolved.');
   await expect(cited.getByRole('button', { name: /^View case answer version/ })).toHaveCount(0);
   await cited.getByRole('button', { name: 'Done', exact: true }).click();
@@ -4321,4 +4324,50 @@ test('@approach-method model explanation drafts preserve saved overview', async 
     page.getByRole('region', { name: 'Reasoning and methods', exact: true }),
   ).toContainText(data.saved.version.content.steps[0].purpose);
   await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(0);
+});
+
+
+test('@approach-method overview details edit all fields and preserve the saved question', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const data = await describedApproach(page, browser, baseURL);
+  await expect(page.getByRole('region', { name: 'Selected method step', exact: true }))
+    .toContainText(data.saved.version.content.steps[0].purpose);
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Back to overview', exact: true })).toHaveCount(0);
+  const question = page.getByRole('region', { name: 'Study question', exact: true });
+  await expect(question.getByRole('button')).toHaveText(['See more details']);
+  await question.getByRole('button', { name: 'See more details', exact: true }).click();
+  const details = page.getByRole('dialog', { name: 'Study details', exact: true });
+  await details.getByRole('button', { name: 'Edit all', exact: true }).click();
+  await expect(details.getByRole('textbox', { name: 'Study question', exact: true })).toHaveValue(
+    data.saved.version.content.question,
+  );
+  await details
+    .getByRole('textbox', { name: 'Current approach', exact: true })
+    .fill('Use the selected response law in its stated operating range.');
+  await details
+    .getByRole('textbox', { name: 'Open questions', exact: true })
+    .fill('Check sensitivity to the boundary condition.');
+  await details.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(details).not.toBeVisible();
+  await expect(question).toContainText(
+    'Use the selected response law in its stated operating range.',
+  );
+  await question.getByRole('button', { name: 'See more details', exact: true }).click();
+  await expect(details).toContainText('Check sensitivity to the boundary condition.');
+  await expect(details).toContainText(data.saved.version.content.question);
+  const previous = (
+    await (
+      await page.request.get(
+        `/api/1/studies/${data.sid}/approach/versions/${data.saved.version.approach_version_id}`,
+      )
+    ).json()
+  ).data;
+  expect(previous.version.content).toEqual(data.saved.version.content);
+  await details.getByRole('button', { name: 'Close Study details', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh usage', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Study details', exact: true })).toHaveCount(0);
 });

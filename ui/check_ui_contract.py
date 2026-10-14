@@ -90,9 +90,9 @@ approach_checks = {
         'sourceMatch',
         'this.active < 2',
         '.slice(0, 10)',
-        'Retry usage page',
+        'Retry supporting results',
         'Upstream record unavailable',
-        'More usage is available',
+        'SupportingResults',
     ],
     'src/ApproachController.tsx': [
         'previewApproach',
@@ -122,9 +122,9 @@ approach_checks['src/ApproachFindings.tsx'] += [
     'No study answer has been assessed.',
     'function CaseCard(',
     'Remaining method work',
-    'Study details',
-    'All usage loaded',
-    'Not evaluated in the loaded review',
+    'supportFor',
+    'studySupport',
+    'No run is associated with this configuration.',
 ]  # one card per case; study limits are a link
 approach_checks['src/ApproachPanel.tsx']+=['CaseNavigation.Provider value={null}','ApproachResultsSlot']
 approach_checks['src/ConfigurationApproach.tsx']+=['CaseContextLink','No specific case']
@@ -389,7 +389,7 @@ findings_s5=(ROOT/'src/ApproachFindings.tsx').read_text()
 for term in (
     'function CaseCard(',
     'What this case tells us',
-    'onStudyLimits',
+    'SupportingResults',
     'Create configuration for ',
     'aria-label="Approach usage"',
     '<RunFacets run={run} />',

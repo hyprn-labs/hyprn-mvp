@@ -1,3 +1,4 @@
+import { ApproachController, useApproachController } from './ApproachController';
 import type { ApproachResolution } from './api';
 import type { ApproachContent } from './api';
 import { createContext, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
@@ -400,24 +401,174 @@ export function StudyQuestionBox({
   );
 }
 
+type StudyDetailsEditorOptions = {
+  api: HyprnMvpApi;
+  studyId: string;
+  controller: ApproachController;
+  onSaved: () => void;
+  onEditingChange?: (dirty: boolean) => void;
+};
+function StudyDetailsEditor({
+  options,
+  limitsHeading,
+  onFinish,
+}: {
+  options: StudyDetailsEditorOptions;
+  limitsHeading: RefObject<HTMLHeadingElement | null>;
+  onFinish: () => void;
+}) {
+  const { api, studyId, controller } = options;
+  const state = useApproachController(controller);
+  const [nestedEditing, setNestedEditing] = useState(false);
+  const beforeEdit = useRef<ApproachContent | null>(null);
+  useEffect(() => {
+    const remember = () => {
+      beforeEdit.current = structuredClone(controller.getSnapshot().local);
+    };
+    if (controller.getSnapshot().studyId !== studyId || !controller.getSnapshot().local)
+      void controller.open(studyId).then((ok) => {
+        if (ok) remember();
+      });
+    else remember();
+  }, [controller, studyId]);
+  const locked = controller.busy || !!api.pending || state.accessLost;
+  return (
+    <>
+      {state.error && <p role="alert">{state.error}</p>}
+      {controller.busy && <p role="status">Loading or saving study details…</p>}
+      {state.studyId === studyId && state.local && !state.accessLost && (
+        <>
+          <ApproachAnnotations
+            api={api}
+            studyId={studyId}
+            content={state.local}
+            resolved={state.preview?.resolved}
+            onChange={controller.edit}
+            disabled={locked}
+            contextLabel="Editing approach draft"
+            onEditingChange={(dirty) => {
+              setNestedEditing(dirty);
+              options.onEditingChange?.(dirty);
+            }}
+          >
+            <StudyDetails limitsHeading={limitsHeading} />
+          </ApproachAnnotations>
+          <p className="context-line">
+            Saving creates a new approach version. Existing calculations and answers stay with the
+            version they used.
+          </p>
+          <div className="study-details-edit-actions">
+            <Button
+              variant="primary"
+              disabled={locked || nestedEditing}
+              onClick={() =>
+                void (async () => {
+                  if ((await controller.save()) && (await controller.saveVersion())) {
+                    options.onSaved();
+                    onFinish();
+                  }
+                })()
+              }
+            >
+              Save changes
+            </Button>
+            <Button
+              disabled={locked || nestedEditing}
+              onClick={() => {
+                if (beforeEdit.current) controller.edit(beforeEdit.current);
+                onFinish();
+              }}
+            >
+              Cancel editing
+            </Button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export type StudyDetailsHandle={open:(focus?:'limits')=>void};
 /** Study details separates the question, current approach, assumptions, limits and open questions
  * for the exact content
  * of the surrounding ApproachAnnotations (current draft, a saved or a retained version).
  * Editable only where that context is (approach edit mode); read-only everywhere else. */
-export function StudyDetailsDialog({ref}:{ref?:Ref<StudyDetailsHandle>}){
-  const dialog=useRef<HTMLDialogElement>(null),invoker=useRef<HTMLElement|null>(null),limits=useRef<HTMLHeadingElement>(null),id=useId();
-  useImperativeHandle(ref,()=>({open(focus){
-    invoker.current=document.activeElement as HTMLElement;dialog.current?.showModal();
-    if(focus==='limits')requestAnimationFrame(()=>{limits.current?.scrollIntoView({block:'start'});limits.current?.focus();});
-  }}),[]);
-  const close=()=>dialog.current?.close();
+export function StudyDetailsDialog({
+  ref,
+  editor,
+  actions,
+}: {
+  ref?: Ref<StudyDetailsHandle>;
+  editor?: StudyDetailsEditorOptions;
+  actions?: ReactNode;
+}) {
+  const [editingAll, setEditingAll] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null),
+    invoker = useRef<HTMLElement | null>(null),
+    limits = useRef<HTMLHeadingElement>(null),
+    id = useId();
+  useImperativeHandle(
+    ref,
+    () => ({
+      open(focus) {
+        invoker.current = document.activeElement as HTMLElement;
+        dialog.current?.showModal();
+        if (focus === 'limits')
+          requestAnimationFrame(() => {
+            limits.current?.scrollIntoView({ block: 'start' });
+            limits.current?.focus();
+          });
+      },
+    }),
+    [],
+  );
+  const close = () => dialog.current?.close();
   // Native close normally restores focus; keep it on the opener when the browser does not.
-  return <DialogFrame ref={dialog} aria-labelledby={id} className="action-dialog study-details-dialog" onClose={()=>{const active=document.activeElement;if(invoker.current?.isConnected&&(active===document.body||!active||dialog.current?.contains(active)))invoker.current.focus();}}>
-    <div className="dialog-heading"><h2 id={id}>Study details</h2><Button variant="quiet" icon={<ActionIcon name="close"/>} aria-label="Close Study details" onClick={close}/></div>
-    <div className="dialog-body"><StudyDetails limitsHeading={limits}/></div>
-    <div className="dialog-footer"><Button onClick={close}>Done</Button></div>
-  </DialogFrame>;
+  return (
+    <DialogFrame
+      ref={dialog}
+      aria-labelledby={id}
+      className="action-dialog study-details-dialog"
+      onClose={() => {
+        const active = document.activeElement;
+        if (
+          invoker.current?.isConnected &&
+          (active === document.body || !active || dialog.current?.contains(active))
+        )
+          invoker.current.focus();
+      }}
+    >
+      <div className="dialog-heading">
+        <h2 id={id}>Study details</h2>
+        <Button
+          variant="quiet"
+          icon={<ActionIcon name="close" />}
+          aria-label="Close Study details"
+          onClick={close}
+        />
+      </div>
+      <div className="dialog-body">
+        {editingAll && editor ? (
+          <StudyDetailsEditor
+            options={editor}
+            limitsHeading={limits}
+            onFinish={() => setEditingAll(false)}
+          />
+        ) : (
+          <>
+            <StudyDetails limitsHeading={limits} />
+            <div className="study-details-edit-actions">
+              {actions}
+              {editor && <Button onClick={() => setEditingAll(true)}>Edit all</Button>}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="dialog-footer">
+        <Button onClick={close}>Done</Button>
+      </div>
+    </DialogFrame>
+  );
 }
 function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElement|null>}){
   const {content,onChange,disabled,contextLabel}=useAnnotations();
@@ -448,16 +599,36 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
       <p className="context-line">{contextLabel ?? 'Current approach draft'}</p>
       <section aria-label="Study question" className="study-details-section">
         <h3>Study question</h3>
-        <p className="context-copy study-details-question">
-          {content.question || 'No study question'}
-        </p>
+        {onChange ? (
+          <TextArea
+            aria-label="Study question"
+            value={content.question}
+            maxLength={4096}
+            disabled={disabled}
+            onChange={(event) => onChange({ ...content, question: event.target.value })}
+          />
+        ) : (
+          <p className="context-copy study-details-question">
+            {content.question || 'No study question'}
+          </p>
+        )}
         <QuestionClaim title="Original wording" claim={described.original_question} />
         <QuestionClaim title="Elaboration" claim={described.elaboration} />
       </section>
-      {content.scope.trim() && (
+      {(content.scope.trim() || onChange) && (
         <section aria-label="Current approach" className="study-details-section">
           <h3>Current approach</h3>
-          <p className="context-copy">{content.scope}</p>
+          {onChange ? (
+            <TextArea
+              aria-label="Current approach"
+              value={content.scope}
+              maxLength={4096}
+              disabled={disabled}
+              onChange={(event) => onChange({ ...content, scope: event.target.value })}
+            />
+          ) : (
+            <p className="context-copy">{content.scope}</p>
+          )}
         </section>
       )}
       {(content.assumptions.length > 0 || onChange) && (
@@ -537,17 +708,37 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               </div>
             );
           })}
-          {content.limitations.trim() && (
+          {(content.limitations.trim() || onChange) && (
             <article className="study-limit-item">
-              <p className="context-copy">{content.limitations}</p>
+              {onChange ? (
+                <TextArea
+                  aria-label="Additional limits"
+                  value={content.limitations}
+                  maxLength={4096}
+                  disabled={disabled}
+                  onChange={(event) => onChange({ ...content, limitations: event.target.value })}
+                />
+              ) : (
+                <p className="context-copy">{content.limitations}</p>
+              )}
             </article>
           )}
         </section>
       )}
-      {content.open_questions.trim() && (
+      {(content.open_questions.trim() || onChange) && (
         <section aria-label="Open questions" className="study-details-section">
           <h3>Open questions</h3>
-          <p className="context-copy">{content.open_questions}</p>
+          {onChange ? (
+            <TextArea
+              aria-label="Open questions"
+              value={content.open_questions}
+              maxLength={4096}
+              disabled={disabled}
+              onChange={(event) => onChange({ ...content, open_questions: event.target.value })}
+            />
+          ) : (
+            <p className="context-copy">{content.open_questions}</p>
+          )}
         </section>
       )}
       {editing && (
@@ -620,6 +811,7 @@ export function OverviewStudyQuestion({
     details: ReactNode,
     version: string | null | undefined,
     saved?: ApproachSavedRead3,
+    onSaved?: () => void,
   ) => ReactNode;
 }) {
   const [state, setState] = useState<OverviewQuestion>({ kind: 'loading' }),
@@ -704,6 +896,7 @@ export function OverviewStudyQuestion({
           </Button>,
           record.version.approach_version_id,
           record,
+          () => { selected.current = null; setAttempt(value=>value+1); },
         )}
         <StudyDetailsDialog ref={details} />
       </ApproachAnnotations>

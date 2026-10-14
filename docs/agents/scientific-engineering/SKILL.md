@@ -52,6 +52,16 @@ For each implemented method, link exact model versions and relevant elements;
 several methods may share a model, and a method may use several models. Preserve
 proposed or partial methods and their unresolved work. A link is not evidence that
 the method is scientifically complete.
+Make the method explanation specific enough to reconstruct its logic without reading
+code. Purpose names the contribution to the study question; basis and reasoning
+explain why these equations, sources and approximations are suitable; calculation
+in plain words follows the actual input-to-output sequence and names the material
+intermediate quantities. Check that it describes the linked implementation, including
+its omissions. Avoid repeating the same broad description for unrelated components.
+Let the reasoning determine useful case comparisons and groupings; do not force a
+fuel-comparison template, a fixed set of outputs or universal case categories on
+other studies.
+
 State exclusions and unresolved validity conditions in limits. Keep assumptions
 separate: an assumption is a condition being adopted, with its rationale and
 support; a limit says what cannot be inferred. An open question identifies what
@@ -156,6 +166,17 @@ still expresses the brief, the approach explains the method, source links suppor
 their actual claims, limits state the missing coverage, and the conclusion answers
 only what the retained evidence establishes. Correct authored content with new
 versions where required; never rewrite the records used by historical runs.
+
+Before publishing a revision, perform a focused coherence review of the affected
+question, approach, cases, cited assumption notes, configurations and answers. Follow
+the references as a reader would: compare consequential values, units, denominators,
+constraints and claims about what is held constant with the selected input records.
+A revised answer does not repair an older assumption note still cited by the current
+approach. Update affected references and conclusions together using new versions;
+retain an older record only when its historical or contrasting role is explicit.
+Keep shared qualifications at their owner and repeat only the case-specific
+consequence. Check that each qualification actually applies to its case. Review
+claim strength and physical meaning, not merely matching words or API validity.
 
 When changing this guidance, use the contrasting requests in
 [behavioral scenarios](references/behavioral-scenarios.md). They test decisions,

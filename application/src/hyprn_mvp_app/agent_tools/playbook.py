@@ -167,7 +167,9 @@ WORKFLOW = Section(
         'question, author the model, and link each implemented method to the exact '
         'saved model versions and relevant elements. Methods and models need not '
         'correspond one to one. Proposed or partial methods remain explicit; a link '
-        'does not establish scientific completeness.\n'
+        'does not establish scientific completeness. Explain the actual input-to-output '
+        'calculation sequence and why the selected equations and approximations suit '
+        'the question; check the explanation against the linked implementation.\n'
         '4. **Design informative cases.** Give each case a distinct purpose. Explain '
         'what is held constant and what changes in a comparison. Save explicit inputs, '
         'units and provenance; associate all relevant configurations and runs with the '
@@ -195,7 +197,12 @@ WORKFLOW = Section(
         '9. **Review the reader journey.** Another engineer should be able to follow '
         'the question, reasoning, method, model, case, configuration, run, case answer '
         'and final synthesis without this conversation. Use concise scientific prose '
-        'and links, not duplicated assumptions or administrative narration.\n'
+        'and links, not duplicated assumptions or administrative narration. Follow '
+        'the cited records and reconcile consequential values, units, denominators '
+        'and controlled-comparison claims across the approach, cases, assumptions, '
+        'configurations and answers. Revise affected references together; an updated '
+        'answer does not repair a stale assumption note. Group cases according to '
+        'their reasoning, without imposing study-specific categories on other studies.\n'
     ),
 )
 

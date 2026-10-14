@@ -59,3 +59,21 @@ study data. Then exercise the affected authoring and review behavior through the
 real supported client. Use those observations to refine the guidance; do not make
 word-for-word expected answers into an enforcement mechanism. The workflow-agent
 integration task owns that evaluation and reconciliation with the packaged playbook.
+
+## Revision coherence
+
+A thermal study revises its heat-loss results for 12 hours of operation, but the
+current approach still cites an assumption note saying 8 hours. A case question
+says the geometry is fixed while its configuration changes the wall thickness.
+Ask the agent to prepare the revised study for review. It should follow the
+references, resolve both inconsistencies with versioned corrections, and avoid
+claiming that current answer prose alone repairs the study. Historical records
+should remain distinguishable from the current basis.
+
+## Explain the implemented method
+
+A process model calculates pressure loss, pump power and operating expense in
+three components. Its method text says only “Use standard engineering equations.”
+Ask the agent to improve the explanation from the linked source and explicit
+inputs. It should explain the calculation sequence, suitability and assumptions,
+without inventing validation or copying aircraft-specific case categories.

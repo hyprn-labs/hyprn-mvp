@@ -21,12 +21,14 @@ function renderOverview(ctx: ViewContext) {
           api={api}
           studyId={study.study_id}
         >
-          {(question, details, version, saved) => {
+          {(question, details, version, saved, onSaved) => {
             const editStudy = (
               <ActionDialog title="Edit study" label="Edit study">
                 <p>
-                  Edit the study name and description used in the study list. To edit the study
-                  question, open the modeling approach.
+                  Edit the study name and description used in the study list.{' '}
+                  {saved
+                    ? 'To edit the study question, use Edit all in Study details.'
+                    : 'To edit the study question, open the modeling approach.'}
                 </p>
                 <RecordAttribution kind="study_context" id={study.revision} line />
                 <fieldset className="form-stack" disabled={busy || !!api.pending}>
@@ -77,19 +79,17 @@ function renderOverview(ctx: ViewContext) {
                 onOpenModel={(id) =>
                   navigate(() => void openLink({ study: study.study_id, model: id, view: 'model' }))
                 }
-                questionActions={
-                  <>
-                    {editStudy}
-                    <Button
-                      ref={approachEntry}
-                      onClick={() =>
-                        navigate(() => void openLink({ study: study.study_id, view: 'approach' }))
-                      }
-                    >
-                      Edit approach
-                    </Button>
-                  </>
-                }
+                detailsEditor={{
+                  api,
+                  studyId: study.study_id,
+                  controller: ctx.approach,
+                  onSaved: onSaved!,
+                  onEditingChange: (dirty) => {
+                    ctx.approachEditingRef.current = dirty;
+                    ctx.setApproachEditing(dirty);
+                  },
+                }}
+                detailsActions={editStudy}
                 findings={(slot) => (
                   <ApproachFindings
                     {...slot}

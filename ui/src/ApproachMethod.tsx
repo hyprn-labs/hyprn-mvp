@@ -507,28 +507,6 @@ export function ApproachMethod({
                           .join(', ')}
                       </p>
                     )}
-                    <div className="section-actions">
-                      {model && (
-                        <ActionDialog
-                          variant="quiet"
-                          title={'Model version ' + model.model_revision_id.slice(0, 8)}
-                          label="View model details"
-                          width="workspace"
-                          completionKey={openedStep}
-                        >
-                          <p className="context-line">
-                            {modelLabel(model)} · read-only · linked to this approach
-                          </p>
-                          {selection.kind !== 'none' && (
-                            <p role="status">
-                              {plural(matching.length, 'method step')}{' '}
-                              {matching.length === 1 ? 'references' : 'reference'} this selection.
-                            </p>
-                          )}
-                          {modelView(viewId + '-open-')}
-                        </ActionDialog>
-                      )}
-                    </div>
                     {active ? (
                       <>
                         {modelControls}
@@ -610,6 +588,28 @@ export function ApproachMethod({
                     ) : (
                       <p>Select or add a method step.</p>
                     )}
+                    <div className="section-actions method-detail-footer">
+                      {model && (
+                        <ActionDialog
+                          variant="quiet"
+                          title={'Model version ' + model.model_revision_id.slice(0, 8)}
+                          label="View model details"
+                          width="workspace"
+                          completionKey={openedStep}
+                        >
+                          <p className="context-line">
+                            {modelLabel(model)} · read-only · linked to this approach
+                          </p>
+                          {selection.kind !== 'none' && (
+                            <p role="status">
+                              {plural(matching.length, 'method step')}{' '}
+                              {matching.length === 1 ? 'references' : 'reference'} this selection.
+                            </p>
+                          )}
+                          {modelView(viewId + '-open-')}
+                        </ActionDialog>
+                      )}
+                    </div>
                   </div>
                 )}
               </Disclosure>

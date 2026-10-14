@@ -16,9 +16,9 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 
 ## Overview
 
-1. **About this study** spans the reading column: the full latest saved study question, **See more details**, and an explicit action for approach versions and authoring. Study name and list-description editing remains separate.
+1. **About this study** spans the reading column: the full latest saved study question, **See more details**, with editing inside its Study details dialog. The existing question, approach, assumptions, limits and open-question fields remain together; **Edit all** edits the shared approach draft. Study name and list-description editing remains separate inside that dialog.
 2. The same saved approach follows directly in three bordered section panels: **Reasoning and methods**, **Cases and their answers**, **Answer to the study question**. No separate jump-link menu or duplicate recent-record dashboard.
-3. The case filter and refresh controls are always visible. Each answer separates its scientific explanation from supporting results and sources; exact record identities stay in a compact record dialog. A referenced case answer opens once in a dialog rather than nesting its full answer and controls recursively.
+3. The case filter is always visible; supporting records load automatically without pagination or refresh controls. Each case has one supporting-results group: configurations own their associated runs, and answer citations are identified there instead of repeated in another list. The study synthesis groups its support by case and configuration using the same aligned button rows. Each answer separates its scientific explanation from supporting results and sources; exact record identities stay in a compact record dialog. A referenced case answer opens once in a dialog rather than nesting its full answer and controls recursively.
 
 Study details keeps the question separate from the current approach and limits. Empty optional prose, assumptions and limits are omitted in read-only views; editing retains the controls needed to add them. Evidence opens directly beside its claim, with version and relationship details inside the evidence view.
 
@@ -86,14 +86,14 @@ Below 1150px the page gutters narrow and the model heading wraps. Below 1050px t
 
 ## Continuous modeling approach
 
-Preserve the entire saved question and its line breaks. Follow it with section links,
-expandable method rows, expandable case rows and the study answer. The links focus
-their sections without changing the workspace route. Hairlines and token spacing
+Preserve the entire saved question and its line breaks. Follow it with the three section panels containing
+expandable method rows, expandable case rows and the study answer. Hairlines and token spacing
 separate rows; avoid a second method map, chapter tabs or an assumptions tab.
 
 Each method shows its purpose and implementation state before expansion. Expanded
 content explains the calculation and basis, dependencies and remaining work; linked
-model versions open the canonical view. Each case keeps all configuration and run
+model versions open the canonical view from **View model details** at the bottom-right
+of the full expanded method, after its evidence and assumptions. Each case keeps all configuration and run
 links, with no implicit latest-run selection. Scientific interpretations require an
 explicit persisted basis. Execution, criteria and full precision stay in supporting
 details. Limits and assumption editing remain at their existing owners.

@@ -76,6 +76,8 @@ export function ApproachReader({
   source,
   onAccessLost,
   questionActions,
+  detailsEditor,
+  detailsActions,
   findings,
   focusCase,
   api,
@@ -96,6 +98,8 @@ export function ApproachReader({
   onHandoff?: (value: ApproachHandoff) => void;
   source: ApproachReadSource;
   questionActions?: ReactNode;
+  detailsEditor?: React.ComponentProps<typeof StudyDetailsDialog>['editor'];
+  detailsActions?: ReactNode;
   findings?: ApproachResultsSlot;
   focusCase?: { id: string; token: number };
   api?: HyprnMvpApi;
@@ -169,7 +173,7 @@ export function ApproachReader({
               </>
             }
           />
-          <StudyDetailsDialog ref={details} />
+          <StudyDetailsDialog ref={details} editor={detailsEditor} actions={detailsActions} />
           <Panel
             className="approach-section"
             id={sectionId + '-methods'}
@@ -607,7 +611,6 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
                       onOpen={onOpenRecord}
                       focusCase={slot.focusCase}
                       onViewStep={slot.onViewStep}
-                      onStudyLimits={slot.onStudyLimits}
                       onCreateConfiguration={createForCase}
                     />
                   )
