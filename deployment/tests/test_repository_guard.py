@@ -574,6 +574,17 @@ class DocumentsGuardTests(unittest.TestCase):
 
 
 
+class LocalApiClientGroupGuardTests(unittest.TestCase):
+    def test_local_api_client_has_one_scoped_target_and_no_native_backend(self):
+        self.assertEqual(runner.GROUPS['local-api-client'],
+                         ('deployment/tests/test_local_api_client.py',))
+        self.assertEqual(runner.UNITTEST_GUARD_MODULES['local-api-client'],
+                         'test_local_api_client')
+        self.assertNotIn('local-api-client', runner.NATIVE_BACKEND_GROUPS)
+        self.assertNotIn('local-api-client', runner.BROWSER_GROUPS)
+        self.assertEqual(runner.group_needs('local-api-client'), ())
+
+
 class LocalityContractsGuardTests(unittest.TestCase):
     """Closed data-only locality group under the reviewed application interpreter."""
 

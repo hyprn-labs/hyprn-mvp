@@ -407,6 +407,7 @@ GROUPS = {
         'application/tests/test_ownership.py',
     ),
     'local-edition': ('editions/local/tests/test_shim.py', 'editions/local/tests/test_paths.py'),
+    'local-api-client': ('deployment/tests/test_local_api_client.py',),
     # The installation configuration: closed schema, stdlib loader, file safety and location refusals.
     'installation-config': ('deployment/tests/test_installation_config.py',),
     # Operating-system folder layout only in the path policy; no absolute home path in tracked files.
@@ -870,6 +871,7 @@ UNITTEST_GUARD_MODULES = {
     'naming': 'test_naming_guard',
     'hygiene': 'test_hygiene_guard',
     'style-ratchet': 'test_style_ratchet',
+    'local-api-client': 'test_local_api_client',
 }
 
 
