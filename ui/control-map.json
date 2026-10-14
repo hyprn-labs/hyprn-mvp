@@ -251,7 +251,7 @@
     },
     "approach-page-01": {
       "spec": "approach.spec.ts",
-      "test": "@approach-reading Overview and the approach page share one study question box and its Study details dialog"
+      "test": "@approach-reading Overview and approach share the saved question and details"
     },
     "approach-page-02": {
       "spec": "approach.spec.ts",

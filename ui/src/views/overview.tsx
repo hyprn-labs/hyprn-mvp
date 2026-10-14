@@ -15,76 +15,82 @@ function renderOverview(ctx: ViewContext) {
   if (view !== 'overview') return null;
   return (
     <>
-      <OverviewStudyQuestion
-        key={`${api.actor}:${study.study_id}`}
-        api={api}
-        studyId={study.study_id}
-      />
       <div className="overview-grid">
-        <Panel className="study-about overview-card" label="About this study">
-          <SectionHeader
-            level={2}
-            title="About this study"
-            actions={
-              <ActionDialog title="Edit study" label="Edit">
-                <fieldset className="form-stack" disabled={busy || !!api.pending}>
-                  <label>
-                    Study name
-                    <TextInput
-                      value={metadata.name}
-                      maxLength={4096}
-                      onChange={(e) => setMetadata({ ...metadata, name: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Description
-                    <TextArea
-                      aria-label="Description"
-                      value={metadata.description}
-                      maxLength={4096}
-                      onChange={(e) => setMetadata({ ...metadata, description: e.target.value })}
-                    />
-                  </label>
-                  <Button
-                    variant="primary"
-                    disabled={!metadataDirty}
-                    onClick={() => void perform(saveMetadata)}
-                  >
-                    Save study context
-                  </Button>
-                </fieldset>
-                {metadataDirty && (
-                  <p role="status">Unsaved changes are kept when you close this editor.</p>
-                )}
-                {busy && <p role="status">Saving study…</p>}
-                {error != null && <p role="alert">{message(error)}</p>}
-                {notice && <p role="status">{notice}</p>}
-                {api.pending && (
-                  <p role="alert">
-                    Command outcome is uncertain. Close this editor and check the original command
-                    before making more changes.
-                  </p>
-                )}
-              </ActionDialog>
-            }
-          />
-          <p className="context-copy">
-            <strong>Description: </strong>
-            {study.description || 'No description yet.'}
-          </p>
-          {/* Who wrote the description: its own line when an agent wrote this revision. */}
-          <RecordAttribution kind="study_context" id={study.revision} line />
-          <div className="approach-overview-entry">
-            <Button
-              ref={approachEntry}
-              onClick={() =>
-                navigate(() => void openLink({ study: study.study_id, view: 'approach' }))
-              }
-            >
-              View modeling approach
-            </Button>
-          </div>
-        </Panel>
+        <OverviewStudyQuestion
+          key={`${api.actor}:${study.study_id}`}
+          api={api}
+          studyId={study.study_id}
+        >
+          {(question, details) => (
+            <Panel className="study-about overview-card" label="About this study">
+              <SectionHeader
+                level={2}
+                title="About this study"
+                actions={
+                  <ActionDialog title="Edit study" label="Edit study">
+                    <p>
+                      Edit the study name and description used in the study list. To edit the study
+                      question, open the modeling approach.
+                    </p>
+                    <RecordAttribution kind="study_context" id={study.revision} line />
+                    <fieldset className="form-stack" disabled={busy || !!api.pending}>
+                      <label>
+                        Study name
+                        <TextInput
+                          value={metadata.name}
+                          maxLength={4096}
+                          onChange={(e) => setMetadata({ ...metadata, name: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Study list description
+                        <TextArea
+                          aria-label="Study list description"
+                          value={metadata.description}
+                          maxLength={4096}
+                          onChange={(e) =>
+                            setMetadata({ ...metadata, description: e.target.value })
+                          }
+                        />
+                      </label>
+                      <Button
+                        variant="primary"
+                        disabled={!metadataDirty}
+                        onClick={() => void perform(saveMetadata)}
+                      >
+                        Save study context
+                      </Button>
+                    </fieldset>
+                    {metadataDirty && (
+                      <p role="status">Unsaved changes are kept when you close this editor.</p>
+                    )}
+                    {busy && <p role="status">Saving study…</p>}
+                    {error != null && <p role="alert">{message(error)}</p>}
+                    {notice && <p role="status">{notice}</p>}
+                    {api.pending && (
+                      <p role="alert">
+                        Command outcome is uncertain. Close this editor and check the original
+                        command before making more changes.
+                      </p>
+                    )}
+                  </ActionDialog>
+                }
+              />
+              {question}
+              <div className="approach-overview-entry">
+                {details}
+                <Button
+                  ref={approachEntry}
+                  onClick={() =>
+                    navigate(() => void openLink({ study: study.study_id, view: 'approach' }))
+                  }
+                >
+                  View modeling approach
+                </Button>
+              </div>
+            </Panel>
+          )}
+        </OverviewStudyQuestion>
         <OverviewRecords
           key={`${api.actor}:${study.study_id}`}
           api={api}

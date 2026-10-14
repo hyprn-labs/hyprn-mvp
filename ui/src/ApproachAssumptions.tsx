@@ -87,11 +87,14 @@ function Citations({
     invoker.current?.focus();
   }
   return (
-    <section aria-label={label + ' evidence'}>
+    <section className={brief ? 'assumption-evidence' : undefined} aria-label={label + ' evidence'}>
       {!links.length && !brief && <p className="context-line">No evidence linked</p>}
       {links.map((link, index) => (
-        <div className="evidence-record" key={link.evidence_version_id + link.relation}>
-          <div className="section-actions">
+        <div
+          className={brief ? 'assumption-evidence-row' : 'evidence-record'}
+          key={link.evidence_version_id + link.relation}
+        >
+          <div className={brief ? undefined : 'section-actions'}>
             {!brief && (
               <span>
                 {link.relation === 'supports'
@@ -359,16 +362,42 @@ function QuestionClaim({title,claim}:{title:string;claim:ApproachQuestionClaim1|
   );
 }
 
-/** The study question box: the same component on Overview and on the
- * modeling approach page. "See more details" sits at its bottom-right and opens StudyDetailsDialog. */
-export function StudyQuestionBox({question,scope,headingId,actions,onDetails,children}:{question:string;scope?:string;headingId?:string;actions?:ReactNode;onDetails?:()=>void;children?:ReactNode}){
-  return <Panel className="approach-question-card" label="Study question">
-    <p className="approach-eyebrow">Study question</p>
-    <h2 id={headingId} tabIndex={-1} className="approach-question">{question||'No study question'}</h2>
-    {scope&&<p className="context-copy approach-question-scope">{scope}</p>}
-    {children}
-    {(actions||onDetails)&&<div className="approach-question-actions"><div className="section-actions">{actions}</div>{onDetails&&<Button aria-haspopup="dialog" onClick={onDetails}>See more details</Button>}</div>}
-  </Panel>;
+/** The approach page question box opens the shared Study details dialog. */
+export function StudyQuestionBox({
+  question,
+  scope,
+  headingId,
+  actions,
+  onDetails,
+  children,
+}: {
+  question: string;
+  scope?: string;
+  headingId?: string;
+  actions?: ReactNode;
+  onDetails?: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <Panel className="approach-question-card" label="Study question">
+      <p className="approach-eyebrow">Study question</p>
+      <h2 id={headingId} tabIndex={-1} className="approach-question">
+        {question || 'No study question'}
+      </h2>
+      {scope && <p className="context-copy approach-question-scope">{scope}</p>}
+      {children}
+      {(actions || onDetails) && (
+        <div className="approach-question-actions">
+          <div className="section-actions">{actions}</div>
+          {onDetails && (
+            <Button aria-haspopup="dialog" onClick={onDetails}>
+              See more details
+            </Button>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
 }
 
 export type StudyDetailsHandle={open:(focus?:'limits')=>void};
@@ -546,48 +575,129 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
 }
 
 type OverviewQuestion={kind:'loading'}|{kind:'none';draft:boolean}|{kind:'error';text:string}|{kind:'lost'}|{kind:'ready';record:ApproachSavedRead3};
-/** Overview question box: the latest saved approach version only (a draft is never study
+/** Overview question: the latest saved approach version only (a draft is never study
  * context). Reads through the shared session fence; a confirmed denial clears it, and a late
  * reply after sign-out, access loss or leaving Overview is discarded. A retry re-reads only
  * the exact version already selected. Evidence comes from that version's closure. */
-export function OverviewStudyQuestion({api,studyId}:{api:HyprnMvpApi;studyId:string}){
-  const [state,setState]=useState<OverviewQuestion>({kind:'loading'}),[attempt,setAttempt]=useState(0);
-  const selected=useRef<string|null>(null),details=useRef<StudyDetailsHandle>(null);
-  useAccessLoss(api,studyId,change=>{selected.current=null;setState(change.kind==='access-lost'?{kind:'lost'}:{kind:'loading'});});
-  useEffect(()=>{
-    const read=api.fence({studyId});let current=true;const valid=()=>current&&read.valid();
-    setState({kind:'loading'});
-    void (async()=>{
-      try{
-        let version=selected.current;
-        if(!version){
-          const approach=await api.approach(studyId,read.signal);if(!valid())return;
-          if(!approach.latest_version){setState({kind:'none',draft:!!approach.draft});return;}
-          version=approach.latest_version.approach_version_id;selected.current=version;
+export function OverviewStudyQuestion({
+  api,
+  studyId,
+  children,
+}: {
+  api: HyprnMvpApi;
+  studyId: string;
+  children: (question: ReactNode, details: ReactNode) => ReactNode;
+}) {
+  const [state, setState] = useState<OverviewQuestion>({ kind: 'loading' }),
+    [attempt, setAttempt] = useState(0);
+  const selected = useRef<string | null>(null),
+    details = useRef<StudyDetailsHandle>(null);
+  useAccessLoss(api, studyId, (change) => {
+    selected.current = null;
+    setState(change.kind === 'access-lost' ? { kind: 'lost' } : { kind: 'loading' });
+  });
+  useEffect(() => {
+    const read = api.fence({ studyId });
+    let current = true;
+    const valid = () => current && read.valid();
+    setState({ kind: 'loading' });
+    void (async () => {
+      try {
+        let version = selected.current;
+        if (!version) {
+          const approach = await api.approach(studyId, read.signal);
+          if (!valid()) return;
+          if (!approach.latest_version) {
+            setState({ kind: 'none', draft: !!approach.draft });
+            return;
+          }
+          version = approach.latest_version.approach_version_id;
+          selected.current = version;
         }
-        const saved=await api.approachVersion(studyId,version,read.signal);if(!valid())return;
-        if(saved.version.approach_version_id!==version)throw new Error('The saved approach version could not be verified.');
-        setState({kind:'ready',record:saved});
-      }catch(error){
-        if(!current)return;
-        const outcome=await api.readFailed(error,read);
-        if(!current||outcome==='stale')return;
-        if(outcome==='access-lost'){selected.current=null;setState({kind:'lost'});return;}
-        setState({kind:'error',text:outcome==='transient'?accessUnverifiedText:error instanceof ApiError&&error.detail.code==='backend_unavailable'?'The study question is temporarily unavailable. Retry this read.':message(error)});
-      }finally{read.done();}
+        const saved = await api.approachVersion(studyId, version, read.signal);
+        if (!valid()) return;
+        if (saved.version.approach_version_id !== version)
+          throw new Error('The saved approach version could not be verified.');
+        setState({ kind: 'ready', record: saved });
+      } catch (error) {
+        if (!current) return;
+        const outcome = await api.readFailed(error, read);
+        if (!current || outcome === 'stale') return;
+        if (outcome === 'access-lost') {
+          selected.current = null;
+          setState({ kind: 'lost' });
+          return;
+        }
+        setState({
+          kind: 'error',
+          text:
+            outcome === 'transient'
+              ? accessUnverifiedText
+              : error instanceof ApiError && error.detail.code === 'backend_unavailable'
+                ? 'The study question is temporarily unavailable. Retry this read.'
+                : message(error),
+        });
+      } finally {
+        read.done();
+      }
     })();
-    return()=>{current=false;read.abort();};
-  },[api,studyId,api.actor,api.csrf,attempt]);
-  useEffect(()=>()=>{selected.current=null;},[studyId]);
-  if(state.kind==='ready'){const record=state.record;
-    return <ApproachAnnotations content={record.version.content} resolved={record.closure} contextLabel={'Current saved approach v'+record.version.version_number}>
-      <StudyQuestionBox question={record.version.content.question} scope={record.version.content.scope} onDetails={()=>details.current?.open()}/>
-      <StudyDetailsDialog ref={details}/>
-    </ApproachAnnotations>;}
-  return <Panel className="approach-question-card" label="Study question"><p className="approach-eyebrow">Study question</p>
-    {state.kind==='loading'?<p role="status">Loading study question…</p>
-      :state.kind==='none'?<><h2 className="approach-question">No study question yet</h2><p className="context-line">{state.draft?'A draft is available, but no approach version has been saved.':'No saved approach version is available.'}</p></>
-      :state.kind==='lost'?<p role="alert">{accessLostText}</p>
-      :<div role="alert"><p>{state.text}</p><Button onClick={()=>setAttempt(value=>value+1)}>Retry study question</Button></div>}
-  </Panel>;
+    return () => {
+      current = false;
+      read.abort();
+    };
+  }, [api, studyId, api.actor, api.csrf, attempt]);
+  useEffect(
+    () => () => {
+      selected.current = null;
+    },
+    [studyId],
+  );
+  if (state.kind === 'ready') {
+    const record = state.record;
+    return (
+      <ApproachAnnotations
+        content={record.version.content}
+        resolved={record.closure}
+        contextLabel={'Current saved approach v' + record.version.version_number}
+      >
+        {children(
+          <p className="context-copy">
+            <strong>Study question: </strong>
+            {record.version.content.question || 'No study question yet'}
+          </p>,
+          <Button aria-haspopup="dialog" onClick={() => details.current?.open()}>
+            See more details
+          </Button>,
+        )}
+        <StudyDetailsDialog ref={details} />
+      </ApproachAnnotations>
+    );
+  }
+  return children(
+    <div className="overview-question">
+      <p>
+        <strong>Study question</strong>
+      </p>
+      {state.kind === 'loading' ? (
+        <p role="status">Loading study question…</p>
+      ) : state.kind === 'none' ? (
+        <>
+          <p>No study question yet</p>
+          <p className="context-line">
+            {state.draft
+              ? 'A draft is available, but no approach version has been saved.'
+              : 'No saved approach version is available.'}
+          </p>
+        </>
+      ) : state.kind === 'lost' ? (
+        <p role="alert">{accessLostText}</p>
+      ) : (
+        <div role="alert">
+          <p>{state.text}</p>
+          <Button onClick={() => setAttempt((value) => value + 1)}>Retry study question</Button>
+        </div>
+      )}
+    </div>,
+    null,
+  );
 }

@@ -315,10 +315,11 @@ print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assum
 # or source excerpt. Cases & results: results first, then one card per case; the limits aside is
 # a Study limits link.
 details_text=(ROOT/'src/ApproachAssumptions.tsx').read_text()
-for term in ('export function StudyQuestionBox(','export function StudyDetailsDialog(','export function OverviewStudyQuestion(','>See more details<','Study details</h2>',
+for term in ('export function StudyQuestionBox(','export function StudyDetailsDialog(','export function OverviewStudyQuestion(','See more details','Study details</h2>',
  'aria-label="Study question"','aria-label="Current approach"','aria-label="Study assumptions"',
  'aria-label="Study limits"','aria-label="Open questions"',
- 'api.fence({studyId})','api.readFailed(error,read)','useAccessLoss(api,studyId','Current saved approach v'):
+ 'api.fence({ studyId })','api.readFailed(error, read)',
+ 'useAccessLoss(api, studyId','Current saved approach v'):
  assert term in details_text,('src/ApproachAssumptions.tsx','Study question box and details',term)
 for removed in ('export function StudyConditions(','StudyConditionsAction','CurrentStudyConditions','Study conditions & limits','Approach-owned',"'Model assumption'",'(read-only)`};'):
  assert removed not in details_text,('src/ApproachAssumptions.tsx','Removed by Study details',removed)
@@ -340,9 +341,9 @@ for removed in ('function ResultCard(','function StudyLimits(','Study-wide limit
 workspace_s5=(ROOT/'src/Workspace.tsx').read_text()
 overview_s5=(ROOT/'src/views/overview.tsx').read_text()
 assert '<OverviewStudyQuestion' in overview_s5,\
- ('src/views/overview.tsx','Overview question box replaces the conditions entry')
+ ('src/views/overview.tsx','Overview composes the canonical saved question into About this study')
 assert 'CurrentStudyConditions' not in workspace_s5+overview_s5,\
- ('src/views/overview.tsx','Overview question box replaces the conditions entry')
+ ('src/views/overview.tsx','Overview composes the canonical saved question into About this study')
 for path in sorted((ROOT/'src').rglob('*.tsx')):
  text=path.read_text()
  for removed in ('Study conditions & limits','Question in detail','StudyConditions'):
@@ -351,7 +352,11 @@ for file,exempt in (('src/ApproachAssumptions.tsx',()),('src/ApproachFindings.ts
  text=(ROOT/file).read_text()
  for token in exempt:assert text.count(token)==1,(file,'Stale exemption',token);text=text.replace(token,'')  # retained-integrity admission, not record presentation
  assert 'schema_version' not in text,(file,'No new schema_version branch; read through recordViews.ts / descriptiveApproach')
-print('Approach page: one study question box with See more details on Overview and the approach page, one Study details dialog (question, context, assumptions, limits), no Study conditions & limits or Question in detail; Methods in two tabs with one implementation line and the canonical model version; one card per case with a Study limits link; browser gates remain separate.')
+print(
+ 'Approach page: canonical saved question in Overview About and an approach question box; '
+ 'one Study details dialog; Methods in two tabs with the canonical model version; '
+ 'one card per case with Study limits. Browser gates remain separate.'
+)
 
 
 # Evidence index. One shared EvidenceIndex lists assumptions by owner with their evidence: the Evidence

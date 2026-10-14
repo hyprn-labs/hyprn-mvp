@@ -82,15 +82,24 @@ test('Overview marks a description an agent wrote, not one a person wrote since'
 }) => {
   const state = await agentHarness(page);
   await login(page, studyLink(agentStudy));
-  await expect(about(page).locator('.context-copy')).toContainText('Size the exchanger');
-  const line = about(page).locator('.context-line');
+  await about(page).getByRole('button', { name: 'Edit study', exact: true }).click();
+  await expect(page.getByLabel('Study list description', { exact: true })).toHaveValue(
+    'Size the exchanger for the stated duty.',
+  );
+  const line = page
+    .getByRole('dialog', { name: 'Edit study', exact: true })
+    .locator('.context-line');
   await expectChip(line, names.codexForAda);
+  await page.getByRole('button', { name: 'Close Edit study', exact: true }).click();
   await expect(about(page).getByRole('button', { name: 'View modeling approach' })).toBeVisible();
   // A signed-in hash change opens the linked study in place.
   await page.goto(origin + '/ui/' + studyLink(humanStudy));
-  await expect(about(page).locator('.context-copy')).toContainText('Choose a pump');
+  await expect(heading(page).getByRole('heading')).toHaveText('Pump selection');
   // The study's attribution names an earlier agent revision; the current revision is a person's.
-  await expect(about(page).locator('.hf-attr')).toHaveCount(0);
+  await about(page).getByRole('button', { name: 'Edit study', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Edit study', exact: true }).locator('.hf-attr'),
+  ).toHaveCount(0);
   expect(state.writes).toEqual([]);
   expect(state.unknown).toEqual([]);
 });
@@ -199,7 +208,10 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
       await expectWhole(page, await expectChip(row, long.codexForAda), long.codexForAda);
       await row.getByRole('button', { name: 'Open study Heat exchanger sizing' }).click();
       await expectWhole(page, await expectChip(heading(page), long.codexForAda), long.codexForAda);
-      const line = about(page).locator('.context-line');
+      await about(page).getByRole('button', { name: 'Edit study', exact: true }).click();
+      const line = page
+        .getByRole('dialog', { name: 'Edit study', exact: true })
+        .locator('.context-line');
       observations.push({
         theme: colorScheme,
         overview: await expectWhole(
@@ -209,6 +221,7 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
         ),
       });
       await zoomed.screenshot(`attribution-overview-${colorScheme}-200.png`);
+      await page.getByRole('button', { name: 'Close Edit study', exact: true }).click();
       await page.getByRole('button', { name: 'Models', exact: true }).click();
       await page.getByRole('button', { name: /^Open model / }).click();
       const context = modelHeading(page).locator('.model-context');
@@ -258,7 +271,7 @@ test('returning to a study cannot apply an earlier attribution read', async ({ p
   await login(page, studyLink(agentStudy));
   await expect(about(page)).toBeVisible();
   await page.goto(origin + '/ui/' + studyLink(humanStudy));
-  await expect(about(page).locator('.context-copy')).toContainText('Choose a pump');
+  await expect(heading(page).getByRole('heading')).toHaveText('Pump selection');
   await page.goto(origin + '/ui/' + studyLink(agentStudy));
   await expectChip(heading(page), names.codexForAda);
   const response = page.waitForResponse((reply) =>

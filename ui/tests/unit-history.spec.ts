@@ -42,29 +42,44 @@ test('@units-history downloaded CSV distinguishes declarations and absent value 
   await seeded(page);
   // The Variables tab is gone; the Quantities table is always below the canvas and the
   // Quantities CSV exports its displayed rows.
-  await expect(page.getByRole('tab',{name:'Variables',exact:true})).toHaveCount(0);
-  await expect(page.getByRole('table',{name:'Quantities',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await page.getByRole('button',{name:'Export',exact:true}).click();
-  const download=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Quantities CSV',exact:true}).click();
-  const csv=await readFile((await(await download).path())!,'utf8');
-  expect(csv).toContain('"Not specified"');expect(csv).toContain('"Dimensionless"');
-  expect(csv).toContain('"m/s"');expect(csv).toContain('"Not recorded"');
+  await expect(page.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Quantities', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Quantities CSV', exact: true }).click();
+  const csv = await readFile((await (await download).path())!, 'utf8');
+  expect(csv).toContain('"Not specified"');
+  expect(csv).toContain('"Dimensionless"');
+  expect(csv).toContain('"m/s"');
+  expect(csv).toContain('"Not recorded"');
   expect(csv).not.toContain('[object Object]');
   // The CSV exports exactly the displayed columns, including Definition.
-  const header=csv.split('\r\n').find(r=>r.startsWith('"Variable",'))!;
-  expect(header.split(',').slice(0,5)).toEqual(['"Variable"','"Component"','"Direction"','"Definition"','"Units"']);
-  await expect(page.getByRole('alert').filter({hasText:'Unsupported displayed column'})).toHaveCount(0);
+  const header = csv.split('\r\n').find((r) => r.startsWith('"Variable",'))!;
+  expect(header.split(',').slice(0, 5)).toEqual([
+    '"Variable"',
+    '"Component"',
+    '"Direction"',
+    '"Definition"',
+    '"Units"',
+  ]);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Unsupported displayed column' }),
+  ).toHaveCount(0);
 });
 
-async function comparison(page:Page,f:ReaderFixture) {
-  const study=(await(await page.request.get('/api/1/studies/'+f.study_id)).json()).data;
-  await page.evaluate(({study,snapshot})=>(window as any).showComparison(study,snapshot),{study,snapshot:f.before});
-  await page.getByRole('button',{name:'Export',exact:true}).click();
-  await page.getByLabel('Comparison model version ID',{exact:true}).fill(f.after.model_revision_id);
-  await page.getByRole('button',{name:'Read comparison target',exact:true}).click();
-  return page.getByRole('region',{name:'Comparison',exact:true});
+async function comparison(page: Page, f: ReaderFixture) {
+  const study = (await (await page.request.get('/api/1/studies/' + f.study_id)).json()).data;
+  await page.evaluate(({ study, snapshot }) => (window as any).showComparison(study, snapshot), {
+    study,
+    snapshot: f.before,
+  });
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  await page
+    .getByLabel('Comparison model version ID', { exact: true })
+    .fill(f.after.model_revision_id);
+  await page.getByRole('button', { name: 'Read comparison target', exact: true }).click();
+  return page.getByRole('region', { name: 'Comparison', exact: true });
 }
 for(const schema of ['1','2','3'])test('@units-history exact schema '+schema+' comparison and model package download inspection',async({page})=>{
   const f=await seeded(page,schema),area=await comparison(page,f);
@@ -242,10 +257,13 @@ async function runModels(page:Page,f:any) {
   await page.getByRole('tab',{name:'Model',exact:true}).click();
   await expect(page.locator('#run-panel-1').getByRole('table',{name:'Quantities',exact:true})).toBeVisible();
 }
-async function csvDownload(page:Page) {
-  await page.getByRole('button',{name:'Export',exact:true}).click();
-  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Quantities CSV',exact:true}).click();
-  const csv=await readFile((await(await pending).path())!,'utf8');await page.keyboard.press('Escape');return csv;
+async function csvDownload(page: Page) {
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Quantities CSV', exact: true }).click();
+  const csv = await readFile((await (await pending).path())!, 'utf8');
+  await page.keyboard.press('Escape');
+  return csv;
 }
 test('@units-history run CSV retains dimensionless zero physical output and absent records',async({page})=>{
   const f=await savedHistory(page);await outage(page);await runModels(page,f);
@@ -281,108 +299,261 @@ for(const code of ['missing_results','corrupt_retained_record','unsupported_reco
 });
 test('@units-history light dark narrow and genuine 200 percent keyboard evidence',async({baseURL})=>{
   test.setTimeout(180000);
-  const root=process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,extension=join(root,'artifacts/units-history-zoom-extension');
-  await mkdir(extension);await writeFile(join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'Units historical zoom verification',version:'1.0',permissions:['tabs'],background:{service_worker:'worker.js'}}));await writeFile(join(extension,'worker.js'),'chrome.runtime.onInstalled.addListener(()=>{});');
-  const context=await chromium.launchPersistentContext(join(root,'artifacts/units-history-zoom-profile'),{executablePath:chromiumExecutable(),headless:true,viewport:null,baseURL,args:['--disable-extensions-except='+extension,'--load-extension='+extension,'--window-size=1440,1000','--no-first-run']});
-  const worker=context.serviceWorkers()[0]??await context.waitForEvent('serviceworker'),geometry:any[]=[];
+  const root = process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,
+    extension = join(root, 'artifacts/units-history-zoom-extension');
+  await mkdir(extension);
+  await writeFile(
+    join(extension, 'manifest.json'),
+    JSON.stringify({
+      manifest_version: 3,
+      name: 'Units historical zoom verification',
+      version: '1.0',
+      permissions: ['tabs'],
+      background: { service_worker: 'worker.js' },
+    }),
+  );
+  await writeFile(join(extension, 'worker.js'), 'chrome.runtime.onInstalled.addListener(()=>{});');
+  const context = await chromium.launchPersistentContext(
+    join(root, 'artifacts/units-history-zoom-profile'),
+    {
+      executablePath: chromiumExecutable(),
+      headless: true,
+      viewport: null,
+      baseURL,
+      args: [
+        '--disable-extensions-except=' + extension,
+        '--load-extension=' + extension,
+        '--window-size=1440,1000',
+        '--no-first-run',
+      ],
+    },
+  );
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker')),
+    geometry: any[] = [];
   try {
-    const page=context.pages()[0]??await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));const f=await savedHistory(page);await outage(page);
-    const cdp=await context.newCDPSession(page),info=await cdp.send('Browser.getWindowForTarget');
-    async function resize(width:number,height:number) {const before=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));const actual=(await cdp.send('Browser.getWindowBounds',{windowId:info.windowId})).bounds;await cdp.send('Browser.setWindowBounds',{windowId:info.windowId,bounds:{width:actual.width!+width-before.width,height:actual.height!+height-before.height}});await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(width);}
-    async function capture(name:string) {
-      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    const page = context.pages()[0] ?? (await context.newPage());
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    const f = await savedHistory(page);
+    await outage(page);
+    const cdp = await context.newCDPSession(page),
+      info = await cdp.send('Browser.getWindowForTarget');
+    async function resize(width: number, height: number) {
+      const before = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      const actual = (await cdp.send('Browser.getWindowBounds', { windowId: info.windowId }))
+        .bounds;
+      await cdp.send('Browser.setWindowBounds', {
+        windowId: info.windowId,
+        bounds: {
+          width: actual.width! + width - before.width,
+          height: actual.height! + height - before.height,
+        },
+      });
+      await expect.poll(() => page.evaluate(() => innerWidth)).toBe(width);
+    }
+    async function capture(name: string) {
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
       // Flush computed styles and use a bounded wait for Foundry's theme
       // transitions before capturing their final colors.
-      await expect.poll(()=>page.locator('.hf-btn:visible').evaluateAll(items=>items.every(item=>{
-        getComputedStyle(item).backgroundColor;
-        return item.getAnimations().every(a=>a.playState!=='running');
-      }))).toBe(true);
-      const size=await page.evaluate(()=>({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio}));
-      expect(size.scrollWidth).toBeLessThanOrEqual(size.width+1);
-      const labels=await page.locator('.change-table th .exact-proposal').evaluateAll(items=>items.map(item=>({width:item.clientWidth,scrollWidth:item.scrollWidth})));
-      for(const label of labels)expect(label.scrollWidth).toBeLessThanOrEqual(label.width+1);
-      const buttons=await page.locator('.hf-btn:visible').evaluateAll(items=>items.map(item=>{const style=getComputedStyle(item);return {text:item.textContent,className:item.className,background:style.backgroundColor,color:style.color,border:style.borderColor,surface:style.getPropertyValue('--surface').trim(),hover:item.matches(':hover'),transition:style.transitionDuration,animations:item.getAnimations().map(a=>a.playState)};}));
-      for(const button of buttons)expect(button.animations).not.toContain('running');
-      geometry.push({name,...size,labels,buttons});
-      const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});await writeFile(join(root,'evidence/'+name+'.png'),Buffer.from(shot.data,'base64'));
+      await expect
+        .poll(() =>
+          page.locator('.hf-btn:visible').evaluateAll((items) =>
+            items.every((item) => {
+              getComputedStyle(item).backgroundColor;
+              return item.getAnimations().every((a) => a.playState !== 'running');
+            }),
+          ),
+        )
+        .toBe(true);
+      const size = await page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        dpr: devicePixelRatio,
+      }));
+      expect(size.scrollWidth).toBeLessThanOrEqual(size.width + 1);
+      const labels = await page
+        .locator('.change-table th .exact-proposal')
+        .evaluateAll((items) =>
+          items.map((item) => ({ width: item.clientWidth, scrollWidth: item.scrollWidth })),
+        );
+      for (const label of labels) expect(label.scrollWidth).toBeLessThanOrEqual(label.width + 1);
+      const buttons = await page.locator('.hf-btn:visible').evaluateAll((items) =>
+        items.map((item) => {
+          const style = getComputedStyle(item);
+          return {
+            text: item.textContent,
+            className: item.className,
+            background: style.backgroundColor,
+            color: style.color,
+            border: style.borderColor,
+            surface: style.getPropertyValue('--surface').trim(),
+            hover: item.matches(':hover'),
+            transition: style.transitionDuration,
+            animations: item.getAnimations().map((a) => a.playState),
+          };
+        }),
+      );
+      for (const button of buttons) expect(button.animations).not.toContain('running');
+      geometry.push({ name, ...size, labels, buttons });
+      const shot = await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: false,
+      });
+      await writeFile(join(root, 'evidence/' + name + '.png'), Buffer.from(shot.data, 'base64'));
     }
-    await resize(1440,1000);
-    const tab=await worker.evaluate(async(url)=>{const tabs=await(globalThis as any).chrome.tabs.query({});return tabs.find((t:any)=>t.url.startsWith(url)).id;},baseURL!);
-    async function mode(size:string) {
-      await worker.evaluate(id=>(globalThis as any).chrome.tabs.setZoom(id,1),tab);await expect.poll(()=>page.evaluate(()=>devicePixelRatio)).toBe(1);
-      await resize(size==='narrow'?600:1440,size==='narrow'?900:1000);
-      if(size==='200'){
-        await worker.evaluate(id=>(globalThis as any).chrome.tabs.setZoom(id,2),tab);
-        expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tab)).toBe(2);expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);
+    await resize(1440, 1000);
+    const tab = await worker.evaluate(async (url) => {
+      const tabs = await (globalThis as any).chrome.tabs.query({});
+      return tabs.find((t: any) => t.url.startsWith(url)).id;
+    }, baseURL!);
+    async function mode(size: string) {
+      await worker.evaluate((id) => (globalThis as any).chrome.tabs.setZoom(id, 1), tab);
+      await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBe(1);
+      await resize(size === 'narrow' ? 600 : 1440, size === 'narrow' ? 900 : 1000);
+      if (size === '200') {
+        await worker.evaluate((id) => (globalThis as any).chrome.tabs.setZoom(id, 2), tab);
+        expect(
+          await worker.evaluate((id) => (globalThis as any).chrome.tabs.getZoom(id), tab),
+        ).toBe(2);
+        expect(page.viewportSize()).toBeNull();
+        await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
       }
     }
 
-    await page.goto('/ui/#v=1&view=configurations&study='+f.study_id+'&configuration='+f.frozen.configuration.configuration_revision_id);
-    const saved=page.getByRole('region',{name:'Saved configuration',exact:true});
-    for(const size of ['desktop','narrow','200']) {
+    await page.goto(
+      '/ui/#v=1&view=configurations&study=' +
+        f.study_id +
+        '&configuration=' +
+        f.frozen.configuration.configuration_revision_id,
+    );
+    const saved = page.getByRole('region', { name: 'Saved configuration', exact: true });
+    for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
-      for(const theme of ['light','dark']) {
-        await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        await saved.getByRole('button',{name:'Record details',exact:true}).focus();await capture('history-saved-context-'+size+'-'+theme);
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await saved.getByRole('button', { name: 'Record details', exact: true }).focus();
+        await capture('history-saved-context-' + size + '-' + theme);
         // One model-assumptions line; the retained model version opens read-only
         // in the canonical model view, where the model's assumptions carry their evidence.
-        const assumption=saved.getByText(modelAssumptionsLine(f),{exact:true});
-        await assumption.scrollIntoViewIfNeeded();await capture('history-saved-assumptions-'+size+'-'+theme);
-        const open=saved.getByRole('button',{name:'View model assumptions',exact:true});
-        await open.focus();await page.keyboard.press('Enter');
-        const modelDialog=page.getByRole('dialog',{name:'Model version '+f.after.model_revision_id.slice(0,8),exact:true});
-        const evidence=modelDialog.getByRole('region',{name:'Model assumptions',exact:true}).getByRole('button',{name:'View evidence',exact:true}).first();
-        await evidence.focus();await page.keyboard.press('Enter');
-        const dialog=page.getByRole('dialog').filter({hasText:'Retained unit evidence'}).last();
-        await expect(dialog).toBeVisible();await capture('history-retained-evidence-'+size+'-'+theme);
-        await page.keyboard.press('Escape');await expect(evidence).toBeFocused();
-        await page.keyboard.press('Escape');await expect(modelDialog).toBeHidden();await expect(open).toBeFocused();
+        const assumption = saved.getByText(modelAssumptionsLine(f), { exact: true });
+        await assumption.scrollIntoViewIfNeeded();
+        await capture('history-saved-assumptions-' + size + '-' + theme);
+        const open = saved.getByRole('button', { name: 'View model assumptions', exact: true });
+        await open.focus();
+        await page.keyboard.press('Enter');
+        const modelDialog = page.getByRole('dialog', {
+          name: 'Model version ' + f.after.model_revision_id.slice(0, 8),
+          exact: true,
+        });
+        const evidence = modelDialog
+          .getByRole('region', { name: 'Model assumptions', exact: true })
+          .getByRole('button', { name: 'View evidence', exact: true })
+          .first();
+        await evidence.focus();
+        await page.keyboard.press('Enter');
+        const dialog = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Retained unit evidence' })
+          .last();
+        await expect(dialog).toBeVisible();
+        await capture('history-retained-evidence-' + size + '-' + theme);
+        await page.keyboard.press('Escape');
+        await expect(evidence).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(modelDialog).toBeHidden();
+        await expect(open).toBeFocused();
       }
     }
-    await mode('desktop');await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+f.run_id);
-    for(const size of ['desktop','narrow','200']) {
+    await mode('desktop');
+    await page.goto('/ui/#v=1&view=runs&study=' + f.study_id + '&run=' + f.run_id);
+    for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
-      for(const theme of ['light','dark']) {
-        await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        await page.getByRole('tab',{name:'Configuration',exact:true}).click();
-        await page.locator('#run-panel-2').getByText(modelAssumptionsLine(f),{exact:true}).scrollIntoViewIfNeeded();await capture('history-run-configuration-'+size+'-'+theme);
-        await page.getByRole('tab',{name:'Evidence',exact:true}).focus();await page.keyboard.press('Enter');
-        await expect(page.getByRole('tab',{name:'Evidence',exact:true})).toBeFocused();
-        await page.locator('#run-panel-3').getByText('Revised bounded assumption',{exact:true}).scrollIntoViewIfNeeded();await capture('history-run-evidence-'+size+'-'+theme);
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await page.getByRole('tab', { name: 'Configuration', exact: true }).click();
+        await page
+          .locator('#run-panel-2')
+          .getByText(modelAssumptionsLine(f), { exact: true })
+          .scrollIntoViewIfNeeded();
+        await capture('history-run-configuration-' + size + '-' + theme);
+        await page.getByRole('tab', { name: 'Evidence', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('tab', { name: 'Evidence', exact: true })).toBeFocused();
+        await page
+          .locator('#run-panel-3')
+          .getByText('Revised bounded assumption', { exact: true })
+          .scrollIntoViewIfNeeded();
+        await capture('history-run-evidence-' + size + '-' + theme);
       }
     }
-    await mode('desktop');await page.getByRole('button',{name:'Create modified run',exact:true}).click();
-    await expect(page.getByLabel('Configuration name',{exact:true})).toBeVisible();
-    for(const size of ['desktop','narrow','200']) {
+    await mode('desktop');
+    await page.getByRole('button', { name: 'Create modified run', exact: true }).click();
+    await expect(page.getByLabel('Configuration name', { exact: true })).toBeVisible();
+    for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
-      for(const theme of ['light','dark']) {
-        await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        await page.getByRole('region',{name:'Configuration assumption owners',exact:true}).filter({visible:true}).getByText(modelAssumptionsLine(f),{exact:true}).scrollIntoViewIfNeeded();await capture('history-modified-assumptions-'+size+'-'+theme);
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await page
+          .getByRole('region', { name: 'Configuration assumption owners', exact: true })
+          .filter({ visible: true })
+          .getByText(modelAssumptionsLine(f), { exact: true })
+          .scrollIntoViewIfNeeded();
+        await capture('history-modified-assumptions-' + size + '-' + theme);
       }
     }
     // Comparison remains an isolated actual component consumer; owner-hidden
     // comparison navigation is not exposed by this test harness.
-    await page.unroute('**/api/1/studies/*/models/**');await mode('desktop');await comparison(page,f);
-    const unitGroup=page.getByRole('region',{name:'Comparison',exact:true}).locator('details').filter({has:page.locator('summary').filter({hasText:/^Ports and units/})});
-    if(await unitGroup.getAttribute('open')===null)await unitGroup.locator('summary').first().click();
-    for(const size of ['desktop','narrow','200']) {
+    await page.unroute('**/api/1/studies/*/models/**');
+    await mode('desktop');
+    await comparison(page, f);
+    const unitGroup = page
+      .getByRole('region', { name: 'Comparison', exact: true })
+      .locator('details')
+      .filter({ has: page.locator('summary').filter({ hasText: /^Ports and units/ }) });
+    if ((await unitGroup.getAttribute('open')) === null)
+      await unitGroup.locator('summary').first().click();
+    for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
-      for(const theme of ['light','dark']) {
-        await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        const labels=unitGroup.getByText(/Left: Energy law · unknown/);await labels.scrollIntoViewIfNeeded();await capture('history-comparison-'+size+'-'+theme);
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        const labels = unitGroup.getByText(/Left: Energy law · unknown/);
+        await labels.scrollIntoViewIfNeeded();
+        await capture('history-comparison-' + size + '-' + theme);
       }
     }
-    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Export',exact:true})).toBeFocused();
-    await page.getByRole('button',{name:'Import',exact:true}).click();
-    await page.getByLabel('Portable model record file',{exact:true}).setInputFiles({name:'model.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(f.package))});
-    await page.getByRole('button',{name:'Preview model import',exact:true}).click();
-    for(const size of ['desktop','narrow','200']) {
+    await page.keyboard.press('Escape');
+    await expect(
+      page.getByRole('button', { name: 'Export model and data', exact: true }),
+    ).toBeFocused();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page
+      .getByLabel('Portable model record file', { exact: true })
+      .setInputFiles({
+        name: 'model.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(f.package)),
+      });
+    await page.getByRole('button', { name: 'Preview model import', exact: true }).click();
+    for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
-      for(const theme of ['light','dark']) {
-        await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        await page.getByRole('button',{name:'Cancel',exact:true}).focus();await expect(page.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();await capture('history-package-inspector-'+size+'-'+theme);
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await page.getByRole('button', { name: 'Cancel', exact: true }).focus();
+        await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+        await capture('history-package-inspector-' + size + '-' + theme);
       }
     }
-    await writeFile(join(root,'evidence/history-native-zoom.json'),JSON.stringify({zoom:2,viewport:null,geometry},null,2));
-  }finally{await context.close();}
+    await writeFile(
+      join(root, 'evidence/history-native-zoom.json'),
+      JSON.stringify({ zoom: 2, viewport: null, geometry }, null, 2),
+    );
+  } finally {
+    await context.close();
+  }
 });

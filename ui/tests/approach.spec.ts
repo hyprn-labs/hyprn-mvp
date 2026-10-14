@@ -1114,20 +1114,38 @@ test('@approach-controller polish legacy draft remains exact until explicit desc
 });
 
 test('@approach-reading polish contextual question and limits use real commands and reading defaults',async({page})=>{
-  await openProduct(page);await writeQuestion(page,'Which observations bound the response?');
-  await page.getByRole('button',{name:'Edit question and scope',exact:true}).click();
-  const editor=page.getByRole('dialog',{name:'Edit question and scope',exact:true});
-  await editor.getByLabel('Original wording',{exact:true}).fill('What sets the response bounds?');
-  await editor.getByLabel('Original wording attribution',{exact:true}).selectOption('human');
-  await editor.getByLabel('Original wording attribution label',{exact:true}).fill('Recorded requester');
-  await editor.getByLabel('Detailed elaboration',{exact:true}).fill('<script>window.unsafeClaim = true</script> The measured range needs explicit limits.');
-  await editor.getByLabel('Detailed elaboration attribution',{exact:true}).selectOption('agent');
-  await editor.getByLabel('Detailed elaboration attribution label',{exact:true}).fill('Drafting assistant');
-  await editor.getByRole('button',{name:'Apply to draft',exact:true}).click();
+  await openProduct(page);
+  await writeQuestion(page, 'Which observations bound the response?');
+  await page.getByRole('button', { name: 'Edit question and scope', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit question and scope', exact: true });
+  await editor
+    .getByLabel('Original wording', { exact: true })
+    .fill('What sets the response bounds?');
+  await editor.getByLabel('Original wording attribution', { exact: true }).selectOption('human');
+  await editor
+    .getByLabel('Original wording attribution label', { exact: true })
+    .fill('Recorded requester');
+  await editor
+    .getByLabel('Detailed elaboration', { exact: true })
+    .fill('<script>window.unsafeClaim = true</script> The measured range needs explicit limits.');
+  await editor
+    .getByLabel('Detailed elaboration attribution', { exact: true })
+    .selectOption('agent');
+  await editor
+    .getByLabel('Detailed elaboration attribution label', { exact: true })
+    .fill('Drafting assistant');
+  await editor.getByRole('button', { name: 'Apply to draft', exact: true }).click();
   // See more details at the bottom-right of the question box opens Study details.
-  await expect(page.getByRole('button',{name:'Study conditions & limits',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Question in detail',exact:true})).toHaveCount(0);
-  const trigger=page.getByRole('button',{name:'See more details',exact:true});await trigger.focus();await trigger.press('Enter');
-  const conditions=page.getByRole('dialog',{name:'Study details',exact:true});
+  await expect(
+    page.getByRole('button', { name: 'Study conditions & limits', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Question in detail', exact: true })).toHaveCount(
+    0,
+  );
+  const trigger = page.getByRole('button', { name: 'See more details', exact: true });
+  await trigger.focus();
+  await trigger.press('Enter');
+  const conditions = page.getByRole('dialog', { name: 'Study details', exact: true });
   await expect(conditions.getByRole('heading', { level: 3 })).toHaveText([
     'Study question',
     'Current approach',
@@ -1136,44 +1154,102 @@ test('@approach-reading polish contextual question and limits use real commands 
     'Open questions',
   ]);
   await expect(conditions).not.toContainText('Earlier limits text');
-  await conditions.getByRole('button',{name:'Add limit',exact:true}).click();
-  const limit=page.getByRole('dialog',{name:'Edit study limit',exact:true});await expect(limit.getByLabel('Limit statement')).toBeFocused();
-  await limit.getByLabel('Limit statement').fill('Only the measured operating range is represented.');
-  await limit.getByRole('button',{name:'Apply limit',exact:true}).click();
+  await conditions.getByRole('button', { name: 'Add limit', exact: true }).click();
+  const limit = page.getByRole('dialog', { name: 'Edit study limit', exact: true });
+  await expect(limit.getByLabel('Limit statement')).toBeFocused();
+  await limit
+    .getByLabel('Limit statement')
+    .fill('Only the measured operating range is represented.');
+  await limit.getByRole('button', { name: 'Apply limit', exact: true }).click();
   await expect(
     conditions.getByRole('region', { name: 'Study limits', exact: true }),
   ).not.toContainText('No evidence linked');
-  await conditions.getByRole('button',{name:'Done',exact:true}).click();await expect(trigger).toBeFocused();
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Edit approach',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Save draft',exact:true})).toHaveCount(0);
-  const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!,version=await page.getByLabel('Approach version',{exact:true}).inputValue();
-  const saved=(await(await page.request.get(`/api/1/studies/${sid}/approach/versions/${version}`)).json()).data;
-  expect(saved.version.content.schema_version).toBe('2');expect(saved.version.content.limit_items).toHaveLength(1);
+  await conditions.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save approach version', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Save approach version', exact: true })
+    .getByRole('button', { name: 'Save version', exact: true })
+    .click();
+  await expect(page.getByRole('button', { name: 'Edit approach', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toHaveCount(0);
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!,
+    version = await page.getByLabel('Approach version', { exact: true }).inputValue();
+  const saved = (
+    await (await page.request.get(`/api/1/studies/${sid}/approach/versions/${version}`)).json()
+  ).data;
+  expect(saved.version.content.schema_version).toBe('2');
+  expect(saved.version.content.limit_items).toHaveLength(1);
   expect(saved.version.content.original_question.attribution.label).toBe('Recorded requester');
-  for(const theme of ['light','dark']){
-    await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-    await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence','polish-question-'+theme+'.png')});
-    const detailTrigger=page.getByRole('button',{name:'See more details',exact:true});await detailTrigger.focus();await detailTrigger.press('Enter');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+    await page.screenshot({
+      path: join(
+        process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,
+        'evidence',
+        'polish-question-' + theme + '.png',
+      ),
+    });
+    const detailTrigger = page.getByRole('button', { name: 'See more details', exact: true });
+    await detailTrigger.focus();
+    await detailTrigger.press('Enter');
     const detail = page.getByRole('dialog', { name: 'Study details', exact: true });
     await expect(detail).toContainText('Supplied agent attribution: Drafting assistant');
     await expect(detail).toContainText('Authorship has not been verified.');
-    expect(await page.evaluate(()=>(window as any).unsafeClaim)).toBeUndefined();
-    await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence','polish-question-detail-'+theme+'.png')});
-    await page.keyboard.press('Escape');await expect(detailTrigger).toBeFocused();
-    await trigger.click();await expect(conditions.getByRole('button',{name:'Add limit',exact:true})).toHaveCount(0);
-    await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence','polish-conditions-'+theme+'.png')});await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+    expect(await page.evaluate(() => (window as any).unsafeClaim)).toBeUndefined();
+    await page.screenshot({
+      path: join(
+        process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,
+        'evidence',
+        'polish-question-detail-' + theme + '.png',
+      ),
+    });
+    await page.keyboard.press('Escape');
+    await expect(detailTrigger).toBeFocused();
+    await trigger.click();
+    await expect(conditions.getByRole('button', { name: 'Add limit', exact: true })).toHaveCount(0);
+    await page.screenshot({
+      path: join(
+        process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,
+        'evidence',
+        'polish-conditions-' + theme + '.png',
+      ),
+    });
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
   }
-  await page.setViewportSize({width:720,height:1000});await trigger.click();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(720);
-  await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence','polish-conditions-narrow.png')});await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Edit approach',exact:true}).click();await writeQuestion(page,'A changed current draft');await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
-  await page.getByLabel('Approach version',{exact:true}).selectOption(version);
-  await expect(page.getByRole('heading',{name:'Which observations bound the response?',exact:true})).toBeVisible();
-  expect((await(await page.request.get(`/api/1/studies/${sid}/approach/versions/${version}`)).json()).data).toEqual(saved);
+  await page.setViewportSize({ width: 720, height: 1000 });
+  await trigger.click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(720);
+  await page.screenshot({
+    path: join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence', 'polish-conditions-narrow.png'),
+  });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
+  await writeQuestion(page, 'A changed current draft');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await page.getByLabel('Approach version', { exact: true }).selectOption(version);
+  await expect(
+    page.getByRole('heading', { name: 'Which observations bound the response?', exact: true }),
+  ).toBeVisible();
+  expect(
+    (await (await page.request.get(`/api/1/studies/${sid}/approach/versions/${version}`)).json())
+      .data,
+  ).toEqual(saved);
   // Overview shows the same question box and the same dialog for the latest saved version.
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();await expect(page.getByRole('region',{name:'Study question',exact:true}).getByRole('heading',{name:'Which observations bound the response?',exact:true})).toBeVisible();await trigger.click();
-  await expect(page.getByRole('dialog',{name:'Study details',exact:true})).toContainText('Only the measured operating range is represented.');
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'About this study', exact: true })
+      .getByText('Study question: Which observations bound the response?', { exact: true }),
+  ).toBeVisible();
+  await trigger.click();
+  await expect(page.getByRole('dialog', { name: 'Study details', exact: true })).toContainText(
+    'Only the measured operating range is represented.',
+  );
 });
 
 /** Opens the retained approach of a configuration record, then its study conditions (nested dialogs). */
@@ -1403,99 +1479,284 @@ test('@approach-reading paginated version revocation clears context and fences l
 
 test('@approach-reading Overview requires a saved approach and links its existing editor',async({page})=>{
   await openProduct(page);
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   // The Overview question box shows only the latest saved version; About keeps View modeling approach.
-  const box=page.getByRole('region',{name:'Study question',exact:true});
-  await expect(box).toContainText('No saved approach version is available.');await expect(box.getByRole('button',{name:'See more details',exact:true})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Study conditions & limits',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'View modeling approach',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Modeling approach',exact:true})).toBeVisible();
+  const box = page.getByRole('region', { name: 'About this study', exact: true });
+  await expect(box).toContainText('No saved approach version is available.');
+  await expect(box.getByRole('button', { name: 'See more details', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Study conditions & limits', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'View modeling approach', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Modeling approach', exact: true })).toBeVisible();
   // The heading renders before the approach read; wait for the read so the non-waiting check below is not a race.
-  await expect(page.getByRole('button',{name:/^(Create modeling approach|Edit approach|Leave editing)$/}).first()).toBeVisible();
-  if(await page.getByRole('button',{name:'Create modeling approach',exact:true}).isVisible())await page.getByRole('button',{name:'Create modeling approach',exact:true}).click();
-  await writeQuestion(page,'Draft-only question must not become saved study context');
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();
+  await expect(
+    page
+      .getByRole('button', { name: /^(Create modeling approach|Edit approach|Leave editing)$/ })
+      .first(),
+  ).toBeVisible();
+  if (await page.getByRole('button', { name: 'Create modeling approach', exact: true }).isVisible())
+    await page.getByRole('button', { name: 'Create modeling approach', exact: true }).click();
+  await writeQuestion(page, 'Draft-only question must not become saved study context');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   await expect(box).toContainText('A draft is available, but no approach version has been saved.');
   await expect(box).not.toContainText('Draft-only question must not become saved study context');
-  await expect(page.getByRole('dialog',{name:'Study details',exact:true})).toHaveCount(0);
-  await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/cr03-overview-draft-only.png')});
+  await expect(page.getByRole('dialog', { name: 'Study details', exact: true })).toHaveCount(0);
+  await page.screenshot({
+    path: join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence/cr03-overview-draft-only.png'),
+  });
 });
 
 test('@approach-reading Overview reads the exact saved version and fences outage and revoked reads',async({page,browser,baseURL})=>{
-  await openProduct(page);const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
-  const context=await browser.newContext({baseURL}),helper=await context.newPage();await helper.goto('/ui/');
-  const saved=await helper.evaluate(async sid=>{
-    const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');await c.open(sid);
-    c.edit({...c.getSnapshot().local,question:'Saved question A',assumptions:[{assumption_id:crypto.randomUUID(),statement:'Saved condition A',role:'overall_method',evidence_links:[]}],limit_items:[{limit_id:crypto.randomUUID(),statement:'Saved limit A',evidence_links:[]}]});
-    if(!await c.save()||!await c.saveVersion())throw new Error(c.getSnapshot().error);const saved=c.getSnapshot().saved;
-    await c.open(sid);c.edit({...c.getSnapshot().local,question:'Draft question B',assumptions:[{assumption_id:crypto.randomUUID(),statement:'Draft condition B',role:'overall_method',evidence_links:[]}],limit_items:[{limit_id:crypto.randomUUID(),statement:'Draft limit B',evidence_links:[]}]});
-    if(!await c.save())throw new Error(c.getSnapshot().error);return saved;
-  },sid);await context.close();await page.reload();await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  const trigger=page.getByRole('button',{name:'See more details',exact:true}),dialog=page.getByRole('dialog',{name:'Study details',exact:true}),box=page.getByRole('region',{name:'Study question',exact:true});
-  const exact='**/api/1/studies/'+sid+'/approach/versions/'+saved.version.approach_version_id;
-  let reads=0,stateReads=0;page.on('request',request=>{if(request.url().endsWith('/approach/versions/'+saved.version.approach_version_id))reads++;if(request.url().endsWith('/studies/'+sid+'/approach'))stateReads++;});
-  const overview=async()=>{await page.evaluate(sid=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'overview'}).toString();},sid);};
-  const leave=async()=>{await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Models',exact:true}).click();await expect(page.getByRole('heading',{name:'Models',exact:true})).toBeVisible();};
+  await openProduct(page);
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  const context = await browser.newContext({ baseURL }),
+    helper = await context.newPage();
+  await helper.goto('/ui/');
+  const saved = await helper.evaluate(async (sid) => {
+    const { api, controller: c } = (window as any).approachHarness;
+    await api.login('owner', 'correct horse battery staple');
+    await c.open(sid);
+    c.edit({
+      ...c.getSnapshot().local,
+      question: 'Saved question A',
+      assumptions: [
+        {
+          assumption_id: crypto.randomUUID(),
+          statement: 'Saved condition A',
+          role: 'overall_method',
+          evidence_links: [],
+        },
+      ],
+      limit_items: [
+        { limit_id: crypto.randomUUID(), statement: 'Saved limit A', evidence_links: [] },
+      ],
+    });
+    if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+    const saved = c.getSnapshot().saved;
+    await c.open(sid);
+    c.edit({
+      ...c.getSnapshot().local,
+      question: 'Draft question B',
+      assumptions: [
+        {
+          assumption_id: crypto.randomUUID(),
+          statement: 'Draft condition B',
+          role: 'overall_method',
+          evidence_links: [],
+        },
+      ],
+      limit_items: [
+        { limit_id: crypto.randomUUID(), statement: 'Draft limit B', evidence_links: [] },
+      ],
+    });
+    if (!(await c.save())) throw new Error(c.getSnapshot().error);
+    return saved;
+  }, sid);
+  await context.close();
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const trigger = page.getByRole('button', { name: 'See more details', exact: true }),
+    dialog = page.getByRole('dialog', { name: 'Study details', exact: true }),
+    box = page.getByRole('region', { name: 'About this study', exact: true });
+  const exact =
+    '**/api/1/studies/' + sid + '/approach/versions/' + saved.version.approach_version_id;
+  let reads = 0,
+    stateReads = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/approach/versions/' + saved.version.approach_version_id)) reads++;
+    if (request.url().endsWith('/studies/' + sid + '/approach')) stateReads++;
+  });
+  const overview = async () => {
+    await page.evaluate((sid) => {
+      location.hash = new URLSearchParams({ v: '1', study: sid, view: 'overview' }).toString();
+    }, sid);
+  };
+  const leave = async () => {
+    await page
+      .getByRole('navigation', { name: 'Workspace sections' })
+      .getByRole('button', { name: 'Models', exact: true })
+      .click();
+    await expect(page.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
+  };
   // The Overview question box reads the latest saved version when Overview opens; never the draft.
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();
-  await expect(box.getByRole('heading',{name:'Saved question A',exact:true})).toBeVisible();await expect(box).not.toContainText('Draft question B');expect(reads).toBe(1);
-  await trigger.click();await expect(dialog).toContainText('Current saved approach v1');await expect(dialog).toContainText('Saved condition A');await expect(dialog).toContainText('Saved limit A');await expect(dialog).not.toContainText('Draft condition B');expect(reads).toBe(1);
-  await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/cr03-overview-saved-light.png')});
-  await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/cr03-overview-saved-dark.png')});
-  await dialog.getByRole('button',{name:'Done',exact:true}).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await expect(box.getByText('Study question: Saved question A', { exact: true })).toBeVisible();
+  await expect(box).not.toContainText('Draft question B');
+  expect(reads).toBe(1);
+  await trigger.click();
+  await expect(dialog).toContainText('Current saved approach v1');
+  await expect(dialog).toContainText('Saved condition A');
+  await expect(dialog).toContainText('Saved limit A');
+  await expect(dialog).not.toContainText('Draft condition B');
+  expect(reads).toBe(1);
+  await page.screenshot({
+    path: join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence/cr03-overview-saved-light.png'),
+  });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await page.screenshot({
+    path: join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence/cr03-overview-saved-dark.png'),
+  });
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   // An outage of the exact version is named; a retry re-reads only that version.
   await leave();
   // The exact version stays unavailable until the reader explicitly retries.
   // An earlier in-flight read cannot consume the outage intended for Overview.
-  const outage: Parameters<Page['route']>[1] = route => route.fulfill({
-    status: 503,
-    json: {error: {
-      code: 'backend_unavailable', message: 'Exact saved approach is temporarily unavailable',
-      fields: [], outcome: 'unchanged',
-    }},
-  });
+  const outage: Parameters<Page['route']>[1] = (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        error: {
+          code: 'backend_unavailable',
+          message: 'Exact saved approach is temporarily unavailable',
+          fields: [],
+          outcome: 'unchanged',
+        },
+      },
+    });
   await page.route(exact, outage);
-  await overview();await expect(box.getByRole('alert')).toContainText('The study question is temporarily unavailable. Retry this read.');await expect(box).not.toContainText('Saved question A');await expect(box).not.toContainText('Draft question B');await expect(trigger).toHaveCount(0);
+  await overview();
+  await expect(box.getByRole('alert')).toContainText(
+    'The study question is temporarily unavailable. Retry this read.',
+  );
+  await expect(box).not.toContainText('Saved question A');
+  await expect(box).not.toContainText('Draft question B');
+  await expect(trigger).toHaveCount(0);
   await page.unroute(exact, outage);
-  const priorStateReads=stateReads,priorVersionReads=reads;await box.getByRole('button',{name:'Retry study question',exact:true}).click();await expect(box.getByRole('heading',{name:'Saved question A',exact:true})).toBeVisible();expect(stateReads).toBe(priorStateReads);expect(reads).toBe(priorVersionReads+1);
+  const priorStateReads = stateReads,
+    priorVersionReads = reads;
+  await box.getByRole('button', { name: 'Retry study question', exact: true }).click();
+  await expect(box.getByText('Study question: Saved question A', { exact: true })).toBeVisible();
+  expect(stateReads).toBe(priorStateReads);
+  expect(reads).toBe(priorVersionReads + 1);
   // A reply that arrives after leaving Overview is discarded.
-  let release!:()=>void,started=false,finished=false;const gate=new Promise<void>(resolve=>{release=resolve;});
-  await leave();await page.route(exact,async route=>{const response=await route.fetch();started=true;await gate;try{await route.fulfill({response});}catch{/* the product aborts the read */}finally{finished=true;}},{times:1});
-  await overview();await expect.poll(()=>started).toBe(true);await leave();release();await expect.poll(()=>finished).toBe(true);await expect(page.getByText('Saved question A',{exact:true})).toHaveCount(0);await expect(dialog).toHaveCount(0);
+  let release!: () => void,
+    started = false,
+    finished = false;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await leave();
+  await page.route(
+    exact,
+    async (route) => {
+      const response = await route.fetch();
+      started = true;
+      await gate;
+      try {
+        await route.fulfill({ response });
+      } catch {
+        /* the product aborts the read */
+      } finally {
+        finished = true;
+      }
+    },
+    { times: 1 },
+  );
+  await overview();
+  await expect.poll(() => started).toBe(true);
+  await leave();
+  release();
+  await expect.poll(() => finished).toBe(true);
+  await expect(page.getByText('Saved question A', { exact: true })).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
   // Access revoked while the exact read is in flight: the confirmed denial clears the box; nothing protected remains.
-  let resume!:()=>void,held=false;const hold=new Promise<void>(resolve=>{resume=resolve;});
-  await page.route(exact,async route=>{held=true;await hold;await route.continue();},{times:1});
-  await overview();await expect.poll(()=>held).toBe(true);
-  expect((await page.request.post('/fixture/revoke',{data:{study_id:sid}})).ok()).toBe(true);resume();
-  await expect(box.getByRole('alert')).toHaveText('Access to this resource is no longer available.');await expect(box).not.toContainText('Saved question A');await expect(box).not.toContainText('Draft question B');await expect(trigger).toHaveCount(0);
+  let resume!: () => void,
+    held = false;
+  const hold = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  await page.route(
+    exact,
+    async (route) => {
+      held = true;
+      await hold;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await overview();
+  await expect.poll(() => held).toBe(true);
+  expect((await page.request.post('/fixture/revoke', { data: { study_id: sid } })).ok()).toBe(true);
+  resume();
+  await expect(box.getByRole('alert')).toHaveText(
+    'Access to this resource is no longer available.',
+  );
+  await expect(box).not.toContainText('Saved question A');
+  await expect(box).not.toContainText('Draft question B');
+  await expect(trigger).toHaveCount(0);
 });
 
 
 test('@approach-assumptions Overview uses retained evidence after the current draft changes',async({page,browser,baseURL})=>{
   await page.request.post('/fixture/model-available');
-  const data=await seededConditions(page,browser,baseURL);
-  const context=await browser.newContext({baseURL}),helper=await context.newPage();await helper.goto('/ui/');
-  await helper.evaluate(async sid=>{
-    const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');await c.open(sid);
-    c.edit({...c.getSnapshot().local,assumptions:c.getSnapshot().local.assumptions.map((a:any)=>({...a,statement:'Unpublished replacement condition B',evidence_links:[]}))});
-    if(!await c.save())throw new Error(c.getSnapshot().error);
-  },data.sid);await context.close();await page.reload();await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();
-  let evidenceReads=0;page.on('request',r=>{if(r.url().includes('/evidence/'))evidenceReads++;});
-  await page.getByRole('button',{name:'See more details',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Study details',exact:true});await expect(dialog).toContainText('Current saved approach v1');await expect(dialog).toContainText(data.proposal.statement);await expect(dialog).not.toContainText('Unpublished replacement condition B');await expect(dialog).toContainText('Screening measurements');
+  const data = await seededConditions(page, browser, baseURL);
+  const context = await browser.newContext({ baseURL }),
+    helper = await context.newPage();
+  await helper.goto('/ui/');
+  await helper.evaluate(async (sid) => {
+    const { api, controller: c } = (window as any).approachHarness;
+    await api.login('owner', 'correct horse battery staple');
+    await c.open(sid);
+    c.edit({
+      ...c.getSnapshot().local,
+      assumptions: c
+        .getSnapshot()
+        .local.assumptions.map((a: any) => ({
+          ...a,
+          statement: 'Unpublished replacement condition B',
+          evidence_links: [],
+        })),
+    });
+    if (!(await c.save())) throw new Error(c.getSnapshot().error);
+  }, data.sid);
+  await context.close();
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  let evidenceReads = 0;
+  page.on('request', (r) => {
+    if (r.url().includes('/evidence/')) evidenceReads++;
+  });
+  await page.getByRole('button', { name: 'See more details', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Study details', exact: true });
+  await expect(dialog).toContainText('Current saved approach v1');
+  await expect(dialog).toContainText(data.proposal.statement);
+  await expect(dialog).not.toContainText('Unpublished replacement condition B');
+  await expect(dialog).toContainText('Screening measurements');
   await expect(dialog).toContainText('Proposed condition');
   await expect(dialog).not.toContainText('Proposed model condition');
   await expect(
     dialog.getByText('Version ' + data.evidence.evidence_version_id.slice(0, 8), { exact: true }),
   ).not.toBeVisible();
   await expect(dialog.getByText('Supports', { exact: true })).toHaveCount(0);
-  await page.screenshot({path:join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/cr03-overview-retained-citation.png')});
-  await dialog.getByRole('button',{name:'View evidence',exact:true}).click();await expect(page.getByRole('dialog',{name:'Evidence detail',exact:true})).toContainText(data.evidence.content);expect(evidenceReads).toBe(0);
+  await page.screenshot({
+    path: join(
+      process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,
+      'evidence/cr03-overview-retained-citation.png',
+    ),
+  });
+  await dialog.getByRole('button', { name: 'View evidence', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Evidence detail', exact: true })).toContainText(
+    data.evidence.content,
+  );
+  expect(evidenceReads).toBe(0);
   const evidence = page.getByRole('dialog', { name: 'Evidence detail', exact: true });
-  await expect(evidence).toContainText('Version ' + data.evidence.evidence_version_id.slice(0, 8));
-  await expect(evidence).toContainText('Relationship to this statement: supports');
+  await expect(
+    evidence.getByText('Version ' + data.evidence.evidence_version_id.slice(0, 8), { exact: true }),
+  ).toHaveCount(0);
+  await evidence.getByRole('button', { name: 'Record details', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Evidence record', exact: true })).toContainText(
+    data.evidence.evidence_version_id,
+  );
+  await page.getByRole('button', { name: 'Close Evidence record', exact: true }).click();
+  await expect(evidence).toContainText('Supports this statement');
 });
 
 test('@approach-method Method map and detail preserve proposed intent without invented quantities',async({page})=>{
@@ -2497,51 +2758,137 @@ test('@approach-reading editor guard Save writes the approach draft before leavi
 });
 test('@approach-reading editor guard refused study context save keeps the dialog and its transition; Discard restores the saved context',async({page})=>{
   // The guarded fixture proxy has no PATCH route, so only refusal and discard of study context are exercised here.
-  const studyName='Guarded context '+crypto.randomUUID().slice(0,6);
+  const studyName = 'Guarded context ' + crypto.randomUUID().slice(0, 6);
   await page.goto('/ui/?workspace');
-  await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByRole('button',{name:'New study',exact:true}).click();await page.getByLabel('New study name',{exact:true}).fill(studyName);
-  await page.getByRole('button',{name:'Create study',exact:true}).click();
-  const about=page.getByRole('region',{name:'About this study',exact:true}),dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true}),home=page.getByRole('button',{name:'Home',exact:true});
-  await about.getByRole('button',{name:'Edit',exact:true}).click();const edit=page.getByRole('dialog',{name:'Edit study',exact:true});
-  await edit.getByLabel('Description',{exact:true}).fill('Context refused by the workspace guard');await edit.getByRole('button',{name:'Done',exact:true}).click();
-  let refused=0;await page.route('**/api/1/studies/*',async route=>{if(route.request().method()==='PATCH'){refused++;await route.fulfill(refuse('Study context refused by the guard test.'));return;}await route.fallback();});
-  await home.click();await expect(dirty).toBeVisible();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
-  await expect(page.getByText('Study context refused by the guard test.').first()).toBeVisible();expect(refused).toBe(1);
-  await expect(dirty).toBeVisible();await expect(page.getByRole('heading',{name:studyName,exact:true})).toBeVisible();
-  await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();expect(refused).toBe(1);
-  await page.getByRole('button',{name:'Open study '+studyName,exact:true}).first().click();
-  await expect(about).toContainText('No description yet.');
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New study', exact: true }).click();
+  await page.getByLabel('New study name', { exact: true }).fill(studyName);
+  await page.getByRole('button', { name: 'Create study', exact: true }).click();
+  const about = page.getByRole('region', { name: 'About this study', exact: true }),
+    dirty = page.getByRole('dialog', { name: 'Unsaved changes', exact: true }),
+    home = page.getByRole('button', { name: 'Home', exact: true });
+  await about.getByRole('button', { name: 'Edit study', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit study', exact: true });
+  await edit
+    .getByLabel('Study list description', { exact: true })
+    .fill('Context refused by the workspace guard');
+  await edit.getByRole('button', { name: 'Done', exact: true }).click();
+  let refused = 0;
+  await page.route('**/api/1/studies/*', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      refused++;
+      await route.fulfill(refuse('Study context refused by the guard test.'));
+      return;
+    }
+    await route.fallback();
+  });
+  await home.click();
+  await expect(dirty).toBeVisible();
+  await dirty.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByText('Study context refused by the guard test.').first()).toBeVisible();
+  expect(refused).toBe(1);
+  await expect(dirty).toBeVisible();
+  await expect(page.getByRole('heading', { name: studyName, exact: true })).toBeVisible();
+  await dirty.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Studies', exact: true })).toBeVisible();
+  expect(refused).toBe(1);
+  await page
+    .getByRole('button', { name: 'Open study ' + studyName, exact: true })
+    .first()
+    .click();
+  await about.getByRole('button', { name: 'Edit study', exact: true }).click();
+  await expect(edit.getByLabel('Study list description', { exact: true })).toHaveValue('');
 });
 
 // Approach page and Overview question box.
-test('@approach-reading Overview and the approach page share one study question box and its Study details dialog',async({page,browser,baseURL})=>{
+test(
+  '@approach-reading Overview and approach share the saved question and details',
+  async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(180000);
-  await openProduct(page);const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
-  const context=await browser.newContext({baseURL}),helper=await context.newPage();await helper.goto('/ui/');
-  await helper.evaluate(async sid=>{
-    const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');await c.open(sid);
-    c.edit({...c.getSnapshot().local,schema_version:'2',question:'Which cruise range keeps take-off mass under the limit?',scope:'Regional aircraft with kerosene and liquid hydrogen variants.',open_questions:'Does tank mass scale linearly with stored energy?',limitations:'',
-      original_question:{text:'Can hydrogen work for regional flights?',attribution:{kind:'human',label:'Study owner'}},elaboration:{text:'Compare take-off mass against the certified limit for each range.',attribution:{kind:'agent',label:'Drafting assistant'}},
-      assumptions:[{assumption_id:crypto.randomUUID(),statement:'Fuel price is constant over the study horizon.',role:'overall_method',evidence_links:[]}],
-      limit_items:[{limit_id:crypto.randomUUID(),statement:'Results apply to regional ranges only.',evidence_links:[]}]});
-    if(!await c.save()||!await c.saveVersion())throw new Error(c.getSnapshot().error);
-  },sid);await context.close();
-  await page.reload();await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByRole('button',{name:'Back to overview',exact:true}).click();
-  // Overview: the question box on top; About keeps the description, Edit and View modeling approach only.
-  const box=page.getByRole('region',{name:'Study question',exact:true}),about=page.getByRole('region',{name:'About this study',exact:true});
-  await expect(box.getByRole('heading',{name:'Which cruise range keeps take-off mass under the limit?',exact:true})).toBeVisible();await expect(box).toContainText('Regional aircraft with kerosene and liquid hydrogen variants.');
-  await expect(about.getByRole('button')).toHaveText(['Edit','View modeling approach']);
-  for(const removed of ['Study conditions & limits','Question in detail'])await expect(page.getByRole('button',{name:removed,exact:true})).toHaveCount(0);
-  const order=await page.evaluate(()=>['section[aria-label="Study question"]','section[aria-label="About this study"]'].map(selector=>document.querySelector(selector)!.getBoundingClientRect().top));expect(order[0]).toBeLessThan(order[1]);
-  const more=box.getByRole('button',{name:'See more details',exact:true});
-  const moreBox=await more.boundingBox(),boxBox=await box.boundingBox();expect(moreBox!.x+moreBox!.width).toBeGreaterThan(boxBox!.x+boxBox!.width*0.75);expect(moreBox!.y+moreBox!.height).toBeGreaterThan(boxBox!.y+boxBox!.height*0.6);
-  await s4Shots(page,'s5-overview-question',box);
-  const dialog=page.getByRole('dialog',{name:'Study details',exact:true});
-  async function readDetails(label:string){
+  await openProduct(page);
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  const context = await browser.newContext({ baseURL }),
+    helper = await context.newPage();
+  await helper.goto('/ui/');
+  await helper.evaluate(async (sid) => {
+    const { api, controller: c } = (window as any).approachHarness;
+    await api.login('owner', 'correct horse battery staple');
+    await c.open(sid);
+    c.edit({
+      ...c.getSnapshot().local,
+      schema_version: '2',
+      question: 'Which cruise range keeps take-off mass under the limit?',
+      scope: 'Regional aircraft with kerosene and liquid hydrogen variants.',
+      open_questions: 'Does tank mass scale linearly with stored energy?',
+      limitations: '',
+      original_question: {
+        text: 'Can hydrogen work for regional flights?',
+        attribution: { kind: 'human', label: 'Study owner' },
+      },
+      elaboration: {
+        text: 'Compare take-off mass against the certified limit for each range.',
+        attribution: { kind: 'agent', label: 'Drafting assistant' },
+      },
+      assumptions: [
+        {
+          assumption_id: crypto.randomUUID(),
+          statement: 'Fuel price is constant over the study horizon.',
+          role: 'overall_method',
+          evidence_links: [],
+        },
+      ],
+      limit_items: [
+        {
+          limit_id: crypto.randomUUID(),
+          statement: 'Results apply to regional ranges only.',
+          evidence_links: [],
+        },
+      ],
+    });
+    if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+  }, sid);
+  await context.close();
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  // Overview shows the saved question once; scope and metadata keep their own homes.
+  const box = page.getByRole('region', { name: 'About this study', exact: true }),
+    about = page.getByRole('region', { name: 'About this study', exact: true });
+  await expect(
+    box.getByText('Study question: Which cruise range keeps take-off mass under the limit?', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(box).not.toContainText(
+    'Regional aircraft with kerosene and liquid hydrogen variants.',
+  );
+  await expect(about.getByRole('button')).toHaveText([
+    'Edit study',
+    'See more details',
+    'View modeling approach',
+  ]);
+  for (const removed of ['Study conditions & limits', 'Question in detail'])
+    await expect(page.getByRole('button', { name: removed, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Study question', exact: true })).toHaveCount(0);
+  await expect(about.getByRole('heading')).toHaveText('About this study');
+  const more = box.getByRole('button', { name: 'See more details', exact: true });
+  const moreBox = await more.boundingBox(),
+    approachAction = await about
+      .getByRole('button', { name: 'View modeling approach', exact: true })
+      .boundingBox();
+  expect(Math.abs(moreBox!.y - approachAction!.y)).toBeLessThan(1);
+  expect(approachAction!.x - moreBox!.x - moreBox!.width).toBeGreaterThan(8);
+  await s4Shots(page, 's5-overview-question', box);
+  const dialog = page.getByRole('dialog', { name: 'Study details', exact: true });
+  async function readDetails(label: string) {
     await expect(dialog.getByRole('heading', { level: 3 })).toHaveText([
       'Study question',
       'Current approach',
@@ -2550,26 +2897,50 @@ test('@approach-reading Overview and the approach page share one study question 
       'Open questions',
     ]);
     await expect(dialog).toContainText(label);
-    const question=dialog.getByRole('region',{name:'Study question',exact:true});await expect(question).toContainText('Can hydrogen work for regional flights?');await expect(question).toContainText('Supplied human attribution: Study owner');await expect(question).toContainText('Supplied agent attribution: Drafting assistant');
+    const question = dialog.getByRole('region', { name: 'Study question', exact: true });
+    await expect(question).toContainText('Can hydrogen work for regional flights?');
+    await expect(question).toContainText('Supplied human attribution: Study owner');
+    await expect(question).toContainText('Supplied agent attribution: Drafting assistant');
     await expect(dialog.getByRole('region', { name: 'Open questions', exact: true })).toContainText(
       'Does tank mass scale linearly with stored energy?',
     );
-    await expect(dialog.getByRole('region',{name:'Study assumptions',exact:true})).toContainText('Fuel price is constant over the study horizon.');
-    await expect(dialog.getByRole('region',{name:'Study limits',exact:true})).toContainText('Results apply to regional ranges only.');
-    await expect(dialog.getByRole('button',{name:'Add limit',exact:true})).toHaveCount(0);await expect(dialog.getByRole('button',{name:'Add assumption',exact:true})).toHaveCount(0);
+    await expect(
+      dialog.getByRole('region', { name: 'Study assumptions', exact: true }),
+    ).toContainText('Fuel price is constant over the study horizon.');
+    await expect(dialog.getByRole('region', { name: 'Study limits', exact: true })).toContainText(
+      'Results apply to regional ranges only.',
+    );
+    await expect(dialog.getByRole('button', { name: 'Add limit', exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Add assumption', exact: true })).toHaveCount(
+      0,
+    );
   }
-  await more.focus();await more.press('Enter');await readDetails('Current saved approach v1');
-  await s4Shots(page,'s5-overview-details');
-  await page.keyboard.press('Escape');await expect(more).toBeFocused();
+  await more.focus();
+  await more.press('Enter');
+  await readDetails('Current saved approach v1');
+  await s4Shots(page, 's5-overview-details');
+  await page.keyboard.press('Escape');
+  await expect(more).toBeFocused();
   // The approach page shows the same box and opens the same dialog.
-  await about.getByRole('button',{name:'View modeling approach',exact:true}).click();await expect(page.getByRole('heading',{name:'Modeling approach',exact:true})).toBeVisible();
-  const version=(await(await page.request.get(`/api/1/studies/${sid}/approach/versions`)).json()).data.items[0].approach_version_id;await page.getByLabel('Approach version',{exact:true}).selectOption(version);
-  const reader=page.getByRole('region',{name:'The modeling approach',exact:true}),approachBox=reader.getByRole('region',{name:'Study question',exact:true});
-  await expect(approachBox.getByRole('heading',{name:'Which cruise range keeps take-off mass under the limit?',exact:true})).toBeVisible();
-  for(const removed of ['Study conditions & limits','Question in detail'])await expect(page.getByRole('button',{name:removed,exact:true})).toHaveCount(0);
-  await s4Shots(page,'s5-approach-question',approachBox);
-  await approachBox.getByRole('button',{name:'See more details',exact:true}).click();await readDetails('Saved approach v1');
-  await s4Shots(page,'s5-approach-details');
+  await about.getByRole('button', { name: 'View modeling approach', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Modeling approach', exact: true })).toBeVisible();
+  const version = (await (await page.request.get(`/api/1/studies/${sid}/approach/versions`)).json())
+    .data.items[0].approach_version_id;
+  await page.getByLabel('Approach version', { exact: true }).selectOption(version);
+  const reader = page.getByRole('region', { name: 'The modeling approach', exact: true }),
+    approachBox = reader.getByRole('region', { name: 'Study question', exact: true });
+  await expect(
+    approachBox.getByRole('heading', {
+      name: 'Which cruise range keeps take-off mass under the limit?',
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const removed of ['Study conditions & limits', 'Question in detail'])
+    await expect(page.getByRole('button', { name: removed, exact: true })).toHaveCount(0);
+  await s4Shots(page, 's5-approach-question', approachBox);
+  await approachBox.getByRole('button', { name: 'See more details', exact: true }).click();
+  await readDetails('Saved approach v1');
+  await s4Shots(page, 's5-approach-details');
   await page.keyboard.press('Escape');
 });
 
@@ -2694,84 +3065,190 @@ async function s6bRecords(page:Page,sid:string){
 
 test('@approach-reading Home archives a study for everyone, lists it under Archived and restores it; a reader cannot archive and nothing is deleted',async({page,browser,baseURL})=>{
   test.setTimeout(240000);
-  const name=await openProduct(page);const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
-  await writeQuestion(page,'Which study records survive archiving?');
-  const home=page.getByRole('button',{name:'Home',exact:true}),dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
-  await home.click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();
-  // Administrative setup before the baseline: a reader member of this study.
-  expect((await page.request.post('/fixture/reader',{data:{study_id:sid}})).ok()).toBe(true);
-  const before=await s6bRecords(page,sid);expect(before.archived).toBe(false);expect(before.approach.draft).not.toBeNull();
-  const writes:string[]=[];page.on('request',r=>{const url=new URL(r.url());if(r.method()!=='GET'&&url.pathname.startsWith('/api/1/')&&url.pathname!=='/api/1/session')writes.push(r.method()+' '+url.pathname);});
+  const name = await openProduct(page);
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  await writeQuestion(page, 'Which study records survive archiving?');
+  const home = page.getByRole('button', { name: 'Home', exact: true }),
+    dirty = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
   await home.click();
-  const tabs=page.getByRole('tablist',{name:'Study list',exact:true}),studiesTab=tabs.getByRole('tab',{name:/^Studies/}),archivedTab=tabs.getByRole('tab',{name:/^Archived/});
-  const activePanel=page.getByRole('region',{name:'Studies',exact:true}),archivedPanel=page.getByRole('region',{name:'Archived studies',exact:true});
-  const row=activePanel.locator('article').filter({has:page.getByRole('heading',{name,exact:true})}),archivedRow=archivedPanel.locator('article').filter({hasText:name});
-  const counts=async()=>[Number(await studiesTab.locator('.hf-tab__count').textContent()),Number(await archivedTab.locator('.hf-tab__count').textContent())];
-  await expect(studiesTab).toHaveAttribute('aria-selected','true');await expect(row.getByRole('button')).toHaveText(['Open study','Archive']);
-  const [active0,archived0]=await counts();expect(active0).toBe((await s6bListed(page,false)).length);expect(archived0).toBe((await s6bListed(page,true)).length);
+  await dirty.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Studies', exact: true })).toBeVisible();
+  // Administrative setup before the baseline: a reader member of this study.
+  expect((await page.request.post('/fixture/reader', { data: { study_id: sid } })).ok()).toBe(true);
+  const before = await s6bRecords(page, sid);
+  expect(before.archived).toBe(false);
+  expect(before.approach.draft).not.toBeNull();
+  const writes: string[] = [];
+  page.on('request', (r) => {
+    const url = new URL(r.url());
+    if (
+      r.method() !== 'GET' &&
+      url.pathname.startsWith('/api/1/') &&
+      url.pathname !== '/api/1/session'
+    )
+      writes.push(r.method() + ' ' + url.pathname);
+  });
+  await home.click();
+  const tabs = page.getByRole('tablist', { name: 'Study list', exact: true }),
+    studiesTab = tabs.getByRole('tab', { name: /^Studies/ }),
+    archivedTab = tabs.getByRole('tab', { name: /^Archived/ });
+  const activePanel = page.getByRole('region', { name: 'Studies', exact: true }),
+    archivedPanel = page.getByRole('region', { name: 'Archived studies', exact: true });
+  const row = activePanel
+      .locator('article')
+      .filter({ has: page.getByRole('heading', { name, exact: true }) }),
+    archivedRow = archivedPanel.locator('article').filter({ hasText: name });
+  const counts = async () => [
+    Number(await studiesTab.locator('.hf-tab__count').textContent()),
+    Number(await archivedTab.locator('.hf-tab__count').textContent()),
+  ];
+  await expect(studiesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(row.getByRole('button')).toHaveText(['Open study', 'Archive']);
+  const [active0, archived0] = await counts();
+  expect(active0).toBe((await s6bListed(page, false)).length);
+  expect(archived0).toBe((await s6bListed(page, true)).length);
   await expect(page.locator('.home-page .page-heading p')).toHaveCount(0);
-  await s6bShots(page,'s6b-home-studies');
+  await s6bShots(page, 's6b-home-studies');
   // Confirmation; Escape and Cancel change nothing.
-  const archive=row.getByRole('button',{name:'Archive study '+name,exact:true}),confirm=page.getByRole('dialog',{name:'Archive study',exact:true});
-  await archive.click();await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText(`Archive “${name}”? It disappears from Home for everyone. Nothing is deleted; restore it from Archived.`);
-  await expect(confirm.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
-  await s6bShots(page,'s6b-home-confirm');
-  await page.keyboard.press('Escape');await expect(confirm).toBeHidden();await expect(archive).toBeFocused();
-  await archive.click();await confirm.getByRole('button',{name:'Cancel',exact:true}).click();await expect(confirm).toBeHidden();
-  expect(writes).toEqual([]);await expect(row).toHaveCount(1);
+  const archive = row.getByRole('button', { name: 'Archive study ' + name, exact: true }),
+    confirm = page.getByRole('dialog', { name: 'Archive study', exact: true });
+  await archive.click();
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText(
+    `Archive “${name}”? It disappears from Home for everyone. ` +
+      'Nothing is deleted; restore it from Archived.',
+  );
+  await expect(confirm.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await s6bShots(page, 's6b-home-confirm');
+  await page.keyboard.press('Escape');
+  await expect(confirm).toBeHidden();
+  await expect(archive).toBeFocused();
+  await archive.click();
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(confirm).toBeHidden();
+  expect(writes).toEqual([]);
+  await expect(row).toHaveCount(1);
   // An unknown outcome is held as the pending command and checked through its receipt, like any other command.
-  await page.route(`**/api/1/studies/${sid}/archive`,async route=>{await route.fetch();await route.abort();},{times:1});
-  await archive.click();await confirm.getByRole('button',{name:'Archive study',exact:true}).click();
-  const check=page.getByRole('button',{name:'Check original command',exact:true});await expect(check).toBeVisible();
-  await expect(page.getByText('Command outcome is uncertain. Check the original command before making more changes.',{exact:true})).toBeVisible();
-  await expect(archive).toBeDisabled();await expect(page.getByRole('button',{name:'New study',exact:true})).toBeDisabled();
-  await check.click();await expect(page.getByText('Original command: committed. Study lists reloaded.',{exact:true})).toBeVisible();
-  await expect(check).toHaveCount(0);await expect(row).toHaveCount(0);
-  expect(await counts()).toEqual([active0-1,archived0+1]);
-  expect(await s6bListed(page,false)).not.toContain(sid);expect(await s6bListed(page,true)).toContain(sid);
-  const archived=await s6bRecords(page,sid);expect(archived.archived).toBe(true);expect({...archived,archived:false}).toEqual(before);
+  await page.route(
+    `**/api/1/studies/${sid}/archive`,
+    async (route) => {
+      await route.fetch();
+      await route.abort();
+    },
+    { times: 1 },
+  );
+  await archive.click();
+  await confirm.getByRole('button', { name: 'Archive study', exact: true }).click();
+  const check = page.getByRole('button', { name: 'Check original command', exact: true });
+  await expect(check).toBeVisible();
+  await expect(
+    page.getByText(
+      'Command outcome is uncertain. Check the original command before making more changes.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(archive).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New study', exact: true })).toBeDisabled();
+  await check.click();
+  await expect(
+    page.getByText('Original command: committed. Study lists reloaded.', { exact: true }),
+  ).toBeVisible();
+  await expect(check).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  expect(await counts()).toEqual([active0 - 1, archived0 + 1]);
+  expect(await s6bListed(page, false)).not.toContain(sid);
+  expect(await s6bListed(page, true)).toContain(sid);
+  const archived = await s6bRecords(page, sid);
+  expect(archived.archived).toBe(true);
+  expect({ ...archived, archived: false }).toEqual(before);
   // Archived view: tag, Open study and Restore.
-  await archivedTab.click();await expect(archivedTab).toHaveAttribute('aria-selected','true');
-  await expect(page.getByText('Archived studies are hidden from Home for everyone. Nothing in them is deleted.',{exact:true})).toBeVisible();
-  await expect(archivedRow.locator('.hf-tag')).toContainText('Archived');await expect(archivedRow.getByRole('button')).toHaveText(['Open study','Restore']);
-  await s6bShots(page,'s6b-home-archived');
+  await archivedTab.click();
+  await expect(archivedTab).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    page.getByText(
+      'Archived studies are hidden from Home for everyone. Nothing in them is deleted.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(archivedRow.locator('.hf-tag')).toContainText('Archived');
+  await expect(archivedRow.getByRole('button')).toHaveText(['Open study', 'Restore']);
+  await s6bShots(page, 's6b-home-archived');
   // Study-wide: the reader sees it under Archived too, and cannot restore it.
-  const context=await browser.newContext({baseURL}),reader=await context.newPage();
-  try{
-    await reader.goto('/ui/?workspace');await reader.getByLabel('Username',{exact:true}).fill('reader');await reader.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await reader.getByRole('button',{name:'Sign in',exact:true}).click();
-    await expect(reader.getByRole('region',{name:'Studies',exact:true})).toContainText('No studies. Archived studies are listed under Archived.');
-    await reader.getByRole('tab',{name:/^Archived/}).click();
-    const readerArchived=reader.getByRole('region',{name:'Archived studies',exact:true}).locator('article').filter({hasText:name});
-    await readerArchived.getByRole('button',{name:'Restore study '+name,exact:true}).click();
-    await expect(reader.getByRole('alert')).toContainText('Only owners and writers of this study can archive or restore it. Nothing was changed.');
-    await expect(readerArchived).toHaveCount(1);expect((await s6bRecords(page,sid)).archived).toBe(true);
+  const context = await browser.newContext({ baseURL }),
+    reader = await context.newPage();
+  try {
+    await reader.goto('/ui/?workspace');
+    await reader.getByLabel('Username', { exact: true }).fill('reader');
+    await reader.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+    await reader.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(reader.getByRole('region', { name: 'Studies', exact: true })).toContainText(
+      'No studies. Archived studies are listed under Archived.',
+    );
+    await reader.getByRole('tab', { name: /^Archived/ }).click();
+    const readerArchived = reader
+      .getByRole('region', { name: 'Archived studies', exact: true })
+      .locator('article')
+      .filter({ hasText: name });
+    await readerArchived
+      .getByRole('button', { name: 'Restore study ' + name, exact: true })
+      .click();
+    await expect(reader.getByRole('alert')).toContainText(
+      'Only owners and writers of this study can archive or restore it. Nothing was changed.',
+    );
+    await expect(readerArchived).toHaveCount(1);
+    expect((await s6bRecords(page, sid)).archived).toBe(true);
     // An archived study opens and reads as usual; the study header names the study once.
-    await archivedRow.getByRole('button',{name:'Open study '+name,exact:true}).click();
-    await expect(page.getByRole('heading',{name,exact:true,level:1})).toBeVisible();
+    await archivedRow.getByRole('button', { name: 'Open study ' + name, exact: true }).click();
+    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
     await expect(page.locator('.study-heading')).toHaveText(name);
-    await expect(page.getByRole('region',{name:'About this study',exact:true}).getByRole('button')).toHaveText(['Edit','View modeling approach']);
+    await expect(
+      page.getByRole('region', { name: 'About this study', exact: true }).getByRole('button'),
+    ).toHaveText(['Edit study', 'View modeling approach']);
     await expect(page.locator('main>footer')).toHaveText('Third-party software notices');
-    await expect(page.locator('main>footer').getByRole('link',{name:'Third-party software notices',exact:true})).toHaveAttribute('href','/ui/THIRD_PARTY_NOTICES.txt');
-    await s6bShots(page,'s6b-overview-archived-study');
+    await expect(
+      page
+        .locator('main>footer')
+        .getByRole('link', { name: 'Third-party software notices', exact: true }),
+    ).toHaveAttribute('href', '/ui/THIRD_PARTY_NOTICES.txt');
+    await s6bShots(page, 's6b-overview-archived-study');
     // Restore from Archived; the Home view is kept.
-    await home.click();await expect(archivedTab).toHaveAttribute('aria-selected','true');
-    await archivedRow.getByRole('button',{name:'Restore study '+name,exact:true}).click();
-    await expect(page.getByText(`“${name}” restored to Studies.`,{exact:true})).toBeVisible();await expect(archivedRow).toHaveCount(0);
-    expect(await counts()).toEqual([active0,archived0]);
-    await studiesTab.click();await expect(row).toHaveCount(1);
-    const restored=await s6bRecords(page,sid);expect(restored.archived).toBe(false);expect(restored).toEqual(before);
+    await home.click();
+    await expect(archivedTab).toHaveAttribute('aria-selected', 'true');
+    await archivedRow.getByRole('button', { name: 'Restore study ' + name, exact: true }).click();
+    await expect(page.getByText(`“${name}” restored to Studies.`, { exact: true })).toBeVisible();
+    await expect(archivedRow).toHaveCount(0);
+    expect(await counts()).toEqual([active0, archived0]);
+    await studiesTab.click();
+    await expect(row).toHaveCount(1);
+    const restored = await s6bRecords(page, sid);
+    expect(restored.archived).toBe(false);
+    expect(restored).toEqual(before);
     // The reader cannot archive the restored study either.
-    await reader.getByRole('button',{name:'Home',exact:true}).click();await reader.getByRole('tab',{name:/^Studies/}).click();
-    await reader.getByRole('button',{name:'Archive study '+name,exact:true}).click();
-    await reader.getByRole('dialog',{name:'Archive study',exact:true}).getByRole('button',{name:'Archive study',exact:true}).click();
-    await expect(reader.getByRole('alert')).toContainText('Only owners and writers of this study can archive or restore it. Nothing was changed.');
-    await expect(reader.getByRole('region',{name:'Studies',exact:true}).getByRole('heading',{name,exact:true})).toBeVisible();
-  }finally{await context.close();}
-  expect(await s6bListed(page,false)).toContain(sid);expect(await s6bListed(page,true)).not.toContain(sid);
-  expect(await s6bRecords(page,sid)).toEqual(before);
-  expect(writes).toEqual([`POST /api/1/studies/${sid}/archive`,`POST /api/1/studies/${sid}/restore`]);
+    await reader.getByRole('button', { name: 'Home', exact: true }).click();
+    await reader.getByRole('tab', { name: /^Studies/ }).click();
+    await reader.getByRole('button', { name: 'Archive study ' + name, exact: true }).click();
+    await reader
+      .getByRole('dialog', { name: 'Archive study', exact: true })
+      .getByRole('button', { name: 'Archive study', exact: true })
+      .click();
+    await expect(reader.getByRole('alert')).toContainText(
+      'Only owners and writers of this study can archive or restore it. Nothing was changed.',
+    );
+    await expect(
+      reader
+        .getByRole('region', { name: 'Studies', exact: true })
+        .getByRole('heading', { name, exact: true }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+  expect(await s6bListed(page, false)).toContain(sid);
+  expect(await s6bListed(page, true)).not.toContain(sid);
+  expect(await s6bRecords(page, sid)).toEqual(before);
+  expect(writes).toEqual([
+    `POST /api/1/studies/${sid}/archive`,
+    `POST /api/1/studies/${sid}/restore`,
+  ]);
 });
 
 
@@ -2847,16 +3324,14 @@ test('@approach-assumptions Conflicting evidence stays visible in the study brie
     await c.open(sid);
     c.edit({
       ...c.getSnapshot().local,
-      assumptions: c
-        .getSnapshot()
-        .local.assumptions.map((a: any) => ({
-          ...a,
-          role: 'overall_method',
-          evidence_links: a.evidence_links.map((link: any) => ({
-            ...link,
-            relation: 'challenges',
-          })),
+      assumptions: c.getSnapshot().local.assumptions.map((a: any) => ({
+        ...a,
+        role: 'overall_method',
+        evidence_links: a.evidence_links.map((link: any) => ({
+          ...link,
+          relation: 'challenges',
         })),
+      })),
     });
     if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
   }, data.sid);
@@ -2873,6 +3348,6 @@ test('@approach-assumptions Conflicting evidence stays visible in the study brie
   await expect(details).toContainText('Screening measurements');
   await details.getByRole('button', { name: 'View evidence', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Evidence detail', exact: true })).toContainText(
-    'Relationship to this statement: challenges',
+    'Challenges this statement',
   );
 });

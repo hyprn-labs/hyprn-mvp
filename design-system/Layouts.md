@@ -16,11 +16,10 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 
 ## Overview
 
-1. **Study question** card at the top: the study question as the card's heading, and a "See more details" action at its bottom right that opens a dialog with Study question, Current approach, Assumptions, Limits and Open questions (an empty question reads "No study question yet").
-2. A two-column grid of equal cards (same width and height on desktop, stacked on narrow screens):
-   - **About this study**: a dedicated "Edit" action in its header, then "Description:" followed by the saved description with its line and paragraph breaks ("No description yet." when empty), and "View modeling approach" at the bottom right of the same card. No separate approach heading, explanatory paragraph or dividing line. The action wraps if needed at zoom and returns keyboard focus after navigation back from the approach.
+1. A two-column grid of equal cards (same width and height on desktop, stacked on narrow screens):
+   - **About this study**: "Study question:" followed by the latest saved approach question, preserving paragraph breaks. No draft or study-list description substitutes for it. Empty, loading and unavailable states stay explicit. "Edit study" opens the separate study name and study-list description editor; the question is edited in the existing modeling approach editor. At the bottom, "See more details" and "View modeling approach" sit side by side with `space-3` between them and wrap when needed. Details is offered only after the saved question loads. There is no separate question card or repeated approach scope on Overview.
    - **Recent runs**: at most five rows, each with the run name and short ID as a link, `small` metadata and its Execution and Criteria tags at the right; "View all runs" in the card header.
-3. Full width below: **Recent configurations**, distinguishing configurations from their saved versions, with "View all configurations" in the header.
+2. Full width below: **Recent configurations**, distinguishing configurations from their saved versions, with "View all configurations" in the header.
 
 Study details keeps the question separate from the current approach and limits. Empty optional prose, assumptions and limits are omitted in read-only views; editing retains the controls needed to add them. Evidence opens directly beside its claim, with version and relationship details inside the evidence view.
 
@@ -54,7 +53,7 @@ A single `Panel` list, newest first: one row per run (name from its configuratio
 
 The run detail shows the "Run record · Read-only" record bar and a heading with the run's actions grouped together (Record details, "Export computational record", "Create modified run"), shared by all its tabs, and the run tabs **Results · Model · Configuration · Evidence**:
 
-- **Results** leads with the run headline (the "Run status" `Ledger` with Execution and Criteria; see [Scientific states](Scientific-states.md)), then up to four key outputs as `Readout`s, then "Outputs" with per-output availability and a "Full-precision values" dialog.
+- **Results** leads with the run headline (the "Run status" `Ledger` with Execution and Criteria; see [Scientific states](Scientific-states.md)), then the complete "Outputs" table and a "Full-precision values" dialog. Each output appears once; no arbitrary subset is promoted. The table has Output, Value and Units columns. An unavailable value reads "not computed" with its reason in the Value cell.
 - **Model** shows the model version the run used, in the canonical model view, read-only.
 - **Configuration** shows the configuration the run used in the shared Context, Inputs, Criteria, Assumptions order, read-only, with its own "Record details" beside its read-only tag.
 - **Evidence** puts "Evidence used by this run" before the "Run files" table; "Execution diagnostics" sit with the files.

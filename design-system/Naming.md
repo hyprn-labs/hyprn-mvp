@@ -48,6 +48,7 @@ Any change to a reader-facing name is made in this file together with the interf
 | Concept | Reader-facing name | Not in reader text |
 |---|---|---|
 | Method package | "package", the only use of the word | "model package", "inspection package", "package" for exports |
+| Model and data export | "Export model and data" opens the portable model, diagram, quantities CSV and source downloads | an unqualified "Export" action |
 | Portable model record (model import and export) | "Download portable model record", "Portable model record file", "Choose a HYPRN MVP portable model record (.json)." | "model package" |
 | Computational record export | Dialog "Export computational record"; actions "Create record export", "Download record export"; section "Computational record export"; "Record export SHA-256", "Record export size (bytes)", "Record export size limit"; "No record export was created." / "No record export was downloaded." | "Inspection package", "Create package", "Download package", an unqualified "export" for this archive |
 | Comparison (model version, configuration version or current draft) | "Compare", "Read comparison target", region "Comparison", "Right side identity", "Uses the loaded model; unsaved edits are excluded." | "snapshot" |

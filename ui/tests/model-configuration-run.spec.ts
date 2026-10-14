@@ -21,50 +21,73 @@ async function expectAtMostTen(scope: Locator) {
   await expect(record.locator('.hf-criterion__requirement .hf-criterion__unit')).toHaveText(/^dimensionless$/i);
 }
 test('model quantities inspect their component; tables, XDSM and portability stay concise', async ({ page }) => {
-  const state = await harness(page); referenceModel(state);
+  const state = await harness(page);
+  referenceModel(state);
   await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   await page.locator('.hf-node__port').first().click();
   // Details explain the component (What it computes · Why · Assumptions); no ports table or tabs.
-  await expect(details(page).getByRole('heading', { name: 'What it computes', exact: true })).toBeVisible();
+  await expect(
+    details(page).getByRole('heading', { name: 'What it computes', exact: true }),
+  ).toBeVisible();
   await expect(details(page).getByRole('heading', { name: 'Why', exact: true })).toBeVisible();
   await expect(details(page).locator('[data-selected-variable]')).toHaveCount(0);
-  await expect(details(page).locator('table')).toHaveCount(0); await expect(details(page).getByRole('tab')).toHaveCount(0);
-  await page.getByRole('button',{name:'Model actions',exact:true}).click(); await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(details(page).locator('table')).toHaveCount(0);
+  await expect(details(page).getByRole('tab')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByText('Source and composition', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Show Variables below diagram')).toHaveCount(0);
   await capture(page, 'model');
   // The quantities table is below the canvas; a selected component scopes and highlights its rows.
   await expect(page.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('table', { name: 'Quantities', exact: true }).getByRole('columnheader')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
-  await expect(page.locator('[data-variable]')).toHaveCount(3); await expect(page.locator('[data-variable][aria-selected="true"]')).toHaveCount(3);
+  await expect(
+    page.getByRole('table', { name: 'Quantities', exact: true }).getByRole('columnheader'),
+  ).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
+  await expect(page.locator('[data-variable]')).toHaveCount(3);
+  await expect(page.locator('[data-variable][aria-selected="true"]')).toHaveCount(3);
   await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
   await expect(details(page).getByRole('heading', { name: 'Model', exact: true })).toBeVisible();
   await expect(page.locator('[data-variable][aria-selected]')).toHaveCount(0);
   await expect(page.locator('[data-variable]')).toHaveCount(5);
   await expect(page.getByText('from Linear response · u', { exact: true })).toBeVisible();
   await capture(page, 'variables');
-  if (!await page.getByRole('dialog',{name:'Model actions',exact:true}).isVisible()) await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  if (!(await page.getByRole('dialog', { name: 'Model actions', exact: true }).isVisible()))
+    await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Quantities CSV', exact: true }).click();
   const download = await downloading;
-  const content = await (await import('node:fs/promises')).readFile((await download.path())!, 'utf8');
-  expect(content).toContain('Connections'); expect(content).toContain('a/u');
-  await page.getByRole('button', { name: 'Close Export', exact: true }).click(); await page.keyboard.press('Escape');
+  const content = await (
+    await import('node:fs/promises')
+  ).readFile((await download.path())!, 'utf8');
+  expect(content).toContain('Connections');
+  expect(content).toContain('a/u');
+  await page.getByRole('button', { name: 'Close Export model and data', exact: true }).click();
+  await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'XDSM', exact: true }).click();
   await expect(page.locator('.xdsm-exchange button')).toHaveText('1 connectionu → u');
-  expect(await page.locator('.xdsm-exchange button').evaluate(e => getComputedStyle(e).flexDirection)).toBe('column');
+  expect(
+    await page.locator('.xdsm-exchange button').evaluate((e) => getComputedStyle(e).flexDirection),
+  ).toBe('column');
   await capture(page, 'xdsm');
-  if (!await page.getByRole('dialog',{name:'Model actions',exact:true}).isVisible()) await page.getByRole('button',{name:'Model actions',exact:true}).click();
+  if (!(await page.getByRole('dialog', { name: 'Model actions', exact: true }).isVisible()))
+    await page.getByRole('button', { name: 'Model actions', exact: true }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Import', exact: true }).getByRole('button', { name: 'Choose file' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Import', exact: true })
+      .getByRole('button', { name: 'Choose file' }),
+  ).toBeVisible();
   await capture(page, 'import');
   await page.getByRole('button', { name: 'Close Import', exact: true }).click();
-  if (!await page.getByRole('dialog',{name:'Model actions',exact:true}).isVisible()) await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  if (!(await page.getByRole('dialog', { name: 'Model actions', exact: true }).isVisible()))
+    await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download portable model record' })).toBeDisabled();
   await capture(page, 'export');
-  expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 
 test('configuration fields align; one criterion persists visibly; saved layout survives navigation', async ({ page }) => {
@@ -120,12 +143,24 @@ test('configuration fields align; one criterion persists visibly; saved layout s
 });
 
 test('run progress updates automatically, recovers a failed read, and never resubmits', async ({ page }) => {
-  const state = await harness(page); const finished = structuredClone(runFixture(state));
+  const state = await harness(page);
+  const finished = structuredClone(runFixture(state));
   state.detail = { ...finished, state: 'accepted_run', history: null, process_state: undefined };
   let reads = 0;
-  await page.route(`**/api/1/studies/${sid}/runs/run-fixture`, route => {
+  await page.route(`**/api/1/studies/${sid}/runs/run-fixture`, (route) => {
     reads++;
-    if (reads === 2) return route.fulfill({ status: 503, json: { error: { code: 'backend_unavailable', message: 'Temporary read failure', fields: [], outcome: 'unchanged' } } });
+    if (reads === 2)
+      return route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: 'backend_unavailable',
+            message: 'Temporary read failure',
+            fields: [],
+            outcome: 'unchanged',
+          },
+        },
+      });
     return route.fulfill({ json: { schema_version: '1', data: state.detail } });
   });
   await login(page, `#v=1&study=${sid}&view=runs`);
@@ -134,19 +169,28 @@ test('run progress updates automatically, recovers a failed read, and never resu
   await expect(progress).toHaveAttribute('aria-label', 'Queued for preparation');
   await expect(progress).not.toHaveAttribute('value');
   await capture(page, 'run-queued');
-  await expect(page.getByText('Connection interrupted. Retrying status updates automatically.')).toBeVisible();
+  await expect(
+    page.getByText('Connection interrupted. Retrying status updates automatically.'),
+  ).toBeVisible();
   state.detail = { ...state.detail, state: 'recorded', process_state: 'running' };
   await expect(progress).toHaveAttribute('aria-label', 'Calculation running');
   await capture(page, 'run-running');
   state.detail = finished;
   await expect(progress).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Run status', exact: true }).locator('.hf-facet__k')).toHaveText(['Execution', 'Criteria']);
-  await expect(page.locator('.run-key-outputs .hf-readout__missing')).toHaveText('not computed');
+  await expect(
+    page.getByRole('list', { name: 'Run status', exact: true }).locator('.hf-facet__k'),
+  ).toHaveText(['Execution', 'Criteria']);
+  const outputs = page.getByRole('region', { name: 'Output values', exact: true });
+  await expect(outputs.getByRole('columnheader')).toHaveText(['Output', 'Value', 'Units']);
+  await expect(outputs).toContainText('not computed: Producer failed');
+  await expect(page.locator('.run-panel .run-key-outputs')).toHaveCount(0);
+  await expect(outputs.locator('tbody tr')).toHaveCount(finished.history.results.outputs.length);
   await capture(page, 'run-partial');
   const completedReads = reads;
   await page.waitForTimeout(1800);
   expect(reads).toBe(completedReads);
-  expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 
 test('component and connection dialogs close only after successful atomic apply', async ({ page }) => {

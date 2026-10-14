@@ -330,44 +330,57 @@ test('@ae-evidence edit creates an immutable version and dirty Escape keeps text
 });
 
 test('@ae-evidence attachments open exact records directly with meaningful context and secondary identities', async ({page,request}) => {
-  const api=await writer(request);
-  const records=[await api.create('Direct calibration report'),await api.create('Direct observation report')];
-  await harness(page,true);
-  for(const [index,record] of records.entries()) {
-    if(index)await page.getByRole('button',{name:'Add evidence',exact:true}).click();
-    await page.getByLabel('Find evidence',{exact:true}).fill(record.title);
-    await page.getByRole('button',{name:new RegExp('^Choose '+record.title)}).click();
-    await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
+  const api = await writer(request);
+  const records = [
+    await api.create('Direct calibration report'),
+    await api.create('Direct observation report'),
+  ];
+  await harness(page, true);
+  for (const [index, record] of records.entries()) {
+    if (index) await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+    await page.getByLabel('Find evidence', { exact: true }).fill(record.title);
+    await page.getByRole('button', { name: new RegExp('^Choose ' + record.title) }).click();
+    await page.getByRole('button', { name: 'Attach evidence', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button',{name:'View evidence',exact:true})).toHaveCount(index+1);
-    await expect(page.getByRole('button',{name:/^Evidence \(/})).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View evidence', exact: true })).toHaveCount(
+      index + 1,
+    );
+    await expect(page.getByRole('button', { name: /^Evidence \(/ })).toHaveCount(0);
   }
-  const reads:string[]=[];
-  page.on('request',request=>{if(request.url().includes('/evidence'))reads.push(request.url());});
-  for(const record of records) {
-    const action=page.locator('article').filter({has:page.getByRole('heading',{name:record.title,exact:true})}).getByRole('button',{name:'View evidence',exact:true});
-    await action.focus();await expect(action).toBeFocused();await page.keyboard.press('Enter');
-    const detail=page.getByRole('dialog',{name:'Evidence detail',exact:true});
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/evidence')) reads.push(request.url());
+  });
+  for (const record of records) {
+    const action = page
+      .locator('article')
+      .filter({ has: page.getByRole('heading', { name: record.title, exact: true }) })
+      .getByRole('button', { name: 'View evidence', exact: true });
+    await action.focus();
+    await expect(action).toBeFocused();
+    await page.keyboard.press('Enter');
+    const detail = page.getByRole('dialog', { name: 'Evidence detail', exact: true });
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await expect(detail).toContainText(record.content);
-    await expect(detail.getByText('Study evidence',{exact:true})).toBeVisible();
-    await expect(detail.getByRole('heading',{name:'Context',exact:true})).toHaveCount(0);
-    await expect(detail.getByText('scope version',{exact:true})).toHaveCount(0);
-    await expect(detail.getByText('kind',{exact:true})).toHaveCount(0);
-    await expect(detail.getByText(record.evidence_version_id,{exact:true})).toBeHidden();
+    await expect(detail.getByText('Study evidence', { exact: true })).not.toBeVisible();
+    await expect(detail.getByRole('heading', { name: 'Context', exact: true })).toHaveCount(0);
+    await expect(detail.getByText('scope version', { exact: true })).toHaveCount(0);
+    await expect(detail.getByText('kind', { exact: true })).toHaveCount(0);
+    await expect(detail.getByText(record.evidence_version_id, { exact: true })).toBeHidden();
     await expect(detail.locator('script')).toHaveCount(0);
     await expect(detail).toContainText('<script>inert reference</script>');
-    await shots(page,'direct-'+record.title.replaceAll(' ','-'));
-    await detail.getByRole('button',{name:'Record details',exact:true}).click();
-    const identities=page.getByRole('dialog',{name:'Evidence record',exact:true});
+    await shots(page, 'direct-' + record.title.replaceAll(' ', '-'));
+    await detail.getByRole('button', { name: 'Record details', exact: true }).click();
+    const identities = page.getByRole('dialog', { name: 'Evidence record', exact: true });
+    await expect(identities.getByText('Study evidence', { exact: true })).toBeVisible();
     await expect(identities).toContainText(record.evidence_version_id);
     await expect(identities).toContainText(record.evidence_id);
     await expect(identities).toContainText(api.sid);
     await page.keyboard.press('Escape');
-    await expect(detail.getByRole('button',{name:'Record details',exact:true})).toBeFocused();
-    const downloaded=page.waitForEvent('download');
-    await detail.getByRole('button',{name:'Download evidence record',exact:true}).click();
-    expect(JSON.parse(await readFile((await (await downloaded).path())!,'utf8'))).toEqual(record);
+    await expect(detail.getByRole('button', { name: 'Record details', exact: true })).toBeFocused();
+    const downloaded = page.waitForEvent('download');
+    await detail.getByRole('button', { name: 'Download evidence record', exact: true }).click();
+    expect(JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'))).toEqual(record);
     await page.keyboard.press('Escape');
     await expect(action).toBeFocused();
   }
@@ -1232,100 +1245,249 @@ test('@ae-integration run evidence groups exact retained uses during model outag
 
 
 test('@ae-integration actual Package2 export import rejects corrupt files and requires explicit citation repair before configuration',async({page,request})=>{
-  const data=await configurationCase(request,'unresolved'), library=await writer(request);
-  const props=await openModel(page);
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const draftPath=`/api/1/studies/${data.sid}/models/${data.mid}`;
-  await expect.poll(async()=>(await (await request.get(draftPath+'/revisions')).json()).data.length).toBeGreaterThan(1);
-  const selected=(await (await request.get(draftPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Model version',{exact:true}).selectOption(selected.model_revision_id);
-  await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await page.getByRole('button',{name:'Export',exact:true}).click();
-  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download portable model record',exact:true}).click();
-  const raw=await readFile((await (await download).path())!,'utf8'),pkg=JSON.parse(raw);
+  const data = await configurationCase(request, 'unresolved'),
+    library = await writer(request);
+  const props = await openModel(page);
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const draftPath = `/api/1/studies/${data.sid}/models/${data.mid}`;
+  await expect
+    .poll(async () => (await (await request.get(draftPath + '/revisions')).json()).data.length)
+    .toBeGreaterThan(1);
+  const selected = (await (await request.get(draftPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Model version', { exact: true }).selectOption(selected.model_revision_id);
+  await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download portable model record', exact: true }).click();
+  const raw = await readFile((await (await download).path())!, 'utf8'),
+    pkg = JSON.parse(raw);
   expect(pkg.schema_version).toBe('2');
-  const original=pkg.revisions.find((r:any)=>r.model_revision_id===pkg.model_revision_id);
-  expect(original.assumptions[0].evidence_links).toHaveLength(1);expect(original.source_files.length).toBeGreaterThan(0);
-  await page.keyboard.press('Escape');await page.keyboard.press('Escape');
-  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Home',exact:true}).click();
-  await page.getByRole('button',{name:'New study',exact:true}).click();await page.getByLabel('New study name').fill('Isolated Package2 destination');
-  await page.getByRole('button',{name:'Create study',exact:true}).click();
-  await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Models',exact:true}).click();
-  const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
-  await page.getByRole('button',{name:'Import',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Import',exact:true});
-  let posts=0;page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/model-imports'))posts++;});
-  const canonical=(v:any):string=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
-  const sign=(v:any)=>{delete v.digest;v.digest=createHash('sha256').update(canonical(v)).digest('hex');};
-  const rejected=[];
-  for(const kind of ['pairing','revision-version','package-digest','revision-digest','source','size']){
-    const bad=structuredClone(pkg),root=bad.revisions.find((r:any)=>r.model_revision_id===bad.model_revision_id);
-    if(kind==='pairing')bad.schema_version='1';
-    if(kind==='revision-version')root.schema_version='99';
-    if(kind==='revision-digest')root.digest='0'.repeat(64);
-    if(kind==='source'){root.source_files[0].bytes=Buffer.from('corrupt source').toString('base64');sign(root);}
-    sign(bad);if(kind==='package-digest')bad.digest='0'.repeat(64);
-    const buffer=kind==='size'?Buffer.alloc(2*1024*1024,32):Buffer.from(JSON.stringify(bad));
-    await dialog.getByLabel('Portable model record file').setInputFiles({name:kind+'.json',mimeType:'application/json',buffer});
-    if(kind!=='size')await dialog.getByRole('button',{name:'Preview model import',exact:true}).click();
-    await expect(dialog.getByRole('alert')).toBeVisible();await expect(dialog.getByRole('button',{name:'Import model',exact:true})).toHaveCount(0);
-    rejected.push(kind);expect(posts).toBe(0);
+  const original = pkg.revisions.find((r: any) => r.model_revision_id === pkg.model_revision_id);
+  expect(original.assumptions[0].evidence_links).toHaveLength(1);
+  expect(original.source_files.length).toBeGreaterThan(0);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Home', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'New study', exact: true }).click();
+  await page.getByLabel('New study name').fill('Isolated Package2 destination');
+  await page.getByRole('button', { name: 'Create study', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Workspace sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import', exact: true });
+  let posts = 0;
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().endsWith('/model-imports')) posts++;
+  });
+  const canonical = (v: any): string =>
+    v === null || typeof v !== 'object'
+      ? JSON.stringify(v)
+      : Array.isArray(v)
+        ? '[' + v.map(canonical).join(',') + ']'
+        : '{' +
+          Object.keys(v)
+            .sort()
+            .map((k) => JSON.stringify(k) + ':' + canonical(v[k]))
+            .join(',') +
+          '}';
+  const sign = (v: any) => {
+    delete v.digest;
+    v.digest = createHash('sha256').update(canonical(v)).digest('hex');
+  };
+  const rejected = [];
+  for (const kind of [
+    'pairing',
+    'revision-version',
+    'package-digest',
+    'revision-digest',
+    'source',
+    'size',
+  ]) {
+    const bad = structuredClone(pkg),
+      root = bad.revisions.find((r: any) => r.model_revision_id === bad.model_revision_id);
+    if (kind === 'pairing') bad.schema_version = '1';
+    if (kind === 'revision-version') root.schema_version = '99';
+    if (kind === 'revision-digest') root.digest = '0'.repeat(64);
+    if (kind === 'source') {
+      root.source_files[0].bytes = Buffer.from('corrupt source').toString('base64');
+      sign(root);
+    }
+    sign(bad);
+    if (kind === 'package-digest') bad.digest = '0'.repeat(64);
+    const buffer =
+      kind === 'size' ? Buffer.alloc(2 * 1024 * 1024, 32) : Buffer.from(JSON.stringify(bad));
+    await dialog
+      .getByLabel('Portable model record file')
+      .setInputFiles({ name: kind + '.json', mimeType: 'application/json', buffer });
+    if (kind !== 'size')
+      await dialog.getByRole('button', { name: 'Preview model import', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Import model', exact: true })).toHaveCount(0);
+    rejected.push(kind);
+    expect(posts).toBe(0);
   }
-  await shots(page,'package-rejected');
-  await dialog.getByLabel('Portable model record file').setInputFiles({name:'exact-package.json',mimeType:'application/json',buffer:Buffer.from(raw)});
-  await dialog.getByRole('button',{name:'Preview model import',exact:true}).click();
-  await expect(dialog.getByRole('region',{name:'Model import preview'})).toContainText('Ready to import');
-  await shots(page,'package-import-preview');
-  const importing=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/model-imports'));
-  await dialog.getByRole('button',{name:'Import model',exact:true}).click();
-  const importedResponse=await importing;expect(importedResponse.status()).toBe(200);
-  const imported=(await importedResponse.json()).data;
-  expect(imported.assumptions).toEqual(original.assumptions);expect(imported.source_files).toEqual(original.source_files);expect(posts).toBe(1);
-  const importedPath=`/api/1/studies/${sid}/models/${data.mid}`;
-  await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
-  const assumptions=await modelDetails(page);
-  await expect(assumptions).toContainText('Evidence unavailable');await expect(assumptions).toContainText(original.assumptions[0].evidence_links[0].evidence_version_id);
-  await shots(page,'package-unresolved-assumption');
-  await page.getByLabel('Model version',{exact:true}).selectOption(selected.model_revision_id);
-  await page.getByRole('button',{name:'Create configuration',exact:true}).click();
-  await expect(page.getByRole('alert')).toContainText('This evidence reference could not be resolved.');
-  await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeDisabled();await shots(page,'package-blocked-configuration');
-  const before=await configurationCounts(request),saved=data.saved.configuration;
-  const candidate={schema_version:'3',study_id:sid,model_id:data.mid,model_revision_id:selected.model_revision_id,name:'Imported unresolved',inputs:saved.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:{...i.provenance,evidence_version_ids:[]}})),criteria:[],numerical:saved.numerical,context_source:{kind:'current_study',expected_study_revision:(await (await request.get('/api/1/studies/'+sid)).json()).data.revision},notes:[],assumptions:[],general_context_evidence_version_ids:[],derivation:null};
-  for(const commit of [false,true]){
-    const response=await request.post(`/api/1/studies/${sid}/configurations`+(commit?'':'/preview'),{headers:library.headers,data:commit?{command_id:crypto.randomUUID(),configuration_id:null,expected_revision:null,configuration:candidate,expected_preview_digest:'0'.repeat(64)}:candidate});
-    expect(response.status()).toBe(422);expect((await response.json()).error.fields.some((f:any)=>f.code==='unresolved_evidence')).toBe(true);
+  await shots(page, 'package-rejected');
+  await dialog
+    .getByLabel('Portable model record file')
+    .setInputFiles({
+      name: 'exact-package.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(raw),
+    });
+  await dialog.getByRole('button', { name: 'Preview model import', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Model import preview' })).toContainText(
+    'Ready to import',
+  );
+  await shots(page, 'package-import-preview');
+  const importing = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/model-imports'),
+  );
+  await dialog.getByRole('button', { name: 'Import model', exact: true }).click();
+  const importedResponse = await importing;
+  expect(importedResponse.status()).toBe(200);
+  const imported = (await importedResponse.json()).data;
+  expect(imported.assumptions).toEqual(original.assumptions);
+  expect(imported.source_files).toEqual(original.source_files);
+  expect(posts).toBe(1);
+  const importedPath = `/api/1/studies/${sid}/models/${data.mid}`;
+  await expect(page.getByRole('button', { name: 'Model actions', exact: true })).toBeVisible();
+  const assumptions = await modelDetails(page);
+  await expect(assumptions).toContainText('Evidence unavailable');
+  await expect(assumptions).toContainText(
+    original.assumptions[0].evidence_links[0].evidence_version_id,
+  );
+  await shots(page, 'package-unresolved-assumption');
+  await page.getByLabel('Model version', { exact: true }).selectOption(selected.model_revision_id);
+  await page.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'This evidence reference could not be resolved.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Save configuration', exact: true }),
+  ).toBeDisabled();
+  await shots(page, 'package-blocked-configuration');
+  const before = await configurationCounts(request),
+    saved = data.saved.configuration;
+  const candidate = {
+    schema_version: '3',
+    study_id: sid,
+    model_id: data.mid,
+    model_revision_id: selected.model_revision_id,
+    name: 'Imported unresolved',
+    inputs: saved.inputs.map((i: any) => ({
+      kind: 'literal',
+      target: i.target,
+      value: i.value,
+      units: i.units,
+      provenance: { ...i.provenance, evidence_version_ids: [] },
+    })),
+    criteria: [],
+    numerical: saved.numerical,
+    context_source: {
+      kind: 'current_study',
+      expected_study_revision: (await (await request.get('/api/1/studies/' + sid)).json()).data
+        .revision,
+    },
+    notes: [],
+    assumptions: [],
+    general_context_evidence_version_ids: [],
+    derivation: null,
+  };
+  for (const commit of [false, true]) {
+    const response = await request.post(
+      `/api/1/studies/${sid}/configurations` + (commit ? '' : '/preview'),
+      {
+        headers: library.headers,
+        data: commit
+          ? {
+              command_id: crypto.randomUUID(),
+              configuration_id: null,
+              expected_revision: null,
+              configuration: candidate,
+              expected_preview_digest: '0'.repeat(64),
+            }
+          : candidate,
+      },
+    );
+    expect(response.status()).toBe(422);
+    expect(
+      (await response.json()).error.fields.some((f: any) => f.code === 'unresolved_evidence'),
+    ).toBe(true);
   }
   expect(await configurationCounts(request)).toEqual(before);
   // Leave the unsaved configuration and repair the imported owner explicitly.
-  await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Models',exact:true}).click();
-  const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});if(await dirty.isVisible())await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();
+  await page
+    .getByRole('navigation', { name: 'Workspace sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
+  const dirty = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
+  if (await dirty.isVisible())
+    await dirty.getByRole('button', { name: 'Discard changes', exact: true }).click();
   await modelDetails(page);
-  await assumptions.getByRole('button',{name:'Edit assumption: '+original.assumptions[0].statement,exact:true}).click();
-  await page.getByRole('dialog',{name:'Edit assumption',exact:true}).getByRole('button',{name:'Remove attachment',exact:true}).click();
-  await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await assumptions.getByRole('button',{name:'Save model draft',exact:true}).click();await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByRole('dialog',{name:'Preview changes',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const draft=(await (await request.get(importedPath)).json()).data;
-  expect(draft.assumptions[0].evidence_links).toEqual([]);expect(draft.source_files).toEqual(original.source_files);
-  await expect.poll(async()=>(await (await request.get(importedPath+'/revisions')).json()).data[0].model_revision_id).not.toBe(selected.model_revision_id);
-  let repaired=(await (await request.get(importedPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Model version',{exact:true}).selectOption(repaired.model_revision_id);
-  await page.getByRole('button',{name:'Create configuration',exact:true}).click();
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const binding=page.getByRole('dialog',{name:'Review model binding',exact:true});await expect(binding.getByRole('region',{name:'Model assumption changes',exact:true}).first()).toContainText('Evidence unavailable');
-  await binding.getByRole('button',{name:'Use reviewed model version',exact:true}).click();
-  repaired=(await (await request.get(importedPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Configuration name',{exact:true}).fill('Explicitly repaired import');
-  for(const input of await page.locator('input[data-input-key]').all())await input.fill('2');
-  for(const provenance of await page.getByRole('textbox',{name:/ provenance$/}).all())await provenance.fill('Explicit input after repair');
-  await page.getByRole('button',{name:'Save configuration',exact:true}).click();await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
-  await shots(page,'package-repaired-saved');
-  const configs=await request.get(`/api/1/studies/${sid}/configurations`);expect(configs.status()).toBe(200);
-  const rows=(await configs.json()).data;expect(rows).toHaveLength(1);expect(rows[0].model_snapshot.model_revision_id).toBe(repaired.model_revision_id);expect(rows[0].model_snapshot.assumptions[0].evidence_links).toEqual([]);
-  const retained=await request.get(importedPath+'/revisions/'+selected.model_revision_id);expect(retained.status()).toBe(200);expect((await retained.json()).data).toEqual(original);
-  await writeFile(join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/package-roundtrip.json'),JSON.stringify({exported:pkg,imported,rejected,repaired:rows[0],sourceUnchanged:true,posts},null,2));
+  await assumptions
+    .getByRole('button', {
+      name: 'Edit assumption: ' + original.assumptions[0].statement,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Edit assumption', exact: true })
+    .getByRole('button', { name: 'Remove attachment', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Apply assumption', exact: true }).click();
+  await assumptions.getByRole('button', { name: 'Save model draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Preview changes', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const draft = (await (await request.get(importedPath)).json()).data;
+  expect(draft.assumptions[0].evidence_links).toEqual([]);
+  expect(draft.source_files).toEqual(original.source_files);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(importedPath + '/revisions')).json()).data[0].model_revision_id,
+    )
+    .not.toBe(selected.model_revision_id);
+  let repaired = (await (await request.get(importedPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Model version', { exact: true }).selectOption(repaired.model_revision_id);
+  await page.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const binding = page.getByRole('dialog', { name: 'Review model binding', exact: true });
+  await expect(
+    binding.getByRole('region', { name: 'Model assumption changes', exact: true }).first(),
+  ).toContainText('Evidence unavailable');
+  await binding.getByRole('button', { name: 'Use reviewed model version', exact: true }).click();
+  repaired = (await (await request.get(importedPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Configuration name', { exact: true }).fill('Explicitly repaired import');
+  for (const input of await page.locator('input[data-input-key]').all()) await input.fill('2');
+  for (const provenance of await page.getByRole('textbox', { name: / provenance$/ }).all())
+    await provenance.fill('Explicit input after repair');
+  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
+  await expect(page.getByText('Saved · read-only', { exact: true })).toBeVisible();
+  await shots(page, 'package-repaired-saved');
+  const configs = await request.get(`/api/1/studies/${sid}/configurations`);
+  expect(configs.status()).toBe(200);
+  const rows = (await configs.json()).data;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].model_snapshot.model_revision_id).toBe(repaired.model_revision_id);
+  expect(rows[0].model_snapshot.assumptions[0].evidence_links).toEqual([]);
+  const retained = await request.get(importedPath + '/revisions/' + selected.model_revision_id);
+  expect(retained.status()).toBe(200);
+  expect((await retained.json()).data).toEqual(original);
+  await writeFile(
+    join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence/package-roundtrip.json'),
+    JSON.stringify(
+      { exported: pkg, imported, rejected, repaired: rows[0], sourceUnchanged: true, posts },
+      null,
+      2,
+    ),
+  );
 });
 
 test('@ae-integration genuine browser 200 percent assumption and evidence keyboard recovery',async({baseURL,request})=>{

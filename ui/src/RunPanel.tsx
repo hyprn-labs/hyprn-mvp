@@ -17,7 +17,10 @@ import type { ConfigurationRevision, PublicRun, PublicRunDetail, RunHistoryRead6
 import type { HistoryArtifact, ProgramSourceMapEntry } from './contract';
 import { EvidenceIndex, retainedRunAssumptions } from './EvidenceIndex';
 import { CaseNavigation, type Selection } from './workspaceModel';
-import { Button, Panel, Tabs, TextInput, Select, DataTable, Readout, RecordBar, StatusTag, Progress, ActionDialog, SectionHeader, formatNumber } from './design';
+import {
+  Button, Panel, Tabs, TextInput, Select, DataTable, RecordBar, StatusTag, Progress,
+  ActionDialog, SectionHeader, formatNumber,
+} from './design';
 import { modelPorts, refKey, RuntimeComparisonView } from './ConfigurationPanel';
 import { criterionOperators } from './criterionLabels';
 import { RunOutcomes, runOutcomes } from './runStatus';
@@ -397,10 +400,105 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
         <Tabs label="Run detail sections" value={tab} onChange={name => setTab(name as HistoryTab)} items={tabs.map((name, i) => ({ id: name, label: name, tabId: 'run-tab-' + i, panelId: 'run-panel-' + i }))} />
         <section role="tabpanel" id="run-panel-0" aria-labelledby="run-tab-0" hidden={tab !== 'Results'}><Panel hidden={!results && runPending(detail) && detail.state !== 'uncertain'}>
         {!results && (!runPending(detail) || detail.state === 'uncertain') && <p>No results for this run. Missing values are never shown as zero.</p>}
-        {results && <><RunOutcomes variant="ledger" outcomes={runOutcomes(detail)} />{results.execution.state === 'failed' && <section aria-label="Execution diagnostic" className="run-execution-diagnostic"><StatusTag tone="alarm">Execution failed</StatusTag><p className="context-copy">{results.execution.message}</p></section>}<SectionHeader title="Outputs" actions={<ActionDialog title="Full-precision values" label="Full-precision values"><p>Values at full precision. Display rounding never changes criterion evaluation or exported data.</p><DataTable regionLabel="Full-precision output values"><thead><tr><th>Output</th><th>Value</th><th>Units</th></tr></thead><tbody>{results.outputs.map(o => <tr key={refKey(o.target)}><th scope="row">{label(o.target)}</th><td className="hf-mono">{o.availability === 'available' && o.value !== null && Number.isFinite(o.value) ? String(o.value) : 'not computed'}</td><td>{o.units || 'dimensionless'}</td></tr>)}</tbody></DataTable></ActionDialog>} /><div className="run-key-outputs">{results.outputs.slice(0, 4).map(o => <Readout key={refKey(o.target)} label={label(o.target)} value={o.availability === 'available' && o.value !== null && Number.isFinite(o.value) ? o.value : null} unit={o.units || 'dimensionless'} />)}</div><DataTable regionLabel="Output values"><thead><tr><th>Output</th><th>Value</th><th>Units</th><th>Availability</th></tr></thead><tbody>{results.outputs.map(o => <tr key={refKey(o.target)}><th scope="row"><Button variant="quiet" size="sm" disabled={!history?.model_snapshot} onClick={() => inspect({ kind: 'variable', ...o.target }) } data-source-output={refKey(o.target)} aria-label={`Inspect output ${label(o.target)}`}>{label(o.target)}</Button></th><td className={o.availability === 'available' && o.value !== null && Number.isFinite(o.value) ? 'numeric-value numeric-cell hf-mono' : undefined}>{o.availability === 'available' && o.value !== null && Number.isFinite(o.value) ? <span title={`Full precision: ${o.value}`}>{formatNumber(o.value)}</span> : 'not computed'}</td><td>{o.units || 'dimensionless'}</td><td>{present(o.availability, { available: 'Available', unavailable: 'Unavailable' })}{o.reason && `: ${present(o.reason, outputReasons)}`}</td></tr>)}</tbody></DataTable>
-
-
-        </>}
+        {results && (
+          <>
+            <RunOutcomes variant="ledger" outcomes={runOutcomes(detail)} />
+            {results.execution.state === 'failed' && (
+              <section
+                aria-label="Execution diagnostic"
+                className="run-execution-diagnostic"
+              >
+                <StatusTag tone="alarm">Execution failed</StatusTag>
+                <p className="context-copy">{results.execution.message}</p>
+              </section>
+            )}
+            <SectionHeader
+              title="Outputs"
+              actions={
+                <ActionDialog title="Full-precision values" label="Full-precision values">
+                  <p>
+                    Values at full precision. Display rounding never changes criterion
+                    evaluation or exported data.
+                  </p>
+                  <DataTable regionLabel="Full-precision output values">
+                    <thead>
+                      <tr>
+                        <th>Output</th>
+                        <th>Value</th>
+                        <th>Units</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.outputs.map((o) => (
+                        <tr key={refKey(o.target)}>
+                          <th scope="row">{label(o.target)}</th>
+                          <td className="hf-mono">
+                            {o.availability === 'available' &&
+                            o.value !== null &&
+                            Number.isFinite(o.value)
+                              ? String(o.value)
+                              : 'not computed'}
+                          </td>
+                          <td>{o.units || 'dimensionless'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </DataTable>
+                </ActionDialog>
+              }
+            />
+            <DataTable regionLabel="Output values">
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Value</th>
+                  <th>Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.outputs.map((o) => (
+                  <tr key={refKey(o.target)}>
+                    <th scope="row">
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        disabled={!history?.model_snapshot}
+                        onClick={() => inspect({ kind: 'variable', ...o.target })}
+                        data-source-output={refKey(o.target)}
+                        aria-label={`Inspect output ${label(o.target)}`}
+                      >
+                        {label(o.target)}
+                      </Button>
+                    </th>
+                    <td
+                      className={
+                        o.availability === 'available' &&
+                        o.value !== null &&
+                        Number.isFinite(o.value)
+                          ? 'numeric-value numeric-cell hf-mono'
+                          : undefined
+                      }
+                    >
+                      {o.availability === 'available' &&
+                      o.value !== null &&
+                      Number.isFinite(o.value) ? (
+                        <span title={`Full precision: ${o.value}`}>
+                          {formatNumber(o.value)}
+                        </span>
+                      ) : (
+                        <>
+                          not computed
+                          {o.reason && `: ${present(o.reason, outputReasons)}`}
+                        </>
+                      )}
+                    </td>
+                    <td>{o.units || 'dimensionless'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+          </>
+        )}
         </Panel></section>
         {history && <><section role="tabpanel" id="run-panel-1" aria-labelledby="run-tab-1" hidden={tab !== 'Model'}>
           {history.model_snapshot ? <><SectionHeader title={<>Model version {history.model_snapshot.model_revision_id.slice(0, 8)} <StatusTag>Read-only</StatusTag></>} />{workspace}</> : <p>This run's model version can't be shown. The current model is not shown in its place.</p>}

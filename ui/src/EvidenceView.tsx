@@ -142,12 +142,14 @@ export function EvidenceRecordBody({
         <ActionDialog title="Evidence detail" label="View evidence" size="sm">
           <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3>
           {brief && relation && (
-            <p className="context-line">Relationship to this statement: {relation.toLowerCase()}</p>
+            <p className="context-line">
+              {relation.toLowerCase() === 'context'
+                ? 'Background for this statement'
+                : relation.toLowerCase() === 'supports'
+                  ? 'Supports this statement'
+                  : 'Challenges this statement'}
+            </p>
           )}
-          <p className="hf-evidence-metadata">
-            Version {inspected.evidence_version_id.slice(0, 8)}
-            <RecordAttribution kind="evidence_version" id={inspected.evidence_version_id} inline />
-          </p>
           <p className="evidence-content">{inspected.content}</p>
           {inspected.source_refs.length > 0 && (
             <>
@@ -161,26 +163,27 @@ export function EvidenceRecordBody({
               </ol>
             </>
           )}
-          {labels.length ? (
-            <>
-              <SectionHeader title="Context" />
-              <dl className="hf-record-details">
-                {labels.map((label, i) => (
-                  <div key={i}>
-                    <dt>{resourceLabels[label.kind]}</dt>
-                    <dd>
-                      {label.name}
-                      {label.version_id && <> · Version {label.version_id.slice(0, 8)}</>}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </>
-          ) : (
-            context && <p className="hf-evidence-metadata">{context}</p>
-          )}
           <div className="actions">
             <ActionDialog title="Evidence record" label="Record details" size="sm">
+              {labels.length ? (
+                <>
+                  <SectionHeader title="Context" />
+                  <dl className="hf-record-details">
+                    {labels.map((label, i) => (
+                      <div key={i}>
+                        <dt>{resourceLabels[label.kind]}</dt>
+                        <dd>
+                          {label.name}
+                          {label.version_id && <> · Version {label.version_id.slice(0, 8)}</>}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </>
+              ) : (
+                context && <p className="hf-evidence-metadata">{context}</p>
+              )}
+
               {!scope && <p>No scope.</p>}
               <dl className="hf-record-details">
                 <AttributionDetail

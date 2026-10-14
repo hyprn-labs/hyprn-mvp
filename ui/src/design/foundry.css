@@ -408,7 +408,7 @@ pre{font-family:var(--font-mono);font-size:var(--type-code-size);line-height:var
 /* Connected approach: Layout A, same-content sidebar and scoped actions. */
 .study-about>.hf-panel__body{display:flex;flex-direction:column;flex:1}
 .study-about .context-copy{margin:0 0 var(--space-6)}
-.approach-overview-entry{display:flex;justify-content:flex-end;margin-top:auto}
+.approach-overview-entry{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--space-3);margin-top:auto}
 .approach-overview-entry>.hf-btn{white-space:normal;text-align:center;height:auto;min-height:var(--control-desk)}
 .approach-page{min-width:0}
 .approach-page>.page-heading{align-items:flex-start;gap:var(--space-4);flex-wrap:wrap}

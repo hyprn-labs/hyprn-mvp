@@ -21,10 +21,13 @@ test.beforeEach(async ({ page }) => { await guardOrigin(page); });
 test.afterAll(stopFixture);
 
 test('Foundry runs show Execution and Criteria as independent facets and explicit zero versus not computed in both themes', async ({ page }) => {
-  const state = await harness(page); runFixture(state);
-  await login(page); await page.getByRole('button', { name: 'Open study Scalar model study' }).click();
+  const state = await harness(page);
+  runFixture(state);
+  await login(page);
+  await page.getByRole('button', { name: 'Open study Scalar model study' }).click();
   await page.getByRole('button', { name: 'Runs', exact: true }).click();
-  const capture = (name: string) => page.screenshot({ path: process.env.HYPRN_MVP_UI_EVIDENCE_ROOT + '/' + name + '.png' });
+  const capture = (name: string) =>
+    page.screenshot({ path: process.env.HYPRN_MVP_UI_EVIDENCE_ROOT + '/' + name + '.png' });
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await expect(page.locator('.run-list .hf-tag')).toHaveText(['Execution recorded']);
@@ -34,32 +37,58 @@ test('Foundry runs show Execution and Criteria as independent facets and explici
     const ledger = page.getByRole('list', { name: 'Run status', exact: true });
     // Only computed facets; constant ones (convergence, termination, feasibility, completeness, applicability) are not shown.
     await expect(ledger.locator('.hf-facet__k')).toHaveText(['Execution', 'Criteria']);
-    await expect(ledger).not.toContainText('Not converged'); await expect(ledger).not.toContainText('Not applicable');
-    await expect(page.locator('.run-key-outputs .hf-readout__value')).toHaveText(['0dimensionless']);
-    await expect(page.locator('.run-key-outputs .hf-readout__missing')).toHaveText(['not computed']);
+    await expect(ledger).not.toContainText('Not converged');
+    await expect(ledger).not.toContainText('Not applicable');
+    await expect(
+      page.getByRole('region', { name: 'Output values', exact: true }).locator('tbody tr').first(),
+    ).toContainText('0dimensionless');
+    await expect(page.getByRole('region', { name: 'Output values', exact: true })).toContainText(
+      'not computed: Producer failed',
+    );
     await expect(page.locator('.run-key-outputs .hf-readout__basis')).toHaveCount(0);
     const table = page.getByRole('region', { name: 'Output values', exact: true });
-    await expect(table).toContainText('not computed'); await expect(table).toContainText('Producer failed');
+    await expect(table).toContainText('not computed');
+    await expect(table).toContainText('Producer failed');
     await expect(page.locator('.run-panel .hf-record')).toContainText('Run record');
     await capture('foundry-run-partial-' + theme);
     await page.getByRole('tab', { name: 'Model & inputs', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Run this configuration', exact: true })).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: 'Run this configuration', exact: true }),
+    ).toBeHidden();
     await capture('foundry-run-model-' + theme);
     await page.getByRole('tab', { name: 'Evidence & files', exact: true }).click();
-    await expect(page.getByText('retained-note: Exact retained note <script>inert</script>', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('retained-note: Exact retained note <script>inert</script>', { exact: true }),
+    ).toBeVisible();
     await capture('foundry-run-evidence-' + theme);
     await page.getByRole('button', { name: 'Back to run history', exact: true }).click();
   }
-  state.detail.history.results.optimization = { termination: 'unrecognized_fixture_state', feasibility: null };
-  state.detail.history.results.criteria = [{ criterion_id: 'criterion-met', outcome: 'met', reason: 'threshold_comparison' }, { criterion_id: 'criterion-unresolved', outcome: 'unresolved', reason: 'required_output_unavailable' }];
+  state.detail.history.results.optimization = {
+    termination: 'unrecognized_fixture_state',
+    feasibility: null,
+  };
+  state.detail.history.results.criteria = [
+    { criterion_id: 'criterion-met', outcome: 'met', reason: 'threshold_comparison' },
+    {
+      criterion_id: 'criterion-unresolved',
+      outcome: 'unresolved',
+      reason: 'required_output_unavailable',
+    },
+  ];
   await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
   const ledger = page.getByRole('list', { name: 'Run status', exact: true });
   await expect(ledger.locator('.hf-facet__k')).toHaveText(['Execution', 'Criteria']);
-  await expect(ledger).not.toContainText('Termination'); await expect(ledger).not.toContainText('Constraints');
-  await expect(ledger.getByRole('listitem').filter({ hasText: 'Criteria' })).toContainText('1 of 2 not evaluated');
+  await expect(ledger).not.toContainText('Termination');
+  await expect(ledger).not.toContainText('Constraints');
+  await expect(ledger.getByRole('listitem').filter({ hasText: 'Criteria' })).toContainText(
+    '1 of 2 not evaluated',
+  );
   await expect(page.getByText('criterion-met: Met', { exact: false })).toBeVisible();
-  await expect(page.getByText('criterion-unresolved: Not evaluated', { exact: false })).toBeVisible();
-  expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
+  await expect(
+    page.getByText('criterion-unresolved: Not evaluated', { exact: false }),
+  ).toBeVisible();
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 
 test('Foundry run missing uncertain and failed history stay truthful and late history cannot reopen detail', async ({ page }) => {
@@ -146,51 +175,230 @@ async function shot(page: Page, name: string) {
   await page.setViewportSize(original);
 }
 test('approved composition: two complete nodes, contextual details and first-screen configuration inputs', async ({ page }) => {
-  const state = await harness(page); referenceModel(state); await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
-  await expect(page.getByRole('heading', {name:'Response chain',exact:true})).toBeVisible();
+  const state = await harness(page);
+  referenceModel(state);
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+  await expect(page.getByRole('heading', { name: 'Response chain', exact: true })).toBeVisible();
   await expect(components(page)).toBeHidden();
-  await expect(details(page).getByRole('tab')).toHaveCount(0);await expect(details(page).getByRole('heading',{name:'What it computes',exact:true})).toBeVisible();await expect(details(page).locator('table')).toHaveCount(0);
+  await expect(details(page).getByRole('tab')).toHaveCount(0);
+  await expect(
+    details(page).getByRole('heading', { name: 'What it computes', exact: true }),
+  ).toBeVisible();
+  await expect(details(page).locator('table')).toHaveCount(0);
   const canvas = await page.locator('.graph-viewport').boundingBox();
-  for (const item of await page.locator('.diagram-node').all()) { const box = await item.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(canvas!.x); expect(box!.x+box!.width).toBeLessThanOrEqual(canvas!.x+canvas!.width); }
-  const panels=await page.locator('.connected-main,.connected-inspector').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height)); expect(Math.abs(panels[0]-panels[1])).toBeLessThan(2);
-  for(const button of await page.locator('.connected-graph button').all()) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await shot(page,'model');
-  await page.getByRole('button',{name:'＋ Component',exact:true}).click();await expect(page.getByRole('dialog',{name:'Add component',exact:true})).toBeVisible();await shot(page,'new-component-dialog');await page.keyboard.press('Escape');
-  await openSource(page);await shot(page,'model-source');
-  await shot(page,'model-assumptions');
-  await page.getByRole('button',{name:'Edit ports',exact:true}).click();await shot(page,'ports-dialog');await page.keyboard.press('Escape');
-  await details(page).getByRole('button',{name:'Edit',exact:true}).click();await shot(page,'component-version-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Import',exact:true}).click();await shot(page,'import-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Export',exact:true}).click();await shot(page,'export-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Create configuration',exact:true}).click();
-  await expect(page.getByLabel('Configuration name',{exact:true})).toBeVisible();
+  for (const item of await page.locator('.diagram-node').all()) {
+    const box = await item.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(canvas!.x);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(canvas!.x + canvas!.width);
+  }
+  const panels = await page
+    .locator('.connected-main,.connected-inspector')
+    .evaluateAll((nodes) => nodes.map((el) => el.getBoundingClientRect().height));
+  expect(Math.abs(panels[0] - panels[1])).toBeLessThan(2);
+  for (const button of await page.locator('.connected-graph button').all())
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await shot(page, 'model');
+  await page.getByRole('button', { name: '＋ Component', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Add component', exact: true })).toBeVisible();
+  await shot(page, 'new-component-dialog');
+  await page.keyboard.press('Escape');
+  await openSource(page);
+  await shot(page, 'model-source');
+  await shot(page, 'model-assumptions');
+  await page.getByRole('button', { name: 'Edit ports', exact: true }).click();
+  await shot(page, 'ports-dialog');
+  await page.keyboard.press('Escape');
+  await details(page).getByRole('button', { name: 'Edit', exact: true }).click();
+  await shot(page, 'component-version-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await shot(page, 'import-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  await shot(page, 'export-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  await expect(page.getByLabel('Configuration name', { exact: true })).toBeVisible();
   expect(await page.locator('.connected-views:visible').count()).toBe(0);
-  await page.getByLabel('Configuration name',{exact:true}).fill('Baseline');
-  await page.getByLabel('Linear response · x value',{exact:true}).fill('2'); await page.getByLabel('Linear response · z value',{exact:true}).fill('3');
-  await page.getByLabel('Linear response · x provenance',{exact:true}).fill('Manually specified analytical example'); await page.getByLabel('Linear response · z provenance',{exact:true}).fill('Manually specified analytical example');
-  expect((await page.getByLabel('Linear response · z value',{exact:true}).boundingBox())!.y).toBeLessThan(800);
-  await shot(page,'configuration');
-  await page.getByRole('button',{name:'Export',exact:true}).click();let exportDialog=page.getByRole('dialog',{name:'Export',exact:true});await exportDialog.getByText('Export scope',{exact:true}).click();await expect(exportDialog).toContainText('Configuration unsaved explicit input proposal · Run none');await expect(exportDialog).not.toContainText('Configuration 40000000');await shot(page,'draft-export-scope');await page.keyboard.press('Escape');
-  const criteria=page.locator('.section-header').filter({has:page.getByRole('heading',{name:'Criteria',exact:true})});await criteria.getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('button',{name:'Add criterion',exact:true}).click();await page.getByLabel('Criterion 1 operator',{exact:true}).selectOption('eq');await shot(page,'criteria-dialog');await page.getByRole('button',{name:'Remove criterion 1',exact:true}).click();await page.keyboard.press('Escape');
-  await page.locator('.section-header').filter({has:page.getByRole('heading',{name:'Context & supporting evidence',exact:true})}).getByRole('button',{name:'Edit',exact:true}).click();await shot(page,'configuration-context-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Input tools',exact:true}).click();await shot(page,'input-tools-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Save configuration',exact:true}).click(); await expect(page.getByRole('region',{name:'Saved configuration',exact:true})).toBeVisible();
-  expect(state.configurations[0].configuration.inputs.map((i:any)=>i.value)).toEqual([2,3]);
-  await page.getByRole('button',{name:'Configurations',exact:true}).click();
-  await expect(page.getByRole('button',{name:'New configuration',exact:true})).toBeVisible(); await shot(page,'configuration-list');
-  await page.getByRole('button',{name:'Open configuration',exact:true}).click(); await expect(page.getByRole('region',{name:'Saved configuration',exact:true})).toBeVisible();
-  await expect(page.locator('.connected-views')).toBeHidden(); await shot(page,'configuration-saved');await page.getByRole('button',{name:'Export',exact:true}).click();exportDialog=page.getByRole('dialog',{name:'Export',exact:true});await exportDialog.getByText('Export scope',{exact:true}).click();await expect(exportDialog).toContainText('Configuration 40000000-0000-4000-8000-000000000001 · Run none');await page.keyboard.press('Escape');
-  const cfg=state.configurations[0];
-  state.runs=[{run_id:'run-fixture',configuration_revision_id:cfg.configuration.configuration_revision_id,state:'recorded'}];
-  state.detail={run_id:'run-fixture',state:'recorded',process_state:'finished',exit_status:0,history:{errors:[],model_snapshot:cfg.model_snapshot,configuration:cfg.configuration,context:cfg.configuration.context_snapshot,evidence:[],artifacts:[],bundle:null,assessment:null,results:{outputs:[{target:{instance_id:'a',port_id:'u'},value:7,units:'',availability:'available',reason:null},{target:{instance_id:'b',port_id:'y'},value:49,units:'',availability:'available',reason:null}],criteria:[],execution:{state:'finished',exit_code:0,message:'Fixture only'},convergence:{state:'not_applicable'},optimization:{termination:'not_applicable',feasibility:'not_applicable'},completeness:{available:2,expected:2,failed:0,unavailable:0},applicability:{state:'unassessed'}}}};
-  await page.getByRole('button',{name:'Overview',exact:true}).click(); await expect(page.getByRole('region',{name:'Recent configurations',exact:true}).getByRole('button',{name:/Baseline/})).toBeVisible(); await expect(page.getByRole('button',{name:'Open run run-fixture',exact:true})).toBeVisible(); await shot(page,'overview');
-  await page.getByRole('button',{name:'Runs',exact:true}).click(); await expect(page.getByRole('button',{name:'Inspect run run-fixture',exact:true})).toBeVisible(); await shot(page,'runs');
-  await page.getByRole('button',{name:'Inspect run run-fixture',exact:true}).click(); await expect(page.getByRole('region',{name:'Output values'})).toBeVisible(); await expect(page.getByRole('button',{name:'Inspect run run-fixture',exact:true})).toBeHidden(); await shot(page,'run-results');await expect(page.locator('.run-heading').getByRole('button',{name:'Export',exact:true})).toBeVisible();await page.getByRole('button',{name:'Export',exact:true}).click();exportDialog=page.getByRole('dialog',{name:'Export',exact:true});await exportDialog.getByText('Export scope',{exact:true}).click();await expect(exportDialog).toContainText('Configuration 40000000-0000-4000-8000-000000000001 · Run run-fixture');await shot(page,'run-export-scope');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Evidence',exact:true}).click(); await expect(page.getByRole('heading',{name:'Evidence note',exact:true})).toBeVisible(); await shot(page,'evidence');await page.getByRole('button',{name:'New note',exact:true}).click();await shot(page,'evidence-dialog');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Home',exact:true}).click(); await expect(page.getByRole('button',{name:'Open study Scalar model study',exact:true})).toBeVisible(); await shot(page,'home');
-  await page.getByRole('button',{name:'Profile',exact:true}).click();await expect(page.getByRole('heading',{name:'Profile',exact:true})).toBeVisible();await shot(page,'profile');
-  await page.getByRole('button',{name:'Home',exact:true}).click();await page.getByRole('button',{name:'New study',exact:true}).click();await expect(page.getByLabel('New study name')).toBeVisible();await shot(page,'new-study');await page.getByRole('button',{name:'Cancel',exact:true}).click();
-  await page.getByRole('button',{name:'Open study Scalar model study',exact:true}).click();await page.getByRole('button',{name:'Models',exact:true}).click();await expect(page.getByRole('button',{name:'Open model Response chain',exact:true})).toBeVisible();await shot(page,'models-list');await page.getByRole('button',{name:'New model',exact:true}).click();await expect(page.getByLabel('New model name')).toBeVisible();expect(await page.getByLabel('Starting model',{exact:true}).evaluate(el=>getComputedStyle(el).display)).toBe('block');await shot(page,'new-model');
+  await page.getByLabel('Configuration name', { exact: true }).fill('Baseline');
+  await page.getByLabel('Linear response · x value', { exact: true }).fill('2');
+  await page.getByLabel('Linear response · z value', { exact: true }).fill('3');
+  await page
+    .getByLabel('Linear response · x provenance', { exact: true })
+    .fill('Manually specified analytical example');
+  await page
+    .getByLabel('Linear response · z provenance', { exact: true })
+    .fill('Manually specified analytical example');
+  expect(
+    (await page.getByLabel('Linear response · z value', { exact: true }).boundingBox())!.y,
+  ).toBeLessThan(800);
+  await shot(page, 'configuration');
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  let exportDialog = page.getByRole('dialog', { name: 'Export model and data', exact: true });
+  await exportDialog.getByText('Export scope', { exact: true }).click();
+  await expect(exportDialog).toContainText(
+    'Configuration unsaved explicit input proposal · Run none',
+  );
+  await expect(exportDialog).not.toContainText('Configuration 40000000');
+  await shot(page, 'draft-export-scope');
+  await page.keyboard.press('Escape');
+  const criteria = page
+    .locator('.section-header')
+    .filter({ has: page.getByRole('heading', { name: 'Criteria', exact: true }) });
+  await criteria.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Add criterion', exact: true }).click();
+  await page.getByLabel('Criterion 1 operator', { exact: true }).selectOption('eq');
+  await shot(page, 'criteria-dialog');
+  await page.getByRole('button', { name: 'Remove criterion 1', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page
+    .locator('.section-header')
+    .filter({
+      has: page.getByRole('heading', { name: 'Context & supporting evidence', exact: true }),
+    })
+    .getByRole('button', { name: 'Edit', exact: true })
+    .click();
+  await shot(page, 'configuration-context-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Input tools', exact: true }).click();
+  await shot(page, 'input-tools-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Saved configuration', exact: true }),
+  ).toBeVisible();
+  expect(state.configurations[0].configuration.inputs.map((i: any) => i.value)).toEqual([2, 3]);
+  await page.getByRole('button', { name: 'Configurations', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New configuration', exact: true })).toBeVisible();
+  await shot(page, 'configuration-list');
+  await page.getByRole('button', { name: 'Open configuration', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Saved configuration', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.connected-views')).toBeHidden();
+  await shot(page, 'configuration-saved');
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  exportDialog = page.getByRole('dialog', { name: 'Export model and data', exact: true });
+  await exportDialog.getByText('Export scope', { exact: true }).click();
+  await expect(exportDialog).toContainText(
+    'Configuration 40000000-0000-4000-8000-000000000001 · Run none',
+  );
+  await page.keyboard.press('Escape');
+  const cfg = state.configurations[0];
+  state.runs = [
+    {
+      run_id: 'run-fixture',
+      configuration_revision_id: cfg.configuration.configuration_revision_id,
+      state: 'recorded',
+    },
+  ];
+  state.detail = {
+    run_id: 'run-fixture',
+    state: 'recorded',
+    process_state: 'finished',
+    exit_status: 0,
+    history: {
+      errors: [],
+      model_snapshot: cfg.model_snapshot,
+      configuration: cfg.configuration,
+      context: cfg.configuration.context_snapshot,
+      evidence: [],
+      artifacts: [],
+      bundle: null,
+      assessment: null,
+      results: {
+        outputs: [
+          {
+            target: { instance_id: 'a', port_id: 'u' },
+            value: 7,
+            units: '',
+            availability: 'available',
+            reason: null,
+          },
+          {
+            target: { instance_id: 'b', port_id: 'y' },
+            value: 49,
+            units: '',
+            availability: 'available',
+            reason: null,
+          },
+        ],
+        criteria: [],
+        execution: { state: 'finished', exit_code: 0, message: 'Fixture only' },
+        convergence: { state: 'not_applicable' },
+        optimization: { termination: 'not_applicable', feasibility: 'not_applicable' },
+        completeness: { available: 2, expected: 2, failed: 0, unavailable: 0 },
+        applicability: { state: 'unassessed' },
+      },
+    },
+  };
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Recent configurations', exact: true })
+      .getByRole('button', { name: /Baseline/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open run run-fixture', exact: true }),
+  ).toBeVisible();
+  await shot(page, 'overview');
+  await page.getByRole('button', { name: 'Runs', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }),
+  ).toBeVisible();
+  await shot(page, 'runs');
+  await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Output values' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }),
+  ).toBeHidden();
+  await shot(page, 'run-results');
+  await expect(
+    page
+      .locator('.run-heading')
+      .getByRole('button', { name: 'Export model and data', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  exportDialog = page.getByRole('dialog', { name: 'Export model and data', exact: true });
+  await exportDialog.getByText('Export scope', { exact: true }).click();
+  await expect(exportDialog).toContainText(
+    'Configuration 40000000-0000-4000-8000-000000000001 · Run run-fixture',
+  );
+  await shot(page, 'run-export-scope');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Evidence', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Evidence note', exact: true })).toBeVisible();
+  await shot(page, 'evidence');
+  await page.getByRole('button', { name: 'New note', exact: true }).click();
+  await shot(page, 'evidence-dialog');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Open study Scalar model study', exact: true }),
+  ).toBeVisible();
+  await shot(page, 'home');
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
+  await shot(page, 'profile');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await page.getByRole('button', { name: 'New study', exact: true }).click();
+  await expect(page.getByLabel('New study name')).toBeVisible();
+  await shot(page, 'new-study');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Open study Scalar model study', exact: true }).click();
+  await page.getByRole('button', { name: 'Models', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Open model Response chain', exact: true }),
+  ).toBeVisible();
+  await shot(page, 'models-list');
+  await page.getByRole('button', { name: 'New model', exact: true }).click();
+  await expect(page.getByLabel('New model name')).toBeVisible();
+  expect(
+    await page
+      .getByLabel('Starting model', { exact: true })
+      .evaluate((el) => getComputedStyle(el).display),
+  ).toBe('block');
+  await shot(page, 'new-model');
   expect(state.unknown).toEqual([]);
 });
 
@@ -335,21 +543,69 @@ test('Foundry Overview latest five follow public pages and request states stay t
   expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
 });
 test('resource header import and export preserve scope, previews, exact bytes and errors',async({page})=>{
- const state=await harness(page);await openModel(page);
- const header=page.locator('.model-heading');await expect(header.getByRole('button',{name:'Import',exact:true})).toBeVisible();await expect(header.getByRole('button',{name:'Export',exact:true})).toBeVisible();
- await expect(page.locator('summary').filter({hasText:'Import and export'})).toHaveCount(0);
- const launch=header.getByRole('button',{name:'Export',exact:true});await launch.focus();await page.keyboard.press('Enter');
- const exp=page.getByRole('dialog',{name:'Export',exact:true});await expect(exp.getByRole('button',{name:'Download portable model record',exact:true})).toBeDisabled();
- await exp.getByText('Source files',{exact:true}).click();const download=page.waitForEvent('download');await exp.getByRole('button',{name:/Download source/}).click();
- const bytes=await readFile((await (await download).path())!);expect(bytes).toEqual(Buffer.from(source));await page.keyboard.press('Escape');await expect(launch).toBeFocused();
- await header.getByRole('button',{name:'Import',exact:true}).click();const imp=page.getByRole('dialog',{name:'Import',exact:true});
- await imp.getByLabel('Portable model record file').setInputFiles({name:'package.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(modelPackage()))});await imp.getByRole('button',{name:'Preview model import',exact:true}).click();
- await expect(imp.getByRole('region',{name:'Model import preview'})).toBeVisible();await imp.getByRole('button',{name:'Done',exact:true}).click();await header.getByRole('button',{name:'Import',exact:true}).click();await expect(imp.getByRole('region',{name:'Model import preview'})).toBeVisible();
- await imp.getByRole('button',{name:'Import model',exact:true}).click();await expect(imp.getByRole('alert')).toContainText('This model changed. Your edits are preserved');await imp.getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('alert')).toContainText('This model changed. Your edits are preserved');
- expect(state.writes.filter(w=>w.path.endsWith('/model-imports'))).toHaveLength(1);expect(state.writes.filter(w=>w.path.endsWith('/model-imports'))[0].body.expected_revision).toBe('study-r1');
- await page.getByLabel('Model version',{exact:true}).selectOption(version);await page.getByRole('button',{name:'Import',exact:true}).click();await expect(page.getByRole('region',{name:'Model import preview'})).toHaveCount(0);await page.keyboard.press('Escape');
- await page.getByRole('button',{name:'Export',exact:true}).click();await expect(exp.getByRole('button',{name:'Download portable model record',exact:true})).toBeEnabled();await page.keyboard.press('Escape');
- await page.getByRole('button',{name:'Configurations',exact:true}).click();await expect(page.getByRole('button',{name:'Import',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Export',exact:true})).toHaveCount(0);expect(state.unknown).toEqual([]);
+  const state = await harness(page);
+  await openModel(page);
+  const header = page.locator('.model-heading');
+  await expect(header.getByRole('button', { name: 'Import', exact: true })).toBeVisible();
+  await expect(
+    header.getByRole('button', { name: 'Export model and data', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('summary').filter({ hasText: 'Import and export' })).toHaveCount(0);
+  const launch = header.getByRole('button', { name: 'Export model and data', exact: true });
+  await launch.focus();
+  await page.keyboard.press('Enter');
+  const exp = page.getByRole('dialog', { name: 'Export model and data', exact: true });
+  await expect(
+    exp.getByRole('button', { name: 'Download portable model record', exact: true }),
+  ).toBeDisabled();
+  await exp.getByText('Source files', { exact: true }).click();
+  const download = page.waitForEvent('download');
+  await exp.getByRole('button', { name: /Download source/ }).click();
+  const bytes = await readFile((await (await download).path())!);
+  expect(bytes).toEqual(Buffer.from(source));
+  await page.keyboard.press('Escape');
+  await expect(launch).toBeFocused();
+  await header.getByRole('button', { name: 'Import', exact: true }).click();
+  const imp = page.getByRole('dialog', { name: 'Import', exact: true });
+  await imp
+    .getByLabel('Portable model record file')
+    .setInputFiles({
+      name: 'package.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(modelPackage())),
+    });
+  await imp.getByRole('button', { name: 'Preview model import', exact: true }).click();
+  await expect(imp.getByRole('region', { name: 'Model import preview' })).toBeVisible();
+  await imp.getByRole('button', { name: 'Done', exact: true }).click();
+  await header.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(imp.getByRole('region', { name: 'Model import preview' })).toBeVisible();
+  await imp.getByRole('button', { name: 'Import model', exact: true }).click();
+  await expect(imp.getByRole('alert')).toContainText(
+    'This model changed. Your edits are preserved',
+  );
+  await imp.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'This model changed. Your edits are preserved',
+  );
+  expect(state.writes.filter((w) => w.path.endsWith('/model-imports'))).toHaveLength(1);
+  expect(
+    state.writes.filter((w) => w.path.endsWith('/model-imports'))[0].body.expected_revision,
+  ).toBe('study-r1');
+  await page.getByLabel('Model version', { exact: true }).selectOption(version);
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Model import preview' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  await expect(
+    exp.getByRole('button', { name: 'Download portable model record', exact: true }),
+  ).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Configurations', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Import', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Export model and data', exact: true }),
+  ).toHaveCount(0);
+  expect(state.unknown).toEqual([]);
 });
 
 test('import confirmation participates in dirty navigation and replacing a package invalidates preview',async({page})=>{
@@ -458,18 +714,23 @@ test('Foundry model light and dark projections, details and historical source ar
 });
 
 test('Foundry graph export retains every node and port as inert SVG slots', async ({ page }) => {
-  const state = await harness(page); referenceModel(state);
+  const state = await harness(page);
+  referenceModel(state);
   await login(page, '#v=1&study=' + sid + '&model=' + mid + '&view=model');
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: /SVG/ }).click();
-  const download = await downloading, path = await download.path();
+  const download = await downloading,
+    path = await download.path();
   if (!path) throw new Error('Missing fixture download');
   const svg = await readFile(path, 'utf8');
-  expect(svg).toContain('Linear response'); expect(svg).toContain('Squared response');
+  expect(svg).toContain('Linear response');
+  expect(svg).toContain('Squared response');
   for (const port of ['→ x', '→ z', 'u →', '→ u', 'y →']) expect(svg).toContain(port);
-  expect(svg).not.toContain('foreignObject'); expect(svg).not.toContain('<button');
-  expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
+  expect(svg).not.toContain('foreignObject');
+  expect(svg).not.toContain('<button');
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 
 test('Foundry configuration fields preserve blank zero negative and immutable saved inputs', async ({ page }) => {

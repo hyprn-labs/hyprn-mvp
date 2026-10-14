@@ -134,32 +134,57 @@ test('Home, separate study creation, five study sections and minimal Profile', a
 });
 
 test('About edits preserve the hidden boundary through keep, discard and save navigation', async ({ page }) => {
-  const state = await harness(page); await login(page); await openStudy(page);
-  await page.locator('.study-about').getByRole('button', { name: 'Edit', exact: true }).click();
+  const state = await harness(page);
+  await login(page);
+  await openStudy(page);
+  await page
+    .locator('.study-about')
+    .getByRole('button', { name: 'Edit study', exact: true })
+    .click();
   await expect(page.getByLabel('Boundary', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Description', { exact: true }).fill('Local edit');
-  await page.getByRole('dialog', { name: 'Edit study', exact: true }).getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByLabel('Study list description', { exact: true }).fill('Local edit');
+  await page
+    .getByRole('dialog', { name: 'Edit study', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Keep editing', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
-  await expect(page.locator('textarea[aria-label=Description]')).toHaveValue('Local edit');
+  await expect(page.locator('textarea[aria-label="Study list description"]')).toHaveValue(
+    'Local edit',
+  );
   await expect(page.getByRole('button', { name: 'Home', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
-  await openStudy(page); await page.locator('.study-about').getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByLabel('Description', { exact: true })).toHaveValue('A retained description');
-  await page.getByLabel('Description', { exact: true }).fill('Saved description');
-  await page.getByRole('dialog', { name: 'Edit study', exact: true }).getByRole('button', { name: 'Done', exact: true }).click();
+  await openStudy(page);
+  await page
+    .locator('.study-about')
+    .getByRole('button', { name: 'Edit study', exact: true })
+    .click();
+  await expect(page.getByLabel('Study list description', { exact: true })).toHaveValue(
+    'A retained description',
+  );
+  await page.getByLabel('Study list description', { exact: true }).fill('Saved description');
+  await page
+    .getByRole('dialog', { name: 'Edit study', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Profile', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(1);
-  expect(state.writes[0].body).toMatchObject({ expected_revision: 'study-r1', description: 'Saved description', boundary: 'Retained boundary must survive' });
+  expect(state.writes[0].body).toMatchObject({
+    expected_revision: 'study-r1',
+    description: 'Saved description',
+    boundary: 'Retained boundary must survive',
+  });
   expect(state.unknown).toEqual([]);
 });
 
 test('Models list, separate creation and exact read-only version navigation', async ({ page }) => {
-  const state = await harness(page); await login(page); await openStudy(page);
+  const state = await harness(page);
+  await login(page);
+  await openStudy(page);
   await expect(page.getByLabel('New model name')).toHaveCount(0);
   await page.getByRole('button', { name: 'Models', exact: true }).click();
   await page.getByRole('button', { name: 'New model', exact: true }).click();
@@ -171,18 +196,27 @@ test('Models list, separate creation and exact read-only version navigation', as
   await expect(page).toHaveURL(new RegExp('revision=' + version));
   await expect(page.getByLabel('Model version', { exact: true })).toHaveValue(version);
   // Naming since fce14ed (as pinned in evidence-workspace.spec.ts): "<id8> (read-only)".
-  await expect(page.getByLabel('Model version').locator('option:checked')).toHaveText('30000000 (read-only)');
+  await expect(page.getByLabel('Model version').locator('option:checked')).toHaveText(
+    '30000000 (read-only)',
+  );
   // Export lives under Model actions (resource header actions); the exact read-only version
   // offers its package download ("Download portable model record", formerly "Export exact model package").
   await page.getByRole('button', { name: 'Model actions', exact: true }).click();
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Download portable model record', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Export model and data', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Download portable model record', exact: true }),
+  ).toBeEnabled();
   await expect(page.getByLabel('Comparison target')).toHaveCount(0);
-  await page.getByRole('dialog', { name: 'Export', exact: true }).getByRole('button', { name: 'Done', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Export model and data', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Close Model actions', exact: true }).click();
   await page.getByRole('button', { name: 'All models', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Open model Scalar model', exact: true })).toBeVisible();
-  expect(state.writes.map(write => write.path)).toEqual([`/studies/${sid}/models`]);
+  await expect(
+    page.getByRole('button', { name: 'Open model Scalar model', exact: true }),
+  ).toBeVisible();
+  expect(state.writes.map((write) => write.path)).toEqual([`/studies/${sid}/models`]);
   expect(state.unknown).toEqual([]);
 });
 

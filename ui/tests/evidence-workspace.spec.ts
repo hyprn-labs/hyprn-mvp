@@ -30,15 +30,53 @@ test('run outcomes are Execution and Criteria only; unread, unresulted and unkno
  expect(resultOutcomes({state:'finished'},[{outcome:'met'},{outcome:'unresolved'}])).toEqual({execution:{label:'Completed',tone:'ok'},criteria:{label:'1 of 2 not evaluated',tone:'advisory'}});
 });
 test('model header groups secondary actions and connections occur in Ports only',async({page})=>{
- const state=await harness(page);referenceModel(state);await login(page,`#v=1&study=${sid}&model=${mid}&view=model`);
- const header=page.locator('.model-heading');await expect(header.getByRole('button',{name:'Save model version',exact:true})).toBeVisible();await expect(header.getByRole('button',{name:'Create configuration',exact:true})).toBeVisible();await expect(header.getByRole('button',{name:'Export',exact:true})).toHaveCount(0);
- expect(await page.getByLabel('Model version',{exact:true}).locator('option').allTextContents()).toEqual(['draft-r1 (draft)','30000000 (read-only)']);
- await header.getByRole('button',{name:'Model actions',exact:true}).click();const menu=page.getByRole('dialog',{name:'Model actions',exact:true});for(const name of ['Rename model','Reload model','Import','Export'])await expect(menu.getByRole('button',{name,exact:true})).toBeVisible();await capture(page,'model-actions');await page.keyboard.press('Escape');
- // Quantities and their connections are listed once, below the inspector; the inspector summarizes them.
- await page.locator('.connected-graph [data-instance="a"]').click();await expect(details(page).getByText('Affine · 3 quantities · shown below',{exact:true})).toBeVisible();
- await openSource(page);await expect(details(page).getByRole('group',{name:'Source actions'}).getByRole('button')).toHaveCount(1);const bytes=await page.getByLabel('Python source',{exact:true}).inputValue();await details(page).getByRole('button',{name:'Expand source',exact:true}).click();await details(page).getByRole('button',{name:'Collapse source',exact:true}).click();expect(await page.getByLabel('Python source',{exact:true}).inputValue()).toBe(bytes);
- await capture(page,'source');const controls=page.getByRole('group',{name:'Graph view controls'});const heights=await controls.getByRole('button').evaluateAll(es=>es.map(e=>e.getBoundingClientRect().height));expect(new Set(heights).size).toBe(1);
- await page.getByLabel('Model version',{exact:true}).selectOption(version);await header.getByRole('button',{name:'Model actions',exact:true}).click();await expect(menu.getByRole('button',{name:'Rename model',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');expect(state.writes).toEqual([]);expect(state.unknown).toEqual([]);
+  const state = await harness(page);
+  referenceModel(state);
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+  const header = page.locator('.model-heading');
+  await expect(
+    header.getByRole('button', { name: 'Save model version', exact: true }),
+  ).toBeVisible();
+  await expect(
+    header.getByRole('button', { name: 'Create configuration', exact: true }),
+  ).toBeVisible();
+  await expect(
+    header.getByRole('button', { name: 'Export model and data', exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.getByLabel('Model version', { exact: true }).locator('option').allTextContents(),
+  ).toEqual(['draft-r1 (draft)', '30000000 (read-only)']);
+  await header.getByRole('button', { name: 'Model actions', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Model actions', exact: true });
+  for (const name of ['Rename model', 'Reload model', 'Import', 'Export model and data'])
+    await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
+  await capture(page, 'model-actions');
+  await page.keyboard.press('Escape');
+  // Quantities and connections appear once below the inspector, which summarizes them.
+  await page.locator('.connected-graph [data-instance="a"]').click();
+  await expect(
+    details(page).getByText('Affine · 3 quantities · shown below', { exact: true }),
+  ).toBeVisible();
+  await openSource(page);
+  await expect(
+    details(page).getByRole('group', { name: 'Source actions' }).getByRole('button'),
+  ).toHaveCount(1);
+  const bytes = await page.getByLabel('Python source', { exact: true }).inputValue();
+  await details(page).getByRole('button', { name: 'Expand source', exact: true }).click();
+  await details(page).getByRole('button', { name: 'Collapse source', exact: true }).click();
+  expect(await page.getByLabel('Python source', { exact: true }).inputValue()).toBe(bytes);
+  await capture(page, 'source');
+  const controls = page.getByRole('group', { name: 'Graph view controls' });
+  const heights = await controls
+    .getByRole('button')
+    .evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height));
+  expect(new Set(heights).size).toBe(1);
+  await page.getByLabel('Model version', { exact: true }).selectOption(version);
+  await header.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await expect(menu.getByRole('button', { name: 'Rename model', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 test('retained model and configuration stay exact during modeling outage, without run actions',async({page})=>{
  const state=await harness(page);const d=runFixture(state);state.outage=true;

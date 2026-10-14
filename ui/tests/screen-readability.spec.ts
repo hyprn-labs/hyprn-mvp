@@ -66,12 +66,34 @@ test('run criterion aligns with seven outcomes; rounded outputs retain exact val
  await page.getByRole('tab',{name:'Evidence',exact:true}).click(); await page.getByRole('button',{name:'Diagnostics',exact:true}).click(); await expect(page.getByLabel('Execution diagnostics',{exact:true})).toContainText('exit_code');
  expect(d.history.results.outputs[0].value).toBe(8381.7034110152);expect(state.writes).toEqual([]);
 });
-test('Overview preserves paragraphs and distinguishes failed assessment from completed execution',async({page})=>{
- const state=await harness(page); const d=runFixture(state);state.studies[0].description='First line\nSecond line\n\nAnother paragraph.'; d.history.results.execution.state='finished'; d.history.results.criteria=[{criterion_id:'c',outcome:'violated',reason:'threshold_comparison'}];
- await login(page,`#v=1&study=${sid}&view=overview`);
- expect(await page.locator('.context-copy').textContent()).toBe('Description: '+state.studies[0].description); expect(await page.locator('.context-copy').evaluate(e=>getComputedStyle(e).whiteSpace)).toBe('pre-wrap');
- const summary=page.getByLabel('Run outcomes',{exact:true}); await expect(summary).toContainText('Execution Completed'); await expect(summary).toContainText('Criteria 1 of 1 not met'); await expect(summary).not.toContainText('recorded');
- await capture(page,'overview');expect(state.writes).toEqual([]);expect(state.unknown).toEqual([]);
+test(
+  'Overview separates metadata and distinguishes criteria from execution',
+  async ({
+  page,
+}) => {
+  const state = await harness(page);
+  const d = runFixture(state);
+  state.studies[0].description = 'First line\nSecond line\n\nAnother paragraph.';
+  d.history.results.execution.state = 'finished';
+  d.history.results.criteria = [
+    { criterion_id: 'c', outcome: 'violated', reason: 'threshold_comparison' },
+  ];
+  await login(page, `#v=1&study=${sid}&view=overview`);
+  const about = page.getByRole('region', { name: 'About this study', exact: true });
+  await expect(about).toContainText('No study question yet');
+  await expect(about).not.toContainText(state.studies[0].description);
+  await about.getByRole('button', { name: 'Edit study', exact: true }).click();
+  await expect(page.getByLabel('Study list description', { exact: true })).toHaveValue(
+    state.studies[0].description,
+  );
+  await page.getByRole('button', { name: 'Close Edit study', exact: true }).click();
+  const summary = page.getByLabel('Run outcomes', { exact: true });
+  await expect(summary).toContainText('Execution Completed');
+  await expect(summary).toContainText('Criteria 1 of 1 not met');
+  await expect(summary).not.toContainText('recorded');
+  await capture(page, 'overview');
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
 });
 test('evidence has one details action, readable references and an exact download without invented legacy scope',async({page})=>{
  const state=await harness(page); const record={evidence_id:'legacy',evidence_version_id:'legacy-v1',study_id:sid,kind:'note',content:'A note\n\nWith a paragraph.',source_refs:['Report A, page 5','https://example.invalid/not-a-verified-link']};
