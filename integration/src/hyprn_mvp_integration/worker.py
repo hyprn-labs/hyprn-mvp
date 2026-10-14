@@ -1872,7 +1872,7 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
     if model['schema_version'] in ('3', '4'):
         if (
             model['schema_version'] == '4' and bundle_layout(manifest) not in ('8', '9')
-        ) or manifest['schema_version'] not in ('6', '8', '9'):
+        ) or bundle_layout(manifest) not in ('6', '8', '9'):
             raise ValueError('Invalid configuration/model version pairing')
         verify_unit_declarations(model)
     if verify_object_digest(files['model.json']) != manifest['model_digest']:
