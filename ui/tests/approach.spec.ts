@@ -437,11 +437,8 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
   await expect(page.getByText('The comparison is unresolved.', { exact: true })).toHaveCount(0);
   await expect(page.getByText('The study question remains open.', { exact: true })).toHaveCount(0);
-  await page.reload();
-  // Sign-out clears workspace navigation; reopen the exact saved version on login.
-  await page.evaluate((hash) => {
-    location.hash = hash;
-  }, savedApproachRoute);
+  // Sign-out removes the fixture's workspace query; restore it on the fresh document.
+  await page.goto('/ui/?workspace' + savedApproachRoute);
   await page.getByLabel('Username', { exact: true }).fill('owner');
   await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

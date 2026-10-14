@@ -130,3 +130,23 @@ now waits for sign-out to finish before reloading and restores the exact saved
 approach route before login. This changes only the test, not product behavior.
 `git diff --check` passed. No browser or native checks were started; root retains
 the focused rerun. Historical acceptance expansion is no longer requested.
+
+## Verified product-mode reload correction
+
+The next root run, scope `55fed85f-e60f-4075-b1b0-5ef9d00b9301`, again reported
+16 passed, 1 failed, but at a different point: Username could not be found. Its
+DOM showed the controller verification harness. Completed sign-out replaces the
+URL with `/ui/`; the fixture selects Workspace only with its `workspace` query.
+Reloading therefore switched away from the product. The test now opens a fresh
+`/ui/?workspace` document with the captured exact approach hash after confirmed
+sign-out, then signs in. Product code is unchanged.
+
+`./hyprn-mvp dev check approach-ui-method`: **17 passed, 0 failed, 0 skipped**,
+exit 0, 114.74 seconds; scope `f5955298-06d5-48d6-8add-d77ca3fa7b63`.
+This run exercised the exact final test delta, including saved answers, exact
+case-answer revision basis, sign-out clearing and persistence after fresh login.
+`git diff --check` passed. No native or additional history groups were run.
+
+The successful scope's 141 evidence/metadata files were hashed, archived externally
+and released after confirming no scoped process remained. Executor archive totals:
+19 released scopes, 494 verified files. Root-owned failure scopes remain root-owned.
