@@ -96,7 +96,7 @@ def test_native_compounds_histories_and_archive():
                 model=j.commit(draft)
                 assert next(d for d in model['definitions'] if d['definition_version_id']==old['definition_version_id'])==old
                 assert [p['port_id'] for p in newer['ports']]==[p['port_id'] for p in old['ports']]
-                assert j.prepared(model)['schema_version']=='2'
+                assert j.prepared(model)['schema_version']=='3'
                 def later_draft():
                     changed=j.edit(draft,[dict(kind='revise_definition',temp_key='later',
                         definition_id=newer['definition_id'],expected_definition_version_id=newer['definition_version_id'],
@@ -161,7 +161,7 @@ def test_native_compounds_histories_and_archive():
         mixed=j.commit(updated)
         assert next(v for v in mixed['definitions'] if v['definition_version_id']==d['definition_version_id'])==d
         assert mixed['source_files']==legacy['source_files']
-        assert j.prepared(mixed)['schema_version']=='2'
+        assert j.prepared(mixed)['schema_version']=='3'
         assert not j.canary()['candidate_side_effect']
         assert j.process_count()==7
         j.offline();j.restart_web()
@@ -303,7 +303,9 @@ def test_native_mixed_legacy_selected_repair():
             assert private['schema_version']=='3' and 'unit_declarations/1' not in private['required_capabilities']
             prepared=j.private('POST','/models/'+legacy['model_id']+'/prepare-execution',dict(command_id=uid(),
                 model_revision_id=legacy['model_revision_id'],configuration_snapshot=private,configuration_digest=private['digest']))
-            assert prepared['schema_version']=='2' and prepared['required_capabilities']==legacy['required_capabilities']
+            assert prepared['schema_version']=='3'
+            assert prepared['result_protocol_version']=='2'
+            assert prepared['required_capabilities']==legacy['required_capabilities']
             assert j.private('GET','/models/'+legacy['model_id']+'/revisions/'+legacy['model_revision_id'])==legacy
             assert j.private('GET','/models/'+legacy['model_id']+'/export?revision='+legacy['model_revision_id'])==package
             assert j.process_count()==0 and not j.canary()['candidate_side_effect']
@@ -318,7 +320,9 @@ def test_native_mixed_legacy_selected_repair():
         near(output(detail,target['y'])['value'],3);assert output(detail,target['y'])['units']=='N'
         payload=j.payload(rid);raw=canonical(payload);bundle=payload['bundle']
         files={p:base64.b64decode(b) for p,b in bundle['files'].items()}
-        assert bundle['manifest']['schema_version']=='6'
+        assert bundle['manifest']['schema_version']=='10'
+        assert bundle['manifest']['input_schema_version']=='6'
+        assert bundle['manifest']['result_protocol_version']=='2'
         assert bundle['manifest']['required_capabilities']==legacy['required_capabilities']
         assert json.loads(files['model.json'])==legacy
         assert json.loads(files['configuration.json'])==saved['configuration']

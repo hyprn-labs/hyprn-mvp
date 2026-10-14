@@ -139,8 +139,9 @@ for file,exempt in display_readers.items():
  text=(ROOT/file).read_text()
  for token in exempt:assert text.count(token)==1,(file,'Stale exemption',token);text=text.replace(token,'')
  for pattern in ('schema_version',"'assumptions' in"):assert pattern not in text,(file,'Read versioned records through recordViews.ts',pattern)
-panel=(ROOT/'src/ConfigurationPanel.tsx').read_text()
+panel=re.sub(r'\s+', '', (ROOT/'src/ConfigurationPanel.tsx').read_text())
 request_choice="!seed && (snapshot.schema_version === '2' || snapshot.schema_version === '3' || snapshot.schema_version === '4')"  # command: request version
+request_choice=re.sub(r'\s+', '', request_choice)
 assert panel.count(request_choice)==1,('src/ConfigurationPanel.tsx','Stale exemption',request_choice);panel=panel.replace(request_choice,'')
 for pattern in ('snapshot.schema_version','binding.schema_version','config.schema_version','c.schema_version'):assert pattern not in panel,('src/ConfigurationPanel.tsx','Read versioned records through recordViews.ts',pattern)
 approach_routes=[('','get','ApproachState2','200'),('/preview','post','ApproachPreviewRead3','200'),('/draft','post','ApproachDraftRead2','200'),('/versions','post','ApproachVersionSavedRead3','201'),('/versions','get','ApproachVersionPage2','200'),('/versions/{version_id}','get','ApproachSavedRead3','200'),('/versions/{version_id}/usage','get','ApproachUsagePage1','200'),('/draft/restore','post','ApproachDraftRead2','200')]

@@ -46,9 +46,22 @@ import json
 from typing import NamedTuple
 from uuid import UUID, uuid5
 from .contracts import DomainError, canonical, check_digest, data_json, digest, raw_hash, validate
-from .execution_bundle import (MAX_BYTES, RETAINED_PAIRINGS, RESULT_PAIRINGS, result_history_version, bundle_layout, UnsupportedRetainedVersion, bundle_family, finite,
-                               safe_path, uses_polish_envelope, validate_frozen_configuration, validate_retained_bundle,
-                               validate_scientific_snapshot, verify_files)
+from .execution_bundle import (
+    MAX_BYTES,
+    RETAINED_PAIRINGS,
+    RESULT_PAIRINGS,
+    result_history_version,
+    bundle_layout,
+    UnsupportedRetainedVersion,
+    bundle_family,
+    finite,
+    safe_path,
+    uses_polish_envelope,
+    validate_frozen_configuration,
+    validate_retained_bundle,
+    validate_scientific_snapshot,
+    verify_files,
+)
 from .units import port_units
 
 ASSOCIATION_KEYS=('store_uuid','process_uuid')
@@ -122,7 +135,15 @@ def validate_binding(row,payload,receipt):
 def complete_outcome(result,model,config):
     """Check retained completeness without re-running any criterion evaluation."""
     version = result.get('schema_version')
-    fields = {'schema_version', 'run_id', 'bundle_digest', 'execution', 'outputs', 'criteria', 'artifacts'}
+    fields = {
+        'schema_version',
+        'run_id',
+        'bundle_digest',
+        'execution',
+        'outputs',
+        'criteria',
+        'artifacts',
+    }
     if version == '1':
         fields |= {'convergence', 'optimization', 'completeness', 'applicability'}
     if version not in ('1', '2') or set(result) != fields:
@@ -145,15 +166,25 @@ def complete_outcome(result,model,config):
             available+=1
         elif (output['availability']!='unavailable' or output['value'] is not None or not isinstance(output['reason'],str)
                 or len(output['reason'])>4096):raise ValueError('Invalid missing output')
-    if seen != set(expected) or (result['execution']['state'] == 'finished' and available != len(expected)):
+    if seen != set(expected) or (
+        result['execution']['state'] == 'finished' and available != len(expected)
+    ):
         raise ValueError('Incomplete outcome')
     if version == '1':
-        if (any(type(v) is not int for v in result['completeness'].values())
-                or result['completeness'] != dict(expected=len(expected), available=available,
-                    failed=failed, unavailable=len(expected)-available)
-                or result['convergence'] != dict(state='not_applicable', diagnostics_ref=None)
-                or result['optimization'] != dict(termination='not_applicable', feasibility='not_applicable')
-                or result['applicability'] != dict(state='unassessed', evidence_refs=[])):
+        if (
+            any(type(v) is not int for v in result['completeness'].values())
+            or result['completeness']
+            != dict(
+                expected=len(expected),
+                available=available,
+                failed=failed,
+                unavailable=len(expected) - available,
+            )
+            or result['convergence'] != dict(state='not_applicable', diagnostics_ref=None)
+            or result['optimization']
+            != dict(termination='not_applicable', feasibility='not_applicable')
+            or result['applicability'] != dict(state='unassessed', evidence_refs=[])
+        ):
             raise ValueError('Invalid retained facets')
     execution = result['execution']
     if (set(execution) != {'state', 'exit_code', 'message'}
@@ -217,7 +248,9 @@ def retained_read_integrity(run_id, history):
         # Closed historical pairings (the owner's single table): do not inherit future
         # read-alias additions.
         pair = (version, bundle['schema_version'], config['schema_version'], model['schema_version'])
-        if pair not in RESULT_PAIRINGS or version != result_history_version(bundle['schema_version'], outcomes['schema_version']):
+        if pair not in RESULT_PAIRINGS or version != result_history_version(
+            bundle['schema_version'], outcomes['schema_version']
+        ):
             return result
         check_digest(config); check_digest(model)
         if (config['digest'] != bundle['configuration_digest']
@@ -235,7 +268,9 @@ def retained_read_integrity(run_id, history):
                     or bundle['approach_digest'] != (closure['root_approach_digest'] if closure else None)
                     or bundle['approach_closure_digest'] != (closure['digest'] if closure else None)):
                 return result
-        validate('RetainedResults' if outcomes['schema_version'] == '1' else 'RetainedResults2', outcomes)
+        validate(
+            'RetainedResults' if outcomes['schema_version'] == '1' else 'RetainedResults2', outcomes
+        )
         # Data-only output/criterion inventory equality, using the single port-units
         # rule (units.port_units): resolved Model3/4 units, exact legacy strings.
         complete_outcome(outcomes, model, config)
@@ -500,14 +535,24 @@ class History:
                         raise ValueError('Stored scientific snapshot mismatch')
                     value.update(configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],
                         bundle={k:manifest[k] for k in ('schema_version','bundle_digest','model_digest','configuration_digest','dependencies')})
-                    if manifest['schema_version'] == '10':value['bundle']['input_schema_version']=manifest['input_schema_version']
+                    if manifest['schema_version'] == '10':
+                        value['bundle']['input_schema_version'] = manifest['input_schema_version']
                     # History 1 is the absent field (RunHistory1 has none).
-                    history_version = result_history_version(manifest['schema_version'], saved['results']['schema_version']) if saved['results'] is not None else family.history
+                    history_version = (
+                        result_history_version(
+                            manifest['schema_version'], saved['results']['schema_version']
+                        )
+                        if saved['results'] is not None
+                        else result_history_version(
+                            manifest['schema_version'], manifest.get('result_protocol_version', '1')
+                        )
+                    )
                     if history_version != '1':value['history_schema_version'] = history_version
                     if family.carries_approach:
                         value['approach_closure']=payload['frozen']['approach_closure']
                         value['bundle'].update({k:manifest[k] for k in ('approach_digest','approach_closure_digest')})
-                    if bundle_layout(manifest) in ('8','9'):value['bundle']['model_schema_version']=manifest['model_schema_version']
+                    if bundle_layout(manifest) in ('8', '9'):
+                        value['bundle']['model_schema_version'] = manifest['model_schema_version']
                     for f in manifest['files']:
                         self._artifact(value,downloads,run_id,'bundle',f['path'],files[f['path']],f.get('role','bundle'))
                 for f in saved['artifacts']:
@@ -521,6 +566,12 @@ class History:
             value=dict(configuration=None,model_snapshot=None,context=None,evidence=None,
                        bundle=None,results=None,assessment=None,artifacts=[],errors=[error(code)])
             downloads={}
+        if (
+            value['bundle'] is None
+            and value['results'] is not None
+            and value['results']['schema_version'] == '2'
+        ):
+            value.update(history_schema_version='7', approach_closure=None)
         if artifact_id is not None:
             if artifact_id not in downloads:
                 if value['errors'] and not value['artifacts']:raise DomainError(value['errors'][0]['code'],409)

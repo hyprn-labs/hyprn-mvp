@@ -126,7 +126,16 @@ def receipt_error_response(request,error,recovery):
     return JSONResponse(status_code=error.status,content=content)
 
 def response(request,data,status=200,**extra):
-    return JSONResponse(status_code=status,content=dict(schema_version="1",request_id=request.state.request_id,data=public_record_view(data),**extra))
+    return JSONResponse(
+        status_code=status,
+        content=dict(
+            schema_version='1',
+            request_id=request.state.request_id,
+            data=public_record_view(data),
+            **extra,
+        ),
+    )
+
 
 def page(request,items,key,cursor,limit):
     if not 1<=limit<=100:raise DomainError("invalid_request",400)

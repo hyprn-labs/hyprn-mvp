@@ -164,7 +164,9 @@ def bundle_layout(manifest):
 def bundle_family(version, input_schema_version=None):
     """The retained family of bundle ``version``; ``UnsupportedRetainedVersion`` if unlisted."""
     if version == '10':
-        layout = bundle_layout(dict(schema_version=version, input_schema_version=input_schema_version))
+        layout = bundle_layout(
+            dict(schema_version=version, input_schema_version=input_schema_version)
+        )
         return _INPUT_FAMILIES[layout]
     family = _FAMILIES.get(version) if isinstance(version, str) else None
     if family is None:
@@ -1004,7 +1006,8 @@ def validate_retained_bundle(bundle, request, frozen, *, raw_snapshot=False):
             closed('ApproachClosureWithModel3', closure)
     if version in ('6', '8', '9'):
         if model['schema_version'] not in family.models or (
-            not raw_snapshot and frozen.get('schema_version') != {'6': '5', '8': '7', '9': '8'}[version]
+            not raw_snapshot
+            and frozen.get('schema_version') != {'6': '5', '8': '7', '9': '8'}[version]
         ):
             raise ValueError('Invalid bundle6 version pairing')
         for row in manifest['files']:

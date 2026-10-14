@@ -144,6 +144,9 @@ def runtime_fixture():
 def current_fixture(kind='chain', multiplier=2, downstream=None):
     """Current native execution uses the actual current producer capture, never relabeled bytes."""
     case = fixture(kind, multiplier, downstream, current=True)
-    if (case['prepared']['schema_version'], case['prepared']['result_protocol_version']) != ('3', '2'):
+    if (case['prepared']['schema_version'], case['prepared']['result_protocol_version']) != (
+        '3',
+        '2',
+    ):
         raise ValueError('Recapture native programs with the current pinned producer')
     return case

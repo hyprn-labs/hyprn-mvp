@@ -615,6 +615,7 @@ class Export:
                 item['request'],
                 data_json(bundle['files']['model.json']),
                 assessment,
+                result_schema_version=bundle['manifest']['result_protocol_version'],
             )
             validate_criteria(value, data_json(bundle['files']['configuration.json']))
             if (node.exit_status == 0) != (value['execution']['state'] == 'finished'):
@@ -649,7 +650,8 @@ class Export:
                 },
             )
             parsed = validate_result(
-                retrieved['result.json'], item['request'], data_json(bundle['files']['model.json'])
+                retrieved['result.json'], item['request'], data_json(bundle['files']['model.json']),
+                result_schema_version=bundle['manifest']['result_protocol_version'],
             )
             validate_criteria(parsed, data_json(bundle['files']['configuration.json']))
             from aiida.orm.implementation.utils import clean_value

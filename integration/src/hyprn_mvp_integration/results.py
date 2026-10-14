@@ -230,11 +230,16 @@ def validate_result(raw, request, model, *, result_schema_version='1'):
         for line in envelope['output'].splitlines()
         if line.startswith(prefix)
     ]
-    if len(lines) != 1 or any(line.startswith('HYPRN_MVP_RESULT_V') and not line.startswith(prefix) for line in envelope['output'].splitlines()):
+    if len(lines) != 1 or any(
+        line.startswith('HYPRN_MVP_RESULT_V') and not line.startswith(prefix)
+        for line in envelope['output'].splitlines()
+    ):
         raise ValueError('Ambiguous worker result')
     result = bounded_json(lines[0])
-    if result_schema_version not in ('1', '2') or result['schema_version'] != result_schema_version or any(
-        result[key] != request[key] for key in ('run_id', 'bundle_digest')
+    if (
+        result_schema_version not in ('1', '2')
+        or result['schema_version'] != result_schema_version
+        or any(result[key] != request[key] for key in ('run_id', 'bundle_digest'))
     ):
         raise ValueError('Result identity mismatch')
     fields = {
@@ -389,7 +394,10 @@ def read_stored_result(result, request, model, assessment=None, *, result_schema
         dict(
             reason='exited',
             exit_code=0,
-            output='HYPRN_MVP_RESULT_V' + result['schema_version'] + ' ' + json.dumps(result, allow_nan=False),
+            output='HYPRN_MVP_RESULT_V'
+            + result['schema_version']
+            + ' '
+            + json.dumps(result, allow_nan=False),
         ),
         allow_nan=False,
     )
@@ -414,10 +422,10 @@ def _prepared_v2(manifest, prepared, files):
         if manifest[key] != prepared[key]:
             raise ValueError('Retained program binding mismatch')
     entry = prepared['entrypoint']
-    if (
-        entry['protocol'] != 'hyprn_mvp.openmdao.program/1'
-        or (prepared['schema_version'], prepared['result_protocol_version']) not in (('2', '1'), ('3', '2'))
-    ):
+    if entry['protocol'] != 'hyprn_mvp.openmdao.program/1' or (
+        prepared['schema_version'],
+        prepared['result_protocol_version'],
+    ) not in (('2', '1'), ('3', '2')):
         raise UnsupportedRecordVersion('Unsupported retained program or result protocol')
     for key in ('module_path', 'bindings_path', 'source_map_path'):
         if entry[key] not in files:

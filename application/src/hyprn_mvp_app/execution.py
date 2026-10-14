@@ -40,7 +40,8 @@ class StaticPreparation:
             request_schema='Prepare',resources=[mid])
         if set(response)!={'data'} or not isinstance(response['data'],dict):raise ValueError('Invalid preparation response')
         prepared=response['data']
-        if prepared.get('schema_version') not in ('2','3'):raise ValueError('Unsupported preparation version; create a new schema2 run command')
+        if prepared.get('schema_version') not in ('2', '3'):
+            raise ValueError('Unsupported preparation version; create a new schema2 run command')
         closed('PreparedModelArtifactRead3',prepared)
         if len({f['file_id'] for f in prepared['files']})!=len(prepared['files']):raise ValueError('Duplicate file identity')
         files={};total=0
@@ -204,7 +205,9 @@ class Submissions:
             except DomainError as error:
                 self._preparation_failure(row,error.code,status=error.status)
                 return
-            if row['state']=='prepared' and payload['bundle']['manifest'].get('schema_version') not in ('2','3','4','5','6','8','9','10'):
+            if row['state'] == 'prepared' and payload['bundle']['manifest'].get(
+                'schema_version'
+            ) not in ('2', '3', '4', '5', '6', '8', '9', '10'):
                 self._preparation_failure(row, 'unsupported_execution_version')
                 return
             self.native.require_attestation()

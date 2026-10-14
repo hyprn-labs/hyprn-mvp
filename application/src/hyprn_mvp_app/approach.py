@@ -141,7 +141,7 @@ class _Resolver:
                 self.add(table, record)
 
     def frozen(self, frozen, revision):
-        validate('FrozenConfigurationRead7', frozen, remote=True)
+        validate('FrozenConfigurationRead8', frozen, remote=True)
         config, model = frozen['configuration'], frozen['model_snapshot']
         if (config['study_id'] != self.sid or config['configuration_revision_id'] != revision
                 or model['model_id'] != config['model_id']
@@ -217,12 +217,27 @@ class _Resolver:
             if _retained(lambda: json.loads(stored['payload'])) != payload['frozen']:
                 raise DomainError('reference_conflict')
             config, model = payload['frozen']['configuration'], payload['frozen']['model_snapshot']
-            context = _signed(dict(schema_version='2' if history['results'] is not None and history['results']['schema_version']=='2' else '1', run_id=run_id, study_id=self.sid,
-                request=payload['request'], association=history['association'],
-                configuration_revision_id=revision, configuration_digest=config['digest'],
-                model_revision_id=model['model_revision_id'], model_digest=model['digest'],
-                context=config['context_snapshot'], results=history['results'], assessment=history['assessment'],
-                runtime=payload['bundle']['manifest']['runtime'], errors=history['errors']))
+            context = _signed(
+                dict(
+                    schema_version='2'
+                    if history['results'] is not None
+                    and history['results']['schema_version'] == '2'
+                    else '1',
+                    run_id=run_id,
+                    study_id=self.sid,
+                    request=payload['request'],
+                    association=history['association'],
+                    configuration_revision_id=revision,
+                    configuration_digest=config['digest'],
+                    model_revision_id=model['model_revision_id'],
+                    model_digest=model['digest'],
+                    context=config['context_snapshot'],
+                    results=history['results'],
+                    assessment=history['assessment'],
+                    runtime=payload['bundle']['manifest']['runtime'],
+                    errors=history['errors'],
+                )
+            )
             validate('ApproachRunContextRead2', context, remote=True)
             self.add('run_contexts', context)
             self.frozen(payload['frozen'], revision)

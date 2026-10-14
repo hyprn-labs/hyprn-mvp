@@ -244,7 +244,8 @@ class UnitsJourney(ApproachJourney):
                 run_id=rid,bundle_sha256=hashlib.sha256(before).hexdigest(),later_draft=later),indent=2))
         self.dispatch(rid);detail=self.request('GET','runs/'+rid)
         assert detail['state']=='recorded' and not detail['history']['errors'],detail
-        assert detail['history']['history_schema_version']=='4'
+        assert detail['history']['history_schema_version']=='7'
+        assert detail['history']['results']['schema_version']=='2'
         assert detail['history']['results']['execution']['state']=='finished'
         assert self.process_count()==n+1
         self.dispatch(rid);assert self.process_count()==n+1

@@ -33086,7 +33086,7 @@
         "result": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ApproachCommandResult2"
+              "$ref": "#/$defs/ApproachCommandResult3"
             },
             {
               "type": "null"
@@ -33125,7 +33125,7 @@
           "then": {
             "properties": {
               "result": {
-                "$ref": "#/$defs/ApproachCommandResult2"
+                "$ref": "#/$defs/ApproachCommandResult3"
               },
               "error": {
                 "type": "null"
@@ -40634,6 +40634,26 @@
         },
         {
           "$ref": "#/$defs/CapabilitiesResponse2"
+        }
+      ]
+    },
+    "ApproachCommandResult3": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ApproachDraftRead2"
+        },
+        {
+          "$ref": "#/$defs/ApproachVersionSaved4"
+        }
+      ]
+    },
+    "ApproachCommandResultRead3": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApproachCommandResultRead2"
+        },
+        {
+          "$ref": "#/$defs/ApproachCommandResult3"
         }
       ]
     }

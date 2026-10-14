@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from test_assumptions_evidence_api import api, generated, ORIGIN, SCOPE, guard, ROOT
 from test_approach_closure import sample,D
 from hyprn_mvp_app.store import uid
-from test_approach_service import env
+from test_approach_service import env, run_env
 
 def test_http_linked_model_source_and_history_are_exact_during_modeling_outage(env,tmp_path):
     from hyprn_mvp_app.api import create_app
@@ -223,3 +223,77 @@ def test_polish_http_claims_are_closed_inert_data(api,patch):
     before=counts(api);c=polish_content();c['original_question'].update(patch)
     r=post(api,'/preview',dict(schema_version='2',expected_revision=None,content=c))
     assert r.status_code==400 and counts(api)==before
+
+
+@pytest.mark.parametrize('current', [False, True])
+def test_http_run_basis_preserves_exact_source_and_projects_only_historical_views(
+    run_env, generated, current
+):
+    from hyprn_mvp_app.api import create_app
+    from hyprn_mvp_app.auth import Auth
+    from hyprn_mvp_app.store import canonical, digest
+    from test_approach_service import content
+
+    e = run_env
+    rid, result = e['source'](current=current)
+    auth = Auth(e['store'], ORIGIN)
+    actor = auth.provision('basis-owner', 'correct horse battery staple')
+    with e['store'].connection(write=True) as db:
+        db.execute('UPDATE memberships SET actor_id=? WHERE study_id=?', (actor, e['sid']))
+    client = TestClient(create_app(e['store'], auth, None), base_url=ORIGIN)
+    session = client.post('/api/1/session', json=dict(username='basis-owner',
+        password='correct horse battery staple'), headers={'Origin': ORIGIN})
+    client.headers.update({'Origin': ORIGIN, 'X-CSRF-Token': session.json()['data']['csrf_token']})
+    e['client'] = client
+    c = content()
+    c['basis_refs'] = [dict(kind='run', run_id=rid, reason='Prior observation', relation='context')]
+    request = dict(schema_version='1', expected_revision=None, content=c)
+    preview = post(e, '/preview', request)
+    assert preview.status_code == 200, preview.text
+    assert_http(generated, '/studies/{study_id}/approach/preview', 'post', preview)
+    draft, _ = write(e, request)
+    response, command = save(e, draft)
+    assert_http(generated, '/studies/{study_id}/approach/versions', 'post', response)
+    saved = response.json()['data']['saved']
+    version = saved['version']['approach_version_id']
+    closure = saved['closure']
+    assert closure['schema_version'] == ('4' if current else '1')
+    shown = closure['run_contexts'][0]['results']
+    assert shown['schema_version'] == ('2' if current else '1')
+    assert not {'convergence', 'optimization', 'completeness', 'applicability'} & shown.keys()
+    with e['store'].connection() as db:
+        original = json.loads(
+            db.execute(
+                'SELECT payload FROM approach_versions WHERE approach_version_id=?', (version,)
+            ).fetchone()[0]
+        )
+        outbox = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+    assert original['closure']['run_contexts'][0]['results'] == result
+    if current:
+        assert shown == result
+        assert 'record_view' not in closure
+    else:
+        assert shown['record_view']['source_sha256'] == digest(result)
+        assert closure['record_view']['source_sha256'] == digest(original['closure'])
+        assert closure['record_view']['view_sha256'] == digest(
+            {k: v for k, v in closure.items() if k != 'record_view'}
+        )
+    read = client.get(url(e, '/versions/' + version))
+    assert read.status_code == 200 and read.json()['data'] == saved
+    assert_http(generated, '/studies/{study_id}/approach/versions/{version_id}', 'get', read)
+    receipt = client.get('/api/1/studies/' + e['sid'] + '/commands/' + command['command_id'],
+        params={'category': 'approach_version'})
+    assert receipt.status_code == 200, receipt.text
+    assert receipt.json()['data']['result'] == response.json()['data']
+    assert_shape(generated, 'PublicReceipt', receipt.json()['data'])
+    with e['store'].connection() as db:
+        assert (
+            db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0] == outbox
+        )
+        assert canonical(
+            json.loads(
+                db.execute(
+                    'SELECT payload FROM approach_versions WHERE approach_version_id=?', (version,)
+                ).fetchone()[0]
+            )
+        ) == canonical(original)

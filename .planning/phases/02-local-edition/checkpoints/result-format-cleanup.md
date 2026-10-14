@@ -33,3 +33,54 @@ Evidence roots are the named hyprn-orchestration-verification-* folders under th
 - exact preserved protocol1 capture SHA-256: 958c151bdbfaabb93f09a4ff110c408bdc74ec0c23c9c4fc466d539f840a55dd
 
 Root: follow checkpoint2.8 build recipe with modeling_runtime.build(root,evidence,no_cache=True,source_no_cache=False) only when unchanged source image remains verified; verify provenance, pin new modeling_producer image; recapture current 13 programs using updated capture_native_programs.py (requires prepared3/protocol2), preserving pre-split and protocol1 captures. Commit current capture and producer pin before worker rebuild/attestation. Current worker and attested schema/runtime sources changed, so no earlier attestation authorizes them. Root owns isolated native tests and exact final source attestation, then guarded live refresh. Required remaining groups depend on final integrated changes: projection, units-worker, approach-worker, units-launcher, archive/native, native-execution/bindings, units-attestation/native; root coordinates full qualification after this integration. Never use the live demo scratch for tests or cleanup.
+
+## Integration correction checkpoint
+
+Follow-up to ee27a18: real HTTP old/current run-basis tests exercise preview, draft/save,
+version read and receipt read. The legacy case verifies nested public source/view hashes
+and unchanged SQLite bytes; the current case verifies Context2/Closure4 with no obsolete
+fields. This exposed Receipt3 still pointing to the old command-result union; corrected
+with additive CommandResult3/Read3 and preserved every old definition. The manual public
+configuration-preview union now includes Preview7; API and UI state types include it.
+Resolver.frozen accepts the additive Read8 union. Portable/native exports select results
+from the exact bundle protocol. Missing current results retain history7 rather than being
+mislabelled with the older input family's history version.
+
+Readability fixes are limited to changed statements; a whole-function Prettier expansion
+was narrowed using a dry-run patch after preserving exact full files/diffs externally and
+proving canonical formatter output unchanged. Automatic approval first rejected reconstruction
+as potential loss of others' changes; ownership/content proof and a scoped patch resolved it.
+A second automatic rejection misread Read8/Read2 as replacements; exact oneOf definitions
+proved legacy formats remained included, and the counted call-site edit then succeeded.
+No requested work remains blocked by either review.
+
+Passed latest focused runs:
+- contracts127 and approach-api25 (r5hlmia8; 8.7/20.6s), including the real old/current receipt journey.
+- units-bundle121 (kedrkd10; 91.8s): six prior input layouts with prepared3/protocol2,
+  strict cross-protocol refusal and Context2→Closure4→Frozen8→Bundle10/input9.
+- combined-static all6, style-ratchet33, guard116, units-guards138 (1wnihf1u;
+  4.1/11.3/4.0/4.6s).
+- approach-closure67 and approach-history39 (c9jyyep3; 4.9/313.7s).
+- API-a finished successfully in kedrkd10; exact count and repeated bridge-history result
+  are appended in final verification. No source changes are planned during root native lane.
+
+Additional failures: expanded units119/1 used dependencies with legacy config1; corrected.
+Next expanded units120/1 omitted the required linked implementation in its new fixture;
+corrected and121 passed. New HTTP approach24/1 exposed the actual receipt bug above;
+corrected and25 passed. Static3gnbctgi TSC needed separate discriminant branches, then
+wdtihtho static passed; style32/1 found changed long lines, corrected. r5hlmia8 static
+failed the exact textual UI exemption after whitespace formatting; checker now normalizes
+whitespace while keeping exact tokens/count and static passes. Root owns actual current
+native fixture rebuild/execution; current native test assertions now require preparation3,
+result2, history7 and bundle10 with explicit input layout. Seed4 for unchanged layout6
+is deliberately preserved. No standalone unit-native browser spec numeric change was needed.
+
+Fifteen completed evidence roots archived/released: bau6hpc4, tnp6flcd, x93brx9y,
+g0iin9q_, nsh8z9a3, 19baflf6, 8rxy3vkq, 540gon7q, nwiw56sf, 3gnbctgi,
+wdtihtho, ro50agg1, c9jyyep3, 575yjlak, 1_1i4ujj: 27 scopes, zero remaining.
+Active/final sequences are released after completion; no native/live scope touched.
+
+Corrected final model schema SHA-256: 7dbe1a233a1f852a7187f442cc784840826f56112b3e4e862bdfe0e9f6a30bc2.
+Execution schema is unchanged by this Documents-only receipt fix. Root explicitly
+accepted rebuilding producer and recapturing after this correction; earlier rebuilt
+image/capture is intermediate evidence only. Exact old538 definitions remain unchanged.

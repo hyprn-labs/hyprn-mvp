@@ -2,7 +2,22 @@ import type { ApproachContent1, ApproachContent2, ApproachResolution1, ApproachR
 export type ApproachContent = ApproachContent1 | ApproachContent2;
 export type ApproachResolution = ApproachResolution1 | ApproachResolution3;
 import type { Study, Association, ModelDraftRead4, ModelRevisionRead4, Edit2, Source, Error as ContractError, PublicReceipt, ConfigurationCandidate1, FrozenConfigurationRead7, CompatibilityResult1, PublicRun, PublicRunDetail, RunHistoryItem, RevisionSummary, EvidenceRecord, EvidenceCreate2, ExecutionReadiness, Session, ApplyRead4, ResultSourcePage, ConfigurationRequest2, ConfigurationPreview2, ConfigurationCommit2, ModifiedRunSeed1, RecordRequestRead as RecordRequest, RecordPreviewRequest, RecordCreateRequest } from './contract';
-import type { ConfigurationRequest4, ConfigurationPreview4, ConfigurationPreview6, ConfigurationCommit4, EvidenceCreate3, EvidenceRevise3, EvidenceRecord3, EvidenceFamily3, AssumptionEvidenceResolution1, ConfigurationRequest3, ConfigurationPreview3, ConfigurationCommit3, ModifiedRunSeedRead6 } from './contract';
+import type {
+  ConfigurationRequest4,
+  ConfigurationPreview4,
+  ConfigurationPreview6,
+  ConfigurationPreview7,
+  ConfigurationCommit4,
+  EvidenceCreate3,
+  EvidenceRevise3,
+  EvidenceRecord3,
+  EvidenceFamily3,
+  AssumptionEvidenceResolution1,
+  ConfigurationRequest3,
+  ConfigurationPreview3,
+  ConfigurationCommit3,
+  ModifiedRunSeedRead6,
+} from './contract';
 import type { ApproachState2, ApproachPreviewRequestRead2, ApproachPreviewRead3, ApproachDraftWriteRead2, ApproachDraftRead2, ApproachVersionSave1, ApproachVersionSavedRead3, ApproachRestore1, ApproachSavedRead3, ApproachPageRequest1, ApproachVersionPage2, ApproachUsageRequest1, ApproachUsagePage1, ApproachReceiptRead2, ApproachReceiptCategory1 } from './contract';
 import type { UnitCatalog1, PublicNewModel } from './contract';
 import type { StudyArchiveCommand } from './contract';
@@ -376,7 +391,11 @@ export class HyprnMvpApi {
   };
   previewConfiguration2 = async (candidate: ConfigurationRequest2) => (await this.request<ConfigurationPreview2>(`/studies/${candidate.study_id}/configurations/preview`, candidate)).data;
   commitConfiguration2 = async (body: ConfigurationCommit2) => (await this.mutate<FrozenConfigurationRead7>(`/studies/${body.configuration.study_id}/configurations`, body, 'configuration', body.configuration.study_id)).data;
-  previewConfiguration4 = async (candidate: ConfigurationRequest4, signal?: AbortSignal) => (await this.request<ConfigurationPreview4 | ConfigurationPreview6>(`/studies/${candidate.study_id}/configurations/preview`, candidate, 'POST', signal)).data;
+  previewConfiguration4 = async (candidate: ConfigurationRequest4, signal?: AbortSignal) => (
+    await this.request<ConfigurationPreview4 | ConfigurationPreview6 | ConfigurationPreview7>(
+      `/studies/${candidate.study_id}/configurations/preview`, candidate, 'POST', signal
+    )
+  ).data;
   commitConfiguration4 = async (body: ConfigurationCommit4) => (await this.mutate<FrozenConfigurationRead7>(`/studies/${body.configuration.study_id}/configurations`, body, 'configuration', body.configuration.study_id)).data;
   previewConfiguration3 = async (candidate: ConfigurationRequest3, signal?: AbortSignal) => (await this.request<ConfigurationPreview3>(`/studies/${candidate.study_id}/configurations/preview`, candidate, 'POST', signal)).data;
   commitConfiguration3 = async (body: ConfigurationCommit3) => (await this.mutate<FrozenConfigurationRead7>(`/studies/${body.configuration.study_id}/configurations`, body, 'configuration', body.configuration.study_id)).data;

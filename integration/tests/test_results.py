@@ -247,7 +247,10 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
         k:bundle['manifest'][k] for k in ('run_id','bundle_digest')}
     assert native['process_state']=='finished'
     assert native['results']['schema_version'] == '2'
-    assert not {'convergence', 'optimization', 'applicability', 'completeness'} & native['results'].keys()
+    assert (
+        not {'convergence', 'optimization', 'applicability', 'completeness'}
+        & native['results'].keys()
+    )
     assert b'HYPRN_MVP_RESULT_V2 ' in raw
     assert runtime.retained_bundle(node.uuid)==bundle
     envelope=json.loads(raw)
@@ -276,7 +279,10 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
     assert (evidence/'result.json').read_bytes()==node.outputs.retrieved.base.repository.get_object_content('result.json',mode='rb')
 
 
-@pytest.mark.parametrize('fault', [None, 'legacy_field', 'missing', 'duplicate', 'nonfinite', 'unassigned', 'wrong_protocol'])
+@pytest.mark.parametrize(
+    'fault',
+    [None, 'legacy_field', 'missing', 'duplicate', 'nonfinite', 'unassigned', 'wrong_protocol'],
+)
 def test_current_result_protocol_retains_scalar_guards_without_aggregate_status(fault):
     import json
     from hyprn_mvp_integration.results import validate_result, read_stored_result
@@ -293,9 +299,17 @@ def test_current_result_protocol_retains_scalar_guards_without_aggregate_status(
     raw = json.dumps(dict(reason='exited', exit_code=0, output=prefix + json.dumps(result)))
     if fault:
         with pytest.raises(ValueError):
-            validate_result(raw, request, case['frozen']['model_snapshot'], result_schema_version='2')
+            validate_result(
+                raw, request, case['frozen']['model_snapshot'], result_schema_version='2'
+            )
     else:
-        assert validate_result(raw, request, case['frozen']['model_snapshot'], result_schema_version='2') == result
+        assert (
+            validate_result(
+                raw, request, case['frozen']['model_snapshot'], result_schema_version='2'
+            )
+            == result
+        )
         assert read_stored_result(result, request, case['frozen']['model_snapshot']) == result
         assert read_stored_result(legacy, request, case['frozen']['model_snapshot']) == legacy
-        with pytest.raises(ValueError):validate_result(raw, request, case['frozen']['model_snapshot'])
+        with pytest.raises(ValueError):
+            validate_result(raw, request, case['frozen']['model_snapshot'])

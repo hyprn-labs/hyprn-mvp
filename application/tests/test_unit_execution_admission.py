@@ -691,9 +691,11 @@ def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(c
         case = fixture()
         config = case['frozen']['configuration']
         if layout != '2':
-            config.update(schema_version='2' if layout == '3' else '3',
-                          context_source=dict(kind='current_study', expected_study_revision='fixture:1'),
-                          derivation=None)
+            config.update(
+                schema_version='2' if layout == '3' else '3',
+                context_source=dict(kind='current_study', expected_study_revision='fixture:1'),
+                derivation=None,
+            )
             for item in config['inputs']:
                 item['result_binding'] = None
             if layout == '4':
@@ -718,3 +720,54 @@ def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(c
         result_history_version('10', '1')
     with pytest.raises(ValueError):
         result_history_version(layout, '2')
+
+
+def test_current_prior_run_closure_freezes_and_reexecutes_with_exact_protocol(catalog):
+    case = case6(catalog)
+    frozen = case['frozen']
+    model, config = frozen['model_snapshot'], frozen['configuration']
+    prior = deepcopy(config)
+    prior.update(configuration_id=uid(), configuration_revision_id=uid())
+    signed(prior)
+    context = sample(D['ApproachRunContext2'])
+    context.update(
+        study_id=prior['study_id'],
+        configuration_revision_id=prior['configuration_revision_id'],
+        configuration_digest=prior['digest'],
+        model_revision_id=model['model_revision_id'],
+        model_digest=model['digest'],
+        context=prior['context_snapshot'],
+        assessment=None,
+        errors=[],
+    )
+    context['request'].update(run_id=context['run_id'], scope=prior['study_id'])
+    result = sample(D['RetainedResults2'])
+    result.update(
+        run_id=context['run_id'],
+        bundle_digest=context['request']['bundle_digest'],
+        execution=dict(state='failed', exit_code=1, message='Prior recorded failure'),
+        outputs=[],
+        criteria=[],
+    )
+    context['results'] = result
+    signed(context)
+    version = sample(D['ApproachVersion1'])
+    version['study_id'] = prior['study_id']
+    link(version, model)
+    version['content']['basis_refs'] = [dict(kind='run', run_id=context['run_id'],
+        reason='Prior recorded calculation', relation='context')]
+    signed(version)
+    closure = build_closure(version, resolution(models=[model], configurations=[prior],
+        run_contexts=[context]), study_id=prior['study_id'])
+    assert closure['schema_version'] == '4'
+    assert closure['run_contexts'] == [context]
+    frozen.update(schema_version='8', approach_closure=closure)
+    config['approach_binding'] = dict(approach_id=version['approach_id'],
+        approach_version_id=version['approach_version_id'], approach_digest=version['digest'],
+        closure_digest=closure['digest'], case_id=None)
+    case['prepared'].update(schema_version='3', result_protocol_version='2')
+    repin(case)
+    bundle, request = assemble(case)
+    assert bundle['manifest']['input_schema_version'] == '9'
+    validate_retained_bundle(bundle, request, frozen)
+    assert json.loads(bundle['files']['approach/closure.json']) == closure

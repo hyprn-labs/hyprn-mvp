@@ -473,9 +473,12 @@ def public_record_view(value):
     if not isinstance(value, dict):
         return value
     result = {key: public_record_view(item) for key, item in value.items()}
-    if (value.get('schema_version') == '1'
-            and {'run_id', 'bundle_digest', 'outputs', 'execution', 'criteria', 'artifacts'} <= value.keys()
-            and LEGACY_RESULT_FIELDS <= value.keys()):
+    if (
+        value.get('schema_version') == '1'
+        and {'run_id', 'bundle_digest', 'outputs', 'execution', 'criteria', 'artifacts'}
+        <= value.keys()
+        and LEGACY_RESULT_FIELDS <= value.keys()
+    ):
         # Closed validation prevents applying a scientific projection to an
         # arbitrary object that happens to contain similarly named keys.
         validate('RetainedResults', value)

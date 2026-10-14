@@ -21,7 +21,21 @@ def rewrite(value):
     return value
 schemas.update(rewrite(definitions()))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
-_PUBLIC_READ_SUCCESSORS = {'ApproachClosureRead3': 'ApproachClosureRead4', 'FrozenConfigurationRead7': 'FrozenConfigurationRead8', 'RunHistoryRead6': 'RunHistoryRead7', 'ApproachSavedRead3': 'ApproachSavedRead4', 'ApproachVersionSavedRead3': 'ApproachVersionSavedRead4', 'ApproachPreviewRead3': 'ApproachPreviewRead4', 'ApproachResolution3': 'ApproachResolution4', 'ApproachReceiptRead2': 'ApproachReceiptRead3', 'ConfigurationPreviewRead6': 'ConfigurationPreviewRead7', 'ModifiedRunSeedRead6': 'ModifiedRunSeedRead7', 'ResultSource': 'ResultSource2', 'ResultSourcePage': 'ResultSourcePage2'}
+_PUBLIC_READ_SUCCESSORS = {
+    'ApproachClosureRead3': 'ApproachClosureRead4',
+    'FrozenConfigurationRead7': 'FrozenConfigurationRead8',
+    'RunHistoryRead6': 'RunHistoryRead7',
+    'ApproachSavedRead3': 'ApproachSavedRead4',
+    'ApproachVersionSavedRead3': 'ApproachVersionSavedRead4',
+    'ApproachPreviewRead3': 'ApproachPreviewRead4',
+    'ApproachResolution3': 'ApproachResolution4',
+    'ApproachReceiptRead2': 'ApproachReceiptRead3',
+    'ApproachCommandResultRead2': 'ApproachCommandResultRead3',
+    'ConfigurationPreviewRead6': 'ConfigurationPreviewRead7',
+    'ModifiedRunSeedRead6': 'ModifiedRunSeedRead7',
+    'ResultSource': 'ResultSource2',
+    'ResultSourcePage': 'ResultSourcePage2',
+}
 
 schemas["Error"]["properties"]["error"]["properties"]["code"]["enum"] += ["rate_limited","internal_error","history_not_recorded","corrupt_retained_record","unsupported_record_version","missing_results","missing_artifacts","missing_or_invalid_artifact"]
 def ref(name):return {"$ref":"#/components/schemas/"+name}
@@ -173,7 +187,7 @@ schemas["ConfigurationCommit"]=ref("ConfigurationCommit1")
 schemas.pop('ConfigurationCommitV2',None)
 schemas['PublicConfigurationRequest']={'oneOf':[ref('ConfigurationCandidate1'),ref('ConfigurationRequest2'),ref('ConfigurationRequest3'),ref('ConfigurationRequest4')]}
 schemas['PublicConfigurationCommit']={'oneOf':[ref('ConfigurationCommit1'),ref('ConfigurationCommit2'),ref('ConfigurationCommit3'),ref('ConfigurationCommit4')]}
-schemas['PublicConfigurationPreview']={'oneOf':[ref('CompatibilityResult1'),ref('ConfigurationPreview2'),ref('ConfigurationPreview3'),ref('ConfigurationPreview4'),ref('ConfigurationPreview6')]}
+schemas['PublicConfigurationPreview']={'oneOf':[ref('CompatibilityResult1'),ref('ConfigurationPreview2'),ref('ConfigurationPreview3'),ref('ConfigurationPreview4'),ref('ConfigurationPreview6'),ref('ConfigurationPreview7')]}
 # Preserve the earlier concrete public reader; implemented import/export now
 # uses ModelPackage with the qualified native Model4 branch.
 schemas["PublicModelPackageRead3"]={"oneOf":[ref("ModelPackage1"),ref("ModelPackage2"),ref("ModelPackage3")]}
@@ -457,7 +471,9 @@ def public_views():
         legacy['required'].remove(key)
     legacy['properties']['record_view'] = ref('RecordView1')
     legacy['required'].append('record_view')
-    legacy['description'] = 'Public projection of a retained format-1 result; exact source bytes are downloadable.'
+    legacy['description'] = (
+        'Public projection of a retained format-1 result; exact source bytes are downloadable.'
+    )
     affected = {'RetainedResults'}
     def contains(value):
         if isinstance(value, dict):
@@ -483,9 +499,15 @@ def public_views():
         schemas['Previous'+old] = copy.deepcopy(schemas[old])
     def old_refs(value):
         if isinstance(value, dict):
-            return {k:('#/components/schemas/Previous'+v.removeprefix('#/components/schemas/')
-                if k == '$ref' and v.removeprefix('#/components/schemas/') in _PUBLIC_READ_SUCCESSORS
-                else old_refs(v)) for k,v in value.items()}
+            return {
+                k: (
+                    '#/components/schemas/Previous' + v.removeprefix('#/components/schemas/')
+                    if k == '$ref'
+                    and v.removeprefix('#/components/schemas/') in _PUBLIC_READ_SUCCESSORS
+                    else old_refs(v)
+                )
+                for k, v in value.items()
+            }
         if isinstance(value, list):return [old_refs(v) for v in value]
         return value
     # Only the new successor definitions need their embedded predecessor links frozen.

@@ -277,7 +277,9 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     spec = json.loads(public.read_text())
     source_route=spec['paths']['/studies/{study_id}/result-sources']
     assert set(source_route)=={'get'}
-    assert source_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={'$ref':'#/components/schemas/ResultSourcePage2'}
+    assert source_route['get']['responses']['200']['content']['application/json']['schema'][
+        'properties'
+    ]['data'] == {'$ref': '#/components/schemas/ResultSourcePage2'}
     assert spec['paths']['/studies/{study_id}/configurations/preview']['post']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/PublicConfigurationRequest')
     seed_route=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']
     assert set(seed_route)=={'get'}
@@ -286,8 +288,12 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     # the unchanged historical ModifiedRunSeed1-4 union plus the new ModifiedRunSeed6.
     assert seed_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={
         '$ref':'#/components/schemas/ModifiedRunSeedRead6'}
-    assert spec['components']['schemas']['ModifiedRunSeedRead6']=={'oneOf':[
-        {'$ref':'#/components/schemas/PreviousModifiedRunSeedRead6'}, {'$ref':'#/components/schemas/ModifiedRunSeed7'}]}
+    assert spec['components']['schemas']['ModifiedRunSeedRead6'] == {
+        'oneOf': [
+            {'$ref': '#/components/schemas/PreviousModifiedRunSeedRead6'},
+            {'$ref': '#/components/schemas/ModifiedRunSeed7'},
+        ]
+    }
     assert spec['components']['schemas']['ModifiedRunSeed']=={'oneOf':[
         {'$ref':'#/components/schemas/ModifiedRunSeed1'}, {'$ref':'#/components/schemas/ModifiedRunSeed2'},
         {'$ref':'#/components/schemas/ModifiedRunSeed3'}, {'$ref':'#/components/schemas/ModifiedRunSeed4'}]}
@@ -498,3 +504,15 @@ def test_every_new_object_is_closed_and_references_are_local():
                  'ModelingConfiguration2', 'ModelingConfigurationRevision2', 'ExecutionBundle3',
                  'NativeSource', 'ScalarMapping', 'RecordRequest', 'NativeInventory', 'ComputationalRecordManifest1'):
         visit(DEFS[name])
+
+
+def test_public_preview_and_receipt_accept_current_prior_run_context():
+    schemas = json.loads((ROOT / 'contracts/hyprn-mvp.openapi.yaml').read_text())['components'][
+        'schemas'
+    ]
+    assert {'$ref': '#/components/schemas/ConfigurationPreview7'} in schemas[
+        'PublicConfigurationPreview'
+    ]['oneOf']
+    assert {'$ref': '#/components/schemas/ApproachCommandResult3'} in schemas[
+        'ApproachCommandResultRead2'
+    ]['anyOf']

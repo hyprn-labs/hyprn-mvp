@@ -18,7 +18,7 @@ import zipfile
 from datetime import datetime
 
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
-from .execution_bundle import validate_assumption_closure
+from .execution_bundle import result_history_version, validate_assumption_closure
 from .history import History, complete_outcome
 from .locations import refuse_location
 from .modified_runs import ModifiedRuns
@@ -296,7 +296,9 @@ def inspect_record(raw, *, native_inventory=None):
             if pin and version=='2':bundle_files['approach/closure.json']=canonical(closure)
             request=dict(run_id=rid,bundle_digest=mapping['bundle_digest'])
             validate_retained_bundle(dict(manifest=bundle_manifest,files=bundle_files),request,frozen,raw_snapshot=True)
-            result=data_json(files[prefix+'results.json']);validate('RetainedResults',result)
+            result = data_json(files[prefix + 'results.json'])
+            validate('RetainedResultsRead2', result)
+            result_history_version(bundle_manifest['schema_version'], result['schema_version'])
             if result['run_id']!=rid or result['bundle_digest']!=mapping['bundle_digest'] or digest(result)!=mapping['results_digest']:raise ValueError('Portable result identity')
             complete_outcome(result,model,config)
             history['results']=result

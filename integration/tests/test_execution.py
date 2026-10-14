@@ -3,7 +3,7 @@ import copy
 import json
 from pathlib import Path
 import pytest
-from execution_fixtures import fixture, runtime_fixture, uid, raw_hash
+from execution_fixtures import fixture, current_fixture, runtime_fixture, uid, raw_hash
 from hyprn_mvp_app.store import digest
 
 def assemble(case=None, runtime=None):
@@ -232,7 +232,8 @@ def execution_runtime():
 @pytest.mark.integration
 @pytest.mark.parametrize('kind,multiplier,expected',[('chain',2,[7,49]),('chain',3,[9,81]),('unrelated',2,[3]),('units',2,[2])])
 def test_native_general_scalar_equations_retained_exactly(execution_runtime,kind,multiplier,expected):
-    case=fixture(kind,multiplier);bundle=assemble(case,execution_runtime.bundle_runtime())
+    case = current_fixture(kind, multiplier)
+    bundle = assemble(case, execution_runtime.bundle_runtime())
     request=dict(run_id=bundle['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest=digest({'kind':kind,'multiplier':multiplier}),bundle_digest=bundle['manifest']['bundle_digest'])
     record=execution_runtime.launch(bundle,request)
     result=record['results']
@@ -255,28 +256,37 @@ def test_native_general_scalar_equations_retained_exactly(execution_runtime,kind
 @pytest.mark.integration
 @pytest.mark.parametrize('source,assigned',[('pass\n',False),("outputs['y'] = float('nan')\n",True),("outputs['y'] = float('inf')\n",True),("outputs['y'] = 12\nraise RuntimeError('downstream failed')\n",True)])
 def test_incomplete_downstream_preserves_completed_upstream(execution_runtime,source,assigned):
-    case=fixture(downstream=source);bundle=assemble(case,execution_runtime.bundle_runtime())
+    case = current_fixture(downstream=source)
+    bundle = assemble(case, execution_runtime.bundle_runtime())
     request=dict(run_id=bundle['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest=digest({'source':source}),bundle_digest=bundle['manifest']['bundle_digest'])
     record=execution_runtime.launch(bundle,request);outputs=record['results']['outputs']
     upstream=next(o for o in outputs if o['target']==case['targets']['linear']['u'])
     downstream=next(o for o in outputs if o['target']==case['targets']['square']['y'])
     assert upstream['value']==7 and upstream['availability']=='available'
     assert downstream['value'] is None and downstream['availability']=='unavailable' and downstream['assigned']==assigned
-    assert record['results']['completeness']['available']==1
+    assert len(outputs) == 2
+    assert sum(o['availability'] == 'available' for o in outputs) == 1
+    assert record['results']['schema_version'] == '2'
 
 @pytest.mark.integration
 def test_prepared_native_execution_does_not_contact_modeling(execution_runtime,monkeypatch):
     import hyprn_mvp_app.modeling
     def forbidden(*args,**kwargs):raise AssertionError('Prepared execution contacted modeling')
-    case=fixture();bundle=assemble(case,execution_runtime.bundle_runtime())
+
+    case = current_fixture()
+    bundle = assemble(case, execution_runtime.bundle_runtime())
     monkeypatch.setattr(hyprn_mvp_app.modeling.ModelingClient,'call',forbidden)
     request=dict(run_id=bundle['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest=digest({'prepared':True}),bundle_digest=bundle['manifest']['bundle_digest'])
-    assert execution_runtime.launch(bundle,request)['results']['completeness']['available']==2
+    result = execution_runtime.launch(bundle,request)['results']
+    assert result['schema_version'] == '2'
+    assert len(result['outputs']) == 2
+    assert all(o['availability'] == 'available' for o in result['outputs'])
 
 @pytest.mark.integration
 @pytest.mark.parametrize('point,expected',[('before_node',0),('after_node',1),('before_continuation',1),('after_continuation',1),('before_response',1)])
 def test_native_fault_windows(execution_runtime,point,expected):
-    case=fixture();bundle=assemble(case,execution_runtime.bundle_runtime())
+    case = current_fixture()
+    bundle = assemble(case, execution_runtime.bundle_runtime())
     request=dict(run_id=bundle['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest=digest({'fault':point}),bundle_digest=bundle['manifest']['bundle_digest'])
     def fault(at):
         if at==point:raise RuntimeError('injected native boundary fault')
@@ -297,7 +307,9 @@ def test_native_fault_windows(execution_runtime,point,expected):
 @pytest.mark.integration
 @pytest.mark.parametrize('value,expected',[(0,3),(-2,-1)])
 def test_explicit_zero_and_negative_inputs(execution_runtime,value,expected):
-    case=fixture();config=case['frozen']['configuration'];config['inputs'][0]['value']=value
+    case = current_fixture()
+    config = case['frozen']['configuration']
+    config['inputs'][0]['value'] = value
     config['digest']=digest({k:v for k,v in config.items() if k!='digest'})
     case['prepared']['configuration_digest']=config['digest']
     from hyprn_mvp_app.execution import executable_digest
@@ -312,7 +324,8 @@ def test_explicit_zero_and_negative_inputs(execution_runtime,value,expected):
 @pytest.mark.integration
 @pytest.mark.parametrize('mode',['missing','incompatible'])
 def test_invalid_input_configuration_never_becomes_zero(execution_runtime,mode):
-    case=fixture('units');config=case['frozen']['configuration']
+    case = current_fixture('units')
+    config = case['frozen']['configuration']
     if mode=='missing':config['inputs']=[]
     else:config['inputs'][0]['units']='s' if mode=='incompatible' else 'degC'
     config['digest']=digest({k:v for k,v in config.items() if k!='digest'})
@@ -327,12 +340,15 @@ def test_invalid_input_configuration_never_becomes_zero(execution_runtime,mode):
     request=dict(run_id=bundle['manifest']['run_id'],scope=config['study_id'],command_id=uid(),payload_digest=digest({'invalid':mode}),bundle_digest=bundle['manifest']['bundle_digest'])
     record=execution_runtime.launch(bundle,request)
     assert record['process_state']=='finished' and record['exit_status']==301
-    assert record['results']['completeness']['available']==0
+    assert record['results']['schema_version'] == '2'
+    assert all(o['availability'] == 'unavailable' and o['value'] is None
+        for o in record['results']['outputs'])
 
 
 @pytest.mark.integration
 def test_generated_symbol_view_inplace_write_is_explicitly_unavailable(execution_runtime):
-    case=fixture('inplace');bundle=assemble(case,execution_runtime.bundle_runtime())
+    case = current_fixture('inplace')
+    bundle = assemble(case, execution_runtime.bundle_runtime())
     request=dict(run_id=bundle['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],
                  command_id=uid(),payload_digest=digest({'case':'inplace'}),bundle_digest=bundle['manifest']['bundle_digest'])
     record=execution_runtime.launch(bundle,request)

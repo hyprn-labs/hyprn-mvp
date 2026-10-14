@@ -30,9 +30,16 @@ def env(tmp_path,request):
         db.execute('INSERT INTO model_associations VALUES(?,?,?)', (study['study_id'], config['model_id'], uid()))
         db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(config['configuration_id'],study['study_id'],config['configuration_revision_id']))
     service = Submissions(store, None, None)
-    def source():
+    def source(*, current=False):
         run = service.submit(actor, study['study_id'], dict(command_id=uid(), configuration_revision_id=config['configuration_revision_id']))
-        rid = run['run_id']; bundle = assemble_bundle(rid, case['prepared'], case['files'], case['frozen'], runtime_fixture())
+        prepared = copy.deepcopy(case['prepared'])
+        if current:
+            prepared.update(schema_version='3', result_protocol_version='2')
+            prepared['prepared_digest'] = digest(
+                {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+            )
+        rid = run['run_id']
+        bundle = assemble_bundle(rid, prepared, case['files'], case['frozen'], runtime_fixture())
         request = dict(run_id=rid, scope=study['study_id'], command_id=run['command_id'], payload_digest=store.receipt(actor,study['study_id'],'run',run['command_id'])['payload_digest'], bundle_digest=bundle['manifest']['bundle_digest'])
         outputs = json.loads(case['files'][case['prepared']['entrypoint']['bindings_path']])['outputs']
         results = dict(schema_version='1', run_id=rid, bundle_digest=request['bundle_digest'],
@@ -40,6 +47,10 @@ def env(tmp_path,request):
             optimization=dict(termination='not_applicable',feasibility='not_applicable'), completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),
             outputs=[dict(target=o['target'],value=150+i,units=o['units'],availability='available',reason=None,producer_completed=True,assigned=True) for i,o in enumerate(outputs)],
             criteria=[], applicability=dict(state='unassessed',evidence_refs=[]), artifacts=[])
+        if current:
+            for key in ('convergence', 'optimization', 'completeness', 'applicability'):
+                del results[key]
+            results['schema_version'] = '2'
         association = dict(store_uuid=uid(),process_uuid=uid())
         payload = dict(actor=actor, frozen=copy.deepcopy(case['frozen']), request=request,
             bundle=dict(manifest=bundle['manifest'],files={p:base64.b64encode(raw).decode() for p,raw in bundle['files'].items()}))

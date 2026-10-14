@@ -1,5 +1,11 @@
 import { ConfigurationApproachPicker } from './ConfigurationApproach';
-import type { ApproachSelection1, ConfigurationRequest4, ConfigurationPreview4, ConfigurationPreview6 } from './contract';
+import type {
+  ApproachSelection1,
+  ConfigurationRequest4,
+  ConfigurationPreview4,
+  ConfigurationPreview6,
+  ConfigurationPreview7,
+} from './contract';
 import { Assumptions } from './Assumptions';
 import { ModelAssumptionsLink } from './ConfigurationRecord';
 import { ConfigurationChanges, ModelAssumptionChanges, evidenceUseChange } from './ChangePreview';
@@ -44,14 +50,22 @@ export function ConfigurationPanel({ initialApproach = null, modified, onCancelM
   // Command capability, not record interpretation: Seed1 produces ConfigurationRequest2, which
   // carries no description override, approach selection or configuration assumptions.
   const legacyRequest = seed?.schema_version === '1';
-  const [review, setReview] = useState<ConfigurationPreview2 | ConfigurationPreview3 | ConfigurationPreview4 | ConfigurationPreview6 | null>(null);
+  const [review, setReview] = useState<
+    ConfigurationPreview2 | ConfigurationPreview3
+    | ConfigurationPreview4 | ConfigurationPreview6 | ConfigurationPreview7
+    | null
+  >(null);
   const restoreReviewFocus = useRef(false);
   const reviewDialog = useRef<HTMLDialogElement>(null), reviewResolve = useRef<((accepted: boolean) => void) | null>(null), reviewInvoker = useRef<HTMLElement | null>(null);
   useEffect(() => { if (review) reviewDialog.current?.showModal(); }, [review]);
   function closeReview(accepted: boolean) { reviewDialog.current?.close(); setReview(null); const resolve = reviewResolve.current; reviewResolve.current = null; resolve?.(accepted); restoreReviewFocus.current = true; }
   useEffect(() => () => { reviewResolve.current?.(false); }, []);
   const [resultTarget, setResultTarget] = useState<string | null>(null);
-  const [sourcePreview, setSourcePreview] = useState<ConfigurationPreview2 | ConfigurationPreview3 | ConfigurationPreview4 | ConfigurationPreview6 | null>(null), [sourceError, setSourceError] = useState('');
+  const [sourcePreview, setSourcePreview] = useState<
+    ConfigurationPreview2 | ConfigurationPreview3
+    | ConfigurationPreview4 | ConfigurationPreview6 | ConfigurationPreview7
+    | null
+  >(null), [sourceError, setSourceError] = useState('');
   const previewGeneration = useRef(0);
   const original = useRef<{ id: string; draft: Draft } | null>(null);
   const [attachment, setAttachment] = useState<{ label: string; input?: string; criterion?: string; scope: EvidenceResourceRef1 | null } | null>(null);
@@ -221,7 +235,40 @@ export function ConfigurationPanel({ initialApproach = null, modified, onCancelM
       }), numerical: seed?.configuration.numerical ?? numerical, context_source: seed ? {kind:'source_run', source_run_id:seed.source_run_id, source_configuration_digest:seed.source_configuration_digest, observed_study_revision:seed.current_study_revision, choice_confirmed:true} : { kind: 'current_study', expected_study_revision: study.revision },
       notes: value.originalNotes,
       derivation: seed?.configuration.derivation ?? null };
-    return legacyRequest ? { ...common, schema_version: '2', evidence_version_ids: [...new Set([...seed.configuration.evidence_version_ids, ...value.contextEvidence, ...value.inputs.flatMap(i => i.evidence_version_ids), ...value.criteria.flatMap(c => c.evidence_version_ids)])] } : { ...common, ...(value.approachProtocol || seed?.schema_version === '3' || seed?.schema_version === '4' || seed?.schema_version === '6' || seed?.schema_version === '7' || !seed && (snapshot.schema_version === '2' || snapshot.schema_version === '3' || snapshot.schema_version === '4') ? {schema_version: '4' as const, approach_selection: value.approachSelection} : {schema_version: '3' as const}), context_override: { schema_version: '1', description: value.description, boundary: value.boundary }, assumptions: value.assumptions, general_context_evidence_version_ids: value.contextEvidence };
+    return legacyRequest
+      ? {
+          ...common,
+          schema_version: '2',
+          evidence_version_ids: [
+            ...new Set([
+              ...seed.configuration.evidence_version_ids,
+              ...value.contextEvidence,
+              ...value.inputs.flatMap((i) => i.evidence_version_ids),
+              ...value.criteria.flatMap((c) => c.evidence_version_ids),
+            ]),
+          ],
+        }
+      : {
+          ...common,
+          ...(value.approachProtocol ||
+          seed?.schema_version === '3' ||
+          seed?.schema_version === '4' ||
+          seed?.schema_version === '6' ||
+          seed?.schema_version === '7' ||
+          (!seed &&
+            (snapshot.schema_version === '2' ||
+              snapshot.schema_version === '3' ||
+              snapshot.schema_version === '4'))
+            ? { schema_version: '4' as const, approach_selection: value.approachSelection }
+            : { schema_version: '3' as const }),
+          context_override: {
+            schema_version: '1',
+            description: value.description,
+            boundary: value.boundary,
+          },
+          assumptions: value.assumptions,
+          general_context_evidence_version_ids: value.contextEvidence,
+        };
   }
   function previewCandidate(candidate: ConfigurationRequest2 | ConfigurationRequest3 | ConfigurationRequest4) {
     return candidate.schema_version === '4' ? api.previewConfiguration4(candidate) : candidate.schema_version === '3' ? api.previewConfiguration3(candidate) : api.previewConfiguration2(candidate);

@@ -117,7 +117,8 @@ def commit_body(api):
 def test_inventory_reads_fresh_retained_bytes_offline_and_pages(api):
     api['model'].offline=True;c=api['client'];route=path(api,'result-sources')
     page=c.get(route,params={'limit':1});assert page.status_code==200,page.text
-    data=page.json()['data'];validate('ResultSourcePage2',data)
+    data = page.json()['data']
+    validate('ResultSourcePage2', data)
     assert len(data['items'])==1 and data['next_cursor']
     item=data['items'][0];assert item['source_run_id']==api['rid'] and item['labels']['model_name'] is None
     assert item['native_availability']=='not_rechecked' and item['value']==150

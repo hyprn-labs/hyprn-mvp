@@ -213,8 +213,11 @@ def supports_descriptive_execution(capabilities, model):
     if not isinstance(capabilities,dict):return False
     execution=capabilities.get('execution_versions',{})
     pairs = [('8','2'), ('10','3')]
-    if (not any(bundle in execution.get('bundle_versions',[]) and artifact in execution.get('artifact_versions',[]) for bundle,artifact in pairs)
-            or 'hyprn_mvp.openmdao.program/1' not in execution.get('program_protocols',[])):
+    if not any(
+        bundle in execution.get('bundle_versions', [])
+        and artifact in execution.get('artifact_versions', [])
+        for bundle, artifact in pairs
+    ) or 'hyprn_mvp.openmdao.program/1' not in execution.get('program_protocols', []):
         return False
     if model['schema_version'] not in capabilities.get('schema_versions',[]):return False
     advertised={(c.get('id'),c.get('version')) for c in capabilities.get('capabilities',[]) if c.get('supported') is True}

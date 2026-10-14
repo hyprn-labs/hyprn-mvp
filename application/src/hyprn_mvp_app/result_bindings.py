@@ -64,11 +64,23 @@ class ResultBindings:
             units = port_units(model)[(instance['instance_id'],instance['definition_version_id'],port['port_id'])]
             if units != output['units']:
                 raise ValueError('Source units mismatch')
-            value = dict(source_run_id=rid, source_output=deepcopy(target), results_digest=digest(results),
-                source_configuration_digest=config['digest'], value=output['value'], units=output['units'],
-                labels=dict(run_name=config['name'], model_name=None, model_revision_id=model['model_revision_id'],
-                    instance_name=instance['name'], output_name=port['name']),
-                outcomes={k:deepcopy(results[k]) for k in ('execution','criteria')}, native_availability='not_rechecked')
+            value = dict(
+                source_run_id=rid,
+                source_output=deepcopy(target),
+                results_digest=digest(results),
+                source_configuration_digest=config['digest'],
+                value=output['value'],
+                units=output['units'],
+                labels=dict(
+                    run_name=config['name'],
+                    model_name=None,
+                    model_revision_id=model['model_revision_id'],
+                    instance_name=instance['name'],
+                    output_name=port['name'],
+                ),
+                outcomes={k: deepcopy(results[k]) for k in ('execution', 'criteria')},
+                native_availability='not_rechecked',
+            )
             validate('ResultSource2', value)
             return value
         except (StopIteration, ValueError, KeyError, TypeError, DomainError):

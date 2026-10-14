@@ -1214,7 +1214,10 @@ class ApproachClosure:
     def envelope_digest(self, root, reached):
         version = (
             '4'
-            if any(kind == 'run_contexts' and self.tables[kind][key]['schema_version'] == '2' for kind, key in reached)
+            if any(
+                kind == 'run_contexts' and self.tables[kind][key]['schema_version'] == '2'
+                for kind, key in reached
+            )
             else '3'
             if root['schema_version'] == '2'
             or any(
@@ -1276,7 +1279,9 @@ def verify_approach(manifest, files, config):
         raise ValueError('Approach model/bundle version mismatch')
     closure = ApproachClosure(files[path], config['study_id'])
     v = closure.pin(config)
-    if (bundle_layout(manifest) in ('8', '9')) != (closure.value['schema_version'] in ('3', '4')) or (bundle_layout(manifest) == '9') != (closure.value['schema_version'] == '4'):
+    if (bundle_layout(manifest) in ('8', '9')) != (
+        closure.value['schema_version'] in ('3', '4')
+    ) or (bundle_layout(manifest) == '9') != (closure.value['schema_version'] == '4'):
         raise ValueError('Approach descriptive bundle branch mismatch')
     if (
         v != closure.root
@@ -1743,7 +1748,10 @@ def bundle_layout(manifest):
     version = manifest.get('schema_version')
     if version == '10':
         layout = manifest.get('input_schema_version')
-        if layout not in ('2', '3', '4', '5', '6', '8', '9') or manifest['result_protocol_version'] != '2':
+        if (
+            layout not in ('2', '3', '4', '5', '6', '8', '9')
+            or manifest['result_protocol_version'] != '2'
+        ):
             raise ValueError('Unsupported bundle input layout or result protocol')
         return layout
     if manifest.get('result_protocol_version') != '1':
@@ -1843,7 +1851,10 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
             raise ValueError('Missing declared entrypoint file')
     prepared = frozen_json(files['preparation.json'])
     verify_object_digest(files['preparation.json'], 'prepared_digest')
-    if (prepared.get('schema_version'), manifest['result_protocol_version']) not in (('2', '1'), ('3', '2')):
+    if (prepared.get('schema_version'), manifest['result_protocol_version']) not in (
+        ('2', '1'),
+        ('3', '2'),
+    ):
         raise ValueError('Unsupported preparation version')
     for key in ('entrypoint', 'prepared_digest', 'executable_content_digest'):
         if manifest[key] != prepared[key]:
@@ -1857,9 +1868,9 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
     ):
         raise ValueError('Exact Bundle8 model version mismatch')
     if model['schema_version'] in ('3', '4'):
-        if (model['schema_version'] == '4' and bundle_layout(manifest) not in ('8', '9')) or manifest[
-            'schema_version'
-        ] not in ('6', '8', '9'):
+        if (
+            model['schema_version'] == '4' and bundle_layout(manifest) not in ('8', '9')
+        ) or manifest['schema_version'] not in ('6', '8', '9'):
             raise ValueError('Invalid configuration/model version pairing')
         verify_unit_declarations(model)
     if verify_object_digest(files['model.json']) != manifest['model_digest']:
@@ -2265,9 +2276,14 @@ def execute(root, expected_digest, expected_manifest_sha256):
         result.update(
             convergence=dict(state='not_applicable', diagnostics_ref=None),
             optimization=dict(termination='not_applicable', feasibility='not_applicable'),
-            completeness=dict(expected=len(outputs), available=available,
-                failed=sum(not o['producer_completed'] for o in outputs), unavailable=len(outputs)-available),
-            applicability=dict(state='unassessed', evidence_refs=[]))
+            completeness=dict(
+                expected=len(outputs),
+                available=available,
+                failed=sum(not o['producer_completed'] for o in outputs),
+                unavailable=len(outputs) - available,
+            ),
+            applicability=dict(state='unassessed', evidence_refs=[]),
+        )
     result['criteria'] = evaluate_criteria(result, configuration['criteria'], unit_conversion)
     return result
 
@@ -2277,7 +2293,10 @@ def main():
         raise RuntimeError('Restricted fixed entrypoint and trusted input pins required')
     result = execute(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
     print(
-        '\nHYPRN_MVP_RESULT_V' + result['schema_version'] + ' ' + json.dumps(result, allow_nan=False, separators=(',', ':')),
+        '\nHYPRN_MVP_RESULT_V'
+        + result['schema_version']
+        + ' '
+        + json.dumps(result, allow_nan=False, separators=(',', ':')),
         flush=True,
     )
 

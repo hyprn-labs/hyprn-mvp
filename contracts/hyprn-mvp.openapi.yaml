@@ -43281,12 +43281,12 @@
         ]
       },
       "ApproachCommandResultRead2": {
-        "oneOf": [
+        "anyOf": [
           {
-            "$ref": "#/components/schemas/ApproachCommandResult1"
+            "$ref": "#/components/schemas/PreviousApproachCommandResultRead2"
           },
           {
-            "$ref": "#/components/schemas/ApproachCommandResult2"
+            "$ref": "#/components/schemas/ApproachCommandResult3"
           }
         ]
       },
@@ -50871,7 +50871,7 @@
           "result": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ApproachCommandResult2"
+                "$ref": "#/components/schemas/ApproachCommandResult3"
               },
               {
                 "type": "null"
@@ -50913,7 +50913,7 @@
             "then": {
               "properties": {
                 "result": {
-                  "$ref": "#/components/schemas/ApproachCommandResult2"
+                  "$ref": "#/components/schemas/ApproachCommandResult3"
                 },
                 "error": {
                   "type": "null"
@@ -58452,6 +58452,26 @@
           }
         ]
       },
+      "ApproachCommandResult3": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ApproachDraftRead2"
+          },
+          {
+            "$ref": "#/components/schemas/ApproachVersionSaved4"
+          }
+        ]
+      },
+      "ApproachCommandResultRead3": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApproachCommandResultRead2"
+          },
+          {
+            "$ref": "#/components/schemas/ApproachCommandResult3"
+          }
+        ]
+      },
       "Study": {
         "type": "object",
         "properties": {
@@ -60009,6 +60029,9 @@
           },
           {
             "$ref": "#/components/schemas/ConfigurationPreview6"
+          },
+          {
+            "$ref": "#/components/schemas/ConfigurationPreview7"
           }
         ]
       },
@@ -60171,6 +60194,16 @@
           },
           {
             "$ref": "#/components/schemas/ApproachReceipt2"
+          }
+        ]
+      },
+      "PreviousApproachCommandResultRead2": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ApproachCommandResult1"
+          },
+          {
+            "$ref": "#/components/schemas/ApproachCommandResult2"
           }
         ]
       },

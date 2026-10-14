@@ -174,7 +174,12 @@ class ScalarParser(Parser):
             request = self.node.inputs.request.get_dict()
             bundle = retained_bundle(self.node.inputs.frozen_bundle.base.repository, request)
             model = json.loads(bundle['files']['model.json'])
-            result = validate_result(raw, request, model, result_schema_version=bundle['manifest']['result_protocol_version'])
+            result = validate_result(
+                raw,
+                request,
+                model,
+                result_schema_version=bundle['manifest']['result_protocol_version'],
+            )
             config = json.loads(bundle['files']['configuration.json'])
             validate_criteria(result, config)
             self.out('results', orm.Dict(dict=result))
@@ -632,7 +637,9 @@ class NativeExecution:
                     request,
                     json.loads(record['bundle']['files']['model.json']),
                     record['assessment'],
-                    result_schema_version=record['bundle']['manifest'].get('result_protocol_version', '1'),
+                    result_schema_version=record['bundle']['manifest'].get(
+                        'result_protocol_version', '1'
+                    ),
                 )
             else:
                 partial('missing_results')

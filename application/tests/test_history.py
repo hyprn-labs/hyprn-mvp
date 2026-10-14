@@ -300,8 +300,46 @@ def test_public_historical_view_preserves_source_identity_and_exact_nested_recor
     for old, view in [(source, projected), (context, projected['closure']['run_contexts'][0]),
                       (result, projected['result'])]:
         assert view['record_view']['source_sha256'] == digest(old)
-        assert view['record_view']['view_sha256'] == digest({k:v for k,v in view.items() if k != 'record_view'})
-    assert not {'convergence','optimization','completeness','applicability'} & projected['result'].keys()
-    current = {k:v for k,v in result.items() if k not in {'convergence','optimization','completeness','applicability'}}
+        assert view['record_view']['view_sha256'] == digest(
+            {k: v for k, v in view.items() if k != 'record_view'}
+        )
+    assert (
+        not {'convergence', 'optimization', 'completeness', 'applicability'}
+        & projected['result'].keys()
+    )
+    current = {
+        k: v
+        for k, v in result.items()
+        if k not in {'convergence', 'optimization', 'completeness', 'applicability'}
+    }
     current['schema_version'] = '2'
     assert public_record_view(current) == current
+
+
+def test_current_bundle_missing_results_keeps_current_history_contract(submission):
+    from hyprn_mvp_app.store import digest
+    from hyprn_mvp_app.contracts import validate
+    service, store, actor, sid, _, native = submission
+    prepare = service.prepare
+
+    def current_prepare(*args):
+        prepared, files = prepare(*args)
+        prepared = copy.deepcopy(prepared)
+        prepared.update(schema_version='3', result_protocol_version='2')
+        prepared['prepared_digest'] = digest(
+            {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+        )
+        return prepared, files
+
+    service.prepare = current_prepare
+    run = recording(submission)
+    public, actor = client(store, actor)
+    response = public.get(f'/api/1/studies/{sid}/runs/{run["run_id"]}')
+    assert response.status_code == 200, response.text
+    history = response.json()['data']['history']
+    assert history['history_schema_version'] == '7'
+    assert history['bundle']['schema_version'] == '10'
+    assert history['bundle']['input_schema_version'] == '2'
+    assert history['results'] is None
+    assert history['errors'] == [dict(code='missing_results', partial=True)]
+    validate('RunHistory7', history)

@@ -127,7 +127,20 @@ class ModifiedRuns:
             pin=config['approach_binding']
             request.update(approach_selection={k:pin[k] for k in ('approach_version_id','case_id')} if pin else None,
                 context_override=dict(schema_version='1',**{k:config['context_snapshot'][k] for k in ('description','boundary')}))
-            value.update(schema_version='7' if history['bundle'].get('input_schema_version', history['bundle']['schema_version'])=='9' else {'5':'3','6':'4','8':'6'}[history['bundle'].get('input_schema_version', history['bundle']['schema_version'])],source_configuration=deepcopy(config),approach_closure=deepcopy(history['approach_closure']))
+            value.update(
+                schema_version='7'
+                if history['bundle'].get(
+                    'input_schema_version', history['bundle']['schema_version']
+                )
+                == '9'
+                else {'5': '3', '6': '4', '8': '6'}[
+                    history['bundle'].get(
+                        'input_schema_version', history['bundle']['schema_version']
+                    )
+                ],
+                source_configuration=deepcopy(config),
+                approach_closure=deepcopy(history['approach_closure']),
+            )
         validate('ModifiedRunSeed'+value['schema_version'],value)
         return value
 
