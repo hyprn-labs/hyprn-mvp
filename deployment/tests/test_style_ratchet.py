@@ -106,7 +106,8 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(ratchet.attested_files(REPO), set(literal) | attested)
         tracked = ratchet.tracked_files(REPO)
         covered = set(ratchet.covered_files(REPO, tracked))
-        self.assertTrue({p for p in set(literal) | attested if ratchet.covered_suffix(p)} <= covered)
+        python_sources = {p for p in set(literal) | attested if ratchet.covered_suffix(p)}
+        self.assertTrue(python_sources <= covered)
 
 
     def test_the_hash_pinned_exclusion_equals_the_pin_tables(self):
