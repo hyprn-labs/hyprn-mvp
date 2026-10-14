@@ -150,9 +150,9 @@ def test_private_schema_copy_and_legacy_result_preservation(harness):
     patch = (ROOT / 'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
     section = patch.split('+++ b/config/modeling.schema.json\n', 1)[1].split('\n--- ', 1)[0]
     embedded = json.loads('\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')))
-    # Production stages the current reviewed schema beside the cumulative
-    # 040–070 adapter; the original 040 schema remains a historical baseline.
-    assert json.loads(harness[2].read_bytes())['$defs'] == DEFS
+    # Production stages the authored model schema beside the cumulative adapter;
+    # the original patch schema remains a historical baseline.
+    assert harness[2].read_bytes() == (ROOT / 'contracts/schemas/model.schema.json').read_bytes()
     assert DEFS == authored_schema()['$defs']
     # The tracked 040 patch is the historical baseline of the legacy concrete shapes: the
     # current read unions were split from these definitions without changing them.
