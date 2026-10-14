@@ -84,3 +84,18 @@ Corrected final model schema SHA-256: 7dbe1a233a1f852a7187f442cc784840826f56112b
 Execution schema is unchanged by this Documents-only receipt fix. Root explicitly
 accepted rebuilding producer and recapturing after this correction; earlier rebuilt
 image/capture is intermediate evidence only. Exact old538 definitions remain unchanged.
+
+
+## Unissued input-layout refusal
+
+Final read-only dispatch audit found standalone schema9 remnants in runtime admission;
+9 is an input layout tag of bundle10, never an issued bundle. Removed those entries in
+submission, launcher, independent worker, retained reader and native export admission.
+Added schema9 refusal to existing old-version worker/native preflight tests and retained
+reader negatives. This does not change producer/model schema inputs. Root was notified
+before changing runtime sources and will attest only the final integrated tree.
+Guard116 and units-guards138 pass (mv0n8_26; 5.0/6.0s); style follows in the same log.
+API-a121 passed (kedrkd10,164s), including current bundle with missing results keeping
+history7. Final committed agent-tools270 passed (81te2q_8,43.9s). Bridge-history and
+archive-service/readiness/locality checks remain running; no current native execution
+has been claimed by this lane.

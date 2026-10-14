@@ -448,7 +448,6 @@ def retained_bundle(repository, request):
         '5': _prepared_v2,
         '6': _prepared_v2,
         '8': _prepared_v2,
-        '9': _prepared_v2,
         '10': _prepared_v2,
     }
     reader = readers.get(manifest.get('schema_version'))

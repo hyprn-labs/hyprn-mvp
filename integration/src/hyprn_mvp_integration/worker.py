@@ -1754,6 +1754,8 @@ def bundle_layout(manifest):
         ):
             raise ValueError('Unsupported bundle input layout or result protocol')
         return layout
+    if version not in ('2', '3', '4', '5', '6', '8'):
+        raise ValueError('Unsupported bundle version')
     if manifest.get('result_protocol_version') != '1':
         raise ValueError('Historical bundle result protocol mismatch')
     return version

@@ -207,7 +207,7 @@ class Submissions:
                 return
             if row['state'] == 'prepared' and payload['bundle']['manifest'].get(
                 'schema_version'
-            ) not in ('2', '3', '4', '5', '6', '8', '9', '10'):
+            ) not in ('2', '3', '4', '5', '6', '8', '10'):
                 self._preparation_failure(row, 'unsupported_execution_version')
                 return
             self.native.require_attestation()

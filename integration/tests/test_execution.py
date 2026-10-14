@@ -67,9 +67,14 @@ def test_static_assembly_does_not_import_candidate(tmp_path):
 
 @pytest.mark.quick
 @pytest.mark.parametrize('boundary', ['launcher', 'worker', 'native'])
-def test_obsolete_execution_version_rejected_before_import_or_process(tmp_path, monkeypatch, boundary):
+@pytest.mark.parametrize('version', ['1', '9'])
+def test_obsolete_execution_version_rejected_before_import_or_process(
+    tmp_path, monkeypatch, boundary, version
+):
     from hyprn_mvp_integration import launcher, worker
-    bundle=assemble();bundle['manifest']['schema_version']='1'
+
+    bundle = assemble()
+    bundle['manifest']['schema_version'] = version
     bundle['manifest']['bundle_digest']=digest({k:v for k,v in bundle['manifest'].items() if k!='bundle_digest'})
     launcher.write_bundle(bundle,tmp_path/'input')
     request={k:bundle['manifest'][k] for k in ('run_id','bundle_digest')}

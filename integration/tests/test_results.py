@@ -160,7 +160,7 @@ def test_retained_versions_read_without_worker_modeling_or_reassessment(monkeypa
 
 
 @pytest.mark.parametrize('version',['1','2'])
-@pytest.mark.parametrize('mode',['raw','request','snapshot','prepared_version','bundle_version','oversize','duplicate'])
+@pytest.mark.parametrize('mode',['raw','request','snapshot','prepared_version','bundle_version','unissued_bundle_version','oversize','duplicate'])
 def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode):
     import io,json
     from hyprn_mvp_app.store import canonical,digest
@@ -176,6 +176,7 @@ def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode)
         d=next(d for d in manifest['files'] if d['path']=='preparation.json')
         d.update(size=len(files['preparation.json']),sha256=raw_hash(files['preparation.json']))
     if mode=='bundle_version':manifest['schema_version']='99'
+    if mode=='unissued_bundle_version':manifest['schema_version']='9'
     if mode=='oversize':manifest['files'][0]['size']=33*1024*1024
     if mode=='duplicate':manifest['files'].append(manifest['files'][0])
     manifest['bundle_digest']=digest({k:v for k,v in manifest.items() if k!='bundle_digest'})
@@ -184,7 +185,7 @@ def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode)
     class Repository:
         def open(self,path,mode):return io.BytesIO(canonical(manifest) if path=='manifest.json' else files[path])
     with pytest.raises(ValueError) as error:retained_bundle(Repository(),request)
-    if mode in ('prepared_version','bundle_version'):
+    if mode in ('prepared_version','bundle_version','unissued_bundle_version'):
         assert isinstance(error.value,UnsupportedRecordVersion) and error.value.code=='unsupported_record_version'
 
 
