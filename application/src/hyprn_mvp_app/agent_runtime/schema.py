@@ -1,10 +1,13 @@
-"""Runtime-owned tables of the agent records, created idempotently.
+"""Runtime-owned tables of the agent records, created idempotently: the attribution index, the
+agent sessions and the append-only action journal.
 
 ``ensure(store)`` runs this module's DDL on a connection of the one ``Store`` (its single
 writer), called by the composition root until the store's own initialization runs the
 registered schemas; ``store`` never imports this package. Every statement is ``IF NOT EXISTS``,
 so a repeated call changes nothing.
 """
+
+from .limits import RESULT_CAP_BYTES
 
 RECORD_KINDS = (
     'study',
@@ -40,7 +43,144 @@ CREATE TRIGGER IF NOT EXISTS agent_attribution_no_delete BEFORE DELETE ON agent_
 """
 
 
+SURFACES = ('local_mcp', 'remote_mcp', 'claude_managed', 'openai_agents')
+SESSION_STATES = ('active', 'ended', 'access_lost')
+ACTION_STATES = ('intended', 'completed', 'refused', 'reconciling', 'uncertain', 'failed')
+# Effects a journaled call may carry (``NULL`` for a name the registry does not know).
+ACTION_EFFECTS = ('read', 'draft', 'record', 'submit', 'outside_study')
+# What a call returned to the agent: ``ok`` or the category of its error envelope.
+OUTCOME_CLASSES = (
+    'ok',
+    'invalid_input',
+    'too_large',
+    'unsupported',
+    'guard_blocked',
+    'conflict',
+    'not_ready',
+    'not_found',
+    'access_lost',
+    'session_expired',
+    'budget_exhausted',
+    'busy',
+    'pending',
+    'uncertain',
+    'unavailable',
+    'internal',
+)
+
+
+def _closed(values):
+    return ','.join(f"'{value}'" for value in values)
+
+
+# Fixed at opening: everything but the state, its end time and the two counters.
+_SESSION_FIXED = (
+    'session_id',
+    'delegation_id',
+    'token_id',
+    'surface',
+    'mcp_session_id',
+    'protocol_version',
+    'client_name',
+    'client_version',
+    'agent_display_name',
+    'registry_version',
+    'playbook_sha256',
+    'tool_definitions_sha256',
+    'started_at',
+)
+# Written once, when the call is journaled as intended (or refused at admission).
+ACTION_INTENDED = (
+    'action_id',
+    'session_id',
+    'delegation_id',
+    'study_id',
+    'call_id',
+    'tool',
+    'effect',
+    'args_sha256',
+    'command_ids',
+    'created_at',
+)
+
+
+def _changed(columns):
+    return ' OR '.join(f'NEW.{column} IS NOT OLD.{column}' for column in columns)
+
+
+# Agent sessions: one per surface session (one MCP session per token, ND-7). The delegated API
+# session's cookie and cross-site request values are never columns: they live only in the
+# runtime's memory. The identity of a session never changes; its state only leaves ``active``
+# and its counters only grow. Sessions are never deleted.
+#
+# The action journal: one row per tool call, keyed by (session, surface call id). It keeps the
+# argument digest, never the arguments; the reason message is HYPRN MVP text from the closed
+# reason list, never client or agent text. The intended columns never change, a row is inserted
+# only as ``intended`` (or ``refused`` at admission), its state only moves out of ``intended``
+# or ``reconciling`` and never back to ``intended``, and rows are never deleted.
+RUNTIME_DDL = f"""
+CREATE TABLE IF NOT EXISTS agent_sessions(
+ session_id TEXT PRIMARY KEY,
+ delegation_id TEXT NOT NULL REFERENCES agent_delegations(delegation_id),
+ token_id TEXT, surface TEXT NOT NULL CHECK(surface IN ({_closed(SURFACES)})),
+ mcp_session_id TEXT UNIQUE
+  CHECK(mcp_session_id IS NULL OR length(mcp_session_id) BETWEEN 1 AND 128),
+ protocol_version TEXT CHECK(protocol_version IS NULL OR length(protocol_version)<=32),
+ client_name TEXT CHECK(client_name IS NULL OR length(client_name) BETWEEN 1 AND 64),
+ client_version TEXT CHECK(client_version IS NULL OR length(client_version) BETWEEN 1 AND 64),
+ agent_display_name TEXT NOT NULL, registry_version TEXT NOT NULL,
+ playbook_sha256 TEXT NOT NULL, tool_definitions_sha256 TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ({_closed(SESSION_STATES)})),
+ api_calls INTEGER NOT NULL DEFAULT 0 CHECK(api_calls>=0),
+ runs_submitted INTEGER NOT NULL DEFAULT 0 CHECK(runs_submitted>=0),
+ started_at TEXT NOT NULL, ended_at TEXT,
+ CHECK((state='active')=(ended_at IS NULL))
+);
+CREATE INDEX IF NOT EXISTS agent_sessions_token ON agent_sessions(token_id,state);
+CREATE TRIGGER IF NOT EXISTS agent_sessions_no_delete BEFORE DELETE ON agent_sessions
+ BEGIN SELECT RAISE(ABORT,'agent sessions are never deleted'); END;
+CREATE TRIGGER IF NOT EXISTS agent_sessions_fixed BEFORE UPDATE ON agent_sessions
+ WHEN {_changed(_SESSION_FIXED)}
+  OR (OLD.state<>'active' AND (NEW.state IS NOT OLD.state OR NEW.ended_at IS NOT OLD.ended_at))
+  OR NEW.api_calls<OLD.api_calls OR NEW.runs_submitted<OLD.runs_submitted
+ BEGIN SELECT RAISE(ABORT,'an agent session only ends and only counts up'); END;
+CREATE TABLE IF NOT EXISTS agent_actions(
+ action_id TEXT PRIMARY KEY,
+ session_id TEXT NOT NULL REFERENCES agent_sessions(session_id),
+ delegation_id TEXT NOT NULL REFERENCES agent_delegations(delegation_id),
+ study_id TEXT NOT NULL,
+ call_id TEXT NOT NULL CHECK(length(call_id) BETWEEN 1 AND 160),
+ tool TEXT NOT NULL CHECK(length(tool) BETWEEN 1 AND 64),
+ effect TEXT CHECK(effect IS NULL OR effect IN ({_closed(ACTION_EFFECTS)})),
+ args_sha256 TEXT NOT NULL CHECK(length(args_sha256)=64),
+ command_ids TEXT NOT NULL, api_operations TEXT NOT NULL DEFAULT '[]',
+ outcome_class TEXT CHECK(outcome_class IS NULL OR outcome_class IN ({_closed(OUTCOME_CLASSES)})),
+ reason_code TEXT, reason_message TEXT CHECK(reason_message IS NULL OR length(reason_message)<=512),
+ warnings TEXT NOT NULL DEFAULT '[]', records TEXT NOT NULL DEFAULT '[]',
+ result_json TEXT
+  CHECK(result_json IS NULL OR length(CAST(result_json AS BLOB))<={RESULT_CAP_BYTES}),
+ state TEXT NOT NULL CHECK(state IN ({_closed(ACTION_STATES)})),
+ created_at TEXT NOT NULL, completed_at TEXT,
+ UNIQUE(session_id,call_id),
+ CHECK((reason_code IS NULL)=(reason_message IS NULL)),
+ CHECK(result_json IS NULL OR effect IN ('draft','record','submit','outside_study')),
+ CHECK(state<>'completed' OR (reason_code IS NULL AND outcome_class='ok'))
+);
+CREATE INDEX IF NOT EXISTS agent_actions_study ON agent_actions(study_id,created_at);
+CREATE TRIGGER IF NOT EXISTS agent_actions_no_delete BEFORE DELETE ON agent_actions
+ BEGIN SELECT RAISE(ABORT,'the agent action journal is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agent_actions_inserted BEFORE INSERT ON agent_actions
+ WHEN NEW.state NOT IN ('intended','refused')
+ BEGIN SELECT RAISE(ABORT,'a journal row starts intended or refused'); END;
+CREATE TRIGGER IF NOT EXISTS agent_actions_outcome_once BEFORE UPDATE ON agent_actions
+ WHEN OLD.state NOT IN ('intended','reconciling') OR NEW.state='intended'
+  OR {_changed(ACTION_INTENDED)}
+ BEGIN SELECT RAISE(ABORT,'a journal row records one outcome and its intent never changes'); END;
+"""
+
+
 def ensure(store):
     """Create the runtime-owned tables in ``store`` (idempotent)."""
     with store.connection() as db:
         db.executescript(DDL)
+        db.executescript(RUNTIME_DDL)

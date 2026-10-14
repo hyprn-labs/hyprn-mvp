@@ -1,4 +1,5 @@
-"""The agent records store module: every SQL statement over the agent records.
+"""The agent records store module: every SQL statement over the agent records (attribution,
+sessions and the action journal).
 
 Each function runs on a connection or transaction that ``Store.connection`` handed out, so the
 store stays the single transaction owner and gains no method for agent records. Nothing here
@@ -108,3 +109,199 @@ def study_token(db, study_id, token_id):
     """Metadata of tool token ``token_id`` when it belongs to ``study_id``; ``None`` otherwise."""
     row = db.execute(_TOKENS + ' AND t.token_id=?', (study_id, token_id)).fetchone()
     return dict(row) if row else None
+
+
+# ---- Agent sessions ----------------------------------------------------------------------
+
+SESSION_COLUMNS = (
+    'session_id',
+    'delegation_id',
+    'token_id',
+    'surface',
+    'mcp_session_id',
+    'protocol_version',
+    'client_name',
+    'client_version',
+    'agent_display_name',
+    'registry_version',
+    'playbook_sha256',
+    'tool_definitions_sha256',
+    'state',
+    'api_calls',
+    'runs_submitted',
+    'started_at',
+    'ended_at',
+)
+
+
+def insert_session(db, session):
+    """Add one agent session (state ``active``, counters at zero)."""
+    db.execute(
+        f'INSERT INTO agent_sessions({",".join(SESSION_COLUMNS)}) '
+        f'VALUES({",".join("?" * len(SESSION_COLUMNS))})',
+        tuple(session[column] for column in SESSION_COLUMNS),
+    )
+
+
+def session(db, session_id):
+    """Agent session ``session_id``; ``None`` when there is none."""
+    row = db.execute('SELECT * FROM agent_sessions WHERE session_id=?', (session_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def session_by_surface_id(db, mcp_session_id):
+    """The agent session of surface session id ``mcp_session_id``; ``None`` when none."""
+    row = db.execute(
+        'SELECT * FROM agent_sessions WHERE mcp_session_id=?', (mcp_session_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def delegation_study(db, delegation_id):
+    """The study of delegation ``delegation_id`` (live or not); ``None`` when there is none."""
+    row = db.execute(
+        'SELECT study_id FROM agent_delegations WHERE delegation_id=?', (delegation_id,)
+    ).fetchone()
+    return row['study_id'] if row else None
+
+
+def end_token_sessions(db, token_id, ended_at):
+    """End every active session of tool token ``token_id``; returns their ids."""
+    ids = [
+        row['session_id']
+        for row in db.execute(
+            "SELECT session_id FROM agent_sessions WHERE token_id=? AND state='active' "
+            'ORDER BY session_id',
+            (token_id,),
+        ).fetchall()
+    ]
+    for session_id in ids:
+        end_session(db, session_id, 'ended', ended_at)
+    return ids
+
+
+def end_session(db, session_id, state, ended_at):
+    """Move session ``session_id`` from ``active`` to ``state``; whether it was active."""
+    cursor = db.execute(
+        "UPDATE agent_sessions SET state=?,ended_at=? WHERE session_id=? AND state='active'",
+        (state, ended_at, session_id),
+    )
+    return cursor.rowcount == 1
+
+
+def count_api_call(db, session_id, limit):
+    """Count one API call of active session ``session_id`` unless it already made ``limit``;
+    whether it was counted (the check and the count are one statement)."""
+    cursor = db.execute(
+        'UPDATE agent_sessions SET api_calls=api_calls+1 '
+        "WHERE session_id=? AND state='active' AND api_calls<?",
+        (session_id, limit),
+    )
+    return cursor.rowcount == 1
+
+
+def add_runs_submitted(db, session_id, count):
+    """Add ``count`` journaled runs to the session's submitted-run counter."""
+    db.execute(
+        'UPDATE agent_sessions SET runs_submitted=runs_submitted+? WHERE session_id=?',
+        (count, session_id),
+    )
+
+
+# ---- The action journal ------------------------------------------------------------------
+
+ACTION_COLUMNS = (
+    'action_id',
+    'session_id',
+    'delegation_id',
+    'study_id',
+    'call_id',
+    'tool',
+    'effect',
+    'args_sha256',
+    'command_ids',
+    'state',
+    'created_at',
+)
+OUTCOME_COLUMNS = (
+    'api_operations',
+    'outcome_class',
+    'reason_code',
+    'reason_message',
+    'warnings',
+    'records',
+    'result_json',
+    'state',
+    'completed_at',
+)
+
+
+def insert_action(db, row):
+    """Add one journal row: ``intended``, or ``refused`` at admission with its outcome."""
+    columns = ACTION_COLUMNS + tuple(c for c in OUTCOME_COLUMNS if c in row and c != 'state')
+    db.execute(
+        f'INSERT INTO agent_actions({",".join(columns)}) VALUES({",".join("?" * len(columns))})',
+        tuple(row[column] for column in columns),
+    )
+
+
+def action(db, session_id, call_id):
+    """The journal row of call ``call_id`` in session ``session_id``; ``None`` when none."""
+    row = db.execute(
+        'SELECT * FROM agent_actions WHERE session_id=? AND call_id=?', (session_id, call_id)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def action_by_id(db, action_id):
+    """Journal row ``action_id``; ``None`` when there is none."""
+    row = db.execute('SELECT * FROM agent_actions WHERE action_id=?', (action_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def finish_action(db, action_id, outcome):
+    """Record the outcome of journal row ``action_id`` while it is ``intended`` or
+    ``reconciling``; whether a row moved (the journal's triggers refuse any other change)."""
+    cursor = db.execute(
+        f'UPDATE agent_actions SET {",".join(c + "=?" for c in OUTCOME_COLUMNS)} '
+        "WHERE action_id=? AND state IN ('intended','reconciling')",
+        tuple(outcome[column] for column in OUTCOME_COLUMNS) + (action_id,),
+    )
+    return cursor.rowcount == 1
+
+
+def identical_refusals(db, session_id, tool, args_sha256, reason_code, since):
+    """How many calls of ``tool`` with the same argument digest in session ``session_id`` were
+    refused with ``reason_code`` at or after ``since``."""
+    return db.execute(
+        'SELECT count(*) FROM agent_actions WHERE session_id=? AND tool=? AND args_sha256=? '
+        "AND state='refused' AND reason_code=? AND created_at>=?",
+        (session_id, tool, args_sha256, reason_code, since),
+    ).fetchone()[0]
+
+
+_RUN_RECORDS = (
+    "SELECT DISTINCT json_extract(r.value,'$.record_id') AS run_id FROM agent_actions a, "
+    "json_each(a.records) r WHERE json_extract(r.value,'$.kind')='run' AND "
+)
+
+
+def session_runs(db, session_id):
+    """The ids of the runs journaled as records of session ``session_id``."""
+    return [
+        row['run_id']
+        for row in db.execute(_RUN_RECORDS + 'a.session_id=? ORDER BY 1', (session_id,))
+    ]
+
+
+def actor_runs(db, agent_actor_id, study_id):
+    """The ids of the runs journaled as records of agent ``agent_actor_id`` in ``study_id``,
+    across its sessions and delegations."""
+    return [
+        row['run_id']
+        for row in db.execute(
+            _RUN_RECORDS + 'a.study_id=? AND a.delegation_id IN (SELECT delegation_id FROM '
+            'agent_delegations WHERE agent_actor_id=? AND study_id=?) ORDER BY 1',
+            (study_id, agent_actor_id, study_id),
+        )
+    ]
