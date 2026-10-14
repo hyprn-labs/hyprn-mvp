@@ -251,7 +251,7 @@ def snapshot(
     interpreter=None,
     warn=None,
 ):
-    """Archive committed product bytes only; dirty edits are reported and excluded."""
+    """Create a snapshot from HEAD and list excluded working-tree changes."""
     checkout, releases_root = (
         _private_directory(checkout),
         _private_directory(releases_root, output=True),
