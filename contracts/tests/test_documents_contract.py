@@ -1,4 +1,6 @@
 """Documents 25.1 structural wire tests, not runtime/native qualification."""
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -8,8 +10,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMAS = [json.loads((ROOT / ("contracts/schemas/" + name + ".schema.json")).read_text())
-           for name in ("model", "execution")]
+SCHEMAS = [authored_schema()]
 S = SCHEMAS[0]
 ID = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -154,7 +155,7 @@ def test_documents_contracts_prior_definitions_and_mixed_units_branches_remain_e
         widened["properties"]["bundle_versions"]["items"]["enum"].append("8")
         widened["properties"]["bundle_versions"]["maxItems"] = 6
         assert schema["$defs"]["ExecutionVersions"] == widened
-    assert SCHEMAS[0]["$defs"] == SCHEMAS[1]["$defs"]
+    assert_execution_schema()
 
 
 def test_documents_contracts_all_routes_have_typed_requests_outcomes_and_permissions():
@@ -550,7 +551,7 @@ def test_documents_citation_contracts_null_history_is_disjoint_and_integrity_is_
 
 
 def test_documents_citation_contracts_new_definition_refs_resolve_and_closed_shapes_are_equal():
-    assert SCHEMAS[0]["$defs"] == SCHEMAS[1]["$defs"]
+    assert_execution_schema()
     for schema in SCHEMAS: Draft202012Validator.check_schema(schema)
     def walk(value):
         if isinstance(value, dict):

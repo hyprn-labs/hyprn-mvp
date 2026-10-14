@@ -2,6 +2,8 @@
 
 These tests never import native code or resolve live scientific records.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import json
 from pathlib import Path
@@ -9,7 +11,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 D = SCHEMA['$defs']
 UUID = '11111111-1111-4111-8111-111111111111'
 SHA = 'a' * 64
@@ -71,8 +73,8 @@ def test_new_records_closed_required_valid(name):
         with pytest.raises(ValidationError): validate(name, bad)
 
 def test_mirrors_and_private_protocols_unchanged():
-    other = json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())['$defs']
-    for name in NEW_OBJECTS: assert D[name] == other[name]
+    other = authored_schema()['$defs']
+    assert_execution_schema()
     assert D['ModelingConfiguration3']['properties']['schema_version'] == {'enum':['3']}
     assert D['PreparedModelArtifact2']['properties']['schema_version'] == {'enum':['2']}
     assert 'approach_binding' not in D['ModelingConfiguration3']['properties']
@@ -146,7 +148,7 @@ def test_old_closed_read_branches_remain_explicit():
     for union,names in {'ConfigurationRevision':['ConfigurationRevision1','ConfigurationRevision2','ConfigurationRevision3','ConfigurationRevision4'], 'RunHistory':['RunHistory1','RunHistory2','RunHistory3','RunHistory4'], 'ModifiedRunSeed':['ModifiedRunSeed1','ModifiedRunSeed2','ModifiedRunSeed3','ModifiedRunSeed4']}.items():
         assert [r['$ref'].split('/')[-1] for r in D[union]['oneOf']]==names
     for schema in ('model','execution'):
-        Draft202012Validator.check_schema(json.loads((ROOT / ('contracts/schemas/'+schema+'.schema.json')).read_text()))
+        Draft202012Validator.check_schema(authored_schema())
 
 
 def test_receipt_results_categories_and_stable_error_shape():
@@ -316,7 +318,7 @@ def test_polish_limits_bounds_and_semantic_counterexample():
     validate('ApproachContent2',value|{'limit_items':[limit,limit|{'statement':'Different'}]})
 
 def test_polish_reference_closure_no_documents():
-    other=json.loads((ROOT/'contracts/schemas/execution.schema.json').read_text())['$defs'];seen=set()
+    assert_execution_schema();seen=set()
     def walk(v):
         if isinstance(v,dict):
             if '$ref' in v:
@@ -326,9 +328,9 @@ def test_polish_reference_closure_no_documents():
         elif isinstance(v,list):
             for child in v:walk(child)
     for name in POLISH_OBJECTS+['FrozenConfiguration7','ExecutionBundle8','RunHistory6','ModifiedRunSeed6','ApproachReceipt2']:
-        assert D[name]==other[name];walk(D[name])
+        walk(D[name])
     assert not any(n.startswith('Document') or n=='EvidenceSnapshot4' for n in seen)
-    for schema in (SCHEMA,json.loads((ROOT/'contracts/schemas/execution.schema.json').read_text())):
+    for schema in (SCHEMA,authored_schema()):
         Draft202012Validator.check_schema(schema)
         for definition in schema['$defs'].values():walk(definition)
 
@@ -388,7 +390,7 @@ POLISH_HISTORICAL_HASHES = {'Source': 'ced46ca6ae852ed5a1d751eac61c8b2eb5598219a
 def test_polish_historical_hashes():
     import hashlib
     for path in ('model.schema.json','execution.schema.json'):
-        definitions=json.loads((ROOT/'contracts/schemas'/path).read_text())['$defs']
+        definitions=authored_schema()['$defs']
         for name,digest in POLISH_HISTORICAL_HASHES.items():
             # Reviewed exception: observed operational capabilities admit Bundle8.
             # Keep the historical baseline above; no stored artifact schema changes.

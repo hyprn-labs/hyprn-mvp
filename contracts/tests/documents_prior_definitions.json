@@ -1,6 +1,6 @@
 {
  "schema_version": "1",
- "purpose": "Released body digest (sha256 of canonical JSON) of every prior Documents-baseline definition; shared by contracts/schemas/model.schema.json and execution.schema.json.",
+ "purpose": "Released body digest (sha256 of canonical JSON) of every prior Documents-baseline definition; resolved through the single authored contract namespace.",
  "definitions": {
   "Source": "ced46ca6ae852ed5a1d751eac61c8b2eb5598219ad26fdd9ef29b5f67b4bb82f",
   "PortDeclaration": "56ab596fd71b2bc1585635981ec3d3d568ef128e1ccd6a5de51cebce35e4ec63",

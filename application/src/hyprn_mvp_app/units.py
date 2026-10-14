@@ -4,20 +4,20 @@ No physical parser, conversion factors, native imports or model mutation lives
 here. Callers still own authorization, immutable digest/provenance validation,
 connection compatibility and app/private configuration pairing.
 
-Model-version interpretation owned here (14-D1): ``port_units`` is the one rule for
+Model-version interpretation owned here: ``port_units`` is the one rule for
 which units a model port binds (Model1/2 exact literal, Model3/4 resolved engine
 spelling, anything else unsupported); ``active_ports`` and ``resolved_model_units``
 own active-occurrence readiness.
 """
-from .contracts import SCHEMA, DomainError, canonical, validate
+from .contracts import definition, DomainError, canonical, validate
 
-# Identity pins from the audited A3 table, not a fallback catalog or parser.
+# Identity pins from the audited unit catalog table, not a fallback catalog or parser.
 UNIT_CATALOG_DIGEST = "f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3"
 UNIT_ENGINE_SOURCE_SHA256 = "9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92"
 UNIT_CATALOG_BYTES = 16384
 
 # The closed contract vocabulary is shared authority, not a fallback engine table.
-_PHYSICAL = frozenset(SCHEMA['$defs']['UnitDeclaration1']['oneOf'][2]
+_PHYSICAL = frozenset(definition('UnitDeclaration1')['oneOf'][2]
                       ['properties']['expression']['enum'])
 
 
@@ -126,7 +126,7 @@ def resolved_model_units(model):
             for key, path, value in active}
 
 
-# 14-D1: the single port-units rule. Model1/2 bind the exact retained literal; Model3/4
+# the single port-units rule. Model1/2 bind the exact retained literal; Model3/4
 # bind the resolved engine spelling. No other module repeats this choice.
 LITERAL_UNIT_MODELS = frozenset({'1', '2'})
 RESOLVED_UNIT_MODELS = frozenset({'3', '4'})

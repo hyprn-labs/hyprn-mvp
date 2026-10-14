@@ -1,4 +1,5 @@
 """Empirical Documents prerequisites on the runner's real disposable backend."""
+from hyprn_mvp_app.contracts import authored_schema
 import pytest
 
 
@@ -378,7 +379,7 @@ def test_documents_native_originals_short_reads_bound_upload_and_public_wire_sha
             return super().read(min(size, 711))
     witness = adapter.store_original(identity, payload, ShortReader(raw))
     association = witness['associations'][0]
-    schema = json.loads((Path(__file__).resolve().parents[2] / 'contracts/schemas/model.schema.json').read_text())
+    schema = authored_schema()
     for name, value in [('DocumentNativeWitness1', witness),
                         ('DocumentVersion1', adapter.descriptor(association)),
                         ('DocumentNativeOriginalReply1', adapter.read(association, offset=123, byte_length=262144))]:

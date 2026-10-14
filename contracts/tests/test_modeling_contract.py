@@ -1,4 +1,5 @@
 """Backend-independent contract tests. Only HTTP/public IDs are observable here."""
+from hyprn_mvp_app.contracts import authored_schema
 import base64
 import copy
 import hashlib
@@ -14,7 +15,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT=Path(__file__).resolve().parents[2]
-SCHEMA=json.loads((ROOT/'contracts/schemas/model.schema.json').read_text())
+SCHEMA=authored_schema()
 def uid(): return str(uuid.uuid4())
 def raw_hash(b): return hashlib.sha256(b).hexdigest()
 def encoded(b): return base64.urlsafe_b64encode(b).rstrip(b'=').decode()

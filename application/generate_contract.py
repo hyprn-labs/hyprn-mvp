@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).parent/"src"))
 from hyprn_mvp_app.api import create_app
-from hyprn_mvp_app.modeling import SCHEMA
+from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -19,7 +19,7 @@ def rewrite(value):
     if isinstance(value,dict):return {k:(v.replace("#/$defs/","#/components/schemas/") if k=="$ref" else rewrite(v)) for k,v in value.items()}
     if isinstance(value,list):return [rewrite(v) for v in value]
     return value
-schemas.update(rewrite(SCHEMA["$defs"]))
+schemas.update(rewrite(definitions()))
 schemas["Error"]["properties"]["error"]["properties"]["code"]["enum"] += ["rate_limited","internal_error","history_not_recorded","corrupt_retained_record","unsupported_record_version","missing_results","missing_artifacts","missing_or_invalid_artifact"]
 def ref(name):return {"$ref":"#/components/schemas/"+name}
 def obj(properties,required=None):return {"type":"object","properties":properties,"required":list(properties) if required is None else required,"additionalProperties":False}

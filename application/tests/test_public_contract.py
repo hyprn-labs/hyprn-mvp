@@ -1,4 +1,5 @@
 """Every public operation documents closed typed responses and aligns with actual routes."""
+from hyprn_mvp_app.contracts import authored_schema
 import json
 import re
 from pathlib import Path
@@ -81,7 +82,7 @@ def test_readiness_and_scope_snapshot_contracts_are_closed_and_typed(api):
         answer=c.get(path);assert answer.status_code==200;check(answer)
     transport.fail_before=True;check(c.get(path));check(c.get(path+'?status=ready'))
     assert c.get(path.replace(sid,uid())).status_code==404
-    model=json.loads((Path(__file__).resolve().parents[2]/'contracts/schemas/model.schema.json').read_text())
+    model=authored_schema()
     def rewrite(value):
         if isinstance(value,dict):return {k:v.replace('#/$defs/','#/components/schemas/') if k=='$ref' else rewrite(v) for k,v in value.items()}
         if isinstance(value,list):return [rewrite(v) for v in value]

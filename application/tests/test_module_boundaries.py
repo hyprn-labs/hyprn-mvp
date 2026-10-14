@@ -71,7 +71,7 @@ BUNDLE_NAMES = (
 # never through the forwarding alias.
 MOVED = {
     'hyprn_mvp_app.store': dict.fromkeys(('canonical', 'digest', 'uid', 'DomainError'), CONTRACTS),
-    'hyprn_mvp_app.modeling': {**dict.fromkeys(('validate', 'SCHEMA', 'VALIDATORS'), CONTRACTS),
+    'hyprn_mvp_app.modeling': {**dict.fromkeys(('validate',), CONTRACTS),
                               **dict.fromkeys(('UNIT_CATALOG_DIGEST', 'UNIT_ENGINE_SOURCE_SHA256',
                                                'UNIT_CATALOG_BYTES'), UNITS)},
     'hyprn_mvp_app.execution': {**dict.fromkeys(('data_json', 'raw_hash', 'check_digest'), CONTRACTS),
@@ -1362,3 +1362,383 @@ def test_an_import_outside_the_layer_table_fails_the_subgraph_check(tmp_path, mo
         handle.write('\n\ndef extra():\n    from .store import Store\n    return Store\n')
     monkeypatch.setattr(sys.modules[__name__], 'APP', app)
     assert outside_layers(observed_layers()) == [('readiness', 'store')]
+
+
+# Reviewed computed schema names and the version guards that bound their families.
+SCHEMA_COMPUTED = {
+    (
+        'application/src/hyprn_mvp_app/execution_bundle.py',
+        'validate_frozen_configuration',
+        "'FrozenConfiguration' + (version or 'Legacy')",
+    ): (
+        'FrozenConfigurationLegacy',
+        'FrozenConfiguration4',
+        'FrozenConfiguration5',
+        'FrozenConfiguration7',
+    ),
+    (
+        'application/src/hyprn_mvp_app/scientific_configuration.py',
+        'project_scientific_configuration',
+        "('ConfigurationRevision' if immutable else 'ConfigurationCandidate') + version",
+    ): (
+        'ConfigurationCandidate1',
+        'ConfigurationCandidate2',
+        'ConfigurationCandidate3',
+        'ConfigurationCandidate4',
+        'ConfigurationRevision1',
+        'ConfigurationRevision2',
+        'ConfigurationRevision3',
+        'ConfigurationRevision4',
+    ),
+    (
+        'application/src/hyprn_mvp_app/scientific_configuration.py',
+        'project_scientific_configuration',
+        (
+            "('ModelingConfigurationRevision' if immutable else "
+            "'ModelingConfiguration') + private_version"
+        ),
+    ): (
+        'ModelingConfiguration2',
+        'ModelingConfiguration3',
+        'ModelingConfigurationRevision2',
+        'ModelingConfigurationRevision3',
+    ),
+    (
+        'application/src/hyprn_mvp_app/units.py',
+        'active_ports',
+        (
+            "'ModelRevisionRead4' if isinstance(model, dict) and "
+            "'model_revision_id' in model else 'ModelDraftRead4'"
+        ),
+    ): ('ModelRevisionRead4', 'ModelDraftRead4'),
+}
+SCHEMA_VERSION_GUARDS = {
+    ('application/src/hyprn_mvp_app/execution_bundle.py', 'validate_frozen_configuration'): (
+        "version not in (None, '4', '5', '7')",
+        (
+            "frozen['configuration']['schema_version'] == '4' and version != "
+            "frozen_version(frozen['model_snapshot'], frozen['approach_closure'])"
+        ),
+    ),
+    (
+        'application/src/hyprn_mvp_app/scientific_configuration.py',
+        'project_scientific_configuration',
+    ): (
+        (
+            'not isinstance(configuration, dict) or '
+            "configuration.get('schema_version') not in ('1', '2', '3', '4')"
+        ),
+        "version == '4'",
+        "version in ('2', '3', '4')",
+        "version in ('3', '4')",
+    ),
+}
+
+
+SCHEMA_VERSION_ASSIGNMENTS = {
+    ('application/src/hyprn_mvp_app/execution_bundle.py', 'validate_frozen_configuration'): {
+        'version': "version = frozen.get('schema_version')",
+    },
+    (
+        'application/src/hyprn_mvp_app/scientific_configuration.py',
+        'project_scientific_configuration',
+    ): {
+        'version': "version = configuration['schema_version']",
+        'private_version': "private_version = '3' if version == '4' else version",
+    },
+}
+
+
+def schema_roots(path, source):
+    """Unresolved schema dispatch fails closed, including new computed expressions."""
+    tree = ast.parse(source)
+    names = set()
+    aliases = {
+        alias.asname or alias.name: alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            expected = SCHEMA_VERSION_GUARDS.get((path, node.name))
+            if expected is not None:
+                actual = tuple(
+                    ast.unparse(n.test)
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.If) and 'version' in ast.unparse(n.test)
+                )
+                assert actual == expected, (path, node.name, 'version guards changed')
+            for name, expression in SCHEMA_VERSION_ASSIGNMENTS.get((path, node.name), {}).items():
+                bindings = [
+                    n
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.Name)
+                    and n.id == name
+                    and isinstance(n.ctx, (ast.Store, ast.Del))
+                ]
+                assignments = [
+                    n
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.Assign)
+                    and len(n.targets) == 1
+                    and isinstance(n.targets[0], ast.Name)
+                    and n.targets[0].id == name
+                ]
+                assert (
+                    len(bindings) == 1
+                    and len(assignments) == 1
+                    and ast.dump(assignments[0], include_attributes=False)
+                    == ast.dump(ast.parse(expression).body[0], include_attributes=False)
+                ), (path, node.name, name, 'version assignment changed')
+
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    dispatch = (
+        'validate',
+        'closed',
+        '_closed',
+        'validate_execution',
+        'definition',
+        'validator',
+        'definitions',
+        'authored_schema',
+        'documents_contract',
+    )
+    imported_dispatch = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.name in dispatch
+    }
+    callable_names = imported_dispatch | {'validate', 'closed', '_closed', 'validate_execution'}
+    if not path.endswith(('/contracts.py', '/installation.py')):
+        for node in ast.walk(tree):
+            name = (
+                node.id
+                if isinstance(node, ast.Name)
+                else (node.attr if isinstance(node, ast.Attribute) else None)
+            )
+            if aliases.get(name, name) not in dispatch or not isinstance(
+                getattr(node, 'ctx', None), ast.Load
+            ):
+                continue
+            if isinstance(node, ast.Name) and name not in callable_names:
+                continue
+            parent = parents.get(node)
+            scope = parent
+            while scope is not None and not isinstance(
+                scope, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                scope = parents.get(scope)
+            if (
+                isinstance(node, ast.Name)
+                and scope is not None
+                and any(
+                    isinstance(local, ast.Name)
+                    and local.id == name
+                    and isinstance(local.ctx, ast.Store)
+                    for local in ast.walk(scope)
+                )
+            ):
+                continue  # A local data binding shadows an imported name.
+            # AiiDA port validation is not named contract-schema dispatch.
+            if (
+                path == 'integration/src/hyprn_mvp_integration/calculation.py'
+                and ast.unparse(node) == 'spec.inputs.validator'
+                and isinstance(parent, ast.Assign)
+                and [ast.unparse(t) for t in parent.targets] == ['parent_validator']
+            ):
+                continue
+            assert isinstance(parent, ast.Call) and parent.func is node, (
+                'Unreviewed callable schema alias',
+                path,
+                getattr(node, 'lineno', None),
+            )
+    for call in ast.walk(tree):
+        if not isinstance(call, ast.Call):
+            continue
+        callee = (
+            call.func.id
+            if isinstance(call.func, ast.Name)
+            else (call.func.attr if isinstance(call.func, ast.Attribute) else None)
+        )
+        callee = aliases.get(callee, callee)
+        if callee not in dispatch:
+            continue
+        # Installation validates its closed configuration, not a named wire definition.
+        if path.endswith('/installation.py'):
+            continue
+        # The schema owner implements dispatch; consumers below must name every root.
+        if path.endswith('/contracts.py'):
+            continue
+        assert call.args, (path, call.lineno, 'missing schema name')
+        argument = call.args[0]
+        parent = parents.get(call)
+        while parent is not None and not isinstance(
+            parent, (ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            parent = parents.get(parent)
+        scopes = []
+        while parent is not None:
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                scopes.append(parent.name)
+            parent = parents.get(parent)
+        function = '.'.join(reversed(scopes)) if scopes else '<module>'
+        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+            names.add(argument.value)
+        elif (
+            path.endswith('/approach_closure.py')
+            and function == '_closed'
+            or path.endswith('/execution_bundle.py')
+            and function == 'closed'
+        ):
+            assert callee == 'validate' and ast.unparse(argument) == 'name'
+        else:
+            key = path, function, ast.unparse(argument)
+            assert key in SCHEMA_COMPUTED, ('Unreviewed schema dispatch', key)
+            names.update(SCHEMA_COMPUTED[key])
+    return names
+
+
+def test_every_attested_schema_name_is_a_reviewed_execution_root():
+    from hyprn_mvp_app.contracts import EXECUTION_ROOTS
+
+    found = set()
+    for path in ATTESTED_PROJECT_FILES:
+        found.update(schema_roots(path, (REPO / path).read_text()))
+    assert found == set(EXECUTION_ROOTS)
+
+
+@pytest.mark.parametrize(
+    'source',
+    [
+        'def check(value): validate(dynamic, value)',
+        'def check(value): contracts.definition(dynamic)',
+        'def check(value): validate_execution(prefix + version, value)',
+        'def check(value): contracts.validator(dynamic)',
+    ],
+)
+def test_unreviewed_computed_schema_dispatch_refuses(source):
+    with pytest.raises(AssertionError, match='Unreviewed schema dispatch'):
+        schema_roots('application/src/hyprn_mvp_app/units.py', source)
+
+
+@pytest.mark.parametrize(
+    'source',
+    [
+        'check = validate',
+        'def check(value): return forward(contracts.validator, value)',
+        'def check(name, value): validate(name, value)',
+        'contracts.validator(dynamic)',
+    ],
+)
+def test_unreviewed_schema_forwarding_refuses(source):
+    with pytest.raises(AssertionError, match='Unreviewed'):
+        schema_roots('application/src/hyprn_mvp_app/units.py', source)
+
+
+def test_imported_schema_alias_and_module_literal_are_covered():
+    source = "from owner import validate as admit; admit('Model4', value)"
+    assert schema_roots('application/src/hyprn_mvp_app/units.py', source) == {'Model4'}
+
+
+def test_widened_configuration_family_requires_root_review():
+    path = 'application/src/hyprn_mvp_app/scientific_configuration.py'
+    source = (REPO / path).read_text()
+    tree = ast.parse(source)
+    function = next(
+        n for n in tree.body if getattr(n, 'name', '') == 'project_scientific_configuration'
+    )
+    guard = next(
+        n
+        for n in ast.walk(function)
+        if isinstance(n, ast.Tuple)
+        and [getattr(e, 'value', None) for e in n.elts] == ['1', '2', '3', '4']
+    )
+    guard.elts.append(ast.Constant(value='5'))
+    with pytest.raises(AssertionError, match='version guards changed'):
+        schema_roots(path, ast.unparse(tree))
+
+
+@pytest.mark.parametrize(
+    'replacement',
+    [
+        "private_version = '2' if version == '4' else version",
+        "private_version = '3' if version == '4' else version; private_version = '9'",
+        "private_version = '3' if version == '4' else version; version = '9'",
+    ],
+)
+def test_configuration_projection_assignment_requires_root_review(replacement):
+    path = 'application/src/hyprn_mvp_app/scientific_configuration.py'
+    tree = ast.parse((REPO / path).read_text())
+    function = next(
+        n for n in tree.body if getattr(n, 'name', '') == 'project_scientific_configuration'
+    )
+    assignment = next(
+        n
+        for n in function.body
+        if isinstance(n, ast.Assign)
+        and isinstance(n.targets[0], ast.Name)
+        and n.targets[0].id == 'private_version'
+    )
+    position = function.body.index(assignment)
+    function.body[position : position + 1] = ast.parse(replacement).body
+    with pytest.raises(AssertionError, match='version assignment changed'):
+        schema_roots(path, ast.unparse(ast.fix_missing_locations(tree)))
+
+
+def test_launch_path_opens_only_the_attested_execution_schema():
+    code = """
+opened = []
+def audit(event, args):
+    if event == 'open' and 'contracts/schemas/' in str(args[0]):
+        opened.append(str(args[0]).split('contracts/schemas/', 1)[1])
+sys.addaudithook(audit)
+from hyprn_mvp_integration import launcher, calculation, results
+from hyprn_mvp_app import contracts, units
+for name in contracts.EXECUTION_ROOTS:
+    contracts.validator(name)
+print(json.dumps(opened))
+"""
+    # Calculation imports AiiDA, so this isolated probe uses the runner's native interpreter.
+    from scoped_fixture import APPROVED_PYTHON
+
+    result = subprocess.run(
+        [
+            APPROVED_PYTHON,
+            '-B',
+            '-c',
+            'import sys,json;sys.path[:0]='
+            + repr([str(REPO / 'application/src'), str(REPO / 'integration/src')])
+            + ';'
+            + code,
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.splitlines()[-1]) == ['execution.schema.json']
+
+
+def test_documents_schema_belongs_only_to_the_application_inventory(tmp_path):
+    result = probe(f"""
+sys.path.insert(0, {str(REPO / 'deployment')!r})
+from pathlib import Path
+import application_runtime, modeling_runtime
+from hyprn_mvp_integration import launcher
+application_runtime.ui_dist = lambda: Path({str(tmp_path)!r})
+print(json.dumps([sorted(application_runtime.hashes()),
+                  sorted(modeling_runtime.source_hashes()),
+                  sorted(launcher.execution_source_hashes())]))
+""")
+    application, modeling, execution = map(set, result)
+    documents = 'contracts/schemas/documents.schema.json'
+    assert documents in application
+    assert documents not in modeling | execution
+    assert len(modeling) == 23 and len(execution) == 49
+    assert {
+        'contracts/schemas/model.schema.json',
+        'contracts/schemas/execution.schema.json',
+    } <= modeling & execution

@@ -6,6 +6,7 @@ and are reachable exactly when a registered tool of the session's effects uses t
 material (draft annotations) may be deleted only once a registered tool declares its route.
 """
 
+from hyprn_mvp_app.contracts import authored_schema
 from itertools import combinations, product
 import json
 from pathlib import Path
@@ -30,9 +31,7 @@ from hyprn_mvp_app.agent_tools.write_policy import (
 
 REPO = Path(__file__).resolve().parents[3]
 CONTRACT = json.loads((REPO / 'contracts/hyprn-mvp.openapi.yaml').read_text())
-DOCUMENT_ROUTES = json.loads((REPO / 'contracts/schemas/model.schema.json').read_text())[
-    'x-hyprn-mvp-documents-contract'
-]['routes']
+DOCUMENT_ROUTES = authored_schema()['x-hyprn-mvp-documents-contract']['routes']
 S = '/api/1/studies/{study_id}'
 EFFECT_SETS = [
     frozenset(c)

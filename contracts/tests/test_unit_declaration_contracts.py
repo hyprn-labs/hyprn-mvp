@@ -3,6 +3,8 @@
 Bundle files are separately encoded bytes: pairing tests validate their declared
 concrete schemas, not a claim that future launcher/worker admission is delivered.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -13,7 +15,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from test_approach_contracts import sample, valid as previous_sample
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 D = SCHEMA['$defs']
 PHYSICAL = ['m', 'km', 'cm', 'mm', 's', 'min', 'h', 'kg', 'g', 'N', 'Pa',
             'kPa', 'MPa', 'K', 'degC', 'degF', 'rad', 'deg', 'm/s', 'km/h',
@@ -201,8 +203,8 @@ def test_catalog_bounds_endpoint_and_capability_declaration():
 
 
 def test_schema_mirrors_and_all_local_references_resolve():
-    other = json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())
-    assert other['$defs'] == D
+    other = authored_schema()
+    assert_execution_schema()
     for schema in (SCHEMA, other):
         Draft202012Validator.check_schema(schema)
     def walk(node):
@@ -479,10 +481,18 @@ ORIGINAL_HASHES = {
 }
 
 FIXTURE_HASHES = {
-  "contracts/tests/test_modeling_contract.py": "35c1b6bae206939f79dad6096ed83bd4e75aaef08dc6f0edab0d41c2adbd2101",
-  "contracts/tests/test_assumptions_evidence_contracts.py": "74f644931f5bd91848b989cd3e2c5745ce87c8a6b223bad36df3c18bbb3bfba5",
-  "contracts/tests/test_native_program_contract.py": "b93d86d9696cf88c9642903d93a0002f21db84857a4f32e2a0ac33f0109338f4",
-  "contracts/tests/test_approach_contracts.py": "4cf3a043e4c67b64cdb5338a838ff67394f08f3077b4d5c62555291624e2ebe7"
+  "contracts/tests/test_modeling_contract.py": (
+      "d662f5f99406fce0eb7754f9101ceb7d0c5d2a56c5162e6e2476542a5af9fb6a"
+  ),
+  "contracts/tests/test_assumptions_evidence_contracts.py": (
+      "db99ec35a299c21373b08279a8ca108c26c3908cd1290f0373269bc3351c5347"
+  ),
+  "contracts/tests/test_native_program_contract.py": (
+      "add747df66e39aeb1dd76b262723b67fc1ae40b8889cef528e86ddf799104a2b"
+  ),
+  "contracts/tests/test_approach_contracts.py": (
+      "ca318062e2b1caee3f84b54ff945dcc57878a01fce96c397aec1e681ee6436bd"
+  ),
 }
 
 
@@ -506,7 +516,9 @@ def test_original_concrete_definitions_and_fixture_bytes_preserved():
             # The prefix before the structural proofs is pinned as it stands (retained-read
             # tests and two explicit fixture repairs included); reversing only those audited
             # fixture edits must give back the original hash.
-            assert hashlib.sha256(payload).hexdigest() == '003b5124b8d9feeb3ca8f3eb0efb3af90f68b636aa1341f8c69242f7e79989b4'
+            assert hashlib.sha256(payload).hexdigest() == (
+                'e4b188e504cd95537f7d7265b85b5b14b020084ec093e903aac41d9fdbc64ce0'
+            )
             payload = payload.split(b'\n\n# Public-only read metadata', 1)[0]
             payload = payload.replace(b"    if name == 'ApproachRunContext1': value['association']['store_uuid'] = UUID\n", b'')
             payload = payload.replace(b"'RunHistory3','RunHistory4'", b"'RunHistory3'")
@@ -516,7 +528,9 @@ def test_original_concrete_definitions_and_fixture_bytes_preserved():
             # Pinned as it stands (two audited repairs: digest vectors recomputed for the
             # renamed namespace, and major-one checks read through the versioned unions);
             # reversing only those audited edits must give back the original hash.
-            assert hashlib.sha256(payload).hexdigest() == 'e0c2c0ed0c0a4c4506766f5dfc878669dbaff5505dd57ec4ebdcd69190e0d30c'
+            assert hashlib.sha256(payload).hexdigest() == (
+                '2c58c73500e8a41c48601c5396e43c08b7afe436c5f4e6b4ebdc9b589d557433'
+            )
             payload = payload.replace(b'    assert artifact["executable_content_digest"] == "cd03923ae01b944b8ea421fb040dd4a8e5d23e07579e97f08f0fdace9df0e6db"\n    assert artifact["prepared_digest"] == "310b64ddebf0cad72f9f28bbe517e5f37f900c5a1347dbe87464f52bff6510ca"\n', b'    assert artifact["executable_content_digest"] == "4292671e4fda7313c56e211de8068e8be188f6a4facaa63ea32b6652894da517"\n    assert artifact["prepared_digest"] == "c41a9f8fac3c493d05457c1755ff690c6024aaab6e12b7866b71f2bd149fd19d"\n')
             payload = payload.replace(b'        # Versioned unions keep their major-one branch; later versions are added beside it.\n        for name in ("ModelDraft", "ModelRevision", "ModelPackage", "ConfigurationRevision"):\n            assert {"$ref": "#/$defs/" + name + "1"} in schema["$defs"][name]["oneOf"]\n            assert schema["$defs"][name + "1"]["properties"]["schema_version"] == {"enum": ["1"]}\n        assert schema["$defs"]["PreparedModelArtifactResponse"]["properties"]["schema_version"] == {"enum": ["1"]}\n', b'        for name in ("ModelDraft", "ModelRevision", "ModelPackage", "ConfigurationRevision", "PreparedModelArtifactResponse"):\n            assert schema["$defs"][name]["properties"]["schema_version"] == {"enum": ["1"]}\n')
 

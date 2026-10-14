@@ -5,7 +5,7 @@ bundle from exact model-side and application-side bytes, and every check that ad
 or re-admits one (preparation, provenance, retained unit catalog, scientific snapshot,
 approach pins, file inventory and paths, result dependencies, the retained-bundle
 validator) plus the version predicates that select a frozen envelope and the single
-retained pairing table (``RETAINED_PAIRINGS``, ``bundle_family``; task 14-D1). The application
+retained pairing table (``RETAINED_PAIRINGS``, ``bundle_family``). The application
 (submission, history, export) and integration (launcher, calculation, retained-result
 reader, export) share it without loading storage, transport or orchestration.
 
@@ -20,7 +20,7 @@ shape failure to ``ValueError('Invalid <name>')``. ``verify_dependencies`` keeps
 ``ContractError`` of its own schema validation.
 
 Moved from ``execution.py`` (and ``finite``/``verify_dependencies`` from
-``result_bindings.py``) in task 14-B2; bodies unchanged except hoisted imports and the
+``result_bindings.py``); bodies unchanged except hoisted imports and the
 execution schema compiled once.
 """
 import base64
@@ -37,7 +37,7 @@ from .units import UNIT_CATALOG_DIGEST, UNIT_ENGINE_SOURCE_SHA256, port_units, r
 MAX_FILES = 2000
 MAX_BYTES = 32 * 1024 * 1024
 
-# ---- Retained record families (14-D1) -------------------------------------------------
+# ---- Retained record families -------------------------------------------------
 #
 # The single table of supported retained runs, as (history projection, bundle,
 # configuration, model) schema versions. It is closed: a pairing that is not listed is

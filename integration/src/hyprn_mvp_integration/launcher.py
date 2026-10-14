@@ -139,7 +139,7 @@ def execution_source_hashes():
     Native inputs mirror modeling_runtime.source_hashes; execution admission adds
     the actual independent validators and their local contract dependencies.
 
-    14-B3 (reviewed literal; never computed): the project modules are exactly the
+    Reviewed literal; never computed: the project modules are exactly the
     static import closure of launcher, calculation, results and worker, package
     __init__ files included (application/tests/test_module_boundaries.py enforces
     equality). Persistence/orchestration modules are bound by the application

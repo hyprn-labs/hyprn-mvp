@@ -14,7 +14,6 @@ from .units import UNIT_CATALOG_BYTES, UNIT_CATALOG_DIGEST, UNIT_ENGINE_SOURCE_S
 from .store import ForeignEvidence
 # Temporary forwarding aliases for test imports only;
 # production code imports these from their owner (application/tests/test_module_boundaries.py).
-from .contracts import SCHEMA, VALIDATORS  # noqa: F401
 
 class ModelingClient:
     def __init__(self,base_url,key,*,transport=None):

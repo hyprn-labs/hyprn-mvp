@@ -4,6 +4,8 @@ JSON Schema checks wire shapes. Canonical serialization rejects non-JSON numbers
 at the same boundary used by the app. Cross-record authority, keyed uniqueness,
 digest equality and archive safety remain producer/consumer checks in later tasks.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -18,7 +20,7 @@ import rfc8785
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 DEFS = SCHEMA['$defs']
 SHA = 'a' * 64
 
@@ -158,8 +160,8 @@ def test_private_projection_has_exact_literal_fields_and_separate_digest_shape()
 
 
 def test_common_definitions_and_legacy_authorities_are_preserved():
-    other = json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())
-    assert DEFS == other['$defs']
+    other = authored_schema()
+    assert_execution_schema()
     for schema in (SCHEMA, other):
         Draft202012Validator.check_schema(schema)
     # Pinned pre-task definitions; this gate detects accidental v1 tightening.

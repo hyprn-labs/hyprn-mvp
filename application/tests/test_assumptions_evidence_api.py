@@ -4,6 +4,7 @@ generated_ and public_ are disjoint runner selections. Evidence operations use
 real storage. Diagnostic/configuration3 dispatch doubles are labeled explicitly;
 real dispatch and native resolution are proven by the native execution tests.
 """
+from hyprn_mvp_app.contracts import authored_schema
 import json
 import importlib.util
 from pathlib import Path
@@ -94,7 +95,7 @@ def public_refs(value):
 
 
 def test_generated_preserves_shared_concrete_variants_and_read_unions(generated):
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())['$defs']
+    shared = authored_schema()['$defs']
     schemas = generated['components']['schemas']
     for name, definition in shared.items():
         if name in {'EvidenceSnapshotLegacy', 'Error'}:
@@ -104,7 +105,7 @@ def test_generated_preserves_shared_concrete_variants_and_read_unions(generated)
 
 def test_generated_snapshot_normalization_preserves_validation(generated):
     from jsonschema import Draft202012Validator, FormatChecker
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+    shared = authored_schema()
     plain = dict(evidence_version_id=uid(), kind='note', content='Exact legacy bytes', source_refs=[])
     scope = dict(scope_version='1', kind='study', study_id=uid())
     record3 = {**plain, 'evidence_schema_version':'3', 'evidence_id':uid(), 'study_id':scope['study_id'],
@@ -157,7 +158,7 @@ def test_generated_only_registered_routes_and_current_endpoint_versions(generate
 
 def test_generated_private_protocol_matrix_and_refs():
     private = json.loads((ROOT / 'contracts/modeling.openapi.yaml').read_text())
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())['$defs']
+    shared = authored_schema()['$defs']
     matrix = private['x-hyprn-mvp-protocol-matrix']
     assert matrix['envelope_version'] == '1'
     assert matrix['contract_versions'] == ['1.2', '1.3']

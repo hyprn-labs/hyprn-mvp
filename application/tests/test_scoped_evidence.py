@@ -1,4 +1,5 @@
 """Typed immutable evidence through authenticated API and isolated real model HTTP."""
+from hyprn_mvp_app.contracts import authored_schema
 import copy
 import json
 import os
@@ -193,7 +194,7 @@ def test_full_scope_freezes_and_tampering_cannot_strip_or_replace_it(api, scoped
 
 
 def test_scope_schema_pair_is_closed_and_snapshot_pair_is_all_or_neither():
-    schemas=[json.loads((ROOT/'contracts/schemas'/name).read_text()) for name in ['model.schema.json','execution.schema.json']]
+    schemas=[authored_schema() for name in ['model.schema.json','execution.schema.json']]
     for schema in schemas:
         Draft202012Validator.check_schema(schema)
         assert 'EvidenceResourceRef1' in schema['$defs']

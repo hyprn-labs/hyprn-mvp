@@ -4,6 +4,8 @@ JSON Schema cannot compare sibling IDs or resolve an owner against a model.
 The explicit semantic counterexamples below must reach those later validators;
 acceptance here is deliberately not a claim of domain or worker acceptance.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -14,7 +16,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from test_reuse_contract import uid, request, candidate, revision
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 D = SCHEMA['$defs']
 VERSIONS = {'ModelDraft2':'2', 'ModelRevision2':'2', 'ModelPackage2':'2',
     'Preview2':'2', 'Apply2':'2', 'ConfigurationRequest3':'3',
@@ -267,7 +269,7 @@ def test_relational_counterexamples_are_explicit_not_fake_schema_guarantees():
 
 
 def test_shared_definitions_mirror_and_local_references_resolve():
-    assert D == json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())['$defs']
+    assert_execution_schema()
     def visit(value):
         if isinstance(value, dict):
             if '$ref' in value: assert value['$ref'].removeprefix('#/$defs/') in D

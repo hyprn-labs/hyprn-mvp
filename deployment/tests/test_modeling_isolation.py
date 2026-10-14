@@ -37,6 +37,8 @@ pytestmark = [pytest.mark.isolation, pytest.mark.usefixtures('owned_modeling')]
 
 def test_native_build_closure_is_identity_bound():
     inventory = runtime.source_hashes()
+    assert 'contracts/schemas/documents.schema.json' not in inventory
+    assert len(inventory) == 23
     for path in ('modeling/rehearsal.py', 'contracts/schemas/model.schema.json',
                  'contracts/schemas/execution.schema.json', 'integration/worker-requirements.lock',
                  'upstream/whatsopt-patches/050-native-generation.patch'):

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import pytest
 from hyprn_mvp_app.store import digest, uid
-from hyprn_mvp_app.modeling import SCHEMA
+from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.approach_closure import build_closure, validate_closure, validate_saved
 
 @pytest.mark.parametrize('change',[None,'output','value','units','conversion','failed'])
@@ -38,7 +38,7 @@ def test_result_binding_uses_exact_retained_output_and_conversion(change):
         with pytest.raises(ValueError):closure(v,**kwargs)
 
 
-D=SCHEMA['$defs']
+D=definitions()
 SID=uid()
 
 def sample(s):

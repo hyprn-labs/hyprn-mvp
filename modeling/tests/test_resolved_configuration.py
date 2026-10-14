@@ -1,4 +1,5 @@
 """Actual private Rails/native static path in fresh confined tmpfs stores."""
+from hyprn_mvp_app.contracts import authored_schema
 import base64
 import hashlib
 import json
@@ -152,7 +153,7 @@ def test_private_schema_copy_and_legacy_result_preservation(harness):
     # Production stages the current reviewed schema beside the cumulative
     # 040–070 adapter; the original 040 schema remains a historical baseline.
     assert json.loads(harness[2].read_bytes())['$defs'] == DEFS
-    assert DEFS == json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_bytes())['$defs']
+    assert DEFS == authored_schema()['$defs']
     # The tracked 040 patch is the historical baseline of the legacy concrete shapes: the
     # current read unions were split from these definitions without changing them.
     legacy = embedded['$defs']

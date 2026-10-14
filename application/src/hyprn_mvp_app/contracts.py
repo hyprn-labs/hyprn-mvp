@@ -7,14 +7,11 @@ failure it carries (``ContractError``, field-level diagnostics).
 
 Dependency-light by design: stdlib, ``rfc8785`` and ``jsonschema`` only. It must not
 own or import SQLite, HTTP transport, authentication, workflow orchestration,
-model-service coordination, runtime activation or candidate code. Importing it reads
-and compiles ``contracts/schemas/model.schema.json`` once and does nothing else
-(enforced by ``application/tests/test_module_boundaries.py``). The much larger
-``contracts/schemas/execution.schema.json`` is read and compiled once per process, on
-first use by ``validate_execution`` (14-B2; previously re-read on every bundle check).
+model-service coordination, runtime activation or candidate code. Importing it opens no schema. Reviewed launch roots load only the generated
+execution schema; other definitions load the authored namespace lazily. Each used
+validator is compiled once per process.
 
-Identity invariant: ``canonical`` and ``digest`` are byte-for-byte the pre-14-B1
-``store`` implementations; ``application/tests/fixtures/identity_golden.json`` proves it.
+Identity invariant: ``canonical`` and ``digest`` are byte-for-byte the canonical and digest functions before the split; ``application/tests/fixtures/identity_golden.json`` proves it.
 """
 from __future__ import annotations
 from functools import cache
@@ -110,9 +107,102 @@ class ContractError(DomainError):
         self.schema = schema
 
 
-MODEL_CONTRACT=Path(__file__).resolve().parents[3]/"contracts/schemas/model.schema.json"
-SCHEMA=json.loads(MODEL_CONTRACT.read_text())
-VALIDATORS={name:Draft202012Validator({**SCHEMA,"$ref":"#/$defs/"+name},format_checker=FormatChecker()) for name in SCHEMA["$defs"]}
+EXECUTION_ROOTS = (
+    'ApproachClosure3',
+    'ApproachClosurePreUnits',
+    'ApproachClosureRead3',
+    'ApproachClosureWithModel3',
+    'ApproachResolution1',
+    'ApproachResolution3',
+    'ApproachSavedRead3',
+    'ApproachVersionRead2',
+    'ConfigurationCandidate1',
+    'ConfigurationCandidate2',
+    'ConfigurationCandidate3',
+    'ConfigurationCandidate4',
+    'ConfigurationRevision',
+    'ConfigurationRevision1',
+    'ConfigurationRevision2',
+    'ConfigurationRevision3',
+    'ConfigurationRevision4',
+    'ExecutionBundleRead8',
+    'FrozenConfiguration4',
+    'FrozenConfiguration5',
+    'FrozenConfiguration7',
+    'FrozenConfigurationLegacy',
+    'ModelDraftRead4',
+    'ModelRevision2',
+    'ModelRevisionRead4',
+    'ModelingConfiguration2',
+    'ModelingConfiguration3',
+    'ModelingConfigurationRevision2',
+    'ModelingConfigurationRevision3',
+    'NativeSource',
+    'PortRef',
+    'PreparedModelArtifact',
+    'ProgramBindings',
+    'ProgramProvenance',
+    'ProgramSourceMap',
+    'ResultDependencies1',
+    'UnitDeclaration1',
+)
+
+SCHEMA_DIRECTORY = Path(__file__).resolve().parents[3] / "contracts/schemas"
+
+
+@cache
+def _documents_schema():
+    return json.loads((SCHEMA_DIRECTORY / "documents.schema.json").read_bytes())
+
+
+@cache
+def authored_schema():
+    """One authored namespace, preserving public definition order across source files."""
+    model = json.loads((SCHEMA_DIRECTORY / "model.schema.json").read_bytes())
+    documents = _documents_schema()
+    model_defs, document_defs = model["$defs"], documents["$defs"]
+    if model_defs.keys() & document_defs.keys():
+        raise ValueError("Duplicate authored definition")
+    groups = documents["x-hyprn-mvp-definition-order"]
+    ordered = [name for names in groups.values() for name in names]
+    if (len(ordered) != len(set(ordered)) or set(ordered) != set(document_defs)
+            or set(groups) - (set(model_defs) | {""})):
+        raise ValueError("Invalid authored definition order")
+    merged = {name: document_defs[name] for name in groups.get("", ())}
+    for name, body in model_defs.items():
+        merged[name] = body
+        merged.update((child, document_defs[child]) for child in groups.get(name, ()))
+    return {**model, "$defs": merged,
+            "x-hyprn-mvp-documents-contract": documents_contract()}
+
+
+def definitions():
+    """All authored definitions in stable source order, loaded on first use."""
+    return authored_schema()["$defs"]
+
+
+def documents_contract():
+    """Normative Documents metadata, independent of the execution schema."""
+    return _documents_schema()["x-hyprn-mvp-documents-contract"]
+
+
+def definition(name):
+    """Launch roots read exclusively from the attested execution schema."""
+    return (_execution_schema()["$defs"] if name in EXECUTION_ROOTS else definitions())[name]
+
+
+@cache
+def validator(name):
+    """Compile a named definition without loading unrelated authored schemas."""
+    if name in EXECUTION_ROOTS:
+        return _execution_validator(name)
+    schema = authored_schema()
+    if name not in schema["$defs"]:
+        raise KeyError(name)
+    return Draft202012Validator({**schema, "$ref": "#/$defs/" + name},
+                                format_checker=FormatChecker())
+
+
 MAX_DIAGNOSTICS = 20
 TEXT_LIMIT = 4096  # Diagnostic path/message bound in the public Error schema.
 
@@ -123,14 +213,14 @@ def validate(name,value,*,remote=False):
     Raises ``ContractError``: ``invalid_request`` 400 with field diagnostics, or
     ``backend_unavailable`` 503 without diagnostics when ``remote``.
     """
-    fields=_violations(lambda:VALIDATORS[name],value)
+    fields=_violations(lambda:validator(name),value)
     if fields:
         if remote:raise ContractError(name,"backend_unavailable",503,outcome="unknown")
         raise ContractError(name,"invalid_request",400,fields=fields)
     return value
 
 
-EXECUTION_CONTRACT=Path(__file__).resolve().parents[3]/"contracts/schemas/execution.schema.json"
+EXECUTION_CONTRACT = SCHEMA_DIRECTORY / "execution.schema.json"
 
 
 @cache

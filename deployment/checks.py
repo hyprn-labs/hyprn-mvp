@@ -50,7 +50,10 @@ GROUPS = {
     'units-public-types': ('application/tests/test_unit_guidance_api.py',),
     'units-resolution': ('application/tests/test_unit_resolution.py',),
     'units-configuration': ('application/tests/test_unit_configuration.py',),
-    'units-bundle': ('application/tests/test_unit_execution_admission.py',),
+    'units-bundle': (
+        'application/tests/test_unit_execution_admission.py',
+        'application/tests/test_retained_schema_identities.py',
+    ),
     'units-history': ('application/tests/test_unit_history.py',),
     'units-launcher': ('integration/tests/test_unit_execution.py',),
     'units-worker': ('integration/tests/test_unit_worker.py', 'integration/tests/test_native_program.py'),
@@ -107,7 +110,9 @@ GROUPS = {
     # Readability ratchet (deployment/style_ratchet.py): ruff and prettier at their pins, no new
     # long or ;-chained line, every new file formatted. A missing tool or baseline fails.
     'style-ratchet': ('deployment/tests/test_style_ratchet.py',),
-    'contracts': ('contracts/tests/test_reuse_contract.py', 'contracts/tests/test_ui_discovery_contract.py',
+    'contracts': ('contracts/tests/test_schema_sources.py',
+                  'contracts/tests/test_reuse_contract.py',
+                  'contracts/tests/test_ui_discovery_contract.py',
                   'contracts/tests/test_native_program_contract.py'),
     'projection': ('application/tests/test_scientific_configuration.py', 'modeling/tests/test_resolved_configuration.py'),
     'bindings': ('application/tests/test_result_bindings.py',
@@ -1085,6 +1090,8 @@ def contracts_child(group='contracts', *, units_mixed_repair=False):
         if status:
             return status
         targets = tuple(p for p in targets if p != 'deployment/tests/test_repository_guard.py')
+    if group == 'contracts':
+        sys.path.insert(0, str(REPO / 'application/src'))
     if group in PROJECT_PYTEST_GROUPS:
         global PROJECTION_SCOPE
         PROJECTION_SCOPE = scope

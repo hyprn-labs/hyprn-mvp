@@ -279,6 +279,9 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     for inventory, paths in zip(inventories, required):
         for path in paths:
             assert inventory[path] == hashlib.sha256((REPO/path).read_bytes()).hexdigest()
+    documents = 'contracts/schemas/documents.schema.json'
+    assert documents in inventories[0]
+    assert documents not in inventories[1] and documents not in inventories[2]
     # Every reviewed patch, including the quantity-definitions patch, is bound by the native
     # and the execution inventories alike.
     assert inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == hashlib.sha256(
