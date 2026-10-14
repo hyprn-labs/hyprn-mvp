@@ -2,6 +2,9 @@
 
 Date: 2026-10-14. Status: the local public-API author–run–inspect–revise journey is demonstrated. The scientific result is a qualified cruise screening comparison; complete-mission feasibility and ticket pricing remain unresolved. No phase or release qualification is claimed.
 
+The subsequent Study details follow-up is recorded below. The original rehearsal
+identities and numerical evidence remain unchanged.
+
 ## Delivery and exact source
 
 Integrated `30f91a8` and `c6c0078aa2abda91021b3107e1ce7124eb7ac792`: the thin ordinary-session client, focused tests, runner/guard registration and usage guide. No dependency, API, UI or attested runtime file changed. Runtime application source is `6c4d2ae`; its application bytes are identical on the delivery commit. All 49 reviewed attested paths still match the final 2.8 inventory; the active runtime descriptor is unchanged.
@@ -57,3 +60,47 @@ All three helper executor scopes and all three integrated verification scopes we
 Stop adding features after this rehearsal. Preserve the ordinary authenticated demo and its records. Productized installation/lifecycle, other hosts and clients, embedded assistance, broader agent surfaces, full qualification and release audits are separate future scope. Full scientific mission and cost closure require additional source resolution/modeling work; do not present this screening study as a validated aircraft design.
 
 The earlier optional batches remain unmerged and recoverable: `agent-local-foundation` at `d353c796b2f8948c8594b3d9d8f5179fa0fd4304` and `agent-mcp-surface` at `63b617c`. Their checkpoints retain partial checks and remaining findings; the MCP/notes branch still has its recorded style failure. No original numbered task closes merely because the demo works.
+
+## Study details and scientific guidance follow-up
+
+The product owner subsequently requested the Study details cleanup and the start
+of scientific engineering guidance for the workflow agent. UI implementation
+`15e5ae7` separates the question, current approach, assumptions, limits and open
+questions. Empty optional sections and internal format labels are hidden. Evidence
+versions and relationships remain accessible through View evidence; conflicting
+evidence remains visible in the brief. The
+[UI checkpoint](phases/02-local-edition/checkpoints/study-details-brief.md) records
+all nine passing integrated groups, 58 passing browser tests, corrected assertions
+and formatter changes. All nine integrated test scopes are released.
+
+The same owner-authorized public API session saved approach version 3,
+`573e9290-5abb-4553-bd6b-4909ffe6f3fc`, and study revision
+`163dc5a3-5bf8-43d3-a320-8a9c8153bfa0`. The question restates the surviving full
+engineering brief: three fuels, 100 passengers, 3000–15000 km with emphasis on
+9000 km, Mach 4–8, below 575 tonnes, aircraft mass and ticket price. No verbatim
+human original was available, so original-wording and attribution fields were not
+invented. The current method describes the actual cruise calculation and cases.
+Four separately cited limits retain mission, scenario coverage, source-unit and
+cost restrictions. The structural-unit interpretation is explicitly provisional.
+
+The preceding approach content and all ten complete run histories and result
+integrity records compare unchanged. No model, configuration, numerical input or
+result changed. All 49 attested source paths and the running descriptor still match
+the retained attestation. Numerical reruns are unnecessary for this presentation
+and authored-context correction.
+
+The production UI build from integrated `7b590ab` was applied to the existing
+owned static directory without restarting the runtime. The real UI shows the new
+saved brief, omitted empty fields, distinct limits and the exact cited source
+version. Screenshots and DOM capture are retained with before/after API responses
+and historical comparisons in the live scope's `evidence/study-details-brief`,
+indexed by `file-identities.json`. Browser sign-in was renewed after page reload.
+This is automated inspection, not human acceptance.
+
+Scientific guidance commit `fcc715e` adds
+[the foundation skill](../docs/agents/scientific-engineering/SKILL.md) and seven
+behavioral scenarios. Static review establishes intended coverage only. The
+foundation is not installed or loaded by the workflow agent; future integration
+must reconcile it with the single packaged playbook and evaluate actual agent
+responses. No API or runtime instruction source changed. See the
+[foundation checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/scientific-engineering-foundation.md).

@@ -28,6 +28,14 @@ stop adding features until the next product-owner instruction. Optional batches 
 cleanly checkpointed and unmerged; their heads and remaining findings are in the
 rehearsal record.
 
+The subsequent authorized Study details follow-up is delivered: the running UI
+separates the engineering question, approach and limits, and hides empty sections
+and internal format labels. Approach version 3 corrects the authored framing;
+all ten historical runs remain unchanged. A repository-owned scientific guidance
+foundation and seven scenarios are available for later agent integration. They are
+not loaded by the runtime. The rehearsal follow-up records live UI evidence and
+the integration checkpoint; keep broader feature work deferred.
+
 ## Earlier delivery priority — superseded for the current demo (2026-10-14)
 
 Read [DELIVERY-PLAN.md](DELIVERY-PLAN.md) before dispatching pending Phase 2/3

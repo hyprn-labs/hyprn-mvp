@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** The owner-operated fuel workflow is demonstrated. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). Full mission/cost closure and release qualification remain separate.
+**Current focus:** The fuel demo now has a revised Study details brief and a project-owned scientific guidance foundation. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The guidance is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
 
 ## Current Position
 
@@ -15,6 +15,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 - Latest integrated acceptance: all 23 initial groups pass at `b5a7b62`; the docstring-only correction passes affected release checks at `a5ef4eb`; the final native journey passes 14 tests plus its existing one deselection, with seven runs, four archive pairs and three browser checks. The two-constant durable pin at `d4467eb` passes guards 17 and preflight 1, preserving seven processes and 5,675 original files; final style 33 and term scan 0. All 29 allocated orchestrator scopes and the fresh materialized copy are released; the referenced worker image and immutable captures are retained.
 - Every current-image/native group deferred by 2.8c now passes, including public-api 70, ae-model 26 and fuel-native-provenance 16 (one added historical-export case). The earlier 30-group schema/path acceptance remains recorded in [2.8c](phases/02-local-edition/checkpoints/2.8c.md#integrated-orchestrator-verification) and [3.16-paths](phases/03-agent-tools-for-coding-agents/checkpoints/3.16-paths.md); unchanged checks are not repeated.
 - Current demo: Codex completed the real public-API author–run–inspect–revise loop: ten successful restricted-worker runs, two model versions, two approach versions and a revised saved conclusion. Actual UI results and frozen history were inspected. The result is a conditional cruise fuel comparison; full-mission feasibility and ticket pricing are unresolved. See [DEMO-REHEARSAL.md](DEMO-REHEARSAL.md) for exact identities, focused checks, failures and retained runtime scope.
+- Follow-up: Study details now separates the full engineering question, current approach and limits, hides empty sections/internal labels, and preserves exact evidence access and visible conflicting evidence. A third approach version corrects authored framing; all ten run histories remain unchanged. The scientific skill foundation and seven scenarios are repository-owned, statically reviewed and explicitly unintegrated. See the rehearsal follow-up and its linked checkpoints.
 - Optional 2.9/2.10-host and 3.11/3.12 work is preserved in isolated branches at deferred checkpoints and remains unmerged. The previous A–D queue is not the active demo queue; future product scope follows the roadmap decisions.
 
 ## Decisions and Authority
@@ -49,6 +50,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 | Product owner | Decide whether to retain or remove old unpinned durable-fixture folders; preserve them until then. |
 | Later evidence-label fix | Run-scoped evidence expects a synthetic root instance absent from the production model. Preserve frozen identities; the demonstrated conclusion uses study scope with exact run references. |
 | Later performance work | `get_study_overview` reads whole owner lists; large-study scaling remains unqualified. |
+| Workflow-agent integration | Evaluate the scientific foundation against independent scenario responses and real client behavior, then reconcile it into the single packaged playbook before activation. No current agent behavior is changed by the foundation files. |
 
 ## Verification Constraints and Known Limits
 
@@ -63,4 +65,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The thin API helper is integrated and verified at `c6c0078`. No additional feature work is needed for the completed screening rehearsal. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
+Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The Study details follow-up is delivered, and the scientific guidance foundation is ready for later agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
