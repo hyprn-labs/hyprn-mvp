@@ -58,10 +58,10 @@ const agent = (n: number, name: string) => ({
   actor_id: `70000000-0000-4000-8000-00000000000${n}`,
   display_name: name,
 });
-/** The longest names the contract allows (128 characters), with an unbroken run of letters so
- * wrapping cannot rely on spaces. */
+/** Layout stress uses 200 characters (beyond the API's 128-character limit), with an
+ * unbroken run of letters so wrapping cannot rely on spaces. */
 const longest = (lead: string) =>
-  (lead + ' ' + 'W'.repeat(72) + ' tail').padEnd(128, ' x').slice(0, 128);
+  (lead + ' ' + 'W'.repeat(144) + ' tail').padEnd(200, ' x').slice(0, 200);
 
 export type AgentNames = { agent: string; user: string };
 export type AgentOptions = { long?: boolean };

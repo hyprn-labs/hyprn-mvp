@@ -174,7 +174,7 @@ test('chips keep the hidden prefix and their theme tokens in Day and Control roo
   expect(state.unknown).toEqual([]);
 });
 
-test('genuine 200 percent zoom keeps every chip whole with the longest names allowed', async () => {
+test('genuine 200 percent zoom keeps every chip whole with 200-character names', async () => {
   test.setTimeout(120000);
   const evidence = process.env.HYPRN_MVP_UI_EVIDENCE_ROOT!;
   const long = agentNames({ long: true });
@@ -223,6 +223,91 @@ test('an archived agent-created study keeps its chip in its own heading', async 
   await login(page, studyLink(archivedStudy));
   await expectChip(heading(page), names.claudeForBen);
   expect(state.attribution.reads).toEqual([archivedStudy]);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('returning to a study cannot apply an earlier attribution read', async ({ page }) => {
+  const state = await agentHarness(page);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  await page.route(`**/studies/${agentStudy}/agent/attribution?*`, async (route) => {
+    if (++reads !== 1) return route.fallback();
+    await held;
+    return route.fulfill({ json: { data: { items: [], next_cursor: null } } });
+  });
+  await login(page, studyLink(agentStudy));
+  await expect(about(page)).toBeVisible();
+  await page.goto(origin + '/ui/' + studyLink(humanStudy));
+  await expect(about(page).locator('.context-copy')).toContainText('Choose a pump');
+  await page.goto(origin + '/ui/' + studyLink(agentStudy));
+  await expectChip(heading(page), names.codexForAda);
+  const response = page.waitForResponse((reply) =>
+    reply.url().includes(`/studies/${agentStudy}/agent/attribution`),
+  );
+  release();
+  await (await response).finished();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expectChip(heading(page), names.codexForAda);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('an attribution denial during pagination leaves no partial attribution', async ({ page }) => {
+  const state = await agentHarness(page);
+  let pages = 0;
+  await page.route(`**/studies/${agentStudy}/agent/attribution?*`, async (route) => {
+    pages++;
+    if (!new URL(route.request().url()).searchParams.has('cursor')) return route.fallback();
+    return route.fulfill({
+      status: 403,
+      json: {
+        error: {
+          code: 'forbidden',
+          message: 'Study access ended.',
+          fields: [],
+          outcome: 'unchanged',
+        },
+      },
+    });
+  });
+  await login(page, studyLink(agentStudy));
+  await expect.poll(() => pages).toBe(2);
+  await expect(heading(page).locator('.hf-attr')).toHaveCount(0);
+  await expect(about(page).locator('.hf-attr')).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('a Home attribution 401 ends the session and removes protected names', async ({ page }) => {
+  const state = await agentHarness(page);
+  await login(page);
+  await expectChip(studyRow(page, 'Heat exchanger sizing'), names.codexForAda);
+  await page.route('**/agent/attribution/studies?*', (route) =>
+    route.fulfill({
+      status: 401,
+      json: {
+        error: {
+          code: 'unauthorized',
+          message: 'Sign in again.',
+          fields: [],
+          outcome: 'unchanged',
+        },
+      },
+    }),
+  );
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.locator('.hf-attr')).toHaveCount(0);
+  await expect(page.locator('.study-row')).toHaveCount(0);
   expect(state.writes).toEqual([]);
   expect(state.unknown).toEqual([]);
 });

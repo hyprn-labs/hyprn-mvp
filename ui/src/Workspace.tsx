@@ -120,6 +120,7 @@ export function Workspace() {
   // to the study views; Home's marks of the studies an agent created. Both are empty until
   // their read answers and are cleared when the session or access to the study ends.
   const attributionStudy = useRef<string | null>(null);
+  const attributionGeneration = useRef(0);
   const [attribution, setAttribution] = useState<{ study: string; index: AttributionIndex }>();
   const [createdStudies, setCreatedStudies] =
     useState<ReadonlyMap<string, AttributionEntry>>(emptyAttribution);
@@ -145,20 +146,24 @@ export function Workspace() {
   function clearSession() { setApproachHandoff(null); setCaseReturn(null); setRunFilters(emptyRunFilters); setRequestedCase(undefined); setRequestedApproach(undefined); setApproachReturn(null); forgetApproachReading(); generation.current++; setResolvedRuns([]); submittingOrigin.current = null; clearEditor(); setStudies([]); setArchivedStudies([]); setHomeView('active'); setStudiesFailed(false); setArchiveTarget(null); archiveDialog.current?.close(); setStudy(null); setModels([]); setConfigurations([]); setEvidence([]); setSubmitted(null); setActiveRun(false); setMetadata({ name: '', description: '', boundary: '' }); setNewStudy(''); setNewModel(''); setFilter(''); setNotice(''); setError(null); setLoading(false); setPage('home'); setCreatingModel(false); setSignedIn(false); }
   api.onAuthorizationLoss = clearSession;
   useAccessLoss(api, study?.study_id, (change) => {
+    attributionGeneration.current++;
     attributionStudy.current = null;
     setAttribution(undefined);
     if (change.kind === 'signed-out') setCreatedStudies(emptyAttribution);
   });
   async function loadAttribution(sid: string) {
+    const token = ++attributionGeneration.current;
     attributionStudy.current = sid;
     setAttribution(undefined);
     const fence = api.fence({ studyId: sid });
     try {
       const index = await api.attribution(sid, fence.signal);
-      if (fence.valid() && attributionStudy.current === sid) setAttribution({ study: sid, index });
+      if (fence.valid() && token === attributionGeneration.current) {
+        setAttribution({ study: sid, index });
+      }
     } catch (e) {
       // A confirmed denial ends access to the study; any other failure leaves the index empty.
-      await api.readFailed(e, fence);
+      if (token === attributionGeneration.current) await api.readFailed(e, fence);
     } finally {
       fence.done();
     }
@@ -169,8 +174,9 @@ export function Workspace() {
     try {
       const created = await api.createdStudies(fence.signal);
       if (fence.valid() && token === generation.current) setCreatedStudies(created);
-    } catch {
+    } catch (e) {
       // Home stays usable without the marks; no row is marked from a failed read.
+      await api.readFailed(e, fence);
     } finally {
       fence.done();
     }
@@ -182,6 +188,7 @@ export function Workspace() {
     currentLink.current = next === 'home' ? '#home' : next === 'profile' ? '#profile' : '#new-study';
     window.history.replaceState(null, '', currentLink.current);
     attributionStudy.current = null;
+    attributionGeneration.current++;
     if (next !== 'home') return;
     void loadCreatedStudies(token);
     try { const [records, archived] = await Promise.all([api.studies(), api.archivedStudies()]); if (token === generation.current && actor === api.actor) { setStudies(records); setArchivedStudies(archived); } }
