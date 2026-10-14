@@ -46,6 +46,7 @@ import ast
 import importlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -860,7 +861,8 @@ def test_package_wording_rule_distinguishes_legacy_names_from_product_language(t
 # ``agent_tools`` (the registry) reaches only itself and ``contracts``; ``agent_surface``
 # (MCP server, bridges) reaches only itself and ``agent_runtime``; ``agent_runtime`` reaches
 # only itself, ``agent_tools``, ``auth``, ``store`` (whose schema holds the principal tables
-# ``auth`` and ``authorize`` read) and ``contracts``; ``agent_policy`` (the agent route
+# ``auth`` and ``authorize`` read), the edge helpers its router uses and ``contracts``;
+# ``agent_policy`` (the agent route
 # allowlist) reaches only ``agent_tools`` and ``contracts`` and is imported only by ``api``.
 # Nothing in execution integration reaches an agent module, so the attested source set is
 # unchanged. A row for a package that exists must scan at least one file, so it is never vacuous.
@@ -882,7 +884,7 @@ AGENT_REACH = {
     'agent_tools': lambda m: within(m, 'hyprn_mvp_app.agent_tools') or m == CONTRACTS,
     'agent_surface': lambda m: within(m, 'hyprn_mvp_app.agent_surface', 'hyprn_mvp_app.agent_runtime'),
     'agent_runtime': lambda m: within(m, 'hyprn_mvp_app.agent_runtime', 'hyprn_mvp_app.agent_tools')
-                               or m in {AUTH, STORE, CONTRACTS},
+                               or m in {AUTH, STORE, CONTRACTS, 'hyprn_mvp_app.edge'},
 }
 
 
@@ -1004,10 +1006,11 @@ def test_relative_import_above_the_project_package_fails_closed():
 # router composition) and the only importer of a route module. Each ``routes/<owner>.py``
 # reaches only the edge helpers (``edge``), ``contracts`` and the domain owners whose public
 # functions it calls: never ``api``, another route module or an agent module. ``edge`` reaches
-# no project module but ``contracts`` and serves only ``api`` and the route modules. Each row
-# scans at least one module, so it is never vacuous.
+# no project module but ``contracts`` and serves only ``api``, the route modules and the agent
+# runtime's router. Each row scans at least one module, so it is never vacuous.
 
 API, EDGE, ROUTES = 'hyprn_mvp_app.api', 'hyprn_mvp_app.edge', 'hyprn_mvp_app.routes'
+AGENT_ROUTER = 'hyprn_mvp_app.agent_runtime.routes'
 ROUTE_OWNERS = frozenset('hyprn_mvp_app.' + m for m in (
     'store', 'auth', 'readiness', 'modeling', 'configuration', 'approach', 'execution', 'history',
     'result_bindings', 'modified_runs', 'computational_export'))
@@ -1044,4 +1047,213 @@ def test_edge_helpers_reach_only_contracts_and_serve_only_the_edge_and_route_mod
     assert module_path(EDGE) is not None
     assert project_imports(EDGE) - set(package_roots()) == {CONTRACTS}, sorted(project_imports(EDGE))
     importers = production_importers(lambda m: m == EDGE)
-    assert API in importers and importers <= {API} | route_modules(), sorted(importers - {API} - route_modules())
+    serving = {API, AGENT_ROUTER} | route_modules()
+    assert API in importers and importers <= serving, sorted(importers - serving)
+
+
+# ---- Layer table: every application import is an edge of architecture section 7 --------
+# ``LAYERS`` maps each module of ``hyprn_mvp_app`` (the route package and each agent package as
+# one row) to the project modules it may import directly. The observed import graph,
+# function-local imports included, must be a subgraph of it; the table must be closed, acyclic
+# and equal to the "Allowed imports" table of architecture section 7, so the test and the
+# specification cannot drift. ``store -> readiness`` (function-local) is drawn: ``store`` calls
+# the observation owner's two pure validators inside the trusted observation write and read,
+# and ``readiness`` reaches only ``contracts``, so the edge can never close a cycle.
+
+ARCHITECTURE = REPO / 'docs/specs/architecture-and-contracts.md'
+PACKAGE_ROOT = 'hyprn_mvp_app'
+LAYER_PACKAGES = ('routes', 'agent_tools', 'agent_runtime', 'agent_surface')
+LAYERS = {
+    PACKAGE_ROOT: frozenset(),
+    'contracts': frozenset(),
+    'locations': frozenset(),
+    'units': frozenset({'contracts'}),
+    'scientific_configuration': frozenset({'contracts'}),
+    'approach_closure': frozenset({'contracts', 'units'}),
+    'execution_bundle': frozenset(
+        {'approach_closure', 'contracts', 'scientific_configuration', 'units'}
+    ),
+    'readiness': frozenset({'contracts'}),
+    'store': frozenset({'contracts', 'locations', 'readiness'}),
+    'history': frozenset({'contracts', 'execution_bundle', 'units'}),
+    'result_bindings': frozenset({'contracts', 'execution_bundle', 'history', 'units'}),
+    'modified_runs': frozenset({'contracts', 'history', 'readiness'}),
+    'modeling': frozenset({'contracts', 'store', 'units'}),
+    'approach': frozenset(
+        {'approach_closure', 'contracts', 'execution_bundle', 'history', 'store'}
+    ),
+    'configuration': frozenset(
+        {
+            'approach',
+            'contracts',
+            'execution_bundle',
+            'history',
+            'modeling',
+            'modified_runs',
+            'readiness',
+            'result_bindings',
+            'scientific_configuration',
+            'store',
+            'units',
+        }
+    ),
+    'execution': frozenset(
+        {
+            'contracts',
+            'execution_bundle',
+            'history',
+            'readiness',
+            'result_bindings',
+            'scientific_configuration',
+        }
+    ),
+    'computational_export': frozenset(
+        {
+            'approach_closure',
+            'contracts',
+            'execution_bundle',
+            'history',
+            'locations',
+            'modified_runs',
+            'result_bindings',
+        }
+    ),
+    'dispatcher': frozenset(
+        {
+            'computational_export',
+            'contracts',
+            'execution',
+            'execution_bundle',
+            'modeling',
+            'readiness',
+            'store',
+        }
+    ),
+    'auth': frozenset({'contracts', 'store'}),
+    'ui': frozenset(),
+    'edge': frozenset({'contracts'}),
+    'routes': frozenset(
+        {
+            'approach',
+            'auth',
+            'computational_export',
+            'configuration',
+            'contracts',
+            'edge',
+            'execution',
+            'history',
+            'modeling',
+            'modified_runs',
+            'readiness',
+            'result_bindings',
+            'store',
+        }
+    ),
+    'agent_tools': frozenset({'contracts'}),
+    'agent_policy': frozenset({'agent_tools', 'contracts'}),
+    'agent_runtime': frozenset({'agent_tools', 'auth', 'contracts', 'edge', 'store'}),
+    'agent_surface': frozenset({'agent_runtime'}),
+    'api': frozenset(
+        {
+            'agent_policy',
+            'agent_runtime',
+            'approach',
+            'auth',
+            'computational_export',
+            'configuration',
+            'contracts',
+            'edge',
+            'execution',
+            'history',
+            'modeling',
+            'modified_runs',
+            'result_bindings',
+            'routes',
+            'store',
+            'ui',
+        }
+    ),
+}
+
+
+def layer(module):
+    """The layer-table row of project module ``module``: the package root, the route or agent
+    package it belongs to, or its own name below the package. Any other project module
+    (execution integration) keeps its full name, which no row admits."""
+    parts = module.split('.')
+    if parts[0] != PACKAGE_ROOT:
+        return module
+    if len(parts) == 1:
+        return PACKAGE_ROOT
+    return parts[1] if parts[1] in LAYER_PACKAGES else '.'.join(parts[1:])
+
+
+def observed_layers():
+    """Every (row, row) import edge of the application, function-local imports included. The
+    package root, which importing any module runs first, is never an edge target."""
+    edges = set()
+    for path in sorted(APP.rglob('*.py')):
+        module = module_name(path)
+        source = layer(module)
+        for target in project_imports(module):
+            row = layer(target)
+            if row not in (source, PACKAGE_ROOT):
+                edges.add((source, row))
+    return edges
+
+
+def outside_layers(edges):
+    return sorted(
+        (source, target) for source, target in edges if target not in LAYERS.get(source, ())
+    )
+
+
+def test_application_imports_are_a_subgraph_of_the_layer_table():
+    edges = observed_layers()
+    sources = {layer(module_name(path)) for path in APP.rglob('*.py')}
+    assert {source for source, _ in edges} >= {'api', 'store', 'routes', 'agent_runtime'}
+    assert sources <= set(LAYERS), sorted(sources - set(LAYERS))
+    assert outside_layers(edges) == []
+
+
+def test_layer_table_is_closed_and_acyclic():
+    assert all(targets <= set(LAYERS) for targets in LAYERS.values())
+    remaining = {row: set(targets) for row, targets in LAYERS.items()}
+    while remaining:
+        leaves = {row for row, targets in remaining.items() if not targets}
+        assert leaves, ('cycle among', sorted(remaining))
+        remaining = {
+            row: targets - leaves for row, targets in remaining.items() if row not in leaves
+        }
+
+
+def architecture_layers():
+    """The "Allowed imports" table of architecture section 7, as rows of module names."""
+    text = ARCHITECTURE.read_text()
+    section = text[text.index('\n## 7. ') : text.index('\n## 8. ')]
+    lines = section[section.index('**Allowed imports**') :].splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith('|'))
+    rows = {}
+    for line in lines[start + 2 :]:
+        if not line.startswith('|'):
+            break
+        module, targets = (cell.strip() for cell in line.strip().strip('|').split('|'))
+        names = re.findall(r'`([a-z_]+)`', module)
+        assert len(names) == 1 and names[0] not in rows, line
+        rows[names[0]] = frozenset(re.findall(r'`([a-z_]+)`', targets))
+    return rows
+
+
+def test_layer_table_equals_the_architecture_allowed_imports():
+    assert architecture_layers() == LAYERS
+
+
+def test_an_import_outside_the_layer_table_fails_the_subgraph_check(tmp_path, monkeypatch):
+    """The table is never vacuous: one extra edge in a scratch copy of the scanned tree (the
+    observation owner reaching the transaction owner) is reported, and only that edge."""
+    app = tmp_path / PACKAGE_ROOT
+    shutil.copytree(APP, app, ignore=shutil.ignore_patterns('__pycache__'))
+    with (app / 'readiness.py').open('a') as handle:
+        handle.write('\n\ndef extra():\n    from .store import Store\n    return Store\n')
+    monkeypatch.setattr(sys.modules[__name__], 'APP', app)
+    assert outside_layers(observed_layers()) == [('readiness', 'store')]

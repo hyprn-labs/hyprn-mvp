@@ -359,6 +359,40 @@ worker → results only (standard library otherwise)
 | `readiness`, `dispatcher`, `auth`, `ui`, `api` | Observations, executor bridge, local auth, static assets, HTTP surface | — |
 | `agent_tools`, `agent_runtime`, `agent_surface` (planned) | Registry and API client; sessions, delegations, journal and agent activity; MCP server and provider bridge | Reach scientific modules (tools see only `contracts` and the injected API client) |
 
+The diagram summarizes the layers; the table below is complete. Every direct import between application modules, function-local imports included, is one of its edges, the table is acyclic, and the boundary test holds the same table and fails on any import outside it (`application/tests/test_module_boundaries.py`, `LAYERS`). The route package (`routes`, the per-owner routers) and each agent package are one row each; `edge` holds the helpers the routers share; `hyprn_mvp_app` is the package root. Six edges the diagram does not draw are part of it: `modeling → store`; `store → readiness` (function-local: `store` calls the observation owner's two pure validators, `runtime_identity` and `valid_observation_time`, inside the trusted observation write and read, and `readiness` reaches only `contracts`, so the edge cannot close a cycle); `configuration → {modeling, readiness, scientific_configuration}`; `execution → readiness`; `modified_runs → readiness`; `dispatcher → computational_export`. A new edge is added here and in the test together.
+
+**Allowed imports**
+
+| Module | May import directly |
+|---|---|
+| `hyprn_mvp_app` (package root) | — |
+| `contracts` | — |
+| `locations` | — |
+| `units` | `contracts` |
+| `scientific_configuration` | `contracts` |
+| `approach_closure` | `contracts`, `units` |
+| `execution_bundle` | `approach_closure`, `contracts`, `scientific_configuration`, `units` |
+| `readiness` | `contracts` |
+| `store` | `contracts`, `locations`, `readiness` |
+| `history` | `contracts`, `execution_bundle`, `units` |
+| `result_bindings` | `contracts`, `execution_bundle`, `history`, `units` |
+| `modified_runs` | `contracts`, `history`, `readiness` |
+| `modeling` | `contracts`, `store`, `units` |
+| `approach` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `store` |
+| `configuration` | `approach`, `contracts`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
+| `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
+| `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
+| `dispatcher` | `computational_export`, `contracts`, `execution`, `execution_bundle`, `modeling`, `readiness`, `store` |
+| `auth` | `contracts`, `store` |
+| `ui` | — |
+| `edge` | `contracts` |
+| `routes` (package) | `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store` |
+| `agent_tools` (package) | `contracts` |
+| `agent_policy` | `agent_tools`, `contracts` |
+| `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `edge`, `store` |
+| `agent_surface` (package, planned) | `agent_runtime` |
+| `api` | `agent_policy`, `agent_runtime`, `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `history`, `modeling`, `modified_runs`, `result_bindings`, `routes`, `store`, `ui` |
+
 Rules: each shared capability, and each operation that needs a durable, observable outcome (section 3.1), has one owner with a narrow public interface; no cross-module private access (remaining framework or same-module cases are allowlisted); move pure functions to their owner instead of creating service objects; `store` remains the transaction owner (no repository-per-table, plugin framework or universal resolver); integration never imports persistence or orchestration for helpers. A boundary test pins directions, attested-source coverage and forbidden imports; checks are added only against a concrete regression. In the UI, presentation consumes typed record projections instead of branching on wire versions; the study shell handles navigation and composition while domain controllers own their workflow state behind one editor-guard interface (dirty, save, discard) and one session and access-loss seam.
 
 Package names: `hyprn_mvp_app` (application), `hyprn_mvp_integration` (execution and document integration), `hyprn_mvp_local` (local edition CLI and adapters).
