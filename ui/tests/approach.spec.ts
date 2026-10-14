@@ -431,11 +431,17 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
     .click();
   await expect(study).toContainText('The comparison is unresolved.');
   await expect(study).not.toContainText('The comparison needs an additional measurement.');
+  const savedApproachRoute = new URL(page.url()).hash;
   await page.getByRole('button', { name: 'Profile', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
   await expect(page.getByText('The comparison is unresolved.', { exact: true })).toHaveCount(0);
   await expect(page.getByText('The study question remains open.', { exact: true })).toHaveCount(0);
   await page.reload();
+  // Sign-out clears workspace navigation; reopen the exact saved version on login.
+  await page.evaluate((hash) => {
+    location.hash = hash;
+  }, savedApproachRoute);
   await page.getByLabel('Username', { exact: true }).fill('owner');
   await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

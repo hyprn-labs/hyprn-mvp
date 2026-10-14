@@ -119,3 +119,14 @@ All 17 earlier executor scopes and this follow-up scope were archived externally
 with per-file SHA-256 verification before release: 18 scopes, 353 evidence/metadata
 files, no remaining source scopes. The archive includes a release ledger and each
 scope's hash manifest. No live or other executor scope was targeted.
+
+## Focused saved-answer scenario correction
+
+Root's method run in scope `8339069c-aab6-4849-b8dc-674ac8e5c254` reported
+16 passed, 1 failed. The failure was the final persistence assertion after login:
+the browser remained on Profile instead of reopening the saved approach. Earlier
+answer creation, revision-pinned basis and clearing assertions passed. The scenario
+now waits for sign-out to finish before reloading and restores the exact saved
+approach route before login. This changes only the test, not product behavior.
+`git diff --check` passed. No browser or native checks were started; root retains
+the focused rerun. Historical acceptance expansion is no longer requested.
