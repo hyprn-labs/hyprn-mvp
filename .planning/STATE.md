@@ -20,6 +20,8 @@ Progress: [██████████] 100% (Phase 1)
 
 ### Decisions
 
+- Task 2.7 packaging decision (product owner, 2026-10-14): approve the three reviewed packaging-only transformations for openmdao_extensions 1.6.3, wop 2.6.1 and xdsmjs 2.1.0 to use the already approved flit_core 4.1.0. Runtime file bytes, dependencies and entry points must remain equivalent; only the proposal's enumerated build-metadata differences are allowed, and any unlisted difference blocks acceptance. No setuptools licence exception is granted. Proposal artifact `hyprn-flit-build-proposal/PROPOSAL.md` SHA-256 `e60ff64202d200fa085bef63270ec3457bd4362bc43e04991a576696f2afdcf7`; manifest SHA-256 `2faa1a433783ea23e8851d901f9e57d7b0f12ad69c147333969586167895bf91`. Task 2.7 records the exact transformations and equivalence results in its audit and checkpoint.
+
 - `hyprn-mvp` is the only product namespace; human-facing wordmark HYPRN MVP.
 - No compatibility readers for records outside the `hyprn-mvp` namespace; development run data and fixtures carrying other identifiers are regenerated or discarded.
 - The test-group runner becomes `deployment/checks.py`; groups carry a class (must-pass, opt-in) and their environment needs; an absent environment fails a group.
