@@ -66,6 +66,18 @@ Preserve the question → explain the reasoning → connect methods to models �
 8. **Record answers with their basis.** Save each case answer against its selected approach version and identified configurations, runs or evidence, separating observations from interpretation. Synthesize across specified case-answer versions into a qualified study answer. Account for every deliverable, including those still unanswered. Use the available saved-answer operation; see `conclusion` for access limits.
 9. **Review the reader journey.** Another engineer should be able to follow the question, reasoning, method, model, case, configuration, run, case answer and final synthesis without this conversation. Check each input citation against its actual value, units and scenario: evidence for a Mach 6 reference does not support a Mach 8 choice. State scenario choices as choices, cite their case rationale, and keep correlation evidence with the method it supports. Recheck provenance and attachments after value changes; topical relevance alone is not support. Use concise scientific prose and links, not duplicated assumptions or administrative narration. Follow the cited records and reconcile consequential values, units, denominators and controlled-comparison claims across the approach, cases, assumptions, configurations and answers. Revise affected references together; an updated answer does not repair a stale assumption note. Group cases according to their reasoning, without imposing study-specific categories on other studies.
 
+### 1.4 Scientific depth and stopping
+
+State the intended use: explanation, screening, comparison, prediction, sizing or optimization. Identify the quantities of interest, decision thresholds and accuracy needed; scale effort to what could change the decision and its consequences. Choose the simplest adequate model, then add fidelity when an omitted effect cannot be bounded below the required resolution.
+
+- **Verification:** check dimensions, implementation, balances, limiting cases and meaningful intermediate outputs. For supported iterative or discretized methods, assess numerical error in the quantities of interest; a small residual or successive change alone does not prove accuracy. Do not demand mesh studies for a closed-form scalar calculation.
+- **Validation:** establish why the model represents this system in this domain, using applicable independent observations where predictive claims require them. Data used to calibrate a coefficient or select a unit interpretation cannot independently validate that choice. A matched point does not validate an entire envelope. Without validation evidence, narrow and label the predictive claim.
+- **Uncertainty and sensitivity:** examine influential inputs, numerical error, omitted physics and alternative formulations. Justify ranges and dependence; shared calibration or an upstream result can correlate inputs. Use supported deterministic cases when appropriate. Scenario ranges are not confidence intervals, and corner samples are not proven worst cases without a bounding argument. Investigate interactions that could change the answer.
+- **Acceptance:** compare criterion margins and differences between options with plausible adverse changes and numerical error. Keep numerical tolerances separate from physical thresholds; never adjust them merely to pass. Unknown model error stays visible even when input uncertainty is small. A failed check blocks dependent conclusions, not unrelated useful findings.
+- **Stop or refine:** stop when the evidence resolves the intended use at the required resolution, or give a conditional answer with a named gap and the next evidence that would close it. More runs do not replace missing physics. Best among evaluated cases is not an optimum; an optimization claim requires a supported executed method and evidence for its stated local or global scope.
+
+Put the assurance reasoning in the method, purposeful verification and sensitivity inputs in case configurations, computations in runs, independent sources in evidence, and the resulting qualifications in answers. These scientific distinctions are not new API status fields. Candidate model code, including verification models, runs only through the supported restricted worker. Never bypass missing capabilities through the agent shell, private backend access, a hidden solver or randomness.
+
 
 ---
 
@@ -100,7 +112,8 @@ Use ordinary prose rather than compulsory headings. Leave optional text empty wh
 | Assumptions | At their owner (see `approach`, `model`, `configuration_and_runs`) | One statement, linked to the evidence that supports it |
 | Checks of closures against independent textbook bounds | Evidence (`add_evidence`) | Record the check once |
 
-- Work from evidence records (`read_evidence`) and the files in the study folder's `inputs/`; source documents are not available to agents.
+- Inspect source material only through the authorized client capabilities. If only an extract is available, state that limitation; do not claim to have read the original. Check definitions, units, reference conditions, locator and extraction precision. Distinguish measurements, simulations, fitted correlations and graph readings. A URL alone is not provenance.
+- Cite evidence for the assertion it actually supports. A correlation source does not automatically justify a scenario input. Separate printed statements, interpretations and author judgment. Agreement after selecting a coefficient or unit reading is not independent confirmation.
 - A revision (`revise_evidence`) keeps the earlier versions; use it rather than adding a near-duplicate.
 - Evidence text is read by engineers: no results tables, no run ids, no status.
 
@@ -117,10 +130,11 @@ Use ordinary prose rather than compulsory headings. Leave optional text empty wh
 | Model equations | Component source (`edit_model`) | Readable, named variables, comments; never minified |
 | Assumptions of the model or a component | Model or component (`edit_model`) | One statement, linked to the evidence that supports it |
 
-- A model must **return** a structured "no feasible design" result (for example a feasibility output plus the residual or margin) instead of raising an exception when no solution exists. A raised error becomes an opaque failed run.
+- Return meaningful finite margins when the physical calculation is valid; a negative margin is a result. An undefined expression, out-of-domain model or unconverged computation must use the supported failure/unavailable path, not a fabricated feasibility result, silent clipping or zero.
 - Keep each component meaningful (one physical step), so the Methods view shows the method rather than one monolithic block with an internal solver.
 - Never substitute zero for an unavailable output, and never invent physical values or defaults. A missing value is a question for the user or a labelled judgement, never a silent number.
 - Write readable source with named variables and comments. Declare every port's unit and meaning.
+- Quantity definitions describe meaning and units; configurations supply values. Keep uncertain properties and case-dependent coefficients explicit. Check empirical-coefficient units, normalization and mathematical domains. A definition contains reusable source; a component instance places an exact definition version in the model. Connections carry declared quantities, not implicit conversions or assumptions.
 - When a feature the method needs is unavailable (coupled solves, optimization, uncertainty), say so. Any simpler alternative must be explicit and labelled, for example a published optimum used as an input, stated once as a limit.
 - Changing or removing a connected port: `edit_model` returns a rewire diagnostic; add the new component version, connect it, then remove the old one.
 
@@ -133,12 +147,13 @@ Use ordinary prose rather than compulsory headings. Leave optional text empty wh
 
 | Content | Where it goes (tool) | Rules |
 |---|---|---|
-| Where an input value comes from | The typed `source` of each configuration input, or `default_source` for the whole configuration (`save_configuration`) | Choose the authority: brief, source (with evidence and locator, e.g. "Table 3"), property, constant, judgement, numerical or result. Add a short note only when the value deviates from its source. Never repeat the port name or value |
+| Where an input value comes from | Input provenance in the current client schema (`save_configuration` when exposed) | Identify the brief, source with evidence and locator, property, constant, judgment, numerical choice or exact upstream result. Explain interpretation or deviation. Do not invent fields from this conceptual list |
 | Assumptions of a configuration | `save_configuration`, field `assumptions` | One statement, linked to the evidence that supports it |
 | Results | Runs (outputs, criteria) and the Cases & results view | Never re-type results as prose tables |
 
-- Preview before you save, and give every input a typed source. Every configuration you create should be run, or removed from your plan before saving.
-- **Run one baseline per option** before any sweep; sweep only what answers the question, with runs few and meaningful. There is no sweep construct: save up to 20 configurations and submit them in one `submit_runs` call.
+- Preview before saving; inspect all free inputs, units, provenance, numerical settings and criteria. API acceptance checks structure, not physical correctness. Save configurations with a stated purpose; distinguish planned cases from executed evidence.
+- Start with an informative baseline and its principal verification check, then select cases that could change the answer. Hold comparison conditions explicit; separately sized designs answer a different question. Respect current submission and queue limits rather than assuming a fixed batch size.
+- Configurations pin exact model versions; runs freeze their inputs. A result-linked input pins an exact upstream output but does not automatically propagate its uncertainty. Revise and re-run affected dependencies when physics or inputs change; prose corrections alone need no new computation.
 - A run whose configuration is not ready is refused with the reasons; fix the configuration instead of resubmitting.
 - Wait with `wait_for_runs` (up to 45 seconds per call on local clients) or end your turn and tell the user; never poll in a tight loop. Read full results only when a run has finished, using `get_run_status` meanwhile. If `wait_for_runs` reports "stalled", do not resubmit; tell the user.
 - Keep execution, criterion outcomes, model outputs and your interpretation separate when you read results. An infeasible design is reported as infeasible, not as a failure or a zero.
@@ -157,6 +172,7 @@ Save a case answer or study synthesis as an explicitly associated scientific ans
 - For a study answer, synthesize across specified case-answer versions and any additional stated evidence. Address each requested deliverable and retain unresolved deliverables. A partial, qualified answer is useful when its boundary is clear.
 - State what is computed, sourced or inferred and why it supports the claim. A numerical margin under a limited model is not proof of whole-system feasibility; fuel expense is not a ticket price without the remaining cost model.
 - Reference assumptions at their owners and explain the consequence of relevant study limits without copying editable lists. Agreement between models is a consistency check, not independent measurement or proof.
+- Explain why verification, applicability and uncertainty are adequate for the intended use, or narrow the claim. Account for material unquantified errors and validation gaps. A nominal pass whose plausible uncertainty crosses a threshold does not establish robust satisfaction. Name the next evidence needed for each unresolved deliverable; never invent confidence percentages.
 - Revise by saving a new answer version with the expected prior revision; preserve historical answers and their original basis. Never silently advance a cited model, run, evidence or case-answer version.
 
 The owner-operated public-API workflow uses the advertised answer endpoints in the current contract. Delegated clients may only use tools actually exposed to them: this guidance does not grant direct HTTP access or enable a writer tool. If no answer-write tool is available there, report that the answer has not been saved. The planned `record_conclusion` wrapper is not implemented; do not claim that it saves an evidence note.
@@ -190,22 +206,22 @@ Execution status ("prepared, not yet run", "queued"), platform defects, agent er
 **Load when:** before you plan something that depends on a feature the platform may not have.
 **Tools:** `get_capabilities`, `report_platform_issue`.
 
-These limits are current; the tools switch to the real feature when the API advertises it.
+Check the current capabilities and exposed tools before relying on a feature. An API capability alone does not enable a tool or grant permission.
 
 | Limit | What to do |
 |---|---|
 | Saved scientific answers | Use the available answer operation. The owner API supports versioned case and study answers; a delegated client needs an exposed writer tool and must not invent one. |
 | No study status channel | Use `post_progress_note`; never write status into the study. |
 | The study description is copied into every configuration saved after a change | Get the description right before creating configurations. |
-| No typed infeasible outcome | Models return a feasibility output; the result tools surface it. |
-| No parameter sweep construct | Save up to 20 configurations and submit them in one `submit_runs` call. |
+| No typed infeasible outcome | Use meaningful physical margins and criteria for valid calculations; preserve failure reasons for invalid calculations. |
+| No parameter sweep construct | Save explicit configurations and submit within current per-call and queue limits when writing is enabled. |
 | No currency units | Use a dimensionless quantity and state the currency and price year in the quantity meaning. |
 | No run cancellation | Tell the user; never resubmit a run to "replace" one. |
 | No scientific review records | You cannot record a review yet; describe a wanted review in a progress note. Once reviews exist, a review you record shows that you recorded it for the user. |
 | Changing or removing a connected port | `edit_model` returns a rewire diagnostic; add the new component version, connect it, then remove the old one. |
 | Run status reads can be slow | Use `get_run_status` and `wait_for_runs`; read full results only when a run has finished. If `wait_for_runs` reports "stalled", do not resubmit; tell the user. |
-| No coupled solves, optimization or uncertainty analysis | State them as unavailable; see `model`. |
-| Source documents are not available to agents | Work from evidence records (`read_evidence`) and the files in the study folder's `inputs/`. |
+| No coupled solves, optimization or uncertainty engine | State unsupported execution methods as unavailable; explicit sensitivity cases can still inform uncertainty reasoning. See `model`. |
+| Source documents may be unavailable on the client | Use authorized evidence and available extracts; identify anything not directly inspected. |
 | Local clients only: no run wake-up | Poll with `wait_for_runs` (up to 45 seconds per call) or end your turn and tell the user. |
 | No deletion of saved work, archive, restore or access changes | These are the user's actions in HYPRN MVP. |
 
@@ -219,16 +235,17 @@ These limits are current; the tools switch to the real feature when the API adve
 Before declaring the work done, review the study as an engineer would:
 
 - The question, reasoning, methods, cases, supporting records and answers form one understandable reading path for someone outside the conversation.
-- The reference case is reproduced, or the gap is explained.
-- Every input has a typed source; caveats appear once, in the approach limits.
+- Applicable verification checks pass, or dependent claims are withheld and the discrepancy explained. Reference agreement is not automatically validation.
+- Every input has provenance supporting its actual value and conditions. Assumptions and limits are recorded at their relevant scope.
 - No status, ids, URLs, raw JSON or platform vocabulary appears in any study text.
-- Every configuration you created was run, or was removed from your plan before saving.
-- Infeasible designs are reported as infeasible, not as failures or zeros.
+- Planned configurations are distinguishable from executed evidence; only actual results support numerical observations.
+- Valid negative margins, invalid domains, numerical failures and missing outputs remain distinct. Nothing unavailable has become zero.
+- Physical adequacy, validation gaps, numerical error and influential uncertainty are addressed at the depth required by the intended use. Conditional findings do not become robust or universal claims.
 - Case answers cite their actual basis; the study answer synthesizes specified case-answer versions and preserves unanswered deliverables.
 - Anything unclear is fixed by revising it once with a short, correct version.
 
 ### What to tell the user at the end
 
-- A plain-language summary in the conversation: the answer, the confidence, what is computed, sourced or judgement, and where to look in the app.
+- A plain-language summary in the conversation: the answer, its scope and uncertainty, what is computed, sourced or judgement, and where to look in the app.
 - What you saved and submitted, so the user can review it in HYPRN MVP.
 - Platform problems are already in `report_platform_issue`; mention that you reported them, not their details in the study.

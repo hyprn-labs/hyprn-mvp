@@ -1,197 +1,190 @@
 ---
 name: scientific-engineering
-description: Frame and assess engineering studies in HYPRN MVP, preserving the user's question while selecting methods, interpreting sources, designing checks and qualifying conclusions. Use for scientific authoring or review, not API mechanics or application development.
+description: Author and assess computational engineering studies in HYPRN (HYPRN MVP), from the engineering question through models, explicit cases, verification, uncertainty and versioned answers. Use for scientific modeling or review through the supported application client, not application development.
 ---
 
-# Scientific and engineering judgment
+# Computational engineering in HYPRN
 
-Repository-owned scientific guidance. Its core workflow is integrated into the
-application's [packaged playbook](../playbook.md), whose authoritative source is
-[playbook.py](../../../application/src/hyprn_mvp_app/agent_tools/playbook.py).
-Agents receive that guidance through `get_playbook`; this file adds the detailed
-source-interpretation and comparison practices below. It is not automatically
-installed as a separate client skill and grants no API or execution authority.
-The owner-operated demonstration uses [its supported API path](../local-api-demo.md).
-Keep the runtime guidance and this reference consistent; do not distribute another
-editable copy in study folders.
+Produce an answer another engineer can challenge, reproduce and use within a
+stated scope. A successful run is an observation; a scientifically acceptable
+answer connects that observation to the question through justified physics,
+checks, applicable evidence and explicit limitations. An unresolved or conditional
+answer can be scientifically sound. It is not completion of an unmet objective.
 
-Use this guidance to decide what a calculation can establish and to write a
-study another engineer can inspect without the conversation. Apply the parts
-relevant to the question; a small correction does not require a new study plan.
+This is the repository-owned skill for HYPRN MVP, called HYPRN by the user.
+It grants no execution or write authority. The installed agent receives the essential
+rules through `get_playbook`; its authoritative text is
+[playbook.py](../../../application/src/hyprn_mvp_app/agent_tools/playbook.py), rendered
+into [the playbook](../playbook.md). This skill adds detailed operating guidance.
+Do not install it globally or copy editable instructions into a study unless asked.
 
-## Boundary with the application
+## Start with the decision and available means
 
-| Application contracts own | Scientific judgment owns |
+1. Read the existing study, its saved approach, relevant models, configurations,
+   answers and outstanding objections. Read the session's capabilities and tool
+   descriptions. Reuse records deliberately; neither a familiar name nor “latest”
+   establishes their suitability for the question.
+2. Preserve the user's alternatives, ranges, constraints, priorities and requested
+   outputs. Keep the original question intact; put the tractable approximation in
+   the current approach. Do not invent verbatim original wording from a summary.
+3. State the intended use: explanation, screening, comparison, design sizing,
+   optimization, or a consequential decision. Identify quantities of interest,
+   evaluation conditions, acceptable error where known, and what could reverse the
+   decision. Scale effort to those consequences and sensitivities, not model size.
+4. Check the authorized execution surface. Delegated agents use only exposed tools.
+   The separately authorized owner demo uses [the public API helper](../local-api-demo.md).
+   A tool named in guidance is not necessarily implemented or enabled. Read the live
+   schema for fields, units and numerical modes; never guess them from this skill.
+
+Before authoring, read [Operating on HYPRN primitives](references/hyprn-primitives.md).
+For a numerical conclusion, also read
+[Scientific depth and stopping rules](references/scientific-acceptance.md).
+For reference interpretation, validation or uncertainty, the
+[primary-source basis](references/primary-sources.md) identifies the relevant guidance
+and its limits. This skill adapts those practices; it does not certify compliance.
+
+## Form a testable approach
+
+For each requested deliverable, connect:
+
+**question → observable output → physical argument → implemented method → informative
+cases → checks and evidence → permissible conclusion.**
+
+Keep this reasoning in the Modeling approach, using its existing prose and method
+fields rather than inventing a new plan schema. Identify the system boundary,
+operating envelope, material/geometry/environment conventions, governing balances,
+constitutive or empirical relations, and material exclusions. Choose the simplest
+model that can discriminate the decision; add fidelity when an omitted effect or
+uncertainty could overturn it. If that cannot be bounded, state the gap rather than
+assuming it is small. Avoid completing an elaborate implementation before testing
+one useful baseline and its principal verification check.
+
+For every method explain:
+
+- **Purpose:** which part of the question it answers.
+- **Basis and reasoning:** why the physical relations, source domain and simplifying
+  assumptions are suitable, and what competing choice would matter.
+- **Calculation in plain words:** the actual input-to-output sequence, important
+  intermediate quantities, coupling and excluded effects.
+- **Implementation and assurance:** relevant saved model/component versions; checks
+  with expected behavior and tolerances justified before examining agreement.
+
+A method can span models; a model can support several methods. Do not make the
+approach a second executable graph. Keep proposed methods and their missing work
+explicit. A source link or implementation link never establishes scientific adequacy.
+
+## Author information where it belongs
+
+Use the primitive map for field placement. In particular:
+
+- A quantity definition explains physical meaning, direction, unit and conventions;
+  a configuration supplies its value. Case-specific coefficients and uncertain
+  properties are explicit inputs, not constants hidden in source.
+- An assumption is an adopted condition, a rationale explains a choice, evidence
+  supplies a source or observation, and a limit bounds inference. Store one
+  authoritative assumption at its narrowest applicable owner and reference it.
+- A case asks why a situation should be examined. A configuration says exactly what
+  will be computed. A run records what happened. An answer interprets selected
+  evidence; none substitutes for the others.
+- Attach evidence to the assertion it actually warrants. A reference for an equation
+  is not automatically evidence for every coefficient, boundary condition or chosen
+  scenario. A cited Mach 6 example cannot justify an authored Mach 8 input.
+
+Inspect a consequential source's definitions, equation, surrounding text, table
+headers and axes. Record a precise locator, the printed value/unit, reference
+conditions, uncertainty or extraction precision, and any interpretation. Distinguish
+measurement, simulation, fitted correlation, approximate graph reading and author
+judgment. A URL alone does not establish provenance. Never claim to have inspected
+an inaccessible source; seek an accessible primary source or qualify the gap.
+
+If units or conventions conflict, preserve the printed statement and proposed
+interpretation separately. Test plausible readings as labelled cases when useful
+and authorized. Agreement obtained by choosing a reading or tuning a coefficient
+is not independent confirmation of that choice. User approval of a hypothesis
+permits its exploration; it does not make the hypothesis true.
+
+## Execute an adaptive scientific loop
+
+Start with an informative baseline, then choose the next case from what remains
+uncertain. Common-condition comparisons isolate an option's effects; separately
+sized designs answer a different question. State which quantities are fixed,
+changed, derived or constrained. Choose boundary cases, limiting cases, perturbations
+and interactions that can reveal a failure or change a ranking. A few successful
+points do not establish an entire continuous operating envelope.
+
+Before submission, inspect the full model and all free inputs, units, provenance,
+criteria, numerical settings and approach/case links. Read the preview's warnings;
+API acceptance is structural checking, not physical verification. Save coherent
+versions and retain their returned identities. Run candidate code only through the
+supported restricted worker, including numerical verification models. Do not execute
+it in the agent shell, import it for inspection, or bypass missing platform features
+with a hidden solver, external service, randomness or private backend access.
+
+For each completed run:
+
+1. Read execution/termination information, declared outputs, units, missing-value
+   reasons and criterion evaluations. Do not infer convergence or applicability from
+   successful execution; do not turn failure or missing data into zero.
+2. Check implementation and numerical behavior against the preselected tests. Check
+   balances and physically meaningful intermediate outputs, not only the final
+   number. A failed check blocks its dependent conclusion until explained or fixed.
+3. Compare with applicable physical observations when a predictive claim needs them.
+   Identify what was calibrated and what remains independent validation evidence.
+4. Assess decision sensitivity to uncertain inputs, numerical error and model-form
+   choices. Report unquantified contributors. An uncertainty interval is not a
+   probability statement without a justified probabilistic interpretation.
+5. Refine only the affected model, input, evidence or inference. Re-run when changed
+   physics, source or inputs invalidate a result; do not re-run merely to improve prose.
+   When a source changes, inspect downstream assignments and conclusions too.
+
+Keep the next action explicit: correct an error, obtain evidence, evaluate a
+specified case, improve fidelity, answer conditionally, or stop because the evidence
+cannot support the requested claim. Continue independent useful work when only one
+deliverable is blocked. Reuse authorization already given; ask only for missing
+choices that materially affect the answer or newly required authority.
+
+## Reach the right depth, then record an answer
+
+Use the acceptance reference to select the depth required by the intended claim.
+Do not call a candidate an optimum, a criterion a validity assessment, a component
+balance full-system feasibility, or a partial expense a ticket/total cost. Optimization
+requires an actually executed supported optimization method and evidence for its
+stated claim; a sampled best case is only best among evaluated cases.
+
+For each material conclusion, be able to answer:
+
+| Question | Evidence needed before making the claim |
 |---|---|
-| Accepted value types, declared units and input provenance fields | Whether the units express the intended physical quantity and the cited source warrants the chosen value |
-| Exact saved versions, retained runs and evidence references | Whether a reference supports, challenges or merely contextualizes a particular claim |
-| Execution and criterion outcomes | Whether the equations, assumptions and criteria are appropriate to the engineering question |
-| Permissions, revisions, receipts and execution containment | Which authorized calculation is informative, and how strongly its result supports a conclusion |
+| What does this answer, under which conditions? | The preserved brief, selected case and explicit scope. |
+| What produced the number? | Exact model, configuration, run/output and relevant source versions. |
+| Were the equations implemented and solved adequately? | Applicable implementation and solution checks, discrepancies, tolerances and failures. |
+| Why should this model represent this system here? | Physical argument, applicability domain and relevant validation evidence, or an explicit predictive gap. |
+| Could plausible uncertainty or omitted physics change the conclusion? | Decision-relevant sensitivity/error analysis; unknown contributions remain visible. |
+| What is still unanswered and what would resolve it? | Specific missing evidence/method/input and its consequence for the requested deliverable. |
 
-Read the current contract and capability information for API mechanics; do not
-copy schemas, endpoint recipes or runtime limits here. Preserve the scientific
-invariants in [AGENTS.md](../../../AGENTS.md) and use the meanings in
-[CONTEXT.md](../../../CONTEXT.md). Guidance cannot replace enforcement or grant
-execution access. Evaluate candidate model code only through the application's
-supported restricted execution path.
+Save a **case answer** for the selected approach version and case, using observations
+for checked results, interpretation for their engineering meaning, qualifications
+for conditions that change that meaning, and open deliverables for unresolved work.
+Cite exact configurations, runs and evidence; explain conflicting runs and their
+roles. Save the **study answer** against deliberately selected case-answer versions,
+covering every requested deliverable. Use the actual answer operation; a titled
+evidence note is not a persistent answer. If the client cannot save it, provide the
+answer and report that persistence is unavailable; never claim a save occurred.
 
-## Preserve the question; explain the current approach
+Before finishing, read back the saved records and inspect the public reader journey.
+Follow the evidence links and check agreement of values, units, denominators,
+scenario descriptions, controlled comparisons and claim strength. Revise stale
+references and affected answers together. Keep old records identifiable rather than
+silently replacing their basis. Use concise explanatory prose, appropriate precision,
+and selected comparisons; link full result tables instead of copying every output.
+A reviewer should understand the answer without the conversation or internal IDs.
 
-Keep the user's engineering question, requirements and requested deliverables
-intact when a narrower calculation is possible. Put the current method and its
-scope in the Modeling approach. A missing cost model does not turn a ticket-price
-question into a fuel-expense question. Track which requested answers remain open.
+Report the supported answer, its scope and uncertainty, the unresolved deliverables,
+and what was actually saved/run. Stop when the evidence meets the stated use and
+further work is unlikely to change the decision at the required resolution, or when
+a named gap prevents a stronger answer. Do not invent a numerical confidence score.
 
-Retain original wording when it is actually available. If only a summary survives,
-label a reconstruction or restatement as such; do not invent a verbatim human
-quotation or attribution. Do not silently drop ranges, alternatives, constraints
-or secondary objectives when making the question easier to read.
-
-Explain the reasoning connecting the question, selected methods and intended cases.
-For each implemented method, link exact model versions and relevant elements;
-several methods may share a model, and a method may use several models. Preserve
-proposed or partial methods and their unresolved work. A link is not evidence that
-the method is scientifically complete.
-Make the method explanation specific enough to reconstruct its logic without reading
-code. Purpose names the contribution to the study question; basis and reasoning
-explain why these equations, sources and approximations are suitable; calculation
-in plain words follows the actual input-to-output sequence and names the material
-intermediate quantities. Check that it describes the linked implementation, including
-its omissions. Avoid repeating the same broad description for unrelated components.
-Let the reasoning determine useful case comparisons and groupings; do not force a
-fuel-comparison template, a fixed set of outputs or universal case categories on
-other studies.
-
-State exclusions and unresolved validity conditions in limits. Keep assumptions
-separate: an assumption is a condition being adopted, with its rationale and
-support; a limit says what cannot be inferred. An open question identifies what
-must be resolved next. Do not repeat the same caveat in each field.
-
-Use ordinary engineering language in study prose. Leave optional text empty when
-it adds nothing. Keep implementation labels, migration terminology, version hashes
-and progress messages out of that prose; use record links for traceability.
-
-## Match every citation to the assertion
-
-Before saving a configuration, inspect each input's attached evidence against its
-actual value, units, scenario and role. A source describing Mach 6 does not support
-an authored Mach 8 scenario. Label that input as an explicit scenario choice and
-cite the study requirement or case rationale that warrants exploring it; keep the
-Mach 6 source only with the correlation or reference case it actually supports.
-Apply the same check to criteria, assumptions, limits and answer statements.
-Topical relevance is not support for a numerical assignment. After changing a value,
-recheck its provenance statement and each citation; remove misplaced attachments
-or replace them with evidence that supports the revised assertion. General context
-belongs with the method or study statement it explains, not copied onto every input.
-Do not hide a mismatch by rewriting a source note to agree with the calculation.
-
-## Establish what the sources actually say
-
-For each consequential equation, coefficient or interpretation, retain a source
-and a locator precise enough to check it. Distinguish the printed statement from
-your interpretation. Read surrounding definitions, tables and figure axes before
-assigning units. Check dimensions and conventions, including normalization bases,
-reference conditions and whether a plotted value is measured, computed or read off
-a graph. More displayed digits do not create greater source precision.
-
-When a source is inconsistent, keep its printed reading and your proposed reading
-distinct. Explain the discrepancy and how it changes the calculation. If useful
-and already authorized, compare plausible interpretations as explicitly labelled
-sensitivity cases. Do not choose a reading merely because it fits a reference.
-A close match can support investigating a hypothesis; it does not establish a
-correction to the source. A user's approval to explore that hypothesis does not
-resolve its scientific truth.
-
-Use evidence relations deliberately: context explains a choice, support warrants a
-claim within a stated scope, and contradictory evidence must remain visible. Do not
-present a source citation as supporting an interpretation the source never states.
-
-## Choose checks that could change the conclusion
-
-Before extending a model, identify a small set of checks capable of exposing the
-important mistakes: dimensions, conservation or balance, a limiting case, known
-scaling, a reference calculation, or independent observations. Select checks for
-the model's actual failure modes; do not require irrelevant tests for ceremony.
-
-For a reference comparison, state the common inputs, output being compared,
-reference precision and a physically justified tolerance before inspecting
-agreement; do not choose the tolerance to fit the observed difference. Report
-the discrepancy in physical units and, where meaningful, relative terms. Explain
-material differences in equations, conditions or definitions before claiming the
-comparison is like for like. Avoid tuning an assumption to match and then treating
-that same match as independent validation.
-
-Distinguish an implementation check from evidence that the model describes the
-physical system adequately for the proposed use. Agreement with a second
-implementation of the same equations is a consistency check. A published result
-may itself be a model prediction. Neither, alone, demonstrates mission feasibility.
-
-## Make comparisons and conclusions commensurate
-
-Choose intended cases with a reason: a common reference for comparing alternatives,
-a boundary important to the question, or a sensitivity capable of changing a
-ranking. Distinguish a common-input comparison from a comparison of different
-design assumptions. Use controlled sensitivity comparisons to isolate the effects
-of changed inputs; otherwise say their contributions are unresolved. Do not
-attribute all of the observed difference to the alternative being compared.
-
-A candidate mass supplied from a figure is an input, not an optimum calculated by
-the study. Use "optimum" only when the executed method actually solves a defined
-optimization problem, with stated variables, objective, constraints and numerical
-outcome; qualify local or global claims by the available evidence. A positive
-balance in one flight segment is a necessary condition within that model, not a
-complete aircraft or mission feasibility result.
-
-Name cost outputs by their included terms and denominator. Record currency, price
-year, unit basis, occupancy and relevant operating assumptions. Fuel expense per
-occupied seat does not establish a ticket price. Missing capital, insurance,
-operations or mission inputs remain unresolved; do not silently substitute zero
-or invented values. Explain which missing terms prevent the requested estimate.
-
-Record each case answer against the selected approach version and case. Identify
-all configurations, runs and source versions that support it, explaining their
-roles. Separate observations from interpretation and preserve missing or failed
-results where they affect the answer. Never substitute a newer run silently.
-
-Synthesize a study answer across explicitly selected case-answer versions. Address
-every requested deliverable, including unanswered ones. For each claim, state
-whether it is computed, sourced or judgment, and attach the qualification that
-changes its interpretation. Save a new answer version when revising the conclusion;
-ordinary evidence notes do not become answers because of their titles. Preserve distinctions among
-execution, convergence, termination, feasibility, completeness, applicability and
-criterion outcome. Report unresolved applicability as unresolved, even when a
-criterion is met. Confidence is a reasoned judgment, not an unsupported probability.
-
-## Continue useful work; escalate only the dependent decision
-
-Reuse the user's established choices and authorization. Continue independent,
-in-scope work when a scientific gap blocks only one deliverable. Ask for a missing
-input or interpretation when it materially changes the answer and cannot be
-resolved from available evidence or existing choices. Explain the consequence and
-the specific decision needed; do not request approval again for the same choice.
-
-Where a bounded conditional answer is defensible, give it and preserve the unmet
-part of the original question. Where it is not, withhold that claim and say what
-would resolve it. Do not label an incomplete study complete merely because the
-application accepted every operation.
-
-Before finishing, inspect the saved study through the public client: the question
-still expresses the brief, the approach explains the method, source links support
-their actual claims, limits state the missing coverage, and the conclusion answers
-only what the retained evidence establishes. Correct authored content with new
-versions where required; never rewrite the records used by historical runs.
-
-Before publishing a revision, perform a focused coherence review of the affected
-question, approach, cases, cited assumption notes, configurations and answers. Follow
-the references as a reader would: compare consequential values, units, denominators,
-constraints and claims about what is held constant with the selected input records.
-A revised answer does not repair an older assumption note still cited by the current
-approach. Update affected references and conclusions together using new versions;
-retain an older record only when its historical or contrasting role is explicit.
-Keep shared qualifications at their owner and repeat only the case-specific
-consequence. Check that each qualification actually applies to its case. Review
-claim strength and physical meaning, not merely matching words or API validity.
-
-When changing this guidance, use the contrasting requests in
-[behavioral scenarios](references/behavioral-scenarios.md). They test decisions,
-not exact prose or headings.
+When maintaining this skill, use the
+[behavioral scenarios](references/behavioral-scenarios.md) to assess decisions,
+including capability limits and adverse evidence. File validation and API tests do
+not establish scientific judgment or human acceptance.

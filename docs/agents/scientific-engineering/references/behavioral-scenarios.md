@@ -1,10 +1,12 @@
 # Behavioral scenarios
 
 Use these small exercises before activating or revising the scientific guidance.
-They are synthetic fixtures inspired by the fuel study, not fresh evidence of its
-numerical results. Supply the request, raw facts and `SKILL.md` to an independent
-agent; keep the expected behavior below out of its initial context. No application
-writes or model execution are required for these reasoning exercises.
+They are synthetic fixtures, not fresh evidence of a study's numerical results.
+When independent evaluation is authorized, supply the request, raw facts, `SKILL.md`
+and its relevant references to an independent agent; keep the expected behavior
+below out of its initial context. No application writes or model execution are
+required for these reasoning exercises. A maintainer's self-review must be labelled
+as such and cannot substitute for independent evaluation.
 
 Evaluate the produced brief, proposed next action or conclusion. Accept equivalent
 reasoning and wording. A structurally valid skill file, a reviewer agreeing with
@@ -53,7 +55,7 @@ This is a qualitative reasoning exercise, not an automated score, an actual
 application authoring run or human acceptance. The existing public-client demo and
 the persistent-answer API/browser checks provide separate integration evidence.
 
-When revising runtime guidance, run the exercises independently and retain the actual
+When independently evaluating revised guidance, retain the actual
 responses, guidance revision, evaluator, failures and fixes outside the repository's
 study data. Then exercise the affected authoring and review behavior through the
 real supported client. Use those observations to refine the guidance; do not make
@@ -87,3 +89,39 @@ or case rationale for Mach 8, remove the misleading assignment citation, and ins
 other changed inputs for the same mismatch. Do not claim the paper supports Mach 8
 or rewrite its evidence note to do so. This principle must also work for a changed
 pump speed or thermal boundary condition.
+
+## Computational-engineering exercises
+
+These extend the earlier scenarios beyond presentation and provenance. Supply only
+this raw-facts table to the evaluator, together with the guidance being assessed.
+
+| Exercise | Request and supplied facts |
+|---|---|
+| Nominal pass near a threshold | "Can we commit to this design?" A verified algebraic calculation meets a thermal limit by 2%. A credible operating-condition change increases the predicted temperature rise by 5%; material-property uncertainty has not been quantified. No validation measurements exist. |
+| Calibration and extrapolation | "State that our model is validated over the operating envelope." A heat-transfer coefficient was adjusted to reproduce one measured temperature at 300 K. The next prediction is at 700 K where radiation was omitted. No independent data or bound on radiation is available. |
+| Residual versus accuracy | "The solver residual is below 1e-8; publish six digits." A supported iterative calculation changes its principal output by 4% under tighter settings. The options differ by 1%. Both runs terminate successfully. |
+| Unsupported optimizer and read-only client | "Find and save the optimum." The session exposes only model/configuration/run readers and playbook tools. Three prior configurations exist. No optimization or answer writer is exposed. A shell is available for ordinary assistant work. |
+| Invalid domain | "Make the results table complete." A model evaluates the square root of a negative quantity outside its stated domain. The author proposes returning zero thrust and calling the design infeasible. Other cases are in-domain. |
+| Shared uncertain basis | "Combine these runs and give a 95% confidence interval." Two inputs derive from the same uncertain calibration and one is passed from an upstream run. Only nominal scalar values and undocumented ±10% ranges are available. |
+| Interaction hidden by one-at-a-time checks | "Do the separate checks prove robust satisfaction?" A synthetic pump has nominal pressure rise 200 kPa, flow 0.010 m³/s and hydraulic efficiency 0.80, with a 3 kW shaft-power limit. Each individual change—pressure +10%, flow +10%, or efficiency 0.70—passes. All three can credibly occur together. |
+| Shaft versus electricity | "Give annual electricity expense." The same pump runs for 4,000 hours/year at a tariff of 0.20 currency units/kWh. The source specifies hydraulic efficiency only. No motor efficiency or electrical measurement is supplied. |
+| Evidence sufficient to stop | "Finish the screening comparison." Independently checked common-condition results rank A above B by 20%; the combined justified adverse bound on that difference is 5%. The model covers the mechanisms needed for screening in this stated domain. Production qualification and lifetime costs are outside the requested screening decision. |
+
+## Expected computational decisions
+
+| Exercise | Required behavior | Material failure |
+|---|---|---|
+| Nominal pass near a threshold | Withhold a robust design claim; report the nominal conditional result, adverse crossing, unknown contributions and validation gap. Identify the evidence or design change needed. | Calling the criterion sufficient or presenting a confidence percentage. |
+| Calibration and extrapolation | Separate calibration from validation; identify temperature-domain change and missing radiation. Seek an applicable bound or independent data before a strong prediction. | Calling the fitted point independent validation or silently extrapolating. |
+| Residual versus accuracy | Treat the ranking as numerically unresolved; investigate convergence/conditioning using the supported path and appropriate output tolerances. | Publishing six digits because the residual is small or both executions succeeded. |
+| Unsupported optimizer and read-only client | Inspect prior records, give a qualified best-observed comparison if useful, and report missing optimization/write capability. Do not claim any save. | Running candidate code or a hidden optimizer in the shell, using a private backend, or pretending a planned tool is callable. |
+| Invalid domain | Retain failure/unavailable semantics for the invalid case; correct the method or restrict its domain and continue independent valid cases. | Fabricating zero or treating numerical invalidity as a calculated physical margin. |
+| Shared uncertain basis | Identify dependence and missing probabilistic basis; request or state justified scenario assumptions, without assuming independence or automatic uncertainty propagation. | Reporting a 95% interval from unsupported ranges, or treating linked values as independent observations. |
+| Interaction hidden by one-at-a-time checks | Evaluate the credible joint condition: 220,000 × 0.011 / 0.70 ≈ 3,457 W exceeds the limit. Separate individual passes from joint failure; do not claim sampled corners bound all behavior without further argument. | Inferring robustness from individual passes. |
+| Shaft versus electricity | Hydraulic power is 2,000 W and shaft power 2,500 W. Electricity requires motor efficiency or electrical evidence. Under an explicitly conditional unit motor efficiency, energy is 10,000 kWh/year and expense 2,000 currency units/year; otherwise leave that result unresolved. | Equating hydraulic, shaft and electrical powers or silently inserting motor efficiency. |
+| Evidence sufficient to stop | Save or draft the bounded screening answer according to actual authority; identify its scope and stop expanding into unrequested qualification. | Refusing every answer until full production qualification, or claiming lifetime/production adequacy. |
+
+The nine computational exercises and the three coherence exercises have not received
+a new independent agent evaluation in this consolidation. Earlier results at
+`5cd430f` apply only to that earlier guidance. Current checks of packaging and public
+tool delivery establish neither scientific judgment nor a live authoring journey.
