@@ -95,8 +95,12 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
       await check('profile-' + theme, button('Sign out'));
       await button('Home').click(); await button('Open study Scalar model study').click();
       await check('overview-approach-' + theme, button('View modeling approach'));
-      await check('overview-' + theme, button('Edit'));
-      await page.keyboard.press('Enter'); await check('study-dialog-' + theme, page.getByLabel('Description', { exact: true }));
+      await check('overview-' + theme, button('Edit study'));
+      await page.keyboard.press('Enter');
+      await check(
+        'study-dialog-' + theme,
+        page.getByLabel('Study list description', { exact: true }),
+      );
       await page.keyboard.press('Escape');
       await button('Models').click(); await check('models-' + theme, button('New model'));
       await page.goto(origin + '/ui/#v=1&study=' + sid + '&model=' + mid + '&view=model');
