@@ -43,18 +43,19 @@ after verified 3.22 while 3.24-evidence finishes. Genuine interface/store depend
 - Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
 - Merged and verified on the work branch:
   - Phase 1: complete.
-  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8a, 2.8b.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8a, 2.8b, 2.8c.
   - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
+  - The 3.16-paths slice is verified; full 3.16 remains partial.
   - Each task has a checkpoint.
-- Combined-tree results are in STATE "Stopped at". Every listed group is green.
+- Combined-tree results are linked from STATE "Current Position". Every listed completed group is green; pending native groups are explicit.
 
 ## In flight
 
 | Task | State | Next step |
 |---|---|---|
-| 2.8c (consumer schema split) | In progress; pre-edit baselines complete and the stale-attestation window is open. Exact execution schema and all definition-body/public-contract checks pass; the batch is not yet integrated. | Finish historical admission and boundary review, attested formatting and focused checks; then integrate and run the required nonnative union. |
-| 3.16-paths | Not started; same executor batch after 2.8c prerequisites. | Add optional study-folder configuration with backward compatibility; retain every attested inventory path. |
-| 2.8 (release snapshot and re-attestation) | Pending the verified schema/path batch. | Close the combined window with final committed sources, rebuild/pins/capture and all deferred current-image/native checks. |
+| 2.8c (consumer schema split) | Integrated and verified through `fde9937`; all 30 required groups pass. | Pending current-image/native checks remain assigned to 2.8. |
+| 3.16-paths | Integrated and verified in the same batch. | Study kit and the remainder of original 3.16 stay pending. |
+| 2.8 (release snapshot and re-attestation) | Next, with the schema/path prerequisite verified. | Close the combined window with final committed snapshots, rebuild/pins/capture and all deferred current-image/native checks. |
 
 Tasks 2.6 and 2.7 are merged and verified. PD-2.4 option a and its exact packet are approved; checkpoint 2.8a is complete.
 Task 2.8b is merged at `577e30d` and verified: all seven integrated groups pass,

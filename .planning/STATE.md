@@ -10,9 +10,9 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 ## Current Position
 
 - Phase 1 is recorded complete. Its original gate passed 102/103 groups on `a66a1f3`; the remaining findings chain passed later on the continuation branch. That history is not a claim of full qualification on today's tree.
-- Phase 2 completed: 2.1, 2.1a, 2.2–2.7, 2.8a and 2.8b. Phase 3 completed: 3.1, 3.2, 3.2a, 3.3, 3.3a–3.3d and 3.4–3.10. Checkpoints retain exact commands, failures, counts, artifact identities and cleanup.
-- Current batch: 2.8c followed by 3.16-paths. Pre-edit baseline checks are complete; the schema split has opened the stale-attestation window. Task 2.8 alone closes the combined window with the reviewed rebuild, pins, captures and re-attestation.
-- Latest integrated implementation: 2.8b at `577e30d`, recorded by `ba433fd`. All seven integrated groups passed, including locality-contracts 139 and contracts 115; term scan 0; all seven scopes released. See [checkpoint 2.8b](phases/02-local-edition/checkpoints/2.8b.md).
+- Phase 2 completed: 2.1, 2.1a, 2.2–2.7, 2.8a–2.8c. Phase 3 completed: 3.1, 3.2, 3.2a, 3.3, 3.3a–3.3d and 3.4–3.10. Checkpoints retain exact commands, failures, counts, artifact identities and cleanup.
+- Verified batch: 2.8c and 3.16-paths, integrated at `f4dc811` and checked through `fde9937`. Task 2.8 is next and alone closes the still-open attestation window with committed snapshots, rebuilds, pins, captures and re-attestation.
+- Latest integrated acceptance: all 30 required groups pass, including contracts 126, locality-contracts 155, historical admission in units-bundle 114 and installation-config 102. Three test-only repair commits retain their failures and affected reruns; term scan 0; all 35 orchestrator scopes released. See [checkpoint 2.8c](phases/02-local-edition/checkpoints/2.8c.md#integrated-orchestrator-verification) and [3.16-paths](phases/03-agent-tools-for-coding-agents/checkpoints/3.16-paths.md).
 - Current batch baselines include public-api 70 and ae-model 26. Two obsolete modeling test expectations were repaired in a separate test-only commit before any attested edit; failed attempts remain in the batch evidence. All baseline scopes were released. Post-split public-api and the native groups listed by 2.8c remain pending for 2.8, never reported passed against stale images.
 - First useful product checkpoint C: both local clients save an evidence note visible in the UI with attribution, activity and revocation. D adds the complete engineering workflow. E retains portability and broad operational proofs; F retains Documents and final qualification. A partial slice never closes its original task.
 
@@ -37,7 +37,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 | Owner / checkpoint | Obligation |
 |---|---|
-| 2.8c / 3.16-paths / 2.8 | Exact approved schema split, all definition-body and public-contract identities, historical admission, attested formatting, study-path compatibility, then every deferred current-image/native check. |
+| 2.8 | Verified schema split and study-path inputs now require committed release snapshots, final rebuild/re-attestation, pins/captures and every deferred current-image/native check. |
 | 2.11 | Explicit store creation and versions; no DDL on ordinary open. Serialize the mechanical migration of test store constructors with agent work. |
 | 3.17-host / 3.18 | Human probe on both installed clients, exact client names/versions and protocol/kit decision. Neither scripted tests nor one client substitutes for both. |
 | 3.28-evidence / 3.28-full | Human capability reviews; for D resolve whether the queue cap counts only runs waiting before a call, since the current 10 waiting/running cap makes 20-per-call unreachable. |
@@ -61,4 +61,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: finish and integrate 2.8c plus 3.16-paths; review their checkpoints and run the required nonnative union once on the integrated tree. Then use a fresh executor for 2.8 and every pending current-image/native group. Continue in the two approved lanes toward C, stopping for the real 3.17 client probe and 3.18 decision. Preserve the later 3.28 and both-client acceptance gates.
+Next: use a fresh executor for 2.8 and every pending current-image/native group. The 2.8c/3.16-paths integrated union is complete; do not repeat it without changed inputs or unresolved concerns. Continue in the two approved lanes toward C, stopping for the real 3.17 client probe and 3.18 decision. Preserve the later 3.28 and both-client acceptance gates.
