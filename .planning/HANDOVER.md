@@ -43,30 +43,32 @@ after verified 3.22 while 3.24-evidence finishes. Genuine interface/store depend
 - Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
 - Merged and verified on the work branch:
   - Phase 1: complete.
-  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8a, 2.8b, 2.8c.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8a, 2.8b, 2.8c, 2.8.
   - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
   - The 3.16-paths slice is verified; full 3.16 remains partial.
   - Each task has a checkpoint.
 - Combined-tree results are linked from STATE "Current Position". Every listed completed group is green; pending native groups are explicit.
 
-## In flight
+## Next approved batches
 
 | Task | State | Next step |
 |---|---|---|
-| 2.8c (consumer schema split) | Integrated and verified through `fde9937`; all 30 required groups pass. | Pending current-image/native checks remain assigned to 2.8. |
-| 3.16-paths | Integrated and verified in the same batch. | Study kit and the remainder of original 3.16 stay pending. |
-| 2.8 (release snapshot and re-attestation) | Next, with the schema/path prerequisite verified. | Close the combined window with final committed snapshots, rebuild/pins/capture and all deferred current-image/native checks. |
+| 2.9 + 2.10-host | Ready from verified 2.8. | CLI/prerequisite/status journey and all adapter implementations, with current-host proof. Other-host proofs remain E. |
+| 3.11 + 3.12 | Ready from verified foundations and the closed attestation window. | Runtime-owned notes/reports and the composed MCP surface; preserve the read-only capability gate. |
+| 3.16-paths | Integrated and verified. | Study kit and the remainder of original 3.16 stay pending. |
 
-Tasks 2.6 and 2.7 are merged and verified. PD-2.4 option a and its exact packet are approved; checkpoint 2.8a is complete.
-Task 2.8b is merged at `577e30d` and verified: all seven integrated groups pass,
-including locality-contracts 139; all seven scopes released. Follow DELIVERY-PLAN.md
-waves: 2.8c → 3.16-paths → 2.8, keeping the
-study-folder configuration change inside the same re-attestation window. Continue
-with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
-The amendment owns the detailed ordering and every dependency replacement.
-The after-split `public-api` run also waits for 2.8's current-source producer;
-its 70-test baseline is recorded by 2.8c. This follows the existing stale-image
-restriction and retains every public API assertion and identity check.
+Task 2.8 is integrated through `d4467eb` and verified. Its initial 23-group union,
+affected docstring checks, full native journey and durable-reader checks all pass.
+Every native/current-image check deferred by 2.8c is complete, including public-api 70
+and the added historical-export case. The final runtime keeps all 49 reviewed paths
+and one unreplaced attestation. The new durable fixture is `native-20261014T143925Z`;
+all preceding fixtures and the exact pre-split capture remain preserved. See checkpoint
+2.8 for source/artifact identities, test counts, exact later deltas and cleanup.
+
+Continue in two fresh worktree contexts from the verified integration commit. The
+orchestrator owns runner/guard registration for both lanes. Keep 2.11's overlapping
+store/test migration serialized and reserve native resources explicitly. The delivery
+amendment owns the detailed ordering and every dependency replacement.
 
 The next human checkpoint is the 3.17-host live probe on both clients, followed by
 the 3.18 decision. Product-owner gates at 3.28-evidence and 3.28-full and later
