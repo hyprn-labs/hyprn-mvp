@@ -11,7 +11,10 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
 import live_fence  # noqa: E402
 live_runtime_fence = live_fence.pytest_fixture('unit')
 import ast
+import base64
 import fcntl
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -352,6 +355,12 @@ APPLICATION_SOURCES = (
     'application/requirements.lock',
     'deployment/application.Dockerfile',
     'deployment/application_runtime.py',
+    'deployment/pins.json',
+    'deployment/locks/tools.json',
+    'deployment/images/install_python.py',
+    'ui/package.json',
+    'ui/package-lock.json',
+    'ui/index.html',
 )
 INSTALLATION = 'hyprn-mvp-local-0123abcd'
 
@@ -362,6 +371,10 @@ def fresh_application(tmp_path, monkeypatch):
     (root / 'wheels').mkdir(parents=True)
     (root / 'wheels/reviewed.whl').write_bytes(b'wheel')
     repo = private_tree(tmp_path / 'repo', APPLICATION_SOURCES)
+    (repo / 'deployment/pins.json').write_text(json.dumps({
+        'base_image': 'python@sha256:' + '1' * 64,
+        'node_base_image': 'node@sha256:' + '2' * 64,
+    }))
     ui = private_tree(tmp_path / 'ui', ('index.html', 'assets/app.js'))
     names = dict(
         NAME=INSTALLATION + '-application',
@@ -382,7 +395,9 @@ def fresh_application(tmp_path, monkeypatch):
         state.commands.append(args)
         state.inputs.append(input)
         if args[:3] == ('docker', 'image', 'inspect'):
-            return app.BASE if args[3] == 'python:3.12.11-slim-bookworm' else 'sha256:new-app'
+            return 'sha256:new-app'
+        if args[:3] == ('docker', 'run', '--rm') and args[-2:-1] == ('-c',):
+            return '{"index.html":"aW1hZ2UtYnVpbHQ="}'
         return ''
 
     def fake_build(args, **kwargs):
@@ -412,8 +427,10 @@ def test_a_new_application_store_provisions_the_installation_owner_and_names(tmp
     # Every file the image copies is readable by the application user.
     context = env.state.context
     assert context and all(mode == (0o755 if mode & 0o100 else 0o644) for mode in context.values())
-    assert all(context[name] == 0o755 for name in ('application', 'contracts', 'ui-dist', 'wheels'))
-    provision = command(env.state, 'docker', 'run', '--rm')
+    assert all(context[name] == 0o755 for name in ('application', 'contracts', 'ui'))
+    assert 'ui-dist' not in context and 'wheels' not in context
+    assert (app.UI_DIST / 'index.html').read_bytes() == b'image-built'
+    provision = command(env.state, 'docker', 'run', '--rm', '-i')
     assert provision[-4:-2] == ('python', '-c') and provision[-1] == 'engineer'
     password = env.state.inputs[env.state.commands.index(provision)]
     assert password == (env.root / 'credentials/owner.password').read_text().strip()
@@ -437,6 +454,80 @@ def test_the_application_manager_has_no_upgrade_path():
     for removed in ('upgrade', 'restore_upgrade', 'liveness_probe', 'in_container_dispatchers'):
         assert removed not in source
     assert not hasattr(app, 'upgrade_gate')
+
+
+@pytest.mark.parametrize('difference', ['hash', 'size'])
+def test_image_tool_download_refuses_unreviewed_bytes(tmp_path, monkeypatch, difference):
+    path = REPO / 'deployment/images/install_python.py'
+    spec = importlib.util.spec_from_file_location('image_python', path)
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    raw = b'not an executable archive'
+    artifact = dict(archive='uv-test.tar.gz', size=len(raw), sha256=release.sha256(raw))
+    artifact[difference if difference == 'size' else 'sha256'] = (
+        len(raw) + 1 if difference == 'size' else '0' * 64
+    )
+    lock = tmp_path / 'tools.json'
+    lock.write_text(json.dumps(dict(
+        uv_download_base='https://github.com/astral-sh/uv/releases/download/reviewed/',
+        uv_archives={'linux-aarch64': artifact},
+    )))
+    monkeypatch.setattr(installer.platform, 'machine', lambda: 'aarch64')
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', lambda url: io.BytesIO(raw))
+    monkeypatch.setattr(installer.subprocess, 'run', lambda *a, **kw: pytest.fail('executed'))
+    with pytest.raises(ValueError, match='archive identity mismatch'):
+        installer.install(lock, str(tmp_path / 'runtime'))
+    assert not (tmp_path / 'runtime').exists()
+
+
+def test_image_ui_refuses_path_escape_without_modifying_retained_assets(tmp_path, monkeypatch):
+    ui = tmp_path / 'ui'
+    ui.mkdir()
+    (ui / 'index.html').write_bytes(b'retained')
+    monkeypatch.setattr(app, 'UI_DIST', ui)
+    monkeypatch.setattr(app, 'bound_release', lambda: None)
+    encoded = base64.b64encode(b'image').decode()
+    monkeypatch.setattr(app, 'run', lambda *a: json.dumps({
+        'index.html': encoded, '../outside': encoded,
+    }))
+    with pytest.raises(ValueError, match='Unsafe application UI inventory'):
+        app.retain_image_ui('sha256:scoped')
+    assert (ui / 'index.html').read_bytes() == b'retained'
+    assert not (tmp_path / 'outside').exists()
+
+
+def test_changed_ui_input_invalidates_the_running_application(tmp_path, monkeypatch):
+    original_check = app.check
+    env = fresh_application(tmp_path, monkeypatch)
+    inventory = app.build_inputs()
+    identity = dict(source_hashes=app.hashes(), image='sha256:built', build={'inputs': inventory})
+    (env.root / 'identity.json').write_text(json.dumps(identity))
+    monkeypatch.setattr(app, 'inspect', lambda: {
+        'Name': '/' + app.NAME, 'Image': 'sha256:built',
+        'Config': {'Labels': {modeling.LABEL: app.OWNER}},
+    })
+    # Keep the legacy served-byte inventory unchanged: the source inventory must catch this.
+    monkeypatch.setattr(app, 'hashes', lambda: identity['source_hashes'])
+    (app.REPO / 'ui/package-lock.json').write_bytes(b'changed dependency lock')
+    with pytest.raises(ValueError, match='build input drift'):
+        original_check()
+
+
+def test_source_changes_during_build_refuse_image_admission(tmp_path, monkeypatch):
+    fresh_application(tmp_path, monkeypatch)
+    original_build = subprocess.run
+
+    def change_source(args, **kwargs):
+        result = original_build(args, **kwargs)
+        (app.REPO / 'ui/index.html').write_bytes(b'changed during build')
+        return result
+
+    monkeypatch.setattr(subprocess, 'run', change_source)
+    evidence = tmp_path / 'build-evidence'
+    evidence.mkdir()
+    with pytest.raises(ValueError, match='source changed during image build'):
+        app.build_image(evidence)
+    assert not (evidence / 'build-identity.json').exists()
 
 
 # ---- modeling_runtime: every compose call runs in a clean environment ---------------------

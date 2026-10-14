@@ -4,11 +4,14 @@ Fresh synthetic retained results exercise UI authority, not numerical execution.
 The server owns only a marker-bound ephemeral loopback socket and fresh SQLite.
 """
 from copy import deepcopy as private_copy
+import base64
+import hashlib
 import json
 import mimetypes
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import threading
 from dataclasses import replace
@@ -18,6 +21,86 @@ from urllib.parse import unquote, urlsplit
 import scoped_fixture as guard
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def build_image_ui(scope, stage, dist, env):
+    """Serve fixture bytes produced by the application's pinned, offline UI build stage."""
+    import modeling_runtime
+
+    context = guard.scoped_path(scope, 'artifacts/image-build')
+    context.mkdir()
+    ui = context / 'ui'
+    shutil.copytree(ROOT / 'ui', ui, ignore=shutil.ignore_patterns('node_modules', 'dist'))
+    shutil.copyfile(stage / 'index.html', ui / 'index.html')
+    entry = (stage / 'entry.tsx').read_text().replace(str(ROOT / 'ui/src'), '/build/ui/src')
+    (ui / 'entry.tsx').write_text(entry)
+    config = dict(base='/ui/', build=dict(outDir='dist', target='esnext'))
+    (ui / 'vite.config.ts').write_text('export default ' + json.dumps(config))
+    shutil.copyfile(ROOT / 'deployment/application.Dockerfile', context / 'Dockerfile')
+    modeling_runtime.readable_context(context)
+    pins = json.loads((ROOT / 'deployment/pins.json').read_bytes())
+    inputs = {str(p.relative_to(context)): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(context.rglob('*')) if p.is_file()}
+    serialized = json.dumps([scope.run_uuid, inputs], sort_keys=True).encode()
+    digest = hashlib.sha256(serialized).hexdigest()
+    tag = 'hyprn-mvp-ui-fixture:' + digest[:16]
+    command = [
+        'docker', 'build', '--pull=false', '--target', 'ui',
+        '--label', 'org.hyprn-mvp.test-scope=' + scope.run_uuid,
+        '--build-arg', 'NODE_IMAGE=' + pins['node_base_image'],
+        '--build-arg', 'PYTHON_IMAGE=' + pins['base_image'], '-t', tag, str(context),
+    ]
+    evidence = guard.scoped_path(scope, 'evidence')
+    built = subprocess.run(command, env=dict(env, DOCKER_BUILDKIT='1'),
+                           capture_output=True, text=True)
+    (evidence / 'fixture-build.log').write_text(built.stdout + built.stderr)
+    built.check_returncode()
+    try:
+        inspected = subprocess.run(
+            ['docker', 'image', 'inspect', tag], env=env,
+            capture_output=True, text=True, check=True,
+        )
+        image = json.loads(inspected.stdout)[0]
+        if image['Config']['Labels'].get('org.hyprn-mvp.test-scope') != scope.run_uuid:
+            raise ValueError('UI image scope mismatch')
+        script = (
+            "const fs=require('fs'),p=require('path'),root='/build/ui/dist',out={};"
+            "function walk(d){for(const n of fs.readdirSync(d)){const f=p.join(d,n);"
+            "if(fs.statSync(f).isDirectory())walk(f);"
+            "else out[p.relative(root,f)]=fs.readFileSync(f).toString('base64');}}"
+            "walk(root);console.log(JSON.stringify(out));"
+        )
+        extracted = subprocess.run([
+            'docker', 'run', '--rm', '--network=none', '--read-only', '--cap-drop=ALL',
+            '--security-opt=no-new-privileges:true',
+            '--label', 'org.hyprn-mvp.test-scope=' + scope.run_uuid,
+            image['Id'], 'node', '-e', script,
+        ], env=env, capture_output=True, text=True, check=True)
+        assets = json.loads(extracted.stdout)
+        dist.mkdir()
+        hashes = {}
+        for name, value in assets.items():
+            relative = Path(name)
+            if relative.is_absolute() or '..' in relative.parts:
+                raise ValueError('Unsafe image-built UI path')
+            target = dist / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            raw = base64.b64decode(value, validate=True)
+            target.write_bytes(raw)
+            hashes[name] = hashlib.sha256(raw).hexdigest()
+        if 'index.html' not in hashes:
+            raise ValueError('Image-built UI entry point missing')
+        (evidence / 'image-built-ui.json').write_text(json.dumps(dict(
+            image=image['Id'], node_base=pins['node_base_image'], inputs=inputs, assets=hashes,
+            command=command, scope=scope.run_uuid,
+        ), indent=2) + '\n')
+    finally:
+        if 'image' in locals() and image['Config']['Labels'].get(
+            'org.hyprn-mvp.test-scope'
+        ) == scope.run_uuid:
+            subprocess.run(['docker', 'image', 'rm', '--no-prune', tag], env=env, check=True,
+                           capture_output=True, text=True)
+    return command
 
 
 def run(*, retained=False, modified=False, exported=False):
@@ -198,10 +281,14 @@ createRoot(document.getElementById('root')).render(<Fixture/>);
         (stage / 'vite.config.mjs').write_text('export default ' + json.dumps(config))
         env = guard.clean_environment(scope)
         build = ['node', str(ROOT / 'ui/node_modules/vite/bin/vite.js'), 'build', '--config', str(stage / 'vite.config.mjs'), '--configLoader', 'runner']
-        built = subprocess.run(build, cwd=ROOT, env=env, text=True, capture_output=True)
         evidence = guard.scoped_path(scope, 'evidence')
-        (evidence / 'fixture-build.log').write_text(built.stdout + built.stderr)
-        if built.returncode: raise ValueError('Isolated UI fixture build failed; see fixture-build.log')
+        if not (retained or exported):
+            build = build_image_ui(scope, stage, dist, env)
+        else:
+            built = subprocess.run(build, cwd=ROOT, env=env, text=True, capture_output=True)
+            (evidence / 'fixture-build.log').write_text(built.stdout + built.stderr)
+            if built.returncode:
+                raise ValueError('Isolated UI fixture build failed; see fixture-build.log')
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         command = ['node', str(ROOT / 'ui/node_modules/playwright/cli.js'), 'test', '--config', 'ui/playwright.isolated.config.ts', '--grep', '@export' if exported else '@modified' if modified else '@retained' if retained else '@editor', '--reporter=json']
         tested = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)

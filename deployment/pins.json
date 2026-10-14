@@ -78,5 +78,28 @@
     "native": "sha256:a861510d56c094d6b51fc3dae896333497fab183f5afe918dcfd2da06a8e553c",
     "control": "sha256:705035e20b788e9c32c8518d4a3998156013f59861fc5f25ebca36b4eb99b02c"
   },
-  "native_patch_sha256": "e46c48b507d0f375560bfb33b4a0c78f81800592666e6ff7ccf602ef4e1ac192"
+  "native_patch_sha256": "e46c48b507d0f375560bfb33b4a0c78f81800592666e6ff7ccf602ef4e1ac192",
+  "image_bases": {
+    "python": {
+      "index": "python@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258",
+      "platforms": {
+        "linux/arm64": "sha256:739ba32ae445e8d58f3d90feb85f83bebc8346f8dd280fa1eb5848f4ff1ed163",
+        "linux/amd64": "sha256:2ed6491b93cd49272ee6de2b5a38440c3448360322c089fc23e370722d74179d"
+      }
+    },
+    "node": {
+      "index": "node@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8",
+      "platforms": {
+        "linux/arm64": "sha256:80503c2cadca910dfe16f1516025a2133cdfb0e839f02e79191f83548f2ec729",
+        "linux/amd64": "sha256:c4d5523090a817b7aa86d2111241fdd4f66d1e27782b44160e6aa63b357ecb2d"
+      }
+    }
+  },
+  "build_inputs": {
+    "deployment/application.Dockerfile": "94713aed658b5882a20d576b75aaf636a4b847fc5675d28b83b76cfdb0eaa4fe",
+    "deployment/images/install_python.py": "2ed2e1db0ace00b9794b04cf63cf91d77f0fad4aedcf440115367b0fa5fc59ca",
+    "deployment/locks/tools.json": "b260f903917e34f015db91cefd479b8994b21dbd86ac5e5533bbfb718a5ee860",
+    "application/requirements.lock": "159a23fe11b8e5bceca146597e1857a602637fef49771026c11c8817531e6188",
+    "ui/package-lock.json": "9388196671a0b307e25a9128dd4195a5216ce4f34fa9ea80565613ca08dbdadf"
+  }
 }

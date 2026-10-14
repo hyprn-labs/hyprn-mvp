@@ -713,6 +713,7 @@ DOCKER_GROUPS = (NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS | {'units-model'
                  'findings-native', 'findings-native-read'}
                  | {g for g, route in DOCUMENTS_ROUTES.items() if route['mode'] == 'native'})
 # Browser groups need Node.js and the installed UI toolchain (ui/node_modules with Playwright).
+DOCKER_GROUPS = DOCKER_GROUPS | {'ui-a'}
 BROWSER_GROUPS = (FOUNDRY_BROWSER_GROUPS | SERVED_BROWSER_GROUPS | SERVED_INSTALLATION_GROUPS | set(AE_BROWSER_GROUPS)
                   | set(APPROACH_BROWSER_GROUPS) | set(UNITS_BROWSER_GROUPS)
                   | {'combined-static', 'findings-native', 'findings-native-read'}
@@ -1125,6 +1126,28 @@ def contracts_child(group='contracts', *, units_mixed_repair=False):
     return 0 if passed else 1
 
 
+def prepare_ui_builder(scope):
+    """Retain only the installed builder executable in the isolated Docker CLI home."""
+    import hashlib
+
+    inspected = subprocess.run(
+        ['docker', 'info', '--format', '{{json .ClientInfo.Plugins}}'],
+        text=True, capture_output=True, check=True, timeout=60,
+    )
+    matches = [item for item in json.loads(inspected.stdout) if item.get('Name') == 'buildx']
+    if len(matches) != 1 or not Path(matches[0]['Path']).is_file():
+        raise ValueError('environment absent: installed Docker buildx plugin')
+    raw = Path(matches[0]['Path']).read_bytes()
+    destination = fixture.scoped_path(scope, 'home/.docker/cli-plugins/docker-buildx')
+    destination.parent.mkdir(parents=True, mode=0o700)
+    destination.write_bytes(raw)
+    destination.chmod(0o700)
+    fixture.scoped_path(scope, 'evidence/builder.json').write_text(json.dumps(dict(
+        name='buildx', version=matches[0].get('Version'),
+        sha256=hashlib.sha256(raw).hexdigest(), size=len(raw),
+    ), indent=2) + '\n')
+
+
 def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
     validate_units_mixed_repair(group, units_mixed_repair)
     if group == 'qualification':
@@ -1175,6 +1198,8 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
         raise ValueError('Group fixture/runner not implemented yet: ' + group)
     require_environment(group)
     scope = fixture.allocate_scope(replace(fixture.new_scope(), interpreter=GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON)))
+    if group == 'ui-a':
+        prepare_ui_builder(scope)
     env = fixture.clean_environment(scope)
     command = [scope.interpreter, '-B', str(Path(__file__).resolve()), '--' + group + '-child']
     if units_mixed_repair:

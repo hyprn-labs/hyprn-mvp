@@ -11,12 +11,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import secrets
 import subprocess
 import sys
-import zipfile
-import io
 import application_runtime as app
 import modeling_runtime as model
 import local_paths
@@ -49,27 +46,6 @@ def guarded_empty_root(path):
         raise ValueError('Exact nonsymlink store required')
     if path.exists() and any(path.iterdir()):
         raise ValueError('Store already has contents; refuse reset, inspect checkpoint')
-
-
-def cache_wheels():
-    """Only accept wheel bytes whose hashes are in the reviewed application lock."""
-    wanted = set(re.findall(r'sha256:([a-f0-9]{64})', (app.REPO/'application/requirements.lock').read_text()))
-    found = {}
-    # pip's own cache location (no operating-system layout written here).
-    cache = subprocess.run([sys.executable, '-m', 'pip', 'cache', 'dir'], text=True, capture_output=True, check=True).stdout.strip()
-    for path in Path(cache).rglob('*'):
-        if path.is_file() and (path.name.endswith('.body') or path.suffix == '.whl') and path.stat().st_size < 50000000:
-            raw = path.read_bytes()
-            digest = hashlib.sha256(raw).hexdigest()
-            if digest in wanted:
-                with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                    wheel = next(n for n in archive.namelist() if n.endswith('.dist-info/WHEEL'))
-                    tag = re.search(r'^Tag: (.+)$', archive.read(wheel).decode(), re.M)[1]
-                name = wheel.split('/')[0].removesuffix('.dist-info') + '-' + tag + '.whl'
-                found[digest] = (name, raw)
-    if set(found) != wanted:
-        raise ValueError('Reviewed wheel cache incomplete')
-    return found
 
 
 def verify_image_sources():
@@ -119,16 +95,15 @@ def bootstrap():
     port = local_paths.port()  # Refused before any effect while HYPRN_MVP_PORT is unset.
     for root in STORES:
         guarded_empty_root(root)
-    wheels = cache_wheels()
     sources, ui, patches = verify_image_sources()
-    for root, children in [(app.ROOT,('application','credentials','wheels','evidence')),(model.DEFAULT_ROOT,('modeling','credentials','evidence'))]:
+    stores = [(app.ROOT, ('application', 'credentials', 'evidence')),
+              (model.DEFAULT_ROOT, ('modeling', 'credentials', 'evidence'))]
+    for root, children in stores:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         root.chmod(0o700)
         for child in children:(root/child).mkdir(mode=0o700)
     EVIDENCE.mkdir(mode=0o700)
     emit(EVIDENCE/'approval.json',dict(authorization='Owner: initialize empty development stores',app_image=APP_IMAGE,model_image=MODEL_IMAGE,source_hashes=sources,ui_hashes=UI_HASHES,native_patches=patches))
-    for digest,(name,raw) in wheels.items():(app.ROOT/'wheels'/name).write_bytes(raw)
-    emit(EVIDENCE/'wheel-hashes.json',{name:digest for digest,(name,_) in wheels.items()})
     app.UI_DIST.mkdir(parents=True,mode=0o700)
     for name,raw in ui.items():
         path=app.UI_DIST/name;path.parent.mkdir(exist_ok=True);path.write_bytes(raw)
@@ -170,7 +145,11 @@ def bootstrap():
         '-e','HYPRN_MVP_APP_STORE=/store/application.sqlite','-e',f'HYPRN_MVP_ORIGIN=http://127.0.0.1:{port}',
         '-e',f'HYPRN_MVP_MODEL_URL=http://{model.CONTAINER}:3000/modeling/1','-e','HYPRN_MVP_MODEL_KEY_FILE=/run/model.key',APP_IMAGE)
     run('docker','network','connect',model.NETWORK,app.NAME)
-    emit(app.ROOT/'identity.json',dict(owner=app.OWNER,container=app.NAME,image=APP_IMAGE,base=app.BASE,source_hashes=app.hashes(),store=str(app.ROOT/'application'),recovery='verified retained image; host runtime path relocation only'))
+    emit(app.ROOT / 'identity.json', dict(
+        owner=app.OWNER, container=app.NAME, image=APP_IMAGE, source_hashes=app.hashes(),
+        store=str(app.ROOT / 'application'),
+        recovery='verified retained image; host runtime path relocation only',
+    ))
     emit(EVIDENCE/'bootstrap.json',dict(application=app.check(),modeling=model.check(model.DEFAULT_ROOT)))
     print('Fresh application/modeling stores provisioned; native environment and attestation pending.')
 
