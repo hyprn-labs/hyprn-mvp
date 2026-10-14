@@ -141,6 +141,7 @@ export function EvidenceRecordBody({
       <div className="section-actions">
         <ActionDialog title="Evidence detail" label="View evidence" size="sm">
           <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3>
+          <RecordAttribution kind="evidence_version" id={inspected.evidence_version_id} line />
           {brief && relation && (
             <p className="context-line">
               {relation.toLowerCase() === 'context'
