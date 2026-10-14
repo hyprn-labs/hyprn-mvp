@@ -52,8 +52,9 @@ after verified 3.22 while 3.24-evidence finishes. Genuine interface/store depend
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Complete at `94a631f`; 17 integrated acceptance groups passed. | Source-built producer, 49-file attestation inventory, native-program capture and durable fixture verified. All task scopes released. PD-2.4 option a is approved. |
-| 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Approved Flit transformations preserve runtime equivalence. Combined 2.6 tree passed fresh attestation and native acceptance. |
+| 2.8c (consumer schema split) | In progress; pre-edit baselines complete and the stale-attestation window is open. Exact execution schema and all definition-body/public-contract checks pass; the batch is not yet integrated. | Finish historical admission and boundary review, attested formatting and focused checks; then integrate and run the required nonnative union. |
+| 3.16-paths | Not started; same executor batch after 2.8c prerequisites. | Add optional study-folder configuration with backward compatibility; retain every attested inventory path. |
+| 2.8 (release snapshot and re-attestation) | Pending the verified schema/path batch. | Close the combined window with final committed sources, rebuild/pins/capture and all deferred current-image/native checks. |
 
 Tasks 2.6 and 2.7 are merged and verified. PD-2.4 option a and its exact packet are approved; checkpoint 2.8a is complete.
 Task 2.8b is merged at `577e30d` and verified: all seven integrated groups pass,
@@ -66,7 +67,8 @@ The after-split `public-api` run also waits for 2.8's current-source producer;
 its 70-test baseline is recorded by 2.8c. This follows the existing stale-image
 restriction and retains every public API assertion and identity check.
 
-Product-owner gates remain at 3.18, 3.28-evidence and 3.28-full; live
+The next human checkpoint is the 3.17-host live probe on both clients, followed by
+the 3.18 decision. Product-owner gates at 3.28-evidence and 3.28-full and later
 both-client checkpoints remain mandatory. The queue-limit ambiguity is decided
 for D. Phase 4 is deferred until A–D and E are complete.
 

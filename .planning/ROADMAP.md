@@ -124,7 +124,7 @@ Release gate action: remove `documents` from the advertised unavailable capabili
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
 | 1. Repository baseline | 1/1 | Complete (tasks 1.1–1.11) | 2026-10-14 |
-| 2. Local edition | 0/1 | Planned | - |
-| 3. Agent tools for coding agents | 0/1 | Planned | - |
+| 2. Local edition | 0/1 | In progress | - |
+| 3. Agent tools for coding agents | 0/1 | In progress | - |
 | 4. Documents | 0/1 | Planned | - |
 | 5. Qualification and first local release | 0/? | Context ready | - |
