@@ -4,9 +4,18 @@
 
 The product already delivers the manual modeling workflow. This milestone turns it into a local edition any engineer can install on macOS or Linux (Windows through WSL2), gives desktop coding agents a governed tool surface onto one study, adds source documents, and ends with independent reviews and a first qualified local release. Phase 1 makes the repository consistent under the `hyprn-mvp` namespace with every must-pass group green. Phase 2 packages the local edition. Phases 3 and 4 add agent tools and documents and may run in parallel with Phase 2 where their files do not overlap. Phase 5 qualifies and releases.
 
+## Current delivery
+
+The latest [delivery instruction](DELIVERY-PLAN.md) makes the real owner-operated
+fuel workflow the only demo queue: current app/services, thin authenticated public
+API client, Codex author–run–inspect–revise loop, actual retained outputs and UI
+rehearsal. Open numbered tasks below remain deferred product obligations. In-flight
+CLI/MCP work is preserved separately; its completion is not required for this demo.
+No phase or release completion is implied.
+
 ## Phases
 
-Execution priority is now governed by [the A–D delivery amendment](DELIVERY-PLAN.md),
+The earlier full-product priority was governed by [the A–D delivery amendment](DELIVERY-PLAN.md),
 approved on 2026-10-14. It preserves the phase scope and original task IDs while
 ordering pending work by delivered value:
 

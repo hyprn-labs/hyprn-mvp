@@ -1,4 +1,85 @@
-# Delivery amendment — A–D before portability and release
+# Delivery plan — restore the local fuel workflow through the cleaned API
+
+## Current instruction — simplest working demo, 2026-10-14
+
+The product owner explicitly rejected the preceding subset-heavy demo plan. The
+current objective is to get the local application working with the cleaned API and
+Codex authoring the whole engineering workflow in a loop from the fuel brief.
+This section replaces that demo plan. The earlier A–D plan below is a record of
+later product obligations, not the current execution queue or demo gate.
+
+Use the existing public application API and ordinary local user authentication,
+through a thin local client Codex can invoke. Reuse the existing deployment managers
+and current runtime. Do not finish the dedicated agent platform to demonstrate
+agentic use of the application. MCP is optional only if already usable and cheaper;
+its completion is not a prerequisite. No new delegation/bootstrap system is needed.
+
+For this owner-operated local demonstration, API actions use the authorized local
+user session and appear under that user identity. Distinct delegated-agent identity,
+attribution chips, agent-specific permissions and activity reporting are not demo
+requirements. The helper handles normal login/session headers without printing
+credentials; it neither disables server authentication nor changes the public API's
+normal authorization. The local user authorizes the scientific workflow, not deletion
+of existing records or changes to memberships. Application actions still go through
+the public API, never through direct database/modeling-service access.
+
+| Remaining delivery step | What to do | Done when |
+|---|---|---|
+| 1. Run the current app | Use existing deployment/runtime managers and the verified refactored code. Fix only actual startup or UI blockers. | The local UI and public API work against the real modeling/execution services. |
+| 2. Give Codex an API client | Reuse a working client if available; otherwise add one thin local helper for login, API requests and receipt/status reads, plus concise workflow guidance. Use the existing user session across study creation and subsequent work. | Codex creates a study and immediately reads/edits it through the public API, without manual token renewal. |
+| 3. Exercise the authoring/run loop | From the brief and legitimate source material, Codex records context/evidence/approach, creates and edits components/model, saves configurations, submits runs, reads errors/results and revises its work. Implement only missing API/client behavior encountered on this path. | Codex completes a genuine author-edit-run-inspect-revise loop using real execution; records are visible in the UI. |
+| 4. Finish the fuel answer | Codex performs the fuel comparison and answers in chat with actual results, assumptions, sources and limitations. No preauthored model or seeded result substitutes for its work. | The engineering question has a defensible answer supported by retained runs, with any scientific uncertainty stated honestly. |
+| 5. Rehearse and stop | Run focused checks for changed behavior and one complete Codex fuel rehearsal on the delivery tree; inspect the actual UI and fix blockers. | The brief-to-conclusion journey works locally without manual modeling or run submission. Record concise evidence and stop adding features. |
+
+### Open Phase 2/3 tasks: deferred by default
+
+No remaining original task is a prerequisite merely because of its number or plan
+position. Reuse existing implementations; do not build every planned agent wrapper.
+
+| Original tasks | Current disposition |
+|---|---|
+| 2.9–2.14 | Defer productized CLI/setup, OS adapters, store-initialization redesign/reset, uninstall/re-adoption, clean-room packaging and broad docs. Use existing managers and existing scoped test cleanup. Borrow only code needed to fix an observed startup/client blocker. |
+| 3.11–3.23 | Defer notes/reports, MCP completion, evaluation infrastructure, delegated tokens/relay/kit, client matrices, new agent journaling/guards/policy work and activity UI. Existing API validation, authorization, revision checks and receipt recovery stay in use. |
+| 3.24–3.26, 3.31–3.32 | Their scientific capabilities are essential, but their dedicated agent-tool implementations are deferred. Use existing public study/evidence/approach/model/configuration/run endpoints directly through the thin client; add only missing behavior required by the real workflow. |
+| 3.27–3.30, 3.33–3.36 | Defer staged agent-platform reviews/enablements, standalone authoring evaluation, saved-conclusion tool, broad live matrix and phase closure. Replace their demo scheduling with the focused end-to-end rehearsal above; do not claim those original tasks passed. |
+
+The already completed architecture/API refactor and 3.16-paths remain retained.
+Preserve useful in-flight CLI/MCP work at a clean checkpoint; do not finish optional
+work merely because it started and do not discard others' edits. The executing
+orchestrator decides safe integration boundaries and keeps deferred work recoverable.
+
+### Explicit demo exceptions and retained correctness
+
+This instruction explicitly supersedes the old demo requirements for the installed
+study kit, agent-only MCP access, new-study token binding, delegated attribution,
+Agent activity UI, protocol/client-support decisions, writer-token capability reviews,
+staged registry enablement and full current-host qualification. Those gates remain
+for the later delegated-agent product/release; this demo does not mint or enable its
+writer tokens. Historical accepted ADRs are not edited or claimed satisfied.
+
+Retain the current restricted execution environment and its valid attestation,
+scientific input/unit/provenance checks, immutable saved versions, actual computed
+results and existing API command-receipt recovery. Never blindly repeat an uncertain
+run launch. Do not spend this milestone redesigning these already working mechanisms.
+No arbitrary physical defaults, host-side model execution or fabricated results.
+
+Changed behavior receives focused tests through the established check entry point;
+API changes retain contract tests and the UI contract checker. Run real native
+execution and inspect actual UI persistence as part of the final journey. Full-suite
+qualification, broad fault-injection/client matrices, multi-OS proof, new security
+features and release audits move later. Existing failures that actually block or
+invalidate the demonstrated journey still must be fixed. Use existing isolated test
+scopes, preserve authoring records, and do not add an uninstall or cleanup framework.
+
+Use the fuel reference to check the scientific answer; do not build a new G1 grading
+framework or make every evaluation metric a prerequisite. If a source, unit ambiguity
+or model limitation blocks a defensible answer, resolve or report it honestly; a
+working interface alone is not evidence of a successful engineering study.
+
+This is a local demonstration, not full Phase 2/3 completion, a supported delegated
+agent release, a portability claim or permission to publish/deploy elsewhere.
+
+## Earlier A–D amendment — retained full-product obligations
 
 Status: approved priority change, executable planning amendment; no implementation or acceptance is claimed here.
 Date: 2026-10-14. The October 15 demonstration is an aspiration, never an acceptance waiver.

@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** Phases 2 and 3, ordered by the approved [delivery plan](DELIVERY-PLAN.md).
+**Current focus:** Restore the owner-operated fuel workflow through the cleaned public API, under the latest [delivery instruction](DELIVERY-PLAN.md#current-instruction--simplest-working-demo-2026-10-14).
 
 ## Current Position
 
@@ -14,7 +14,8 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 - Task 2.8 closes the combined schema/study-path/release attestation window. The current modeling producer and native captures are verified; the final runtime retains exactly 49 reviewed source paths and one unreplaced attestation. See [checkpoint 2.8](phases/02-local-edition/checkpoints/2.8.md).
 - Latest integrated acceptance: all 23 initial groups pass at `b5a7b62`; the docstring-only correction passes affected release checks at `a5ef4eb`; the final native journey passes 14 tests plus its existing one deselection, with seven runs, four archive pairs and three browser checks. The two-constant durable pin at `d4467eb` passes guards 17 and preflight 1, preserving seven processes and 5,675 original files; final style 33 and term scan 0. All 29 allocated orchestrator scopes and the fresh materialized copy are released; the referenced worker image and immutable captures are retained.
 - Every current-image/native group deferred by 2.8c now passes, including public-api 70, ae-model 26 and fuel-native-provenance 16 (one added historical-export case). The earlier 30-group schema/path acceptance remains recorded in [2.8c](phases/02-local-edition/checkpoints/2.8c.md#integrated-orchestrator-verification) and [3.16-paths](phases/03-agent-tools-for-coding-agents/checkpoints/3.16-paths.md); unchanged checks are not repeated.
-- First useful product checkpoint C: both local clients save an evidence note visible in the UI with attribution, activity and revocation. D adds the complete engineering workflow. E retains portability and broad operational proofs; F retains Documents and final qualification. A partial slice never closes its original task.
+- Current demo outcome: Codex creates a study in an ordinary authorized local user session, authors evidence/approach/components/model/configurations, runs and revises through the public API, and answers the fuel brief from real retained outputs visible in the UI. No seeded model/result substitutes for the rehearsal.
+- Optional 2.9/2.10-host and 3.11/3.12 work is being preserved in its isolated branches at deferred checkpoints; it is not integrated or claimed complete. The previous A–D queue and delegated-agent gates are later product obligations.
 
 ## Decisions and Authority
 
@@ -37,7 +38,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 | Owner / checkpoint | Obligation |
 |---|---|
-| 2.9 / 2.10-host and 3.11 / 3.12 | Next two independent batches: local CLI/adapters and runtime notes/MCP. One integrator owns runner/guard registration; preserve the verified attested inputs. |
+| 2.9 / 2.10-host and 3.11 / 3.12 | Deferred worktree checkpoints; preserve code, existing evidence and unverified items. No further completion or integration is a demo prerequisite. |
 | 2.11 | Explicit store creation and versions; no DDL on ordinary open. Serialize the mechanical migration of test store constructors with agent work. |
 | 3.17-host / 3.18 | Human probe on both installed clients, exact client names/versions and protocol/kit decision. Neither scripted tests nor one client substitutes for both. |
 | 3.28-evidence / 3.28-full | Human capability reviews; for D resolve whether the queue cap counts only runs waiting before a call, since the current 10 waiting/running cap makes 20-per-call unreachable. |
@@ -61,4 +62,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: use fresh worktree executors for the approved batches 2.9 + 2.10-host and 3.11 + 3.12 from the verified integration commit. Root owns shared runner/guard registration and integrated acceptance. The attestation window is closed; repeat prior checks only for changed inputs or unresolved concerns. Continue toward C, stopping for the real 3.17 client probe and 3.18 decision. Preserve the later 3.28 and both-client acceptance gates.
+Next: finish safe preservation/cleanup of optional work, run the current application against real services, and provide the smallest usable authenticated public API client. Rehearse the actual fuel author–run–inspect–revise loop and inspect persisted records in the UI. The delegated-agent human gates remain deferred product obligations, not gates on this owner-operated demo. No publication or production writer-token enablement is requested.

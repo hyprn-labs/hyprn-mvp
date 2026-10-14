@@ -2,7 +2,28 @@
 
 Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Session Continuity") and `.planning/ROADMAP.md`. Each phase plan and its checkpoints are under `.planning/phases/`.
 
-## Delivery priority approved by the product owner (2026-10-14)
+## Current priority: working fuel demo
+
+The latest instruction at the top of [DELIVERY-PLAN.md](DELIVERY-PLAN.md) supersedes
+the A–D demo queue below. Run the existing refactored application and real services;
+use normal authorized local user authentication with a thin public API client. Codex
+must create a study and author, run, inspect and revise the fuel workflow in the same
+session, then answer from retained results visible in the UI. No prebuilt model or
+seeded result counts. Stop adding features after one successful end-to-end rehearsal.
+
+The in-flight local CLI/adapters and MCP/notes batches are stopping at recoverable
+worktree checkpoints. Preserve their code and evidence; do not merge or finish them
+merely because they started. All open numbered tasks are deferred completion
+obligations. Existing authentication, scientific validation, restricted execution,
+attestation, immutable records and receipt recovery remain. Focused changed-behavior
+checks and required API/UI contract checks apply; full qualification, delegated-agent
+reviews, other clients/hosts, installation productization and release audits are later.
+
+Next: establish the current runtime and legitimate fuel source material, reuse or add
+the smallest local API helper, then perform the actual Codex rehearsal. Record real
+blockers and observed timings. No new permission gate for this owner-operated route.
+
+## Earlier delivery priority — superseded for the current demo (2026-10-14)
 
 Read [DELIVERY-PLAN.md](DELIVERY-PLAN.md) before dispatching pending Phase 2/3
 work. It supersedes the earlier whole-Phase-2-plus-Phase-3 demo target with
@@ -49,7 +70,7 @@ after verified 3.22 while 3.24-evidence finishes. Genuine interface/store depend
   - Each task has a checkpoint.
 - Combined-tree results are linked from STATE "Current Position". Every listed completed group is green; pending native groups are explicit.
 
-## Next approved batches
+## Deferred batches from the earlier queue
 
 | Task | State | Next step |
 |---|---|---|
