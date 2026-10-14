@@ -606,13 +606,20 @@ def test_compose_runs_with_a_clean_environment(tmp_path, monkeypatch):
     assert env['DOCKER_HOST'] == 'unix:///configured/docker.sock'
     source = Path(modeling.__file__).read_text()
     tree = ast.parse(source)
-    commands = [node for node in ast.walk(tree) if isinstance(node, (ast.List, ast.Tuple))
-                and [getattr(item, 'value', None) for item in node.elts[:2]] == ['docker', 'compose']]
-    environment_calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
-                         and isinstance(node.func, ast.Name)
-                         and node.func.id == 'compose_environment']
-    environment_definitions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-                               and node.name == 'compose_environment']
+    commands = [
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.List, ast.Tuple))
+        and [getattr(item, 'value', None) for item in node.elts[:2]] == ['docker', 'compose']
+    ]
+    environment_calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        and node.func.id == 'compose_environment'
+    ]
+    environment_definitions = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == 'compose_environment'
+    ]
     assert len(commands) == len(environment_calls) == len(environment_definitions) == 1
     assert 'compose_up(' in source.split('def setup(', 1)[1]
 
