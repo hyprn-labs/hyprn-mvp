@@ -41,8 +41,8 @@ import scoped_fixture as guard
 # Durable fixture root (deployment/local_paths.py). While it is unconfigured the fixture is
 # unavailable (FixtureUnavailable names the variable).
 FIXTURES_ROOT = guard.local_paths.fixtures_root(required=False)
-NATIVE_FIXTURE = None if FIXTURES_ROOT is None else FIXTURES_ROOT / 'native-20261014T104956Z'
-NATIVE_MANIFEST_SHA256 = '13525021901ee1d520e72740897b154a0c6cc72ae32affb602e02fca86219bdd'
+NATIVE_FIXTURE = None if FIXTURES_ROOT is None else FIXTURES_ROOT / 'native-20261014T143925Z'
+NATIVE_MANIFEST_SHA256 = 'c505be7a85cef4f1659785aeb8da702f3f8b0e72dc6480b5406348f3dea262fc'
 IDENTITY_FIELDS = frozenset({
     'run_uuid', 'profile_uuid', 'store_uuid', 'study_id', 'source_run', 'source_process',
     'source_configuration', 'source_revision', 'source_payload', 'source_results_digest',
