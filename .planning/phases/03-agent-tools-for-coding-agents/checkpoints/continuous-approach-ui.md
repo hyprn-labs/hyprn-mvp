@@ -150,3 +150,34 @@ case-answer revision basis, sign-out clearing and persistence after fresh login.
 The successful scope's 141 evidence/metadata files were hashed, archived externally
 and released after confirming no scoped process remained. Executor archive totals:
 19 released scopes, 494 verified files. Root-owned failure scopes remain root-owned.
+
+## Current-reader cleanup and Overview entry
+
+Implementation `ecdc50e67ff5be07a3613b5cedae70392950906a` removes the per-case
+Coverage incomplete badge and duplicate case pagination notes. The existing usage
+pagination control remains. Empty case evidence is hidden in readers; the same
+canonical owner remains available in editing and when citations exist.
+
+The old Overview entry was unversioned, so the controller intentionally opened its
+draft authoring state even though Overview displayed a saved question. The approved
+correction passes the exact version already displayed by Overview to the entry.
+Draft is used only when the question read confirms no saved version. Loading or
+failed reads do not silently fall back to Draft. Edit approach and the Draft
+selector retain their explicit authoring behavior. The only change inside
+ApproachAssumptions is the Overview question callback's selected-version value;
+assumption ownership and editing are unchanged.
+
+Focused checks on the source-identical candidate:
+
+- `./hyprn-mvp dev check combined-static`: 6 stages passed, 0 failed; scope
+  `720a5042-ce16-470f-b4b4-e6c0367fe847`.
+- `./hyprn-mvp dev check style-ratchet`: 33 passed, 0 failed, 0 skipped; scope
+  `5585c025-fb7c-4fa6-9962-c323c6af1cf9`.
+- `git diff --check`: passed.
+
+Existing focused assertions now check the exact Overview route/selection and absent
+empty case evidence. No browser matrix was repeated for this narrow follow-up;
+root owns the current live Overview-to-saved-answer inspection. Automated checks
+do not imply human acceptance. Both new scopes were archived with verified hashes
+and released: executor totals 21 scopes and 507 evidence/metadata files, no remaining
+executor scopes. No live authoring records or other executor scopes were touched.
