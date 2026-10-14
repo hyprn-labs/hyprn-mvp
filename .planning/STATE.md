@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** The fuel demo has a consolidated Overview, consistent evidence rows and a complete run-output table. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The scientific guidance foundation is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
+**Current focus:** The fuel demo now also groups shared limit evidence, simplifies model details and groups run exports. Removal of obsolete aggregate statuses from new results and current API/agent views is in progress in an isolated backend batch; the running demo still uses its previous attested runtime. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The scientific guidance foundation is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
 
 ## Current Position
 
@@ -66,4 +66,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The Overview/evidence/run presentation follow-up is delivered; its checkpoint records focused acceptance and the queued computational export limitation. The scientific guidance foundation awaits agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
+Next: finish the integrated UI acceptance, then integrate and verify the result-format/API cleanup before rebuilding the modeling producer and re-attesting the worker. Preserve the running demonstrated study and its native records; do not clean its retained scope. The current UI batch is 7c57a6a with editable-empty-state follow-up 3ee243c; backend work is isolated in codex/run-result-contract-cleanup. The queued computational export remains a separate obligation. The scientific guidance foundation awaits agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
