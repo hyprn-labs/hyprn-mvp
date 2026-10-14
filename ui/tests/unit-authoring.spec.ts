@@ -22,41 +22,63 @@ test('@units-authoring negotiates explicit new-model protocol', async ({page})=>
   expect((await request).postDataJSON().schema_version).toBe('3');
 });
 
-for (const response of ['success','refusal'] as const) {
-test('@units-authoring component authoring waits for unit guidance and preserves inputs after '+response, async ({page})=>{
-  await model(page);
-  await expect(page.getByRole('button',{name:'Create model',exact:true})).toBeEnabled();
-  let release!:()=>void;
-  const pending=new Promise<void>(resolve=>release=resolve);
-  let arrived=false;
-  await page.route('**/unit-catalog',async route=>{arrived=true;await pending;if(response==='refusal'){await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'modeling_unavailable',message:'Unit guidance is unavailable',fields:[],outcome:'unchanged'}})});}else{await route.continue();}},{times:1});
-  try {
-    await page.getByRole('button',{name:'Create model',exact:true}).click();
-    await expect.poll(()=>arrived).toBe(true);
-    await page.getByRole('button',{name:'＋ Component',exact:true}).click();
-    const dialog=page.getByRole('dialog',{name:'Add component',exact:true});
-    await dialog.getByLabel('New component name').fill('Energy law');
-    await dialog.getByLabel('Input symbols').fill('x');
-    await dialog.getByLabel('Output symbols').fill('y');
-    const add=dialog.getByRole('button',{name:'Add component',exact:true});
-    await expect(dialog.getByRole('status')).toHaveText('Loading unit guidance…');
-    await expect(add).toBeDisabled();
-    release();
-    if(response==='refusal'){
-      await expect(dialog.getByRole('alert')).toContainText('Unit guidance is unavailable');
+for (const response of ['success', 'refusal'] as const) {
+  test('@units-authoring keeps component inputs through catalog ' + response, async ({page}) => {
+    await model(page);
+    await expect(page.getByRole('button', {name: 'Create model', exact: true})).toBeEnabled();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => release = resolve);
+    let arrived = false;
+    await page.route('**/unit-catalog', async route => {
+      arrived = true;
+      await pending;
+      if (response === 'refusal') {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({error: {
+            code: 'modeling_unavailable',
+            message: 'Unit guidance is unavailable',
+            fields: [],
+            outcome: 'unchanged',
+          }}),
+        });
+      } else {
+        await route.continue();
+      }
+    }, {times: 1});
+    try {
+      await page.getByRole('button', {name: 'Create model', exact: true}).click();
+      await expect.poll(() => arrived).toBe(true);
+      await page.getByRole('button', {name: '＋ Component', exact: true}).click();
+      const dialog = page.getByRole('dialog', {name: 'Add component', exact: true});
+      await dialog.getByLabel('New component name').fill('Energy law');
+      await dialog.getByLabel('Input symbols').fill('x');
+      await dialog.getByLabel('Output symbols').fill('y');
+      const add = dialog.getByRole('button', {name: 'Add component', exact: true});
+      await expect(dialog.getByRole('status')).toHaveText('Loading unit guidance…');
       await expect(add).toBeDisabled();
-      await dialog.getByRole('button',{name:'Retry unit guidance',exact:true}).click();
+      release();
+      if (response === 'refusal') {
+        await expect(dialog.getByRole('alert')).toContainText('Unit guidance is unavailable');
+        await expect(add).toBeDisabled();
+        await dialog.getByRole('button', {name: 'Retry unit guidance', exact: true}).click();
+      }
+      await expect(add).toBeEnabled();
+      await expect(dialog.getByLabel('New component name')).toHaveValue('Energy law');
+      await expect(dialog.getByLabel('Input symbols')).toHaveValue('x');
+      await expect(dialog.getByLabel('Output symbols')).toHaveValue('y');
+      await add.click();
+      await page.getByRole('button', {name: 'Apply changes', exact: true}).click();
+      await expect(page.getByText('Component added', {exact: true})).toBeVisible();
+      const guidanceError = page.getByRole('alert').filter({
+        hasText: 'Unit guidance is unavailable',
+      });
+      await expect(guidanceError).toHaveCount(0);
+    } finally {
+      release();
     }
-    await expect(add).toBeEnabled();
-    await expect(dialog.getByLabel('New component name')).toHaveValue('Energy law');
-    await expect(dialog.getByLabel('Input symbols')).toHaveValue('x');
-    await expect(dialog.getByLabel('Output symbols')).toHaveValue('y');
-    await add.click();
-    await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-    await expect(page.getByText('Component added',{exact:true})).toBeVisible();
-    await expect(page.getByRole('alert').filter({hasText:'Unit guidance is unavailable'})).toHaveCount(0);
-  } finally { release(); }
-});
+  });
 }
 
 async function create(page: Page) {
