@@ -467,8 +467,14 @@ def test_every_tool_emits_all_four_annotations_and_destructive_exactly_for_the_c
     for item in REGISTRY.definitions('local_mcp', 'runs', WRITER):
         assert set(item['annotations']) == hints
         assert set(item.get('_meta', {})) <= {'anthropic/alwaysLoad'}
-    assert REGISTRY.definitions('local_mcp', LOCAL_STAGE, {'read'})[0]['_meta'] == {
-        'anthropic/alwaysLoad': True
+    # The two entry tools load upfront in clients that defer tools (D-P10); no other does.
+    loaded = {
+        item['name']: item['_meta']
+        for item in REGISTRY.definitions('local_mcp', LOCAL_STAGE, {'read'})
+        if '_meta' in item
+    }
+    assert loaded == {
+        name: {'anthropic/alwaysLoad': True} for name in ('get_playbook', 'get_study_overview')
     }
 
 
@@ -595,7 +601,11 @@ def test_agent_policy_allows_only_registry_pairs_and_internal_reads_never_human_
     assert not agent_policy.route_allowed(
         'GET', '/api/1/studies/' + str(uuid4()), {'outside_study'}, registry=built
     )
-    assert not agent_policy.route_allowed('GET', '/api/1/studies/' + str(uuid4()), {'read'})
+    # The packaged read tools declare the study read; a read no tool declares stays refused.
+    study = '/api/1/studies/' + str(uuid4())
+    assert agent_policy.route_allowed('GET', study, {'read'})
+    export = study + '/models/' + str(uuid4()) + '/export'
+    assert not agent_policy.route_allowed('GET', export, {'read'})
     with pytest.raises(ValueError):
         agent_policy.route_allowed('GET', '/api/1/capabilities', {'delete'})
 
