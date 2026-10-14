@@ -302,7 +302,10 @@ def test_the_loader_and_the_location_rule_decide_alike(scratch):
 
 def test_the_schema_is_closed_and_names_exactly_the_loader_fields():
     assert SCHEMA['additionalProperties'] is False
-    assert tuple(SCHEMA['required']) == installation.FIELDS == tuple(SCHEMA['properties'])
+    assert tuple(SCHEMA['required']) == installation.FIELDS
+    required = tuple(name for name in SCHEMA['properties'] if name != 'studies_root')
+    assert required == installation.FIELDS
+    assert set(SCHEMA['properties']) - set(installation.FIELDS) == {'studies_root'}
     for name, fields in installation.OBJECTS.items():
         part = SCHEMA['properties'][name]
         assert part['additionalProperties'] is False
@@ -569,3 +572,40 @@ def test_installations_on_one_engine_never_share_a_name_with_each_other_or_a_tes
     inherited = {'DOCKER_HOST': 'tcp://elsewhere:2375', 'PATH': '/bin'}
     configured = {'DOCKER_HOST': first['docker']['endpoint'], 'PATH': '/bin'}
     assert installation.docker_environment(first, inherited) == configured
+
+
+
+def test_studies_root_is_optional_and_a_safe_absolute_value_is_retained(scratch):
+    root, home, folder = scratch
+    old = document(root, home)
+    assert installation.load(write(folder, old), edition='local', host=LINUX) == old
+    current = dict(old, studies_root=str(root / 'studies'))
+    loaded = installation.load(write(folder, current), edition='local', host=LINUX)
+    assert loaded == current and schema_accepts(current)
+    assert installation.owner(loaded) == installation.owner(old)
+    assert installation.profile_name(loaded) == installation.profile_name(old)
+
+
+@pytest.mark.parametrize('value', [None, True, 7, '', 'relative', '/', '/a/../b', '/a//b', '/a/'])
+def test_invalid_studies_root_is_refused_by_both_schema_and_loader(scratch, value):
+    root, home, folder = scratch
+    config = document(root, home, studies_root=value)
+    assert not schema_accepts(config)
+    assert refusal(write(folder, config)).reason_code == 'configuration_invalid'
+
+
+def test_studies_root_keeps_synced_and_symbolic_link_refusals(scratch):
+    root, home, folder = scratch
+    host = locations.Host(system='linux', homes=(home,))
+    target = root / 'real'
+    target.mkdir()
+    (root / 'link').symlink_to(target)
+    for path in (home / 'Dropbox' / 'studies', root / 'link' / 'studies', REPO / 'studies'):
+        config = document(root, home, studies_root=str(path))
+        assert refusal(write(folder, config), host=host).reason_code == 'location_refused'
+
+
+@pytest.mark.parametrize('value', [None, True, 7, [], 'configuration'])
+def test_optional_studies_root_preserves_non_object_refusal(value):
+    with pytest.raises(installation.InstallationError, match='must be an object'):
+        installation.validate(value, edition='local', host=LINUX)

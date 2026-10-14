@@ -161,7 +161,12 @@ def validate(document, *, edition, host=None):
     """The validated configuration (a new dict); ``host`` injects the location rule's host."""
     if edition not in EDITIONS:
         raise ValueError('Unknown edition: ' + str(edition))
-    _closed(document, FIELDS, 'configuration')
+    _closed(
+        document,
+        FIELDS
+        + (('studies_root',) if isinstance(document, dict) and 'studies_root' in document else ()),
+        'configuration',
+    )
     for name, fields in OBJECTS.items():
         _closed(document[name], fields, name)
     if document['schema'] != SCHEMA:
@@ -203,6 +208,12 @@ def validate(document, *, edition, host=None):
     _boolean(document['release']['immutable'], 'release.immutable')
     _boolean(document['agent']['enabled'], 'agent.enabled')
     _integer(document['agent']['token_ttl_hours'], 'agent.token_ttl_hours', TOKEN_TTL_HOURS)
+    if 'studies_root' in document:
+        studies = _admitted(
+            _path(document['studies_root'], 'studies_root'), 'the studies root', host
+        )
+        if studies.is_relative_to(Path(__file__).resolve().parents[3]):
+            raise InstallationError('the studies root is inside the checkout', 'location_refused')
     cache = _path(document['upstream']['cache'], 'upstream.cache')
     if cache == data_root or not cache.is_relative_to(data_root):
         raise InstallationError('upstream.cache must be inside data_root')

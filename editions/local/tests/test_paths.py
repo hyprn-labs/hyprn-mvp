@@ -221,5 +221,69 @@ class RefusalTests(ScratchTest):
                 self.assertEqual('refusing the checkout' in result.stderr, policy is not None, result.stderr)
 
 
+
+class StudiesRootTests(ScratchTest):
+    def test_study_root_precedence_and_platform_defaults(self):
+        flag, env, config = (self.root / name for name in ('flag', 'env', 'config-root'))
+        for system, wsl in (('macos', False), ('linux', False), ('linux', True)):
+            host = self.host(system, wsl)
+            environment = {'HOME': str(self.home), paths.STUDIES_DIR: str(env)}
+            configuration = {'studies_root': str(config)}
+            for kwargs, expected, source in (
+                (
+                    {'flag': str(flag), 'environ': environment, 'configuration': configuration},
+                    flag,
+                    'flag',
+                ),
+                ({'environ': environment, 'configuration': configuration}, env, 'environment'),
+                (
+                    {'environ': {'HOME': str(self.home)}, 'configuration': configuration},
+                    config,
+                    'configuration',
+                ),
+                (
+                    {'environ': {'HOME': str(self.home)}, 'configuration': {}},
+                    self.home / 'hyprn-mvp-studies',
+                    'default',
+                ),
+            ):
+                with self.subTest(system=system, wsl=wsl, source=source):
+                    resolved = paths.studies_root(host=host, **kwargs)
+                    self.assertEqual((resolved.path, resolved.source), (expected, source))
+
+    def test_study_root_refuses_unsafe_explicit_values_without_falling_back(self):
+        target = self.root / 'target'
+        target.mkdir()
+        link = self.root / 'linked'
+        link.symlink_to(target)
+        for value in (
+            'relative',
+            str(link / 'study'),
+            str(self.home / 'Dropbox' / 'study'),
+            str(REPO / 'studies'),
+        ):
+            for kwargs in (
+                {'flag': value, 'environ': {'HOME': str(self.home)}},
+                {'environ': {'HOME': str(self.home), paths.STUDIES_DIR: value}},
+                {'configuration': {'studies_root': value}, 'environ': {'HOME': str(self.home)}},
+            ):
+                with (
+                    self.subTest(value=value, source=kwargs),
+                    self.assertRaises(paths.LocationRefused),
+                ):
+                    paths.studies_root(host=self.host('linux'), **kwargs)
+
+    def test_unknown_home_requires_an_answer_and_noninteractive_exit_is_two(self):
+        host = paths.Host(system='linux')
+        with self.assertRaises(paths.LocationUnresolved) as raised:
+            paths.studies_root(environ={}, host=host)
+        self.assertEqual(
+            (raised.exception.reason_code, raised.exception.exit_code), ('location_unresolved', 2)
+        )
+        chosen = self.root / 'chosen'
+        result = paths.studies_root(environ={}, host=host, ask=lambda name, reason: str(chosen))
+        self.assertEqual((result.path, result.source), (chosen, 'answer'))
+
+
 if __name__ == '__main__':
     unittest.main()

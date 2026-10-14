@@ -3,9 +3,9 @@ default folders. Standard library only.
 
 Every location resolves in this order (first match wins):
 
-1. a command-line flag (``--config``, ``--data-dir``), passed in by the caller;
+1. a command-line flag (``--config``, ``--data-dir``, ``--folder``), passed in by the caller;
 2. the location's ``HYPRN_MVP_*`` environment variable;
-3. the installation configuration (``data_root``);
+3. the installation configuration (``data_root`` or optional ``studies_root``);
 4. the per-OS default below;
 5. otherwise the caller's question to the user, whose confirmed answer is recorded. Without a
    question (non-interactive mode) the location is unresolved: ``LocationUnresolved``, reason
@@ -20,6 +20,7 @@ data root                   ~/Library/Application Support/hyprn-mvp
                                                 ${XDG_DATA_HOME:-~/.local/share}/hyprn-mvp
 tool cache (uv, CPython)    ~/Library/Caches/hyprn-mvp/tools
                                                 ${XDG_CACHE_HOME:-~/.cache}/hyprn-mvp/tools
+study-folder root           ~/hyprn-mvp-studies  ~/hyprn-mvp-studies (Linux home on WSL2)
 logs                        <data root>/logs    <data root>/logs
 ==========================  ==================  ==================================================
 
@@ -49,6 +50,7 @@ if Path(locations.__file__).resolve() != _CORE / 'hyprn_mvp_app/locations.py':
 CONFIG = 'HYPRN_MVP_CONFIG'
 DATA_ROOT = 'HYPRN_MVP_DATA_ROOT'
 TOOLS_DIR = 'HYPRN_MVP_TOOLS_DIR'
+STUDIES_DIR = 'HYPRN_MVP_STUDIES_DIR'
 PRODUCT = 'hyprn-mvp'
 CONFIG_FILE = 'installation.json'
 LOGS = 'logs'
@@ -57,15 +59,18 @@ LOCATIONS = {
     'config': ('--config', CONFIG, None),
     'data_root': ('--data-dir', DATA_ROOT, 'data_root'),
     'tools': (None, TOOLS_DIR, None),
+    'studies_root': ('--folder', STUDIES_DIR, 'studies_root'),
 }
 # Per-OS defaults: (base folder below the home folder, its XDG variable on Linux, the path
 # below that base). macOS keeps its configuration under ~/.config like Linux.
 _MACOS = {'config': (('.config',), None, (PRODUCT, CONFIG_FILE)),
           'data_root': (('Library', 'Application Support'), None, (PRODUCT,)),
-          'tools': (('Library', 'Caches'), None, (PRODUCT, 'tools'))}
+          'tools': (('Library', 'Caches'), None, (PRODUCT, 'tools')),
+          'studies_root': ((), None, (PRODUCT + '-studies',))}
 _LINUX = {'config': (('.config',), 'XDG_CONFIG_HOME', (PRODUCT, CONFIG_FILE)),
           'data_root': (('.local', 'share'), 'XDG_DATA_HOME', (PRODUCT,)),
-          'tools': (('.cache',), 'XDG_CACHE_HOME', (PRODUCT, 'tools'))}
+          'tools': (('.cache',), 'XDG_CACHE_HOME', (PRODUCT, 'tools')),
+          'studies_root': ((), None, (PRODUCT + '-studies',))}
 DEFAULTS = {locations.MACOS: _MACOS, locations.LINUX: _LINUX}
 
 Host = locations.Host
@@ -132,6 +137,8 @@ def admit(path, *, name, host=None):
     if reason is not None:
         raise LocationRefused('refusing the ' + name.replace('_', ' ') + ' ' + os.fspath(path) + ': ' + reason)
     path = Path(path)
+    if name == 'studies_root' and path.is_relative_to(REPO):
+        raise LocationRefused('the studies root is inside the checkout')
     if name == 'data_root' and path.exists():
         status = path.lstat()
         if not path.is_dir() or status.st_uid != os.getuid():
@@ -165,3 +172,9 @@ def resolve(name, *, flag=None, configuration=None, environ=None, host=None, ask
             return Resolved(admit(answer, name=name, host=host), 'answer')
     hint = ' or '.join(item for item in (option, variable) if item)
     raise LocationUnresolved(name.replace('_', ' ') + ' unresolved (' + reason + '); set ' + hint)
+
+
+def studies_root(*, flag=None, configuration=None, environ=None, host=None, ask=None):
+    """Resolve the study-folder root with the same precedence and refusals as other locations."""
+    return resolve('studies_root', flag=flag, configuration=configuration,
+                   environ=environ, host=host, ask=ask)

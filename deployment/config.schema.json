@@ -21,6 +21,7 @@
     },
     "host_home": {"$ref": "#/$defs/AbsolutePath", "description": "The account's home folder, which the worker containment probe proves absent inside the worker."},
     "data_root": {"$ref": "#/$defs/AbsolutePath"},
+    "studies_root": {"$ref": "#/$defs/AbsolutePath", "description": "Optional study-folder root; the shared location refusals apply."},
     "ports": {
       "type": "object",
       "additionalProperties": false,
