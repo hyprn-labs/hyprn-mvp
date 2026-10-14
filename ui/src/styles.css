@@ -181,10 +181,12 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 
 
 /* R2 Methods composition: explanations and exact model records share one selected step. */
-.approach-jumps{display:flex;flex-wrap:wrap;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--line)}
-.approach-page [aria-label="The modeling approach"]{max-width:var(--home-max);margin-inline:auto}
-.approach-section{margin-top:var(--space-8);scroll-margin-top:var(--space-6);min-width:0}
-.approach-section>h3{font-size:var(--type-heading-size);line-height:var(--type-heading-line);margin-bottom:var(--space-4)}
+[aria-label="The modeling approach"]{max-width:var(--home-max);margin-inline:auto}
+.approach-section{margin-top:var(--space-6);scroll-margin-top:var(--space-6);min-width:0}
+.answer-support{margin-block:var(--space-4)}
+.answer-support .section-actions{margin-block:var(--space-2)}
+.answer-record-details{overflow-wrap:anywhere}
+.answer-record-details dd{margin:var(--space-1) 0 var(--space-3)}
 .approach-method-rows{list-style:none;padding:0;margin:var(--space-4) 0}
 .approach-method-rows>li{border-top:1px solid var(--line);padding:var(--space-4) 0;min-width:0}
 .method-row-toggle,.approach-case-toggle{cursor:pointer;overflow-wrap:anywhere}
@@ -193,7 +195,7 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 .method-detail{min-width:0;padding:var(--space-3) 0}
 .approach-case-content{display:grid;gap:var(--space-3);padding-top:var(--space-4)}
 .approach-usage-review{margin-bottom:var(--space-4)}
-.approach-study-answer{border-top:1px solid var(--line);padding-top:var(--space-6)}
+
 .method-detail h3{font-size:var(--type-subheading-size);line-height:var(--type-subheading-line);margin-top:var(--space-6)}
 .method-detail h3+.context-copy{margin-top:var(--space-2)}
 .method-binding-choice{margin-bottom:var(--space-4)}

@@ -375,12 +375,12 @@ for term in (
 for removed in ('Model & quantities','QuantityCard','QuantityTable','ExactMethodSource','Source excerpt','View exact source','Inspect source and ports','Exact model element','title="Exact model version"','GraphView','method-quantity'):
  assert removed not in method_text,('src/ApproachMethod.tsx','Removed method step element',removed)
 for term in (
-    'aria-label="On this page"',
+    'label="Reasoning and methods"',
     'Reasoning and methods',
     'Cases and their answers',
     'Answer to the study question',
 ):
-    assert term in panel_text, ('src/ApproachPanel.tsx', 'Continuous approach navigation', term)
+    assert term in panel_text, ('src/ApproachPanel.tsx', 'Continuous approach section boxes', term)
 assert '<Tabs' not in panel_text and '<Tabs' not in method_text, (
     'Approach and method readers must not split the journey into tabs'
 )

@@ -120,7 +120,7 @@ function renderApproach(ctx: ViewContext) {
 }
 
 /** The open approach editors: a nested editor that must be applied or discarded first, then
- * the approach draft, saved only while the approach page is shown. */
+ * the shared approach draft, saved from its study reading and model editing views. */
 function approachGuard(ctx: GuardContext) {
   const { view, approach, approachEditing, approachEditingRef } = ctx;
   const { setApproachEditing, setApproachEditEpoch } = ctx;
@@ -147,7 +147,7 @@ function approachGuard(ctx: GuardContext) {
       name: 'approach',
       shown: approach.handle.dirty,
       guard: () => approach.handle,
-      skip: () => view !== 'approach',
+      skip: () => view !== 'approach' && view !== 'overview' && view !== 'model',
       reset: () => approach.clear(),
     },
   ];

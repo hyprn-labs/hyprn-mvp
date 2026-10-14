@@ -452,8 +452,12 @@ export function Workspace() {
   const methods = view === 'model' ? latestMethods : retainedMethodLinks(view === 'runs' ? retainedApproachVersion(retainedHistory?.configuration, retainedHistory && 'approach_closure' in retainedHistory ? retainedHistory.approach_closure : null)
     : view === 'configurations' && configuration ? retainedApproachVersion(configuration.configuration, 'approach_closure' in configuration ? configuration.approach_closure : null) : null, displayedSnapshot);
   function openMethodStep(link: MethodLink) {
-    const version = link.approachVersionId; if (!study || !version) return;
-    navigate(() => { showMethodStep(study.study_id, version, link.stepId); void openLink({ study: study.study_id, view: 'approach', approach: version }); });
+    const version = link.approachVersionId;
+    if (!study) return;
+    navigate(() => {
+      showMethodStep(study.study_id, version, link.stepId);
+      void openLink({ study: study.study_id, view: 'approach', approach: version ?? undefined });
+    });
   }
   const studyAttribution =
     study && attribution?.study === study.study_id ? attribution.index : emptyAttribution;

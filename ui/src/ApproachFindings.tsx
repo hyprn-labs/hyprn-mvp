@@ -22,7 +22,15 @@ import type {
 } from './contract';
 import { EvidenceRecordBody } from './EvidenceView';
 import {
-  ActionDialog, Button, DataTable, Disclosure, Panel, Select, StatusTag, formatNumber,
+  ActionDialog,
+  Button,
+  DataTable,
+  DialogFrame,
+  Disclosure,
+  Panel,
+  Select,
+  StatusTag,
+  formatNumber,
 } from './design';
 import { ApproachCaseContext } from './ApproachAssumptions';
 import { RunOutcomes, runOutcomes } from './runStatus';
@@ -31,7 +39,13 @@ import { resolvedUnit, unitLabel } from './unitLabels';
 import type { WorkspaceLink } from './workspaceModel';
 
 type Configuration = NonNullable<NonNullable<PublicRunDetail['history']>['configuration']>;
-type Row = { usage: ApproachUsage1; configuration?: Configuration; run?: PublicRunDetail; loading?: boolean; error?: string };
+type Row = {
+  usage: ApproachUsage1;
+  configuration?: Configuration;
+  run?: PublicRunDetail;
+  loading?: boolean;
+  error?: string;
+};
 type SourceRead = { state: 'loading' | 'error' | 'ready'; run?: PublicRunDetail };
 
 /** Scientific prose is displayed only from an explicitly associated answer record. */
@@ -40,7 +54,9 @@ function ScientificAnswer({
   api,
   studyId,
   onOpen,
+  recordOnly = false,
 }: {
+  recordOnly?: boolean;
   answer: ScientificAnswer1;
   api: HyprnMvpApi;
   studyId: string;
@@ -72,40 +88,125 @@ function ScientificAnswer({
           </ul>
         </>
       )}
-      <Disclosure>
-        <summary>Answer basis and record details</summary>
-        <p>
-          Answer version {answer.version_number} · <code>{answer.answer_version_id}</code>
-        </p>
-        <div className="section-actions">
-          {answer.basis.configuration_revision_ids.map((id) => (
-            <Button
-              key={id}
-              onClick={() => onOpen({ study: studyId, view: 'configurations', configuration: id })}
-            >
-              Configuration {id.slice(0, 8)}
-            </Button>
-          ))}
-          {answer.basis.run_ids.map((id) => (
-            <Button key={id} onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}>
-              Run {id.slice(0, 8)}
-            </Button>
-          ))}
-        </div>
-        {answer.basis.evidence_version_ids.map((id) => (
-          <AnswerBasis
-            key={id}
-            kind="evidence"
-            id={id}
-            api={api}
-            studyId={studyId}
-            onOpen={onOpen}
-          />
-        ))}
-        {answer.basis.case_answer_version_ids.map((id) => (
-          <AnswerBasis key={id} kind="answer" id={id} api={api} studyId={studyId} onOpen={onOpen} />
-        ))}
-      </Disclosure>
+      {!recordOnly && (
+        <>
+          {!!(
+            answer.basis.run_ids.length ||
+            answer.basis.configuration_revision_ids.length ||
+            answer.basis.case_answer_version_ids.length
+          ) && (
+            <div className="answer-support">
+              <h4>Supporting results</h4>
+              {!!answer.basis.run_ids.length && (
+                <div className="section-actions">
+                  <strong>Runs</strong>
+                  {answer.basis.run_ids.map((id) => (
+                    <Button
+                      key={id}
+                      onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}
+                    >
+                      Run {id.slice(0, 8)}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {!!answer.basis.configuration_revision_ids.length && (
+                <div className="section-actions">
+                  <strong>Configurations</strong>
+                  {answer.basis.configuration_revision_ids.map((id) => (
+                    <Button
+                      key={id}
+                      onClick={() =>
+                        onOpen({
+                          study: studyId,
+                          view: 'configurations',
+                          configuration: id,
+                        })
+                      }
+                    >
+                      Configuration {id.slice(0, 8)}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {!!answer.basis.case_answer_version_ids.length && (
+                <div className="section-actions">
+                  <strong>Case answers</strong>
+                  {answer.basis.case_answer_version_ids.map((id) => (
+                    <AnswerBasis
+                      key={id}
+                      kind="answer"
+                      id={id}
+                      api={api}
+                      studyId={studyId}
+                      onOpen={onOpen}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {!!answer.basis.evidence_version_ids.length && (
+            <div className="answer-support">
+              <h4>Sources</h4>
+              <div className="section-actions">
+                {answer.basis.evidence_version_ids.map((id) => (
+                  <AnswerBasis
+                    key={id}
+                    kind="evidence"
+                    id={id}
+                    api={api}
+                    studyId={studyId}
+                    onOpen={onOpen}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <ActionDialog title="Answer record details" label="Record details" size="sm" variant="quiet">
+        <dl className="answer-record-details">
+          <dt>Answer version</dt>
+          <dd>
+            {answer.version_number} · <code>{answer.answer_version_id}</code>
+          </dd>
+          <dt>Approach version</dt>
+          <dd>
+            <code>{answer.approach_version_id}</code>
+          </dd>
+          {answer.case_id && (
+            <>
+              <dt>Case</dt>
+              <dd>
+                <code>{answer.case_id}</code>
+              </dd>
+            </>
+          )}
+          <dt>Recorded by</dt>
+          <dd>{answer.created_by}</dd>
+          <dt>Recorded at</dt>
+          <dd>{answer.created_at}</dd>
+          <dt>Digest</dt>
+          <dd>
+            <code>{answer.digest}</code>
+          </dd>
+          {Object.entries(answer.basis).map(([kind, ids]) =>
+            ids.length ? (
+              <div key={kind}>
+                <dt>{kind.replaceAll('_', ' ')}</dt>
+                <dd>
+                  {ids.map((id) => (
+                    <p key={id}>
+                      <code>{id}</code>
+                    </p>
+                  ))}
+                </dd>
+              </div>
+            ) : null,
+          )}
+        </dl>
+      </ActionDialog>
     </div>
   );
 }
@@ -128,6 +229,10 @@ function AnswerBasis({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const scope = useRef<ReadFence | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const invoker = useRef<HTMLElement | null>(null);
+  const headingId = useId();
+  const title = kind === 'evidence' ? 'Source record' : 'Case answer record';
   const identity = useRef<{ api: HyprnMvpApi; studyId: string; id: string; kind: string } | null>(
     null,
   );
@@ -135,6 +240,7 @@ function AnswerBasis({
     function clear() {
       scope.current?.abort();
       setRecord(null);
+      dialog.current?.close();
       setBusy(false);
       setError('');
     }
@@ -189,19 +295,50 @@ function AnswerBasis({
     }
   }
   return (
-    <div>
-      <Button disabled={busy} onClick={() => void load()}>
-        {busy ? 'Loading' : visibleRecord ? 'Reload' : 'View'}{' '}
-        {kind === 'evidence' ? 'evidence version' : 'case answer version'} {id.slice(0, 8)}
+    <>
+      <Button
+        aria-haspopup="dialog"
+        onClick={() => {
+          invoker.current = document.activeElement as HTMLElement;
+          dialog.current?.showModal();
+          if (!visibleRecord) void load();
+        }}
+      >
+        View {kind === 'evidence' ? 'source version' : 'case answer version'} {id.slice(0, 8)}
       </Button>
-      {error && <p role="alert">{error}</p>}
-      {visibleRecord &&
-        ('answer_version_id' in visibleRecord ? (
-          <ScientificAnswer answer={visibleRecord} api={api} studyId={studyId} onOpen={onOpen} />
-        ) : (
-          <EvidenceRecordBody record={visibleRecord} />
-        ))}
-    </div>
+      <DialogFrame
+        ref={dialog}
+        className="action-dialog"
+        aria-labelledby={headingId}
+        onClose={() => {
+          if (invoker.current?.isConnected) invoker.current.focus();
+        }}
+      >
+        <div className="dialog-heading">
+          <h2 id={headingId}>{title}</h2>
+        </div>
+        <div className="dialog-body">
+          {busy && <p role="status">Loading record…</p>}
+          {error && <p role="alert">{error}</p>}
+          {error && <Button onClick={() => void load()}>Retry record</Button>}
+          {visibleRecord &&
+            ('answer_version_id' in visibleRecord ? (
+              <ScientificAnswer
+                recordOnly
+                answer={visibleRecord}
+                api={api}
+                studyId={studyId}
+                onOpen={onOpen}
+              />
+            ) : (
+              <EvidenceRecordBody record={visibleRecord} />
+            ))}
+        </div>
+        <div className="dialog-footer">
+          <Button onClick={() => dialog.current?.close()}>Done</Button>
+        </div>
+      </DialogFrame>
+    </>
   );
 }
 const identity = (usage: ApproachUsage1) => usage.kind + '/' + (usage.kind === 'run' ? usage.run_id : usage.configuration_revision_id);
@@ -600,8 +737,10 @@ export function ApproachFindings({
   onStudyLimits,
   onCreateConfiguration,
   answerId,
+  casesId,
 }: {
   answerId?: string;
+  casesId?: string;
   api: HyprnMvpApi;
   studyId: string;
   saved: ApproachSavedRead3;
@@ -899,23 +1038,6 @@ export function ApproachFindings({
     );
   const incomplete = loading || error || !!cursor || rows.some((row) => row.loading || row.error);
   const groups = groupFindings(saved, rows, caseId);
-  const runRows = rows.filter((row) => row.usage.kind === 'run'),
-    loadedRuns = runRows.filter((row) => row.run),
-    retained = loadedRuns.filter((row) => row.run!.history?.results).length;
-  const configurationsLoaded = rows.filter(
-      (row) => row.usage.kind === 'configuration' && row.configuration,
-    ).length,
-    failedRecords = rows.filter((row) => row.error).length;
-  const selectedCase = saved.version.content.cases.find((item) => item.case_id === caseId);
-  const coverage = !incomplete
-    ? 'All usage loaded'
-    : error
-      ? 'A usage page could not be loaded; review coverage is incomplete'
-      : cursor
-        ? 'More usage is available; review coverage is incomplete'
-        : loading
-          ? 'Loading usage; review coverage is incomplete'
-          : 'Some records are not loaded; review coverage is incomplete';
   const cardGroups = groups.filter((group) => group.item || group.rows.length);
   const row = (item: Row, configuration?: Configuration) => (
     <FindingRow
@@ -941,33 +1063,24 @@ export function ApproachFindings({
   // Results first (recorded facts, exact coverage, no verdict), then one card per case.
   return (
     <section className="approach-usage" aria-label="Approach usage">
-      <Disclosure className="approach-usage-review">
-        <summary>Review configurations and runs</summary>
+      <Panel
+        id={casesId}
+        className="approach-section"
+        label="Cases and their answers"
+        title="Cases and their answers"
+        headingLevel={3}
+      >
+      <div className="approach-usage-review">
         <div role="region" aria-label="Usage review">
           <h4 id={base + '-results'} tabIndex={-1}>
-            Usage of this approach version
+            Review configurations and runs
           </h4>
-          <p className="approach-results-summary">
-            {plural(loadedRuns.length, 'run')} loaded for{' '}
-            {selectedCase ? `case ${selectedCase.title} of this` : 'this'} approach version.{' '}
-            {retained} {retained === 1 ? 'has' : 'have'} results.
-          </p>
-          <p className="context-line">
-            Approach v{saved.version.version_number} ·{' '}
-            {plural(configurationsLoaded, 'configuration')} loaded
-            {failedRecords
-              ? ` · ${plural(failedRecords, 'record')} could not be loaded`
-              : ''} · {coverage}
-          </p>
           {missingCase && (
             <p role="alert">
               This case is not part of approach v{saved.version.version_number}. No other case is
               shown in its place.
             </p>
           )}
-          <p className="context-line">
-            Criteria are fixed-threshold checks on outputs. They do not answer the study question.
-          </p>
           <div className="section-actions approach-usage-controls">
             <label>
               Case filter
@@ -984,7 +1097,10 @@ export function ApproachFindings({
                 ))}
               </Select>
             </label>
-            <Button onClick={() => setReview((value) => value + 1)}>Refresh usage</Button>
+            <Button onClick={() => {
+              setReview((value) => value + 1);
+              setAnswerReview((value) => value + 1);
+            }}>Refresh usage</Button>
           </div>
           <p role="status" className="context-line">
             {rows.length} usage rows loaded ·{' '}
@@ -993,7 +1109,7 @@ export function ApproachFindings({
             {cursor ? 'More usage is available' : !loading && !error ? 'All usage loaded' : ''}
           </p>
         </div>
-      </Disclosure>
+      </div>
       {loading && <p role="status">Loading usage…</p>}
       {error && <p role="alert">Usage unavailable</p>}
       {accessUnverified && <p role="alert">Study access could not be verified. Retry the read.</p>}
@@ -1041,29 +1157,29 @@ export function ApproachFindings({
           Retry usage page
         </Button>
       )}
-      <section
+      </Panel>
+      <Panel
         id={answerId}
         className="approach-section approach-study-answer"
-        tabIndex={-1}
-        aria-label="Answer to the study question"
+        label="Answer to the study question"
+        title="Answer to the study question"
+        headingLevel={3}
       >
-        <h3>Answer to the study question</h3>
         {answerFor(null)}
         <p className="context-line">
           Case results support an answer only after their basis and limitations have been assessed.
         </p>
-        <Button
-          disabled={answerState === 'loading'}
-          onClick={() => setAnswerReview((value) => value + 1)}
-        >
-          {answerState === 'error' ? 'Retry answer read' : 'Refresh answers'}
-        </Button>
+        {answerState === 'error' && (
+          <Button onClick={() => setAnswerReview((value) => value + 1)}>
+            Retry answer read
+          </Button>
+        )}
         {onStudyLimits && (
           <Button variant="quiet" size="sm" aria-haspopup="dialog" onClick={onStudyLimits}>
             Study details
           </Button>
         )}
-      </section>
+      </Panel>
     </section>
   );
 }

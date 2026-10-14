@@ -328,12 +328,11 @@ test('@approach-method continuous sections preserve question and route', async (
     'Cases and their answers',
     'Answer to the study question',
   ]) {
-    const jump = page.getByRole('link', { name, exact: true });
-    await jump.focus();
-    await jump.press('Enter');
-    await expect(page).toHaveURL(route);
-    await expect(page.getByRole('region', { name, exact: true })).toBeFocused();
+    await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
   }
+  await expect(page).toHaveURL(route);
+  await expect(page.getByLabel('Findings case', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'On this page' })).toHaveCount(0);
   const nominal = page.getByRole('article', { name: 'Nominal range', exact: true });
   await expect(nominal.locator('details').first()).not.toHaveAttribute('open', '');
   await nominal.locator('summary').first().focus();
@@ -351,6 +350,20 @@ test('@approach-method continuous sections preserve question and route', async (
     await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
     await readingShot(page, 'continuous-approach-' + theme);
   }
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Study question', exact: true })).toContainText(
+    question,
+  );
+  for (const name of [
+    'Reasoning and methods',
+    'Cases and their answers',
+    'Answer to the study question',
+  ]) {
+    await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
+  }
+  await expect(page.getByLabel('Findings case', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add method step', exact: true })).toHaveCount(0);
+  await readingShot(page, 'continuous-overview');
 });
 
 test('@approach-method synthesis pins its earlier case-answer basis', async ({
@@ -417,21 +430,24 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
     },
   );
   await other.close();
-  await page.getByRole('button', { name: 'Refresh answers', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh usage', exact: true }).click();
   const study = page.getByRole('region', { name: 'Answer to the study question', exact: true });
   await expect(study).toContainText('The study question remains open.');
   const nominal = page.getByRole('article', { name: 'Nominal range', exact: true });
   await nominal.locator('summary').first().click();
   await expect(nominal).toContainText('The comparison needs an additional measurement.');
   await expect(nominal).toContainText('Compute the comparison.');
-  await study.getByText('Answer basis and record details', { exact: true }).click();
+  await expect(study.getByRole('heading', { name: 'Supporting results' })).toBeVisible();
   await study
     .getByRole('button', {
       name: 'View case answer version ' + answer.answer_version_id.slice(0, 8),
       exact: true,
     })
     .click();
-  await expect(study).toContainText('The comparison is unresolved.');
+  const cited = page.getByRole('dialog', { name: 'Case answer record', exact: true });
+  await expect(cited).toContainText('The comparison is unresolved.');
+  await expect(cited.getByRole('button', { name: /^View case answer version/ })).toHaveCount(0);
+  await cited.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(study).not.toContainText('The comparison needs an additional measurement.');
   const savedApproachRoute = new URL(page.url()).hash;
   await page.getByRole('button', { name: 'Profile', exact: true }).click();
@@ -478,10 +494,7 @@ test('@approach-method answer read failures stay distinct from unassessed', asyn
 });
 
 async function casesTab(page:Page){
-  await page.getByRole('link',{name:'Cases and their answers',exact:true}).click();
-  const review=page.locator('.approach-usage-review');
-  if ((await review.count()) && (await review.getAttribute('open')) === null)
-    await review.locator('summary').click();
+  await page.getByRole('heading',{name:'Cases and their answers',exact:true}).click();
   if (await page.locator('.approach-usage').count())
     await expect(page.getByText('Loading usage…', { exact: true })).toHaveCount(0);
   for (const summary of await page.locator('.approach-case-card>details:not([open])>summary').all())
@@ -640,7 +653,7 @@ test('@approach-assumptions unknown and foreign evidence fail without losing loc
 
 test('@approach-method proposed steps and cases persist through actual draft and version commands',async({page})=>{
   await openProduct(page);await writeQuestion(page);
-  await page.getByRole('link', { name: 'Reasoning and methods', exact: true }).click();
+  await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
   await page.getByRole('button', { name: 'Add method step', exact: true }).click();
   const dialog=page.getByRole('dialog',{name:'Method step',exact:true});
   await dialog.getByLabel('Step title',{exact:true}).fill('Estimate the response');
@@ -650,10 +663,10 @@ test('@approach-method proposed steps and cases persist through actual draft and
   await dialog.getByLabel('Intended inputs',{exact:true}).fill('Explicit operating condition');
   await dialog.getByLabel('Intended outputs',{exact:true}).fill('Predicted response');
   await dialog.getByRole('button',{name:'Apply step',exact:true}).click();
-  await page.getByRole('link', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
   await page.getByRole('button', { name: 'Add intended case', exact: true }).click();
   const caseDialog=page.getByRole('dialog',{name:'Intended case',exact:true});await caseDialog.getByLabel('Case title',{exact:true}).fill('Nominal conditions');await caseDialog.getByLabel('Case question',{exact:true}).fill('What is the nominal response?');await caseDialog.getByRole('button',{name:'Apply case',exact:true}).click();
-  await page.getByRole('link', { name: 'Reasoning and methods', exact: true }).click();
+  await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
   await page.getByRole('button', { name: 'Add method step', exact: true }).click();
   await dialog.getByLabel('Step title', { exact: true }).fill('Interpret the response');
   await dialog.getByRole('checkbox', { name: 'Estimate the response', exact: true }).check();
@@ -661,7 +674,7 @@ test('@approach-method proposed steps and cases persist through actual draft and
   await page.getByRole('button',{name:'Step 1 actions',exact:true}).click();await page.getByRole('button',{name:'Remove step 1',exact:true}).click();await page.getByRole('button',{name:'Remove this step',exact:true}).click();await page.getByRole('dialog',{name:'Remove method step',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('dialog',{name:'Step 1 actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Another step depends');
   await page.getByRole('button',{name:'Step 2 actions',exact:true}).click();await page.getByRole('button',{name:'Move step 2 up',exact:true}).click();await page.getByRole('dialog',{name:'Step 1 actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('button',{name:'Select step 1',exact:true})).toContainText('Interpret the response');
   await page.getByRole('button',{name:'Step 1 actions',exact:true}).click();await page.getByRole('button',{name:'Remove step 1',exact:true}).click();await page.getByRole('button',{name:'Remove this step',exact:true}).click();await expect(page.getByRole('button',{name:'Select step 2',exact:true})).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
   await page.getByRole('button', { name: 'Add intended case', exact: true }).click();
   await caseDialog.getByLabel('Case title', { exact: true }).fill('Alternative conditions');
   await caseDialog.getByRole('button', { name: 'Apply case', exact: true }).click();
@@ -684,9 +697,9 @@ test('@approach-method proposed steps and cases persist through actual draft and
   ).toHaveCount(0);
   await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
-  await page.getByRole('link', { name: 'Reasoning and methods', exact: true }).click();
+  await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Select step 1', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
   await expect(
     page
       .getByRole('region', { name: 'Approach usage', exact: true })
@@ -702,7 +715,7 @@ test('@approach-method exact repeated-instance references and parallel connectio
   const model=await helper.evaluate(async sid=>{const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const pkg=await(await fetch('/fixture/model-package')).json();await api.mutate(`/studies/${sid}/model-imports`,{command_id:crypto.randomUUID(),expected_revision:(await api.study(sid)).revision,package:pkg},'model',sid);return pkg.revisions[0];},sid);
   await context.close();
   for(const title of ['Predict the response','Review the response']){
-    await page.getByRole('link', { name: 'Reasoning and methods', exact: true }).click();
+    await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
     await page.getByRole('button', { name: 'Add method step', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Method step', exact: true });
     await dialog.getByLabel('Step title',{exact:true}).fill(title);await dialog.getByLabel('Purpose',{exact:true}).fill('Connect the explicit operating condition to the declared response.');await dialog.getByLabel('Why this method',{exact:true}).fill('Use the same exact component instance for two distinct scientific steps.');
@@ -720,13 +733,25 @@ test('@approach-method exact repeated-instance references and parallel connectio
   const detail = page.getByRole('region', { name: 'Selected method step', exact: true });
   await expect(detail.getByRole('tab')).toHaveCount(0);
   await expect(detail.locator('.method-explanation')).toBeVisible();
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();const open=page.getByRole('dialog',{name:'Model version '+model.model_revision_id.slice(0,8),exact:true});
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  const open = page.getByRole('dialog', {
+    name: 'Model version ' + model.model_revision_id.slice(0, 8),
+    exact: true,
+  });
   // The step's exact port reference highlights exactly one port in the read-only model view.
   const highlighted=open.locator('.hf-node__port[aria-pressed="true"]');await expect(highlighted).toHaveCount(1);await expect(highlighted).toHaveAttribute('title',/^u · /);
   const graph=open.getByLabel('Directed graph',{exact:true});await graph.getByRole('button',{name:/Exchange 2 links/}).click();await expect(open.getByRole('status').filter({hasText:'2 method steps reference'})).toBeVisible();
   await expect(open.getByText('Connections · 2',{exact:true})).toBeVisible();await open.getByRole('button',{name:'Connection 2: v → z',exact:true}).click();await expect(open.getByRole('status').filter({hasText:'0 method steps reference'})).toHaveCount(1);
   // The component's source opens read-only from View source in the same view.
-  await open.getByRole('button',{name:'1 Response',exact:true}).click();await open.getByRole('button',{name:'View source',exact:true}).click();const componentSource=page.getByRole('dialog',{name:/^Source · Response/});await expect(componentSource.getByLabel('Read-only authored source').filter({hasText:"outputs['u'] = inputs['x'] + inputs['z']"})).toBeVisible();await componentSource.getByRole('button',{name:'Done',exact:true}).click();await open.getByRole('button',{name:'Done',exact:true}).click();
+  await open.getByRole('button', { name: '1 Response', exact: true }).click();
+  await open.getByText('Python function', { exact: true }).click();
+  const componentSource = open.getByRole('region', { name: 'Selection inspector', exact: true });
+  await expect(
+    componentSource
+      .getByLabel('Read-only authored source')
+      .filter({ hasText: "outputs['u'] = inputs['x'] + inputs['z']" }),
+  ).toBeVisible();
+  await open.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
   // Port and connection references resolve to their exact endpoints only: one input, one output.
   await selectMethod(page,1);
@@ -930,10 +955,10 @@ test('@approach-reading @approach-method @approach-assumptions genuine 200 perce
       if (packageResponse.ok()) {
         await page.locator('.method-implemented').scrollIntoViewIfNeeded();
         await capture('approach-method-200-' + theme);
-        await page.getByRole('link', { name: 'Cases and their answers', exact: true }).click();
+        await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
         await page.locator('.approach-case').scrollIntoViewIfNeeded();
         await capture('approach-case-200-' + theme);
-        await page.getByRole('link', { name: 'Reasoning and methods', exact: true }).click();
+        await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
         await page.getByRole('button', { name: 'See more details', exact: true }).click();
         await page
           .getByRole('region', { name: 'Modeling approach assumptions', exact: true })
@@ -954,15 +979,16 @@ test('@approach-reading @approach-method @approach-assumptions genuine 200 perce
           .getByRole('button', { name: 'Done', exact: true })
           .click();
       }
-      await page.getByRole('navigation', { name: 'On this page' }).scrollIntoViewIfNeeded();
+      await page
+        .getByRole('region', { name: 'Study question', exact: true })
+        .scrollIntoViewIfNeeded();
       await capture('approach-sidebar-200-' + theme);
       const edit=page.getByRole('button',{name:'Edit question and scope',exact:true});await edit.focus();await edit.press('Enter');
       const dialog=page.getByRole('dialog',{name:'Edit question and scope',exact:true}),question=dialog.getByLabel('Engineering question',{exact:true});await expect(question).toBeFocused();await question.fill('Temporary edit at native zoom');
       await question.press('Shift+Tab');await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();await page.keyboard.press('Tab');await expect(question).toBeFocused();await capture('approach-edit-200-'+theme);
       await page.keyboard.press('Escape');await expect(edit).toBeFocused();await expect(page.getByLabel('The modeling approach')).not.toContainText('Temporary edit at native zoom');
-      const chapter = page.getByRole('link', { name: 'Reasoning and methods', exact: true });
-      await chapter.focus();
-      await chapter.press('Enter');
+      const chapter = page.getByRole('heading', { name: 'Reasoning and methods', exact: true });
+      await chapter.scrollIntoViewIfNeeded();
       await expect(
         page.getByRole('region', { name: 'Reasoning and methods', exact: true }),
       ).toBeFocused();
@@ -1191,12 +1217,10 @@ test('@approach-history retained reader and export genuine 200 percent keyboard 
       const nested = page
         .getByRole('dialog', { name: 'Linked modeling approach', exact: true })
         .last();
-      const methods = nested.getByRole('link', { name: 'Reasoning and methods', exact: true });
-      await methods.focus();
-      await methods.press('Tab');
-      const cases = nested.getByRole('link', { name: 'Cases and their answers', exact: true });
-      await expect(cases).toBeFocused();
-      await cases.press('Enter');
+      const methods = nested.getByRole('heading', { name: 'Reasoning and methods', exact: true });
+      await methods.scrollIntoViewIfNeeded();
+      const cases = nested.getByRole('heading', { name: 'Cases and their answers', exact: true });
+      await cases.scrollIntoViewIfNeeded();
       await expect(
         nested.getByRole('heading', { name: 'Cases and their answers', exact: true }),
       ).toBeVisible();
@@ -2234,7 +2258,7 @@ test('@approach-method proposed intent stays explicit', async ({
   ).toBeVisible();
   await expect(detail).toContainText('Proposed work — no model linked. No calculation is implied.');
   await expect(detail).toContainText('Explore the declared uncertainty');
-  await expect(detail.getByRole('button', { name: 'Open model version', exact: true })).toHaveCount(
+  await expect(detail.getByRole('button', { name: 'View model details', exact: true })).toHaveCount(
     0,
   );
   // Two tabs; proposed intent stays prose and no quantities are invented.
@@ -2314,7 +2338,9 @@ test('@approach-method exact quantity occurrences and every source stay pinned i
   for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'polish-method-saved-'+theme);}
   await page.evaluate(()=>document.documentElement.dataset.theme='light');
   // Open model version: the canonical view, every exact quantity occurrence once.
-  const opener=detail.getByRole('button',{name:'Open model version',exact:true});await opener.focus();await opener.press('Enter');
+  const opener = detail.getByRole('button', { name: 'View model details', exact: true });
+  await opener.focus();
+  await opener.press('Enter');
   const open=page.getByRole('dialog',{name:'Model version '+id8,exact:true}),table=open.getByRole('table',{name:'Quantities',exact:true});
   await expect(table.getByRole('row')).toHaveCount(9);
   // The human name and the exact source symbol are distinct facts in one row.
@@ -2325,14 +2351,15 @@ test('@approach-method exact quantity occurrences and every source stay pinned i
   await expect(viewRow(page,table,'Response · instance 2','z')).toContainText('Original definition of z');
   await readingShot(page,'polish-method-all-quantities');
   // Every source file of the component version, each checked against its SHA256 and shown as text only.
-  await open.getByRole('button',{name:'1 Response',exact:true}).click();await open.getByRole('button',{name:'View source',exact:true}).click();
-  const source=page.getByRole('dialog',{name:'Source · Response · instance 1',exact:true});
+  await open.getByRole('button', { name: '1 Response', exact: true }).click();
+  await open.getByText('Python function', { exact: true }).click();
+  const source=open.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(source.getByLabel('Read-only authored source')).toHaveCount(2);await expect(source.getByLabel('Read-only authored source').first()).toContainText("outputs['u'] = inputs['x'] + inputs['z']");
   await expect(source.getByLabel('Read-only authored source').last()).toHaveText('# Second retained file; inert in the browser.\nresult = 42\n');
   await expect(source).toContainText('File 2 of 2 · SHA-256 '+data.model.source_files[1].sha256);await expect(source).toContainText('SHA-256 '+data.model.source_files[0].sha256);
   for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'polish-method-exact-source-'+theme);}
   await page.evaluate(()=>document.documentElement.dataset.theme='light');
-  await source.getByRole('button',{name:'Done',exact:true}).click();await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
   await expect(opener).toBeFocused();
   await detail.scrollIntoViewIfNeeded();await readingShot(page,'polish-method-saved-assumptions');
   await page.setViewportSize({ width: 720, height: 1000 });
@@ -2366,7 +2393,7 @@ test('@approach-method canonical model view explains each component with its lin
   const data=await describedApproach(page,browser,baseURL),detail=page.getByRole('region',{name:'Selected method step',exact:true});
   await page.setViewportSize({width:1440,height:1000});
   // Approach "Open model version": the canonical view, read-only, with the step's components in focus.
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();
+  await detail.getByRole('button',{name:'View model details',exact:true}).click();
   const open=page.getByRole('dialog',{name:'Model version '+data.model.model_revision_id.slice(0,8),exact:true}),view=open.getByRole('region',{name:'Model view',exact:true});
   await expect(view.getByRole('tab',{name:'Graph',exact:true})).toHaveAttribute('aria-selected','true');await expect(view.getByRole('tab',{name:'XDSM',exact:true})).toBeVisible();
   await expect(view.getByRole('tab',{name:'Variables',exact:true})).toHaveCount(0);
@@ -2375,9 +2402,11 @@ test('@approach-method canonical model view explains each component with its lin
   await expect(quantities.getByRole('columnheader')).toHaveText(['Quantity','Component','Direction','Definition','Unit']);
   await open.getByRole('button',{name:'1 Response',exact:true}).click();
   const details=view.getByRole('region',{name:'Selection inspector',exact:true});
-  await expect(details.getByRole('heading',{name:'Method context',exact:true})).toBeVisible();
+  await expect(details.getByRole('heading',{name:'Purpose',exact:true})).toBeVisible();
   await expect(details).toContainText('Combine the operating quantities using the authored response law.');
-  await expect(details.getByRole('heading',{name:'Why this method',exact:true})).toBeVisible();
+  await expect(
+    details.getByRole('heading', { name: 'Basis and reasoning', exact: true }),
+  ).toBeVisible();
   await expect(details).toContainText('Connect explicit operating quantities to response.');await expect(details).toContainText('Use the declared response law for a bounded screening.');
   await details.getByRole('button', { name: 'Method record', exact: true }).click();
   const methodRecord = page.getByRole('dialog', { name: 'Method record', exact: true });
@@ -2397,11 +2426,11 @@ test('@approach-method canonical model view explains each component with its lin
   await s4Shots(page,'s4-approach-open-model-version',view);
   await view.getByRole('button',{name:'Show all quantities',exact:true}).click();await expect(view.getByText(/^Showing (\d+) of \1 quantities$/)).toBeVisible();
   await expect(quantityRow(page,quantities,'Response · instance 2','x')).toContainText('Revised definition of x');
-  await details.getByRole('button',{name:'View source',exact:true}).click();
-  const source=page.getByRole('dialog',{name:'Source · Response · instance 1',exact:true});
+  await details.getByText('Python function',{exact:true}).click();
+  const source=open.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(source).toContainText('Shown as text; never run.');await expect(source).toContainText('SHA-256 '+data.model.source_files[0].sha256);
   await expect(source.getByLabel('Read-only authored source').filter({hasText:"outputs['u'] = inputs['x'] + inputs['z']"})).toBeVisible();
-  await source.getByRole('button',{name:'Done',exact:true}).click();
+
   // The link returns to the exact step of this approach version.
   await details.getByRole('button',{name:'Open step 1 in modeling approach →',exact:true}).click();
   await expect(open).toBeHidden();
@@ -2474,7 +2503,11 @@ test('@approach-method model-owned description edit rebinds only the selected in
   await page.evaluate(({sid,id})=>{location.hash=new URLSearchParams({v:'1',view:'approach',study:sid,approach:id}).toString();},{sid:data.sid,id:data.saved.version.approach_version_id});await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);
   const detail=page.getByRole('region',{name:'Selected method step',exact:true});
   // Definitions are read in the step's model version, which keeps its exact definition.
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();const open=page.getByRole('dialog',{name:'Model version '+m.model_revision_id.slice(0,8),exact:true});
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  const open = page.getByRole('dialog', {
+    name: 'Model version ' + m.model_revision_id.slice(0, 8),
+    exact: true,
+  });
   await expect(viewRow(page,open.getByRole('table',{name:'Quantities',exact:true}),'Response · instance 1','x')).toContainText('Original definition of x');await expect(open).not.toContainText('Updated descriptive meaning for the selected instance');await page.keyboard.press('Escape');
   const retained=(await(await page.request.get(`/api/1/studies/${data.sid}/approach/versions/${data.saved.version.approach_version_id}`)).json()).data;expect(retained).toEqual(data.saved);
 });
@@ -2482,12 +2515,17 @@ test('@approach-method model-owned description edit rebinds only the selected in
 test('@approach-method several exact model versions need an explicit choice and absent or undecodable source stays named',async({page,browser,baseURL})=>{
   const data=await describedApproach(page,browser,baseURL,{faults:true}),m=data.model,b=data.branch,detail=page.getByRole('region',{name:'Selected method step',exact:true});
   // Source is read in the canonical model view (View source); undecodable bytes stay named, never shown.
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();let open=page.getByRole('dialog',{name:'Model version '+m.model_revision_id.slice(0,8),exact:true});
-  await open.getByRole('button',{name:'1 Response',exact:true}).click();await open.getByRole('button',{name:'View source',exact:true}).click();
-  let source=page.getByRole('dialog',{name:'Source · Response · instance 1',exact:true});
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  let open = page.getByRole('dialog', {
+    name: 'Model version ' + m.model_revision_id.slice(0, 8),
+    exact: true,
+  });
+  await open.getByRole('button', { name: '1 Response', exact: true }).click();
+  await open.getByText('Python function', { exact: true }).click();
+  let source=open.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(source.getByRole('alert')).toContainText('not valid UTF-8 text');await expect(source).toContainText(m.source_files[2].sha256);await expect(source.locator('pre')).toHaveCount(2);
   await readingShot(page,'polish-method-source-undecodable');
-  await source.getByRole('button',{name:'Done',exact:true}).click();await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Edit approach',exact:true}).click();await page.getByRole('button',{name:'Edit step 1',exact:true}).click();
   const editor=page.getByRole('dialog',{name:'Method step',exact:true});
   await editor.getByLabel('Implementation model',{exact:true}).selectOption(m.model_id);await editor.getByLabel('Implementation model version',{exact:true}).selectOption(b.model_revision_id);
@@ -2496,16 +2534,40 @@ test('@approach-method several exact model versions need an explicit choice and 
   // Two exact bindings: nothing is selected or shown until the reader chooses.
   const choice=detail.getByLabel('Approach model version',{exact:true});await expect(choice).toHaveValue('');
   await expect(detail).toContainText('This step references 2 model versions.');await expect(detail).not.toContainText('Implemented in Model version');
-  await expect(detail.getByRole('button',{name:'Open model version',exact:true})).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: 'View model details', exact: true })).toHaveCount(
+    0,
+  );
   for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'polish-method-multiple-binding-'+theme);}
   await page.evaluate(()=>document.documentElement.dataset.theme='light');
   const label=(r:any)=>'Response investigation · version '+r.model_revision_id.slice(0,8);
-  const rowX=async(r:any,text:string,absent?:string)=>{await detail.getByRole('button',{name:'Open model version',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Model version '+r.model_revision_id.slice(0,8),exact:true});await expect(viewRow(page,dialog.getByRole('table',{name:'Quantities',exact:true}),'Response · instance 1','x')).toContainText(text);if(absent)await expect(dialog).not.toContainText(absent);await page.keyboard.press('Escape');};
+  const rowX = async (r: any, text: string, absent?: string) => {
+    await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+    const dialog = page.getByRole('dialog', {
+      name: 'Model version ' + r.model_revision_id.slice(0, 8),
+      exact: true,
+    });
+    await expect(
+      viewRow(
+        page,
+        dialog.getByRole('table', { name: 'Quantities', exact: true }),
+        'Response · instance 1',
+        'x',
+      ),
+    ).toContainText(text);
+    if (absent) await expect(dialog).not.toContainText(absent);
+    await page.keyboard.press('Escape');
+  };
   await choice.selectOption({label:label(b)});await expect(detail).toContainText('Implemented in Model version '+b.model_revision_id.slice(0,8));await rowX(b,'Branch definition of x');
   await choice.selectOption({label:label(m)});await rowX(m,'Original definition of x','Branch definition of x');
   await choice.selectOption({label:label(b)});
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();open=page.getByRole('dialog',{name:'Model version '+b.model_revision_id.slice(0,8),exact:true});
-  await open.getByRole('button',{name:'1 Response',exact:true}).click();await open.getByRole('button',{name:'View source',exact:true}).click();source=page.getByRole('dialog',{name:'Source · Response · instance 1',exact:true});
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  open = page.getByRole('dialog', {
+    name: 'Model version ' + b.model_revision_id.slice(0, 8),
+    exact: true,
+  });
+  await open.getByRole('button', { name: '1 Response', exact: true }).click();
+  await open.getByText('Python function', { exact: true }).click();
+  source = open.getByRole('region', { name: 'Selection inspector', exact: true });
   await expect(source.getByRole('alert')).toContainText('This source file is missing from the model version.');await expect(source).toContainText(b.definitions[b.definitions.length-1].source_refs[0]);await expect(source.locator('pre')).toHaveCount(0);
   await readingShot(page,'polish-method-source-missing');
 });
@@ -2896,14 +2958,18 @@ test('@approach-configuration sign-out clears approach reading positions and Wor
   ).toHaveCount(0);
   await casesTab(page);
   await expect(
-    page.getByRole('link', { name: 'Cases and their answers', exact: true }),
+    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
   ).toBeVisible();
   await page.evaluate(sid=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'runs'}).toString();},data.sid);await expect(page.getByRole('heading',{name:'Run history',exact:true})).toBeVisible();
   await signOutAndIn(page);
   await page.evaluate(({sid,version})=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'approach',approach:version}).toString();},{sid:data.sid,version});
   await expect(page.getByRole('heading',{name:'Why use the scalar response approximation?',exact:true})).toBeVisible();
-  await expect(page.getByRole('link',{name:'Reasoning and methods',exact:true})).toBeVisible();
-  await expect(page.getByRole('link',{name:'Cases and their answers',exact:true})).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Reasoning and methods', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Selected method step', exact: true }).getByRole('tab'),
   ).toHaveCount(0);
@@ -2992,7 +3058,9 @@ test('@approach-configuration exact case links open the version-qualified case a
   ).toBeVisible();
   await expect(page.getByLabel('Approach version',{exact:true})).toHaveValue(d.saved.version.approach_version_id);
   await expect.poll(()=>new URLSearchParams(new URL(page.url()).hash.slice(1)).get('case')).toBe(d.nominal);expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('approach')).toBe(d.saved.version.approach_version_id);
-  await expect(page.getByRole('link',{name:'Cases and their answers',exact:true})).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
+  ).toBeVisible();
   await expect(usage.getByRole('heading',{name:'Nominal range',exact:true})).toBeFocused();await expect(usage).not.toContainText('Renamed nominal range');
   for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'case-navigation-results-'+theme);}await page.evaluate(()=>document.documentElement.dataset.theme='light');
   await page.getByRole('button',{name:'Return to run history',exact:true}).click();await expect(link).toBeFocused();await expect(filter).toHaveValue(`linked:${d.saved.version.approach_version_id}:${d.nominal}`);await expect(page.getByText('1 of 5 loaded runs',{exact:true})).toBeVisible();
@@ -3270,7 +3338,7 @@ test('@approach-history Results cards show exact criterion facts, remaining meth
   // Remaining work opens the exact proposed step in Methods.
   await remaining.getByRole('button', { name: 'View remaining method', exact: true }).click();
   await expect(
-    page.getByRole('link', { name: 'Reasoning and methods', exact: true }),
+    page.getByRole('heading', { name: 'Reasoning and methods', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.method-row-toggle[aria-expanded="true"]')).toBeFocused();
   await expect(page.locator('.method-row-toggle[aria-expanded="true"]')).toContainText(
@@ -3708,7 +3776,7 @@ test('@approach-method expandable steps open the canonical model version', async
   await expect(explanation.locator('table')).toHaveCount(0);
   await s4Shots(page, 's5-approach-methods', detail);
   // Open model version is the canonical model view, read-only, titled by its version.
-  await detail.getByRole('button', { name: 'Open model version', exact: true }).click();
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
   const open = page.getByRole('dialog', { name: 'Model version ' + id8, exact: true });
   await expect(open.getByRole('region', { name: 'Model view', exact: true })).toBeVisible();
   await expect(open.getByRole('button', { name: '＋ Component', exact: true })).toHaveCount(0);
@@ -3717,7 +3785,7 @@ test('@approach-method expandable steps open the canonical model version', async
     await expect(page.getByRole('dialog', { name: removed, exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(
-    detail.getByRole('button', { name: 'Open model version', exact: true }),
+    detail.getByRole('button', { name: 'View model details', exact: true }),
   ).toBeFocused();
 });
 

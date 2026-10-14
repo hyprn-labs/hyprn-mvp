@@ -3,7 +3,13 @@ import type { ApproachResolution } from './api';
 import type { ApproachContent } from './api';
 import { CaseNavigation, type WorkspaceLink } from './workspaceModel';
 import { ApproachFindings } from './ApproachFindings';
-import { ApproachAnnotations, StudyDetailsDialog, StudyQuestionBox, type ApproachHandoff, type StudyDetailsHandle } from './ApproachAssumptions';
+import {
+  ApproachAnnotations,
+  StudyDetailsDialog,
+  StudyQuestionBox,
+  type ApproachHandoff,
+  type StudyDetailsHandle,
+} from './ApproachAssumptions';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Button,
@@ -15,23 +21,44 @@ import {
   StatusTag,
   ActionDialog,
 } from './design';
-import { ApproachMethod, ApproachCases, ApproachBasis, forgetMethodViews, rememberMethodStep } from './ApproachMethod';
-import { HyprnMvpApi, accessLostText, accessUnverifiedText, message, descriptiveApproach, type ReadFence } from './api';
+import {
+  ApproachMethod,
+  ApproachCases,
+  ApproachBasis,
+  forgetMethodViews,
+  rememberMethodStep,
+} from './ApproachMethod';
+import {
+  HyprnMvpApi,
+  accessLostText,
+  accessUnverifiedText,
+  message,
+  descriptiveApproach,
+  type ReadFence,
+} from './api';
 import { useAccessLoss } from './accessLoss';
 import { ApproachController, useApproachController } from './ApproachController';
-import type { ModelRevisionRead4, ApproachSelection1, ApproachSavedRead3, ApproachVersionSummaryRead2, ApproachCursor1 } from './contract';
+import type {
+  ModelRevisionRead4,
+  ApproachSelection1,
+  ApproachSavedRead3,
+  ApproachVersionSummaryRead2,
+  ApproachCursor1,
+} from './contract';
 
 /** Method reading positions never outlive the session that read them. */
-export function forgetApproachReading(studyId?:string){
+export function forgetApproachReading(studyId?: string) {
   forgetMethodViews(studyId);
 }
 /** The model view's "Open step n in modeling approach": the exact saved version opens
  * with that step expanded and focused. A reading position only; no data. */
-export function showMethodStep(studyId:string,versionId:string,stepId:string){
-  const viewKey=studyId+'/saved/'+versionId;
-  rememberMethodStep(viewKey,stepId);
+export function showMethodStep(studyId: string, versionId: string | null, stepId: string) {
+  const viewKey = versionId ? studyId + '/saved/' + versionId : studyId + '/draft/draft';
+  rememberMethodStep(viewKey, stepId);
 }
-export type ApproachReadSource = { kind: 'draft'; content: ApproachContent; resolved?: ApproachResolution } | { kind: 'saved' | 'retained'; record: ApproachSavedRead3 };
+export type ApproachReadSource =
+  | { kind: 'draft'; content: ApproachContent; resolved?: ApproachResolution }
+  | { kind: 'saved' | 'retained'; record: ApproachSavedRead3 };
 
 /** An explicit snapshot-only reader, also usable by retained history. It never
  * fetches today's model, evidence, usage or draft as a historical substitute. */
@@ -39,25 +66,58 @@ export type ApproachReadSource = { kind: 'draft'; content: ApproachContent; reso
  * configurations together). Study limits open the reader's Study details at Limits. */
 export type ApproachResultsSlot = (slot: {
   answerId: string;
+  casesId: string;
   focusCase?: { id: string; token: number };
   onViewStep: (stepId: string) => void;
   onStudyLimits?: () => void;
 }) => ReactNode;
 
-export function ApproachReader({ source, onAccessLost, questionActions, findings, focusCase, api, studyId, onChange, disabled, baseVersion, onHandoff, onOpenModel, onEditingChange, onCreateConfiguration }: { onAccessLost?:()=>void; onCreateConfiguration?:(caseId:string)=>void; onEditingChange?: (dirty: boolean) => void; onOpenModel?: (id: string) => void; baseVersion?: string | null; onHandoff?: (value: ApproachHandoff) => void; source: ApproachReadSource; questionActions?: ReactNode; findings?: ApproachResultsSlot; focusCase?: { id: string; token: number }; api?: HyprnMvpApi; studyId?: string; onChange?: (content: ApproachContent) => void; disabled?: boolean }) {
+export function ApproachReader({
+  source,
+  onAccessLost,
+  questionActions,
+  findings,
+  focusCase,
+  api,
+  studyId,
+  onChange,
+  disabled,
+  baseVersion,
+  onHandoff,
+  onOpenModel,
+  onEditingChange,
+  onCreateConfiguration,
+}: {
+  onAccessLost?: () => void;
+  onCreateConfiguration?: (caseId: string) => void;
+  onEditingChange?: (dirty: boolean) => void;
+  onOpenModel?: (id: string) => void;
+  baseVersion?: string | null;
+  onHandoff?: (value: ApproachHandoff) => void;
+  source: ApproachReadSource;
+  questionActions?: ReactNode;
+  findings?: ApproachResultsSlot;
+  focusCase?: { id: string; token: number };
+  api?: HyprnMvpApi;
+  studyId?: string;
+  onChange?: (content: ApproachContent) => void;
+  disabled?: boolean;
+}) {
   const sectionId = useId();
   const content = source.kind === 'draft' ? source.content : source.record.version.content;
   const resolved = source.kind === 'draft' ? source.resolved : source.record.closure;
   // Exact version (or current draft) keeps its own reading position across owner navigation.
-  const viewKey=(studyId??'')+'/'+source.kind+'/'+(source.kind==='draft'?'draft':source.record.version.approach_version_id);
-  const [requestedStep,setRequestedStep]=useState<{id:string;token:number}>();
-  const viewStep=(id:string)=>{setRequestedStep(old=>({id,token:(old?.token??0)+1}));};
-  const details=useRef<StudyDetailsHandle>(null);
-  function jump(section: string) {
-    const target = document.getElementById(sectionId + '-' + section);
-    target?.focus();
-    target?.scrollIntoView({ block: 'start' });
-  }
+  const viewKey =
+    (studyId ?? '') +
+    '/' +
+    source.kind +
+    '/' +
+    (source.kind === 'draft' ? 'draft' : source.record.version.approach_version_id);
+  const [requestedStep, setRequestedStep] = useState<{ id: string; token: number }>();
+  const viewStep = (id: string) => {
+    setRequestedStep((old) => ({ id, token: (old?.token ?? 0) + 1 }));
+  };
+  const details = useRef<StudyDetailsHandle>(null);
   const casesPanel = (
     <ApproachCases
       onCreateConfiguration={onCreateConfiguration}
@@ -110,42 +170,13 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
             }
           />
           <StudyDetailsDialog ref={details} />
-          <nav className="approach-jumps" aria-label="On this page">
-            <a
-              href={'#' + sectionId + '-methods'}
-              onClick={(event) => {
-                event.preventDefault();
-                jump('methods');
-              }}
-            >
-              Reasoning and methods
-            </a>
-            <a
-              href={'#' + sectionId + '-cases'}
-              onClick={(event) => {
-                event.preventDefault();
-                jump('cases');
-              }}
-            >
-              Cases and their answers
-            </a>
-            <a
-              href={'#' + sectionId + '-answer'}
-              onClick={(event) => {
-                event.preventDefault();
-                jump('answer');
-              }}
-            >
-              Answer to the study question
-            </a>
-          </nav>
-          <section
+          <Panel
             className="approach-section"
             id={sectionId + '-methods'}
-            aria-labelledby={sectionId + '-methods-heading'}
-            tabIndex={-1}
+            label="Reasoning and methods"
+            title="Reasoning and methods"
+            headingLevel={3}
           >
-            <h3 id={sectionId + '-methods-heading'}>Reasoning and methods</h3>
             <ApproachMethod
               key={viewKey}
               viewKey={viewKey}
@@ -166,51 +197,50 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
               onChange={onChange}
               disabled={disabled}
             />
-          </section>
-          <section
-            className="approach-section"
-            id={sectionId + '-cases'}
-            aria-labelledby={sectionId + '-cases-heading'}
-            tabIndex={-1}
-          >
-            <h3 id={sectionId + '-cases-heading'}>Cases and their answers</h3>
-            {findings ? (
-              findings({
-                answerId: sectionId + '-answer',
-                focusCase,
-                onViewStep: viewStep,
-                onStudyLimits:
-                  content.limitations.trim() || descriptiveApproach(content).limit_items.length
-                    ? () => details.current?.open('limits')
-                    : undefined,
-              })
-            ) : (
-              <>
+          </Panel>
+          {findings ? (
+            findings({
+              answerId: sectionId + '-answer',
+              casesId: sectionId + '-cases',
+              focusCase,
+              onViewStep: viewStep,
+              onStudyLimits:
+                content.limitations.trim() || descriptiveApproach(content).limit_items.length
+                  ? () => details.current?.open('limits')
+                  : undefined,
+            })
+          ) : (
+            <>
+              <Panel
+                className="approach-section"
+                id={sectionId + '-cases'}
+                label="Cases and their answers"
+                title="Cases and their answers"
+                headingLevel={3}
+              >
                 {casesPanel}
-                <section id={sectionId + '-answer'} className="approach-section" tabIndex={-1}>
-                  <Panel
-                    className="approach-results"
-                    label="Answer to the study question"
-                    title="Answer to the study question"
-                  >
-                    <p className="approach-eyebrow">Answer to the study question</p>
-                    <h3 className="approach-results-answer">
-                      {source.kind === 'draft'
-                        ? 'No study answer has been assessed.'
-                        : 'Scientific answers are not included in this historical record.'}
-                    </h3>
-                    <p className="context-line">
-                      {source.kind === 'draft'
-                        ? 'Save an approach version to connect configurations and runs ' +
-                          'to this explanation.'
-                        : 'Results belong to the configurations and runs that used this version. ' +
-                          'This view shows its explanation only.'}
-                    </p>
-                  </Panel>
-                </section>
-              </>
-            )}
-          </section>
+              </Panel>
+              <Panel
+                id={sectionId + '-answer'}
+                className="approach-section approach-results"
+                label="Answer to the study question"
+                title="Answer to the study question"
+              >
+                <h3 className="approach-results-answer">
+                  {source.kind === 'draft'
+                    ? 'No study answer has been assessed.'
+                    : 'Scientific answers are not included in this historical record.'}
+                </h3>
+                <p className="context-line">
+                  {source.kind === 'draft'
+                    ? 'Save an approach version to connect configurations and runs ' +
+                      'to this explanation.'
+                    : 'Results belong to the configurations and runs that used this version. ' +
+                      'This view shows its explanation only.'}
+                </p>
+              </Panel>
+            </>
+          )}
         </div>
       </ApproachAnnotations>
     </CaseNavigation.Provider>
@@ -570,6 +600,7 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
                 ? (slot) => (
                     <ApproachFindings
                       answerId={slot.answerId}
+                      casesId={slot.casesId}
                       api={api}
                       studyId={studyId}
                       saved={state.saved!}

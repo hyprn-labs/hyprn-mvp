@@ -619,6 +619,7 @@ export function OverviewStudyQuestion({
     question: ReactNode,
     details: ReactNode,
     version: string | null | undefined,
+    saved?: ApproachSavedRead3,
   ) => ReactNode;
 }) {
   const [state, setState] = useState<OverviewQuestion>({ kind: 'loading' }),
@@ -702,6 +703,7 @@ export function OverviewStudyQuestion({
             See more details
           </Button>,
           record.version.approach_version_id,
+          record,
         )}
         <StudyDetailsDialog ref={details} />
       </ApproachAnnotations>
