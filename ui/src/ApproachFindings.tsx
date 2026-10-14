@@ -1,9 +1,29 @@
 import { RecordAttribution } from './attribution';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ApiError, HyprnMvpApi, accessDenied, accessLostText, type ReadFailure, type ReadFence } from './api';
+import {
+  ApiError,
+  HyprnMvpApi,
+  accessDenied,
+  accessLostText,
+  type EvidenceRecord,
+  type ReadFailure,
+  type ReadFence,
+} from './api';
 import { useAccessLoss } from './accessLoss';
-import type { FrozenConfigurationRead7, ApproachSavedRead3, ApproachUsage1, ApproachUsageCursor1, PublicRunDetail, ResolvedInput2, ResultBinding } from './contract';
-import { ActionDialog, Button, DataTable, Disclosure, Panel, Readout, Select, StatusTag } from './design';
+import type {
+  ScientificAnswer1,
+  FrozenConfigurationRead7,
+  ApproachSavedRead3,
+  ApproachUsage1,
+  ApproachUsageCursor1,
+  PublicRunDetail,
+  ResolvedInput2,
+  ResultBinding,
+} from './contract';
+import { EvidenceRecordBody } from './EvidenceView';
+import {
+  ActionDialog, Button, DataTable, Disclosure, Panel, Select, StatusTag, formatNumber,
+} from './design';
 import { ApproachCaseContext } from './ApproachAssumptions';
 import { RunOutcomes, runOutcomes } from './runStatus';
 import { criterionOperators } from './criterionLabels';
@@ -13,6 +33,177 @@ import type { WorkspaceLink } from './workspaceModel';
 type Configuration = NonNullable<NonNullable<PublicRunDetail['history']>['configuration']>;
 type Row = { usage: ApproachUsage1; configuration?: Configuration; run?: PublicRunDetail; loading?: boolean; error?: string };
 type SourceRead = { state: 'loading' | 'error' | 'ready'; run?: PublicRunDetail };
+
+/** Scientific prose is displayed only from an explicitly associated answer record. */
+function ScientificAnswer({
+  answer,
+  api,
+  studyId,
+  onOpen,
+}: {
+  answer: ScientificAnswer1;
+  api: HyprnMvpApi;
+  studyId: string;
+  onOpen: (target: WorkspaceLink) => void;
+}) {
+  return (
+    <div className="approach-answer-record">
+      <h4>Observations</h4>
+      <p className="context-copy">{answer.observations}</p>
+      <h4>Interpretation</h4>
+      <p className="context-copy">{answer.interpretation}</p>
+      {!!answer.qualifications.length && (
+        <>
+          <h4>Qualifications</h4>
+          <ul>
+            {answer.qualifications.map((value, index) => (
+              <li key={index}>{value}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {!!answer.open_deliverables.length && (
+        <>
+          <h4>Still to answer</h4>
+          <ul>
+            {answer.open_deliverables.map((value, index) => (
+              <li key={index}>{value}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <Disclosure>
+        <summary>Answer basis and record details</summary>
+        <p>
+          Answer version {answer.version_number} · <code>{answer.answer_version_id}</code>
+        </p>
+        <div className="section-actions">
+          {answer.basis.configuration_revision_ids.map((id) => (
+            <Button
+              key={id}
+              onClick={() => onOpen({ study: studyId, view: 'configurations', configuration: id })}
+            >
+              Configuration {id.slice(0, 8)}
+            </Button>
+          ))}
+          {answer.basis.run_ids.map((id) => (
+            <Button key={id} onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}>
+              Run {id.slice(0, 8)}
+            </Button>
+          ))}
+        </div>
+        {answer.basis.evidence_version_ids.map((id) => (
+          <AnswerBasis
+            key={id}
+            kind="evidence"
+            id={id}
+            api={api}
+            studyId={studyId}
+            onOpen={onOpen}
+          />
+        ))}
+        {answer.basis.case_answer_version_ids.map((id) => (
+          <AnswerBasis key={id} kind="answer" id={id} api={api} studyId={studyId} onOpen={onOpen} />
+        ))}
+      </Disclosure>
+    </div>
+  );
+}
+
+/** Basis records load on explicit request, always by their saved version identity. */
+function AnswerBasis({
+  kind,
+  id,
+  api,
+  studyId,
+  onOpen,
+}: {
+  kind: 'evidence' | 'answer';
+  id: string;
+  api: HyprnMvpApi;
+  studyId: string;
+  onOpen: (target: WorkspaceLink) => void;
+}) {
+  const [record, setRecord] = useState<EvidenceRecord | ScientificAnswer1 | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const scope = useRef<ReadFence | null>(null);
+  const identity = useRef<{ api: HyprnMvpApi; studyId: string; id: string; kind: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    function clear() {
+      scope.current?.abort();
+      setRecord(null);
+      setBusy(false);
+      setError('');
+    }
+    clear();
+    const unsubscribe = api.onSessionChange((change) => {
+      if (change.kind !== 'access-lost' || change.studyId === studyId) clear();
+    });
+    return () => {
+      scope.current?.abort();
+      unsubscribe();
+    };
+  }, [api, studyId, id, kind, api.actor, api.csrf]);
+  const current = identity.current;
+  const visibleRecord =
+    current?.api === api &&
+    current.studyId === studyId &&
+    current.id === id &&
+    current.kind === kind &&
+    scope.current?.valid()
+      ? record
+      : null;
+  async function load() {
+    scope.current?.abort();
+    const read = api.fence({ studyId });
+    scope.current = read;
+    identity.current = { api, studyId, id, kind };
+    setBusy(true);
+    setError('');
+    try {
+      const value = await queueFor(api).read<EvidenceRecord | ScientificAnswer1>(
+        () => read.valid(),
+        () =>
+          kind === 'evidence'
+            ? api.evidenceVersion(studyId, id, read.signal)
+            : api.answer(studyId, id, read.signal),
+      );
+      if (value && read.valid()) {
+        if (
+          ('answer_version_id' in value ? value.answer_version_id : value.evidence_version_id) !==
+          id
+        )
+          throw new Error('Answer basis identity mismatch');
+        setRecord(value);
+      }
+    } catch (error) {
+      const result = await api.readFailed(error, read);
+      if (read.valid() && result !== 'stale' && result !== 'access-lost')
+        setError('This answer basis could not be loaded. Retry the read.');
+    } finally {
+      if (read.valid()) setBusy(false);
+      read.done();
+    }
+  }
+  return (
+    <div>
+      <Button disabled={busy} onClick={() => void load()}>
+        {busy ? 'Loading' : visibleRecord ? 'Reload' : 'View'}{' '}
+        {kind === 'evidence' ? 'evidence version' : 'case answer version'} {id.slice(0, 8)}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {visibleRecord &&
+        ('answer_version_id' in visibleRecord ? (
+          <ScientificAnswer answer={visibleRecord} api={api} studyId={studyId} onOpen={onOpen} />
+        ) : (
+          <EvidenceRecordBody record={visibleRecord} />
+        ))}
+    </div>
+  );
+}
 const identity = (usage: ApproachUsage1) => usage.kind + '/' + (usage.kind === 'run' ? usage.run_id : usage.configuration_revision_id);
 const sameTarget = (a: {instance_id:string;port_id:string}, b: {instance_id:string;port_id:string}) => a.instance_id === b.instance_id && a.port_id === b.port_id;
 
@@ -68,13 +259,64 @@ function RunFacets({run}:{run:PublicRunDetail}) {
   return <><RunOutcomes variant="ledger" outcomes={runOutcomes(run)} executionDetail={results.execution.state==='failed'?results.execution.message:undefined}/><ul aria-label="Individual criterion outcomes">{results.criteria.map((item,index)=><li key={item.criterion_id}><StatusTag tone={item.outcome==='met'?'ok':item.outcome==='violated'?'alarm':'advisory'}>{item.outcome==='met'?'Met':item.outcome==='violated'?'Not met':'Not evaluated'}</StatusTag> · Criterion {index+1} · {item.reason.replaceAll('_',' ')}</li>)}</ul></>;
 }
 
-function RecordedOutputs({run}:{run:PublicRunDetail}) {
-  const [all,setAll]=useState(false),outputs=run.history?.results?.outputs??[];
-  const name=(target:{instance_id:string;port_id:string})=>{
-    const model=run.history?.model_snapshot,instance=model?.instances.find(item=>item.instance_id===target.instance_id),port=model?.definitions.find(item=>item.definition_version_id===instance?.definition_version_id)?.ports.find(item=>item.port_id===target.port_id);
-    return instance&&port?`${instance.name} · ${port.name}`:`${target.instance_id} / ${target.port_id}`;
+function RecordedOutputs({ run }: { run: PublicRunDetail }) {
+  const outputs = run.history?.results?.outputs ?? [];
+  const name = (target: { instance_id: string; port_id: string }) => {
+    const model = run.history?.model_snapshot,
+      instance = model?.instances.find((item) => item.instance_id === target.instance_id),
+      port = model?.definitions
+        .find((item) => item.definition_version_id === instance?.definition_version_id)
+        ?.ports.find((item) => item.port_id === target.port_id);
+    return instance && port
+      ? `${instance.name} · ${port.name}`
+      : `${target.instance_id} / ${target.port_id}`;
   };
-  return <><div className="section-actions"><h4>Outputs</h4><ActionDialog title="Full-precision values" label="Full-precision values"><DataTable regionLabel="Full-precision output values"><thead><tr><th>Output</th><th>Value</th><th>Units</th></tr></thead><tbody>{outputs.map((output,index)=><tr key={index}><td>{name(output.target)}</td><td>{output.availability==='available'&&output.value!==null&&Number.isFinite(output.value)?String(output.value):'not computed'}</td><td>{unitLabel(output.units)}</td></tr>)}</tbody></DataTable></ActionDialog></div><div className="run-key-outputs">{(all?outputs:outputs.slice(0,4)).map((output,index)=><div key={index}><Readout size="sm" label={name(output.target)} value={output.availability==='available'&&output.value!==null&&Number.isFinite(output.value)?output.value:null} unit={unitLabel(output.units)}/>{output.reason&&<p>{output.availability} · {output.reason}</p>}</div>)}</div>{outputs.length>4&&<Button aria-expanded={all} onClick={()=>setAll(value=>!value)}>{all?'Show fewer outputs':`Show all ${outputs.length} outputs`}</Button>}</>;
+  function table(exact: boolean) {
+    return (
+      <DataTable regionLabel={exact ? 'Full-precision output values' : 'Output values'}>
+        <thead>
+          <tr>
+            <th>Output</th>
+            <th>Value</th>
+            <th>Units</th>
+            <th>Availability</th>
+          </tr>
+        </thead>
+        <tbody>
+          {outputs.map((output, index) => (
+            <tr key={index}>
+              <td>{name(output.target)}</td>
+              <td>
+                {output.availability === 'available' &&
+                output.value !== null &&
+                Number.isFinite(output.value)
+                  ? exact
+                    ? String(output.value)
+                    : formatNumber(output.value)
+                  : 'not computed'}
+              </td>
+              <td>{unitLabel(output.units)}</td>
+              <td>
+                {output.availability}
+                {output.reason ? ' · ' + output.reason : ''}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+    );
+  }
+  return (
+    <>
+      <div className="section-actions">
+        <h4>Outputs</h4>
+        <ActionDialog title="Full-precision values" label="Full-precision values">
+          {table(true)}
+        </ActionDialog>
+      </div>
+      {table(false)}
+    </>
+  );
 }
 
 function SourceInputs({configuration,sources,load,onOpen}:{configuration:Configuration;sources:Map<string,SourceRead>;load:(ids:string[],retry?:boolean)=>void;onOpen:(runId:string)=>void}) {
@@ -92,23 +334,98 @@ function SourceInputs({configuration,sources,load,onOpen}:{configuration:Configu
 /** One recorded run (or a configuration without a loaded run) inside its case card: name and
  * short id, the shared Execution · Criteria outcomes, the exact criterion facts, and on demand
  * the run's details and source-linked inputs. Recorded facts only; never a verdict. */
-function FindingRow({row,saved,sources,load,retry,onOpen}:{row:Row;saved?:Configuration;sources:Map<string,SourceRead>;load:(ids:string[],retry?:boolean)=>void;retry:()=>void;onOpen:(target:WorkspaceLink)=>void}) {
+function FindingRow({
+  row,
+  saved,
+  sources,
+  load,
+  retry,
+  onOpen,
+  hideSources = false,
+}: {
+  hideSources?: boolean;
+  row: Row;
+  saved?: Configuration;
+  sources: Map<string, SourceRead>;
+  load: (ids: string[], retry?: boolean) => void;
+  retry: () => void;
+  onOpen: (target: WorkspaceLink) => void;
+}) {
   // A run without retained history (queued, preparing) is named by its loaded saved configuration.
-  const [details,setDetails]=useState(false),{usage,run}=row,configuration=row.configuration??saved;
-  const id=usage.kind==='run'?usage.run_id:usage.configuration_revision_id;
-  return <article className="approach-finding" aria-label={usage.kind+' '+id}>
-    <div className="approach-finding-head"><h4>{configuration?.name??(usage.kind==='run'?'Run':'Configuration')} <span className="approach-finding-id">· {id.slice(0,8)}</span></h4><Button size="sm" onClick={()=>onOpen({view:usage.kind==='run'?'runs':'configurations',...(usage.kind==='run'?{run:usage.run_id}:{configuration:usage.configuration_revision_id})})}>{usage.kind==='run'?'View run':'View configuration'}</Button></div>
-    {row.loading&&<p role="status">Loading record…</p>}{row.error&&<><p role="alert">{row.error}</p><Button onClick={retry}>Retry record</Button></>}
-    {usage.kind==='configuration'&&configuration&&<p className="context-line">Saved configuration · no run loaded</p>}
-      {run &&<>
+  const [details, setDetails] = useState(false),
+    { usage, run } = row,
+    configuration = row.configuration ?? saved;
+  const id = usage.kind === 'run' ? usage.run_id : usage.configuration_revision_id;
+  return (
+    <article className="approach-finding" aria-label={usage.kind + ' ' + id}>
+      <div className="approach-finding-head">
+        <h4>
+          {configuration?.name ?? (usage.kind === 'run' ? 'Run' : 'Configuration')}{' '}
+          <span className="approach-finding-id">· {id.slice(0, 8)}</span>
+        </h4>
+        <Button
+          size="sm"
+          onClick={() =>
+            onOpen({
+              view: usage.kind === 'run' ? 'runs' : 'configurations',
+              ...(usage.kind === 'run'
+                ? { run: usage.run_id }
+                : { configuration: usage.configuration_revision_id }),
+            })
+          }
+        >
+          {usage.kind === 'run' ? 'View run' : 'View configuration'}
+        </Button>
+      </div>
+      {row.loading && <p role="status">Loading record…</p>}
+      {row.error && (
+        <>
+          <p role="alert">{row.error}</p>
+          <Button onClick={retry}>Retry record</Button>
+        </>
+      )}
+      {usage.kind === 'configuration' && configuration && (
+        <p className="context-line">Saved configuration</p>
+      )}
+      {run && (
+        <>
           <RecordAttribution kind="run" id={run.run_id} line />
-          <RunOutcomes variant="inline" outcomes={runOutcomes(run)} />
-      {!run.history?.results&&<p className="context-line">{['accepted_run','prepared','dispatching'].includes(run.state)?'Results not yet available':'No results for this run'}</p>}
-      <CriterionFacts run={run}/>
-      <div className="section-actions approach-finding-actions"><Button size="sm" aria-expanded={details} onClick={()=>setDetails(value=>!value)}>Run details</Button></div>
-      {details&&<div className="approach-finding-details"><RunFacets run={run}/>{run.history?.results&&<RecordedOutputs run={run}/>} {!!run.history?.errors.length&&<p>Diagnostics: {run.history.errors.map(item=>item.code).join(', ')}</p>}</div>}</>}
-    {configuration&&<SourceInputs configuration={configuration} sources={sources} load={load} onOpen={runId=>onOpen({study:configuration.study_id,view:'runs',run:runId})}/>}
-  </article>;
+
+          {!run.history?.results && (
+            <p className="context-line">
+              {['accepted_run', 'prepared', 'dispatching'].includes(run.state)
+                ? 'Results not yet available'
+                : 'No results for this run'}
+            </p>
+          )}
+
+          <div className="section-actions approach-finding-actions">
+            <Button size="sm" aria-expanded={details} onClick={() => setDetails((value) => !value)}>
+              Run details
+            </Button>
+          </div>
+          {details && (
+            <div className="approach-finding-details">
+              <RunFacets run={run} />
+              <CriterionFacts run={run} />
+              {run.history?.results && <RecordedOutputs run={run} />}{' '}
+              {!!run.history?.errors.length && (
+                <p>Diagnostics: {run.history.errors.map((item) => item.code).join(', ')}</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {configuration && !hideSources && (
+        <SourceInputs
+          configuration={configuration}
+          sources={sources}
+          load={load}
+          onOpen={(runId) => onOpen({ study: configuration.study_id, view: 'runs', run: runId })}
+        />
+      )}
+    </article>
+  );
 }
 
 type Group = ReturnType<typeof groupFindings>[number];
@@ -131,30 +448,144 @@ function CriterionFacts({run}:{run:PublicRunDetail}) {
   })}{results.criteria.length>shown.length&&<li>{plural(results.criteria.length-shown.length,'more criterion evaluation')} in this run's details</li>}</ul>;
 }
 
-/** One card per case: the case question, its runs and its configurations without a
- * loaded run, honest coverage notes, and "Why this case" (rationale, model version, evidence).
- * Each case appears once on the page. */
-function CaseCard({group,complete,cursor,headingId,content,onCreateConfiguration,row}:{group:Group;complete:boolean;cursor:boolean;headingId:string;content:ApproachSavedRead3['version']['content'];onCreateConfiguration?:(caseId:string)=>void;row:(row:Row,saved?:Configuration)=>ReactNode}) {
-  const runs=group.rows.filter(row=>row.usage.kind==='run'),loaded=runs.filter(row=>row.run),failed=group.rows.filter(row=>row.error).length,pending=group.rows.filter(row=>row.loading).length;
-  const runConfigurations=new Set(runs.map(row=>row.usage.configuration_revision_id));
-  // A configuration with a run in this case is named by that run; an unread one stays listed.
-  const configurations=group.rows.filter(row=>row.usage.kind==='configuration'&&(!runConfigurations.has(row.usage.configuration_revision_id)||!!row.error));
-  const configurationsOnly=group.rows.filter(row=>row.usage.kind==='configuration'&&!runConfigurations.has(row.usage.configuration_revision_id)).length;
-  const tag=loaded.length?{tone:'inert' as const,label:plural(loaded.length,'run')+' loaded'}:complete?{tone:'advisory' as const,label:'Not evaluated'}:{tone:'advisory' as const,label:'Coverage incomplete'};
-  const item=group.item,binding=item?.binding_id?content.model_bindings.find(b=>b.binding_id===item.binding_id):undefined;
+/** One expandable row per case keeps every configuration and run, with its purpose
+ * and explicit scientific assessment. Coverage never supplies an interpretation. */
+function CaseCard({
+  group,
+  complete,
+  cursor,
+  headingId,
+  content,
+  onCreateConfiguration,
+  row,
+  expanded,
+  answer,
+  answerStatus,
+}: {
+  answer: ReactNode;
+  answerStatus: string;
+  expanded?: number;
+  group: Group;
+  complete: boolean;
+  cursor: boolean;
+  headingId: string;
+  content: ApproachSavedRead3['version']['content'];
+  onCreateConfiguration?: (caseId: string) => void;
+  row: (row: Row, saved?: Configuration) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (expanded !== undefined) setOpen(true);
+  }, [expanded]);
+  const runs = group.rows.filter((row) => row.usage.kind === 'run'),
+    loaded = runs.filter((row) => row.run),
+    failed = group.rows.filter((row) => row.error).length,
+    pending = group.rows.filter((row) => row.loading).length;
+  const runConfigurations = new Set(runs.map((row) => row.usage.configuration_revision_id));
+  // Every associated configuration stays visible, including those with loaded runs.
+  const configurations = group.rows.filter((row) => row.usage.kind === 'configuration');
+  const configurationsOnly = group.rows.filter(
+    (row) =>
+      row.usage.kind === 'configuration' &&
+      !runConfigurations.has(row.usage.configuration_revision_id),
+  ).length;
+  const tag = loaded.length
+    ? { tone: 'inert' as const, label: plural(loaded.length, 'run') + ' loaded' }
+    : complete
+      ? { tone: 'advisory' as const, label: 'Not evaluated' }
+      : { tone: 'advisory' as const, label: 'Coverage incomplete' };
+  const item = group.item,
+    binding = item?.binding_id
+      ? content.model_bindings.find((b) => b.binding_id === item.binding_id)
+      : undefined;
   // Honest coverage notes: what is missing or incomplete is said, never inferred as an outcome.
-  const notes=[...(configurationsOnly?[plural(configurationsOnly,'configuration')+' without a loaded run']:[]),...(failed?[plural(failed,'record')+' could not be loaded']:[]),...(pending?[plural(pending,'record')+' loading']:[]),
-    ...(!runs.length?[complete?'Not evaluated in the loaded review · no run found for this case':cursor?'No run loaded for this case; more usage is available.':'No run loaded for this case; review coverage is incomplete.']:!complete?['Review coverage is incomplete; more records may exist for this case.']:[])];
-  const saved=(id:string)=>group.rows.find(row=>row.usage.kind==='configuration'&&row.usage.configuration_revision_id===id)?.configuration;
-  return <article className="approach-case-card" aria-labelledby={headingId}>
-    <div className="approach-case-card-head"><div className="approach-case-card-title"><StatusTag tone={tag.tone}>{tag.label}</StatusTag><h3 id={headingId} tabIndex={-1}>{group.title}</h3></div>
-      {item&&item.binding_id&&onCreateConfiguration&&<Button aria-label={'Create configuration for '+item.title} onClick={()=>onCreateConfiguration(item.case_id)}>Create configuration</Button>}</div>
-    <p className="context-copy approach-case-question">{item?item.question||'Case question not described':'Configurations and runs linked to this approach version without a case.'}</p>
-    {!!runs.length&&<div className="approach-case-runs" role="group" aria-label={'Runs · '+group.title}>{runs.map(item=>row(item,saved(item.usage.configuration_revision_id)))}</div>}
-    {!!configurations.length&&<div className="approach-case-runs" role="group" aria-label={'Configurations without a loaded run · '+group.title}>{configurations.map(item=>row(item))}</div>}
-    {!!notes.length&&<div className="context-line approach-result-coverage">{notes.map(note=><p key={note}>{note}</p>)}</div>}
-    {item&&<Disclosure className="approach-case-why"><summary>Why this case</summary><p className="context-copy">{item.rationale||'Rationale not described'}</p><p className="context-line">{binding?'Model version '+binding.model_revision_id.slice(0,8):'Proposed case · no model version selected'}</p><ApproachCaseContext item={item}/></Disclosure>}
-  </article>;
+  const notes = [
+    ...(configurationsOnly
+      ? [plural(configurationsOnly, 'configuration') + ' without a loaded run']
+      : []),
+    ...(failed ? [plural(failed, 'record') + ' could not be loaded'] : []),
+    ...(pending ? [plural(pending, 'record') + ' loading'] : []),
+    ...(!runs.length
+      ? [
+          complete
+            ? 'Not evaluated in the loaded review · no run found for this case'
+            : cursor
+              ? 'No run loaded for this case; more usage is available.'
+              : 'No run loaded for this case; review coverage is incomplete.',
+        ]
+      : !complete
+        ? ['Review coverage is incomplete; more records may exist for this case.']
+        : []),
+  ];
+  const saved = (id: string) =>
+    group.rows.find(
+      (row) => row.usage.kind === 'configuration' && row.usage.configuration_revision_id === id,
+    )?.configuration;
+  return (
+    <article className="approach-case-card" aria-labelledby={headingId}>
+      <Disclosure open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+        <summary className="approach-case-toggle">
+          <h3 id={headingId} tabIndex={-1}>
+            {group.title}
+          </h3>
+          <StatusTag tone={answerStatus === 'Assessed' ? 'inert' : 'advisory'}>
+            {answerStatus}
+          </StatusTag>
+        </summary>
+        <div className="approach-case-content">
+          <StatusTag tone={tag.tone}>{tag.label}</StatusTag>
+          <p className="context-copy approach-case-question">
+            {item
+              ? item.question || 'Case question not described'
+              : 'Configurations and runs linked to this approach version without a case.'}
+          </p>
+          {item && (
+            <>
+              <h4>Purpose</h4>
+              <p className="context-copy">{item.rationale || 'Rationale not described'}</p>
+              <p className="context-line">
+                {binding
+                  ? 'Model version ' + binding.model_revision_id.slice(0, 8)
+                  : 'Proposed case · no model version selected'}
+              </p>
+            </>
+          )}
+          <h4>What this case tells us</h4>
+          {answer}
+          {item && item.binding_id && onCreateConfiguration && (
+            <Button
+              aria-label={'Create configuration for ' + item.title}
+              onClick={() => onCreateConfiguration(item.case_id)}
+            >
+              Create configuration
+            </Button>
+          )}
+          {!!configurations.length && (
+            <div
+              className="approach-case-runs"
+              role="group"
+              aria-label={'Configurations · ' + group.title}
+            >
+              {configurations.map((item) => row(item))}
+            </div>
+          )}
+          {!!runs.length && (
+            <div className="approach-case-runs" role="group" aria-label={'Runs · ' + group.title}>
+              {runs.map((item) => row(item, saved(item.usage.configuration_revision_id)))}
+            </div>
+          )}
+          {!!notes.length && (
+            <div className="context-line approach-result-coverage">
+              {notes.map((note) => (
+                <p key={note}>{note}</p>
+              ))}
+            </div>
+          )}
+          {item && <ApproachCaseContext item={item} />}
+        </div>
+      </Disclosure>
+    </article>
+  );
 }
 
 function RemainingWork({content,headingId,onViewStep}:{content:ApproachSavedRead3['version']['content'];headingId:string;onViewStep?:(stepId:string)=>void}) {
@@ -171,119 +602,481 @@ function RemainingWork({content,headingId,onViewStep}:{content:ApproachSavedRead
 
 /** Live usage is injected only by the saved approach screen. Historical
  * ApproachReader receives its retained closure without this component. */
-export function ApproachFindings({api,studyId,saved,onOpen,focusCase,onViewStep,onStudyLimits,onCreateConfiguration}:{api:HyprnMvpApi;studyId:string;saved:ApproachSavedRead3;onOpen:(target:WorkspaceLink)=>void;focusCase?:{id:string;token:number};onViewStep?:(stepId:string)=>void;onStudyLimits?:()=>void;onCreateConfiguration?:(caseId:string)=>void}) {
-  const [rows,setRows]=useState<Row[]>([]),[cursor,setCursor]=useState<ApproachUsageCursor1|null>(null),[caseId,setCaseId]=useState(''),[review,setReview]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState(false),[denied,setDenied]=useState(false),[accessUnverified,setAccessUnverified]=useState(false),[sources,setSources]=useState(new Map<string,SourceRead>());
-  const [missingCase,setMissingCase]=useState('');
-  const generation=useRef(0),queue=useRef(queueFor(api)),cache=useRef(new Map<string,SourceRead>()),failedCursor=useRef<ApproachUsageCursor1|null>(null);
+export function ApproachFindings({
+  api,
+  studyId,
+  saved,
+  onOpen,
+  focusCase,
+  onViewStep,
+  onStudyLimits,
+  onCreateConfiguration,
+  answerId,
+}: {
+  answerId?: string;
+  api: HyprnMvpApi;
+  studyId: string;
+  saved: ApproachSavedRead3;
+  onOpen: (target: WorkspaceLink) => void;
+  focusCase?: { id: string; token: number };
+  onViewStep?: (stepId: string) => void;
+  onStudyLimits?: () => void;
+  onCreateConfiguration?: (caseId: string) => void;
+}) {
+  const [rows, setRows] = useState<Row[]>([]),
+    [cursor, setCursor] = useState<ApproachUsageCursor1 | null>(null),
+    [caseId, setCaseId] = useState(''),
+    [review, setReview] = useState(0),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(false),
+    [denied, setDenied] = useState(false),
+    [accessUnverified, setAccessUnverified] = useState(false),
+    [sources, setSources] = useState(new Map<string, SourceRead>());
+  const [missingCase, setMissingCase] = useState('');
+  const generation = useRef(0),
+    queue = useRef(queueFor(api)),
+    cache = useRef(new Map<string, SourceRead>()),
+    failedCursor = useRef<ApproachUsageCursor1 | null>(null);
   // Shared session fence for this review: the case filter and refresh generation
   // gate display only; a denial is confirmed against study/actor/session/access.
-  const scope=useRef<ReadFence|null>(null);
-  const base=useId();
-  const actor=api.actor,version=saved.version.approach_version_id;
-  const valid=(token:number)=>token===generation.current&&actor===api.actor;
+  const scope = useRef<ReadFence | null>(null);
+  const base = useId();
+  const actor = api.actor,
+    version = saved.version.approach_version_id;
+  const [answerReview, setAnswerReview] = useState(0);
+  const [answerRead, setAnswerRead] = useState<{
+    key: string;
+    state: 'loading' | 'ready' | 'error';
+    items: ScientificAnswer1[];
+  }>({ key: '', state: 'loading', items: [] });
+  const answerKey = studyId + '/' + version + '/' + actor;
+  useEffect(() => {
+    const read = api.fence({ studyId });
+    setAnswerRead({ key: answerKey, state: 'loading', items: [] });
+    void api
+      .answers(studyId, version, read.signal)
+      .then((result) => {
+        if (!read.valid()) return;
+        const cases = new Set<string | null>();
+        if (
+          result.approach_version_id !== version ||
+          result.items.some((answer) => {
+            const duplicate = cases.has(answer.case_id);
+            cases.add(answer.case_id);
+            return (
+              duplicate ||
+              answer.study_id !== studyId ||
+              answer.approach_version_id !== version ||
+              (answer.case_id !== null &&
+                !saved.version.content.cases.some((item) => item.case_id === answer.case_id))
+            );
+          })
+        )
+          throw new Error('Answer association mismatch');
+        setAnswerRead({ key: answerKey, state: 'ready', items: result.items });
+      })
+      .catch(async (error) => {
+        const result = await api.readFailed(error, read);
+        if (read.valid() && result !== 'access-lost' && result !== 'stale')
+          setAnswerRead({ key: answerKey, state: 'error', items: [] });
+      })
+      .finally(read.done);
+    return () => read.abort();
+  }, [api, answerKey, answerReview]);
+  const answerState = answerRead.key === answerKey ? answerRead.state : 'loading';
+  const answers = answerRead.key === answerKey ? answerRead.items : [];
+  const answerFor = (caseId: string | null) => {
+    if (answerState === 'loading') return <p role="status">Loading scientific answer…</p>;
+    if (answerState === 'error')
+      return <p role="alert">Scientific answers could not be loaded. Retry the answer read.</p>;
+    const answer = answers.find((item) => item.case_id === caseId);
+    return answer ? (
+      <ScientificAnswer
+        key={answer.answer_version_id}
+        answer={answer}
+        api={api}
+        studyId={studyId}
+        onOpen={onOpen}
+      />
+    ) : (
+      <p>
+        {caseId === null
+          ? 'No study answer has been assessed.'
+          : 'No case answer has been assessed.'}
+      </p>
+    );
+  };
+
+  const valid = (token: number) => token === generation.current && actor === api.actor;
   /** Clear this review. A confirmed denial from any host of this study runs it, and
    * this review's own confirmed denial is signalled so the approach reader clears too. */
-  function clearProtected(){generation.current++;cache.current.clear();setSources(new Map());setRows([]);setCursor(null);setLoading(false);setDenied(true);}
-  useAccessLoss(api,studyId,change=>{if(change.kind==='access-lost')clearProtected();});
+  function clearProtected() {
+    setAnswerRead({ key: '', state: 'error', items: [] });
+    generation.current++;
+    cache.current.clear();
+    setSources(new Map());
+    setRows([]);
+    setCursor(null);
+    setLoading(false);
+    setDenied(true);
+  }
+  useAccessLoss(api, studyId, (change) => {
+    if (change.kind === 'access-lost') clearProtected();
+  });
   /** Shared classification with the fence captured when the read started (one
    * in-flight study probe per study and session). A superseded review generation
    * still confirms a denial; only its display updates are dropped. */
-  async function failed(e:unknown,token:number,read:ReadFence|null):Promise<ReadFailure>{
-    if(!read)return 'stale';
-    const outcome=await api.readFailed(e,read);
-    if(outcome==='transient'&&valid(token))setAccessUnverified(true);
+  async function failed(e: unknown, token: number, read: ReadFence | null): Promise<ReadFailure> {
+    if (!read) return 'stale';
+    const outcome = await api.readFailed(e, read);
+    if (outcome === 'transient' && valid(token)) setAccessUnverified(true);
     return outcome;
   }
   /** A refused source does not disclose its body or erase authorized downstream
    * facts: confirm current study access with the shared probe instead. */
-  async function checkStudyAccess(token:number){
-    const read=scope.current;if(!read||!valid(token))return;
-    const outcome=await api.confirmAccess(read);
-    if(!valid(token))return;
-    if(outcome==='ok')setAccessUnverified(false);else if(outcome==='transient')setAccessUnverified(true);
+  async function checkStudyAccess(token: number) {
+    const read = scope.current;
+    if (!read || !valid(token)) return;
+    const outcome = await api.confirmAccess(read);
+    if (!valid(token)) return;
+    if (outcome === 'ok') setAccessUnverified(false);
+    else if (outcome === 'transient') setAccessUnverified(true);
   }
-  async function detail(usage:ApproachUsage1,token:number){
-    if(!valid(token))return;
-    const read=scope.current;
-    const update=(value:Partial<Row>)=>{if(valid(token))setRows(old=>old.map(row=>identity(row.usage)===identity(usage)?{usage,...value}:row));};
-    update({loading:true});
+  async function detail(usage: ApproachUsage1, token: number) {
+    if (!valid(token)) return;
+    const read = scope.current;
+    const update = (value: Partial<Row>) => {
+      if (valid(token))
+        setRows((old) =>
+          old.map((row) => (identity(row.usage) === identity(usage) ? { usage, ...value } : row)),
+        );
+    };
+    update({ loading: true });
     try {
-      const record=await queue.current.read<FrozenConfigurationRead7|PublicRunDetail>(()=>valid(token),()=>usage.kind==='run'?api.run(studyId,usage.run_id):api.configuration(studyId,usage.configuration_revision_id));
-      if(!valid(token)||!record)return;
-      const run='run_id' in record?record:undefined,configuration='configuration' in record?record.configuration:run?.history?.configuration;
-      if(run&&run.run_id!==(usage.kind==='run'?usage.run_id:''))throw new Error('binding');
-      if(configuration){const pin='approach_binding' in configuration?configuration.approach_binding:null;
-        if(configuration.study_id!==studyId||configuration.configuration_revision_id!==usage.configuration_revision_id||pin?.approach_id!==saved.version.approach_id||pin?.approach_version_id!==version||pin.case_id!==usage.case_id||pin.approach_digest!==saved.version.digest||pin.closure_digest!==saved.closure.digest)throw new Error('binding');
-      } else if(!run)throw new Error('binding');
-      setAccessUnverified(false);update({configuration:configuration??undefined,run});
-    }catch(e){
-      const outcome=await failed(e,token,read);
-      if(outcome==='access-lost'||outcome==='stale'||!valid(token))return;
-      update({error:e instanceof Error&&e.message==='binding'?'Record binding mismatch':'Record unavailable'});
+      const record = await queue.current.read<FrozenConfigurationRead7 | PublicRunDetail>(
+        () => valid(token),
+        () =>
+          usage.kind === 'run'
+            ? api.run(studyId, usage.run_id)
+            : api.configuration(studyId, usage.configuration_revision_id),
+      );
+      if (!valid(token) || !record) return;
+      const run = 'run_id' in record ? record : undefined,
+        configuration =
+          'configuration' in record ? record.configuration : run?.history?.configuration;
+      if (run && run.run_id !== (usage.kind === 'run' ? usage.run_id : ''))
+        throw new Error('binding');
+      if (configuration) {
+        const pin = 'approach_binding' in configuration ? configuration.approach_binding : null;
+        if (
+          configuration.study_id !== studyId ||
+          configuration.configuration_revision_id !== usage.configuration_revision_id ||
+          pin?.approach_id !== saved.version.approach_id ||
+          pin?.approach_version_id !== version ||
+          pin.case_id !== usage.case_id ||
+          pin.approach_digest !== saved.version.digest ||
+          pin.closure_digest !== saved.closure.digest
+        )
+          throw new Error('binding');
+      } else if (!run) throw new Error('binding');
+      setAccessUnverified(false);
+      update({ configuration: configuration ?? undefined, run });
+    } catch (e) {
+      const outcome = await failed(e, token, read);
+      if (outcome === 'access-lost' || outcome === 'stale' || !valid(token)) return;
+      update({
+        error:
+          e instanceof Error && e.message === 'binding'
+            ? 'Record binding mismatch'
+            : 'Record unavailable',
+      });
     }
   }
-  async function page(next:ApproachUsageCursor1|null,token=generation.current){
-    const read=scope.current;
-    setLoading(true);setError(false);failedCursor.current=next;
-    try{const result=await queue.current.read(()=>valid(token),()=>api.approachUsage(studyId,version,{limit:10,case_id:caseId||null,cursor:next}));
-      if(!valid(token)||!result)return;
-      if(result.items.some(item=>caseId&&item.case_id!==caseId||item.case_id!==null&&!saved.version.content.cases.some(c=>c.case_id===item.case_id)))throw new Error('binding');
-      setRows(old=>{const map=new Map(old.map(row=>[identity(row.usage),row]));for(const usage of result.items)if(!map.has(identity(usage)))map.set(identity(usage),{usage,loading:true});return [...map.values()];});setCursor(result.next_cursor);
-      for(const usage of result.items)void detail(usage,token);
-    }catch(e){const outcome=await failed(e,token,read);if((outcome==='error'||outcome==='transient')&&valid(token))setError(true);}
-    finally{if(valid(token))setLoading(false);}
+  async function page(next: ApproachUsageCursor1 | null, token = generation.current) {
+    const read = scope.current;
+    setLoading(true);
+    setError(false);
+    failedCursor.current = next;
+    try {
+      const result = await queue.current.read(
+        () => valid(token),
+        () =>
+          api.approachUsage(studyId, version, { limit: 10, case_id: caseId || null, cursor: next }),
+      );
+      if (!valid(token) || !result) return;
+      if (
+        result.items.some(
+          (item) =>
+            (caseId && item.case_id !== caseId) ||
+            (item.case_id !== null &&
+              !saved.version.content.cases.some((c) => c.case_id === item.case_id)),
+        )
+      )
+        throw new Error('binding');
+      setRows((old) => {
+        const map = new Map(old.map((row) => [identity(row.usage), row]));
+        for (const usage of result.items)
+          if (!map.has(identity(usage))) map.set(identity(usage), { usage, loading: true });
+        return [...map.values()];
+      });
+      setCursor(result.next_cursor);
+      for (const usage of result.items) void detail(usage, token);
+    } catch (e) {
+      const outcome = await failed(e, token, read);
+      if ((outcome === 'error' || outcome === 'transient') && valid(token)) setError(true);
+    } finally {
+      if (valid(token)) setLoading(false);
+    }
   }
-  function loadSources(ids:string[],retry=false){
-    const token=generation.current;
-    const batch=[...new Set(ids)].filter(id=>retry?cache.current.get(id)?.state==='error':!cache.current.has(id)).slice(0,10);
-    for(const id of batch)cache.current.set(id,{state:'loading'});setSources(new Map(cache.current));
-    for(const id of batch)void queue.current.read(()=>valid(token),()=>api.run(studyId,id)).then(run=>{if(valid(token)&&run){setAccessUnverified(false);cache.current.set(id,{state:'ready',run});setSources(new Map(cache.current));}}).catch(async e=>{
-      if(!valid(token))return;
-      if(accessDenied(e)||e instanceof ApiError&&e.detail.code==='resource_not_found')await checkStudyAccess(token);
-      if(valid(token)){cache.current.set(id,{state:'error'});setSources(new Map(cache.current));}
-    });
+  function loadSources(ids: string[], retry = false) {
+    const token = generation.current;
+    const batch = [...new Set(ids)]
+      .filter((id) => (retry ? cache.current.get(id)?.state === 'error' : !cache.current.has(id)))
+      .slice(0, 10);
+    for (const id of batch) cache.current.set(id, { state: 'loading' });
+    setSources(new Map(cache.current));
+    for (const id of batch)
+      void queue.current
+        .read(
+          () => valid(token),
+          () => api.run(studyId, id),
+        )
+        .then((run) => {
+          if (valid(token) && run) {
+            setAccessUnverified(false);
+            cache.current.set(id, { state: 'ready', run });
+            setSources(new Map(cache.current));
+          }
+        })
+        .catch(async (e) => {
+          if (!valid(token)) return;
+          if (accessDenied(e) || (e instanceof ApiError && e.detail.code === 'resource_not_found'))
+            await checkStudyAccess(token);
+          if (valid(token)) {
+            cache.current.set(id, { state: 'error' });
+            setSources(new Map(cache.current));
+          }
+        });
   }
-  useLayoutEffect(()=>{const token=++generation.current,read=api.fence({studyId});scope.current=read;setRows([]);setCursor(null);setError(false);setDenied(false);setAccessUnverified(false);cache.current.clear();setSources(new Map());void page(null,token);return()=>{generation.current++;cache.current.clear();read.done();};},[api,actor,studyId,version,caseId,review]);
-  const domId=(kind:string,id:string)=>base+'-'+kind+'-'+id;
+  useLayoutEffect(() => {
+    const token = ++generation.current,
+      read = api.fence({ studyId });
+    scope.current = read;
+    setRows([]);
+    setCursor(null);
+    setError(false);
+    setDenied(false);
+    setAccessUnverified(false);
+    cache.current.clear();
+    setSources(new Map());
+    void page(null, token);
+    return () => {
+      generation.current++;
+      cache.current.clear();
+      read.done();
+    };
+  }, [api, actor, studyId, version, caseId, review]);
+  const domId = (kind: string, id: string) => base + '-' + kind + '-' + id;
   // Exact version-qualified case navigation: focus that case's result, never a
   // similarly named case or the first case. Unknown identities are reported.
-  useEffect(()=>{
-    if(!focusCase)return;
-    const known=focusCase.id==='none'||saved.version.content.cases.some(item=>item.case_id===focusCase.id);
-    setMissingCase(known?'':focusCase.id);
-    let frames=0,frame=0;
-    const attempt=()=>{const target=document.getElementById(known?domId('card',focusCase.id):base+'-results');if(target&&target.getClientRects().length){target.focus();target.scrollIntoView({block:'center'});return;}if(++frames<120)frame=requestAnimationFrame(attempt);else document.getElementById(base+'-results')?.focus();};
-    frame=requestAnimationFrame(attempt);
-    return()=>cancelAnimationFrame(frame);
-  },[focusCase?.token,version]);
+  useEffect(() => {
+    if (!focusCase) return;
+    const known =
+      focusCase.id === 'none' ||
+      saved.version.content.cases.some((item) => item.case_id === focusCase.id);
+    setMissingCase(known ? '' : focusCase.id);
+    let frames = 0,
+      frame = 0;
+    const attempt = () => {
+      const target = document.getElementById(
+        known ? domId('card', focusCase.id) : base + '-results',
+      );
+      if (target && target.getClientRects().length) {
+        target.focus();
+        target.scrollIntoView({ block: 'center' });
+        return;
+      }
+      if (++frames < 120) frame = requestAnimationFrame(attempt);
+      else document.getElementById(base + '-results')?.focus();
+    };
+    frame = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(frame);
+  }, [focusCase?.token, version]);
   // Case definitions belong to the protected approach and clear with it.
-  if(denied)return <section className="approach-usage" aria-label="Approach usage"><p role="alert">{accessLostText}</p></section>;
-  const incomplete=loading||error||!!cursor||rows.some(row=>row.loading||row.error);
-  const groups=groupFindings(saved,rows,caseId);
-  const runRows=rows.filter(row=>row.usage.kind==='run'),loadedRuns=runRows.filter(row=>row.run),retained=loadedRuns.filter(row=>row.run!.history?.results).length;
-  const configurationsLoaded=rows.filter(row=>row.usage.kind==='configuration'&&row.configuration).length,failedRecords=rows.filter(row=>row.error).length;
-  const selectedCase=saved.version.content.cases.find(item=>item.case_id===caseId);
-  const coverage=!incomplete?'All usage loaded':error?'A usage page could not be loaded; review coverage is incomplete':cursor?'More usage is available; review coverage is incomplete':loading?'Loading usage; review coverage is incomplete':'Some records are not loaded; review coverage is incomplete';
-  const cardGroups=groups.filter(group=>group.item||group.rows.length);
-  const row=(item:Row,configuration?:Configuration)=><FindingRow key={identity(item.usage)} row={item} saved={configuration} sources={sources} load={loadSources} retry={()=>void detail(item.usage,generation.current)} onOpen={target=>onOpen({...target,study:studyId})}/>;
+  if (denied)
+    return (
+      <section className="approach-usage" aria-label="Approach usage">
+        <p role="alert">{accessLostText}</p>
+      </section>
+    );
+  const incomplete = loading || error || !!cursor || rows.some((row) => row.loading || row.error);
+  const groups = groupFindings(saved, rows, caseId);
+  const runRows = rows.filter((row) => row.usage.kind === 'run'),
+    loadedRuns = runRows.filter((row) => row.run),
+    retained = loadedRuns.filter((row) => row.run!.history?.results).length;
+  const configurationsLoaded = rows.filter(
+      (row) => row.usage.kind === 'configuration' && row.configuration,
+    ).length,
+    failedRecords = rows.filter((row) => row.error).length;
+  const selectedCase = saved.version.content.cases.find((item) => item.case_id === caseId);
+  const coverage = !incomplete
+    ? 'All usage loaded'
+    : error
+      ? 'A usage page could not be loaded; review coverage is incomplete'
+      : cursor
+        ? 'More usage is available; review coverage is incomplete'
+        : loading
+          ? 'Loading usage; review coverage is incomplete'
+          : 'Some records are not loaded; review coverage is incomplete';
+  const cardGroups = groups.filter((group) => group.item || group.rows.length);
+  const row = (item: Row, configuration?: Configuration) => (
+    <FindingRow
+      key={identity(item.usage)}
+      row={item}
+      saved={configuration}
+      hideSources={
+        item.usage.kind === 'configuration' &&
+        rows.some(
+          (other) =>
+            other.usage.kind === 'run' &&
+            !!other.run &&
+            other.usage.configuration_revision_id === item.usage.configuration_revision_id &&
+            other.usage.case_id === item.usage.case_id,
+        )
+      }
+      sources={sources}
+      load={loadSources}
+      retry={() => void detail(item.usage, generation.current)}
+      onOpen={(target) => onOpen({ ...target, study: studyId })}
+    />
+  );
   // Results first (recorded facts, exact coverage, no verdict), then one card per case.
-  return <section className="approach-usage" aria-label="Approach usage">
-    <Panel className="approach-results" label="Results" title="Results" actions={onStudyLimits&&<Button variant="quiet" size="sm" aria-haspopup="dialog" onClick={onStudyLimits}>Study limits</Button>}>
-      <p className="approach-eyebrow">Answer to the study question</p>
-      <h3 id={base+'-results'} tabIndex={-1} className="approach-results-answer">No study answer has been assessed.</h3>
-      <p className="approach-results-summary">{plural(loadedRuns.length,'run')} loaded for {selectedCase?`case ${selectedCase.title} of this`:'this'} approach version. {retained} {retained===1?'has':'have'} results.</p>
-      <p className="context-line">Approach v{saved.version.version_number} · {plural(configurationsLoaded,'configuration')} loaded{failedRecords?` · ${plural(failedRecords,'record')} could not be loaded`:''} · {coverage}</p>
-      {missingCase&&<p role="alert">This case is not part of approach v{saved.version.version_number}. No other case is shown in its place.</p>}
-      <p className="context-line">Criteria are fixed-threshold checks on outputs. They do not answer the study question.</p>
-      <div className="section-actions approach-usage-controls"><label>Case filter<Select aria-label="Findings case" value={caseId} onChange={event=>setCaseId(event.target.value)}><option value="">All cases</option>{saved.version.content.cases.map(item=><option key={item.case_id} value={item.case_id}>{item.title}</option>)}</Select></label><Button onClick={()=>setReview(value=>value+1)}>Refresh usage</Button></div>
-      <p role="status" className="context-line">{rows.length} usage rows loaded · {rows.filter(row=>row.usage.kind==='configuration').length} configurations · {rows.filter(row=>row.usage.kind==='run').length} runs. {cursor?'More usage is available':!loading&&!error?'All usage loaded':''}</p>
-      {loading&&<p role="status">Loading usage…</p>}{error&&<p role="alert">Usage unavailable</p>}{accessUnverified&&<p role="alert">Study access could not be verified. Retry the read.</p>}
-    </Panel>
-    <div className="approach-case-cards">
-      {cardGroups.map(group=><CaseCard key={group.id} group={group} complete={!incomplete} cursor={!!cursor} headingId={domId('card',group.id)} content={saved.version.content} onCreateConfiguration={onCreateConfiguration} row={row}/>)}
-      {!cardGroups.length&&<p>No cases</p>}
-      {!caseId&&<RemainingWork content={saved.version.content} headingId={base+'-remaining'} onViewStep={onViewStep}/>}
-    </div>
-    {cursor&&!error&&<Button disabled={loading} onClick={()=>void page(cursor)}>Load more usage</Button>}{error&&<Button disabled={loading} onClick={()=>void page(failedCursor.current)}>Retry usage page</Button>}
-  </section>;
+  return (
+    <section className="approach-usage" aria-label="Approach usage">
+      <Disclosure className="approach-usage-review">
+        <summary>Review configurations and runs</summary>
+        <div role="region" aria-label="Usage review">
+          <h4 id={base + '-results'} tabIndex={-1}>
+            Usage of this approach version
+          </h4>
+          <p className="approach-results-summary">
+            {plural(loadedRuns.length, 'run')} loaded for{' '}
+            {selectedCase ? `case ${selectedCase.title} of this` : 'this'} approach version.{' '}
+            {retained} {retained === 1 ? 'has' : 'have'} results.
+          </p>
+          <p className="context-line">
+            Approach v{saved.version.version_number} ·{' '}
+            {plural(configurationsLoaded, 'configuration')} loaded
+            {failedRecords
+              ? ` · ${plural(failedRecords, 'record')} could not be loaded`
+              : ''} · {coverage}
+          </p>
+          {missingCase && (
+            <p role="alert">
+              This case is not part of approach v{saved.version.version_number}. No other case is
+              shown in its place.
+            </p>
+          )}
+          <p className="context-line">
+            Criteria are fixed-threshold checks on outputs. They do not answer the study question.
+          </p>
+          <div className="section-actions approach-usage-controls">
+            <label>
+              Case filter
+              <Select
+                aria-label="Findings case"
+                value={caseId}
+                onChange={(event) => setCaseId(event.target.value)}
+              >
+                <option value="">All cases</option>
+                {saved.version.content.cases.map((item) => (
+                  <option key={item.case_id} value={item.case_id}>
+                    {item.title}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <Button onClick={() => setReview((value) => value + 1)}>Refresh usage</Button>
+          </div>
+          <p role="status" className="context-line">
+            {rows.length} usage rows loaded ·{' '}
+            {rows.filter((row) => row.usage.kind === 'configuration').length} configurations ·{' '}
+            {rows.filter((row) => row.usage.kind === 'run').length} runs.{' '}
+            {cursor ? 'More usage is available' : !loading && !error ? 'All usage loaded' : ''}
+          </p>
+        </div>
+      </Disclosure>
+      {loading && <p role="status">Loading usage…</p>}
+      {error && <p role="alert">Usage unavailable</p>}
+      {accessUnverified && <p role="alert">Study access could not be verified. Retry the read.</p>}
+      <div className="approach-case-cards">
+        {cardGroups.map((group) => (
+          <CaseCard
+            key={group.id}
+            group={group}
+            complete={!incomplete}
+            cursor={!!cursor}
+            headingId={domId('card', group.id)}
+            content={saved.version.content}
+            expanded={focusCase?.id === group.id ? focusCase.token : undefined}
+            onCreateConfiguration={onCreateConfiguration}
+            row={row}
+            answer={
+              group.item ? answerFor(group.id) : <p>No case is associated with these records.</p>
+            }
+            answerStatus={
+              answerState === 'loading'
+                ? 'Loading answer'
+                : answerState === 'error'
+                  ? 'Answer unavailable'
+                  : answers.some((item) => item.case_id === group.id)
+                    ? 'Assessed'
+                    : 'Not assessed'
+            }
+          />
+        ))}
+        {!cardGroups.length && <p>No cases</p>}
+        {!caseId && (
+          <RemainingWork
+            content={saved.version.content}
+            headingId={base + '-remaining'}
+            onViewStep={onViewStep}
+          />
+        )}
+      </div>
+      {cursor && !error && (
+        <Button disabled={loading} onClick={() => void page(cursor)}>
+          Load more usage
+        </Button>
+      )}
+      {error && (
+        <Button disabled={loading} onClick={() => void page(failedCursor.current)}>
+          Retry usage page
+        </Button>
+      )}
+      <section
+        id={answerId}
+        className="approach-section approach-study-answer"
+        tabIndex={-1}
+        aria-label="Answer to the study question"
+      >
+        <h3>Answer to the study question</h3>
+        {answerFor(null)}
+        <p className="context-line">
+          Case results support an answer only after their basis and limitations have been assessed.
+        </p>
+        <Button
+          disabled={answerState === 'loading'}
+          onClick={() => setAnswerReview((value) => value + 1)}
+        >
+          {answerState === 'error' ? 'Retry answer read' : 'Refresh answers'}
+        </Button>
+        {onStudyLimits && (
+          <Button variant="quiet" size="sm" aria-haspopup="dialog" onClick={onStudyLimits}>
+            Study details
+          </Button>
+        )}
+      </section>
+    </section>
+  );
 }

@@ -29,7 +29,7 @@ Every piece of information has exactly one editable home. Everywhere else shows 
 | Study archive state | Home row (Archive / Restore) | Home Archived view |
 | Study question, context, approach assumptions, limits | Modeling approach (edit mode) › Study details | Study question box and Study details dialog on Overview and the approach page; retained approach reader in configurations and runs |
 | Method steps | Modeling approach › Methods | Retained approach reader; "Why" in the model view |
-| Cases | Modeling approach › Cases & results (one card per case) | Run header "Case: … · View case"; configuration "View case in approach" |
+| Cases | Modeling approach › Cases and their answers (one expandable row per case) | Run header "Case: … · View case"; configuration "View case in approach" |
 | Model composition, components, connections, source | Models › model draft | Canonical model view, read-only, in model versions, Run › Model, configuration "View model version", approach "Open model version" |
 | Quantities (ports) | Models › model view › Edit ports | Quantities table below the canvas; run and configuration contexts add Value and Provenance |
 | Model and component assumptions | Model view Details (nothing selected for the model; component selected for the component) | Evidence page; Run › Evidence |
@@ -124,11 +124,10 @@ The application is a single-page React client with hash deep links that name exp
 ### 3.4 Modeling approach
 
 - Header: back to Overview, version select, Edit approach / save draft / save approach version, overflow with Record details and Earlier work. The same study question box and Study details dialog as Overview; in edit mode Study details is where approach assumptions and limits are added and edited.
-- **Methods**: method map on the left; the selected step on the right with its status, **Open model version**, and two tabs:
-  - Explanation: purpose, why this method, transformation, then one line "Implemented in Model version … · N inputs · M outputs" (or, for a proposed step, its intended inputs and outputs in prose and the remaining work).
-  - Assumptions & evidence: the step's references to approach, model, component and configuration assumptions, read-only, plus rationale evidence.
-  - Open model version opens the canonical model view read-only, with the step's components traced, its quantities highlighted and the table scoped to them until "Show all quantities".
-- **Cases & results**: results summary first (honest counts, coverage, the fixed-threshold disclaimer, case filter, refresh, and a **Study limits** link that opens Study details at Limits). Then one card per case: question, Create configuration, its runs (name, short ID, Execution, Criteria, criterion facts, View run), configurations not yet run, and "Why this case" (rationale, model version, evidence). Then a "No specific case" card and a "Remaining method work" card.
+- One continuous page follows the full saved engineering question: **Reasoning and methods**, **Cases and their answers**, then **Answer to the study question**. Section links move focus and scroll without replacing the workspace route. There are no chapter tabs or separate method map.
+- Methods expand in place to show purpose, basis and reasoning, calculation, dependencies and unresolved work. Proposed and partially linked methods remain explicit. Model selection handles several exact versions; **Open model version** opens the canonical read-only model view with the relevant components and quantities highlighted. Assumption and evidence references use their canonical owners alongside the explanation.
+- Cases expand to show the question and purpose, every associated saved configuration and run, and the case answer where explicitly assessed. No configuration disappears merely because a run exists, and no run is selected implicitly as latest. Outputs keep units and missing-value reasons; full precision, execution and criterion checks are supporting run details.
+- Usage review keeps case filtering, refresh, bounded reads, pagination and failures explicit. The final study synthesis follows the cases. Empty scientific assessments say they have not been assessed; successful execution, met criteria and evidence titles never supply an answer. Study limits remain in **Study details**.
 
 ### 3.5 Models and the canonical model view
 

@@ -5,25 +5,31 @@ import { CaseNavigation, type WorkspaceLink } from './workspaceModel';
 import { ApproachFindings } from './ApproachFindings';
 import { ApproachAnnotations, StudyDetailsDialog, StudyQuestionBox, type ApproachHandoff, type StudyDetailsHandle } from './ApproachAssumptions';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Tabs, Panel, TextArea, TextInput, Select, DialogFrame, SectionHeader, StatusTag, RecordBar, ActionDialog } from './design';
+import {
+  Button,
+  Panel,
+  TextArea,
+  TextInput,
+  Select,
+  DialogFrame,
+  StatusTag,
+  ActionDialog,
+} from './design';
 import { ApproachMethod, ApproachCases, ApproachBasis, forgetMethodViews, rememberMethodStep } from './ApproachMethod';
 import { HyprnMvpApi, accessLostText, accessUnverifiedText, message, descriptiveApproach, type ReadFence } from './api';
 import { useAccessLoss } from './accessLoss';
 import { ApproachController, useApproachController } from './ApproachController';
 import type { ModelRevisionRead4, ApproachSelection1, ApproachSavedRead3, ApproachVersionSummaryRead2, ApproachCursor1 } from './contract';
 
-const chapters=new Map<string,string>();
-/** Approach reading positions (chapter and method view) never outlive the session
- * that read them; a confirmed access loss forgets that study's positions. */
+/** Method reading positions never outlive the session that read them. */
 export function forgetApproachReading(studyId?:string){
-  if(studyId===undefined)chapters.clear();else for(const key of [...chapters.keys()])if(key.startsWith(studyId+'/'))chapters.delete(key);
   forgetMethodViews(studyId);
 }
 /** The model view's "Open step n in modeling approach": the exact saved version opens
- * on Methods with that step selected and focused. A reading position only; no data. */
+ * with that step expanded and focused. A reading position only; no data. */
 export function showMethodStep(studyId:string,versionId:string,stepId:string){
   const viewKey=studyId+'/saved/'+versionId;
-  chapters.set(viewKey,'methods');rememberMethodStep(viewKey,stepId);
+  rememberMethodStep(viewKey,stepId);
 }
 export type ApproachReadSource = { kind: 'draft'; content: ApproachContent; resolved?: ApproachResolution } | { kind: 'saved' | 'retained'; record: ApproachSavedRead3 };
 
@@ -32,6 +38,7 @@ export type ApproachReadSource = { kind: 'draft'; content: ApproachContent; reso
 /** Live results for an exact saved version: one card per case (definition, runs and
  * configurations together). Study limits open the reader's Study details at Limits. */
 export type ApproachResultsSlot = (slot: {
+  answerId: string;
   focusCase?: { id: string; token: number };
   onViewStep: (stepId: string) => void;
   onStudyLimits?: () => void;
@@ -43,14 +50,23 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
   const resolved = source.kind === 'draft' ? source.resolved : source.record.closure;
   // Exact version (or current draft) keeps its own reading position across owner navigation.
   const viewKey=(studyId??'')+'/'+source.kind+'/'+(source.kind==='draft'?'draft':source.record.version.approach_version_id);
-  const [chapter,setChapterState]=useState(()=>focusCase?'cases':chapters.get(viewKey)??'methods');
-  const setChapter=(value:string)=>{chapters.set(viewKey,value);setChapterState(value);};
   const [requestedStep,setRequestedStep]=useState<{id:string;token:number}>();
-  // Exact case navigation opens Cases & results; the results own the focus target.
-  useLayoutEffect(()=>{if(focusCase)setChapter('cases');},[focusCase?.token]);
-  const viewStep=(id:string)=>{setChapter('methods');setRequestedStep(old=>({id,token:(old?.token??0)+1}));};
+  const viewStep=(id:string)=>{setRequestedStep(old=>({id,token:(old?.token??0)+1}));};
   const details=useRef<StudyDetailsHandle>(null);
-  const casesPanel=<Panel label="Cases and evaluation" title="Cases and evaluation"><ApproachCases onCreateConfiguration={onCreateConfiguration} content={content} models={resolved?.models} onChange={onChange} disabled={disabled}/></Panel>;
+  function jump(section: string) {
+    const target = document.getElementById(sectionId + '-' + section);
+    target?.focus();
+    target?.scrollIntoView({ block: 'start' });
+  }
+  const casesPanel = (
+    <ApproachCases
+      onCreateConfiguration={onCreateConfiguration}
+      content={content}
+      models={resolved?.models}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
   // Retained and draft readers never navigate to live case usage.
   return (
     <CaseNavigation.Provider value={null}>
@@ -94,31 +110,42 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
             }
           />
           <StudyDetailsDialog ref={details} />
-          <Tabs
-            label="Approach sections"
-            value={chapter}
-            onChange={setChapter}
-            items={[
-              {
-                id: 'methods',
-                label: 'Methods',
-                tabId: sectionId + '-tab-methods',
-                panelId: sectionId + '-methods',
-              },
-              {
-                id: 'cases',
-                label: 'Cases & results',
-                tabId: sectionId + '-tab-cases',
-                panelId: sectionId + '-cases',
-              },
-            ]}
-          />
-          <div
+          <nav className="approach-jumps" aria-label="On this page">
+            <a
+              href={'#' + sectionId + '-methods'}
+              onClick={(event) => {
+                event.preventDefault();
+                jump('methods');
+              }}
+            >
+              Reasoning and methods
+            </a>
+            <a
+              href={'#' + sectionId + '-cases'}
+              onClick={(event) => {
+                event.preventDefault();
+                jump('cases');
+              }}
+            >
+              Cases and their answers
+            </a>
+            <a
+              href={'#' + sectionId + '-answer'}
+              onClick={(event) => {
+                event.preventDefault();
+                jump('answer');
+              }}
+            >
+              Answer to the study question
+            </a>
+          </nav>
+          <section
+            className="approach-section"
             id={sectionId + '-methods'}
-            role="tabpanel"
-            aria-labelledby={sectionId + '-tab-methods'}
-            hidden={chapter !== 'methods'}
+            aria-labelledby={sectionId + '-methods-heading'}
+            tabIndex={-1}
           >
+            <h3 id={sectionId + '-methods-heading'}>Reasoning and methods</h3>
             <ApproachMethod
               key={viewKey}
               viewKey={viewKey}
@@ -139,15 +166,17 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
               onChange={onChange}
               disabled={disabled}
             />
-          </div>
-          <div
+          </section>
+          <section
+            className="approach-section"
             id={sectionId + '-cases'}
-            role="tabpanel"
-            aria-labelledby={sectionId + '-tab-cases'}
-            hidden={chapter !== 'cases'}
+            aria-labelledby={sectionId + '-cases-heading'}
+            tabIndex={-1}
           >
+            <h3 id={sectionId + '-cases-heading'}>Cases and their answers</h3>
             {findings ? (
               findings({
+                answerId: sectionId + '-answer',
                 focusCase,
                 onViewStep: viewStep,
                 onStudyLimits:
@@ -157,21 +186,31 @@ export function ApproachReader({ source, onAccessLost, questionActions, findings
               })
             ) : (
               <>
-                <Panel className="approach-results" label="Results" title="Results">
-                  <p className="approach-eyebrow">Answer to the study question</p>
-                  <h3 className="approach-results-answer">No study answer has been assessed.</h3>
-                  <p className="context-line">
-                    {source.kind === 'draft'
-                      ? 'Save an approach version to connect configurations and runs ' +
-                        'to this explanation.'
-                      : 'Results belong to the configurations and runs that used this version. ' +
-                        'This view shows its explanation only.'}
-                  </p>
-                </Panel>
                 {casesPanel}
+                <section id={sectionId + '-answer'} className="approach-section" tabIndex={-1}>
+                  <Panel
+                    className="approach-results"
+                    label="Answer to the study question"
+                    title="Answer to the study question"
+                  >
+                    <p className="approach-eyebrow">Answer to the study question</p>
+                    <h3 className="approach-results-answer">
+                      {source.kind === 'draft'
+                        ? 'No study answer has been assessed.'
+                        : 'Scientific answers are not included in this historical record.'}
+                    </h3>
+                    <p className="context-line">
+                      {source.kind === 'draft'
+                        ? 'Save an approach version to connect configurations and runs ' +
+                          'to this explanation.'
+                        : 'Results belong to the configurations and runs that used this version. ' +
+                          'This view shows its explanation only.'}
+                    </p>
+                  </Panel>
+                </section>
               </>
             )}
-          </div>
+          </section>
         </div>
       </ApproachAnnotations>
     </CaseNavigation.Provider>
@@ -238,32 +277,134 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
   function cancelEdit() { setQuestionOpen(false);if (beforeEdit.current) controller.edit(beforeEdit.current); close(editor.current); }
   const questionDirty=questionOpen&&JSON.stringify(state.local)!==JSON.stringify(beforeEdit.current);
   useLayoutEffect(()=>{onEditingChange?.(questionDirty||annotationEditing||basisEditing);return()=>onEditingChange?.(false);},[questionDirty,annotationEditing,basisEditing]);
-  return <section className="approach-page" aria-labelledby="approach-heading">
-    <div className="approach-topline"><Button className="link back-link" aria-label="Back to overview" onClick={onBack}>← Overview</Button></div>
-    <div className="page-heading"><div><h2 id="approach-heading" tabIndex={-1}>Modeling approach</h2></div><div className="section-actions">
-      <Select aria-label="Approach version" value={lost ? 'draft' : versionId ?? 'draft'} disabled={locked} onChange={e => choose(e.target.value === 'draft' ? undefined : e.target.value)}><option value="draft">Draft</option>{versions.map(v => <option key={v.approach_version_id} value={v.approach_version_id}>v{v.version_number} (read-only)</option>)}{!lost && versionId && !versions.some(v => v.approach_version_id === versionId) && <option value={versionId}>{state.saved ? `v${state.saved.version.version_number}` : 'Selected version'} (read-only)</option>}</Select>
+  return (
+    <section className="approach-page" aria-labelledby="approach-heading">
+      <div className="approach-topline">
+        <Button className="link back-link" aria-label="Back to overview" onClick={onBack}>
+          ← Overview
+        </Button>
+      </div>
+      <div className="page-heading">
+        <div>
+          <h2 id="approach-heading" tabIndex={-1}>
+            Modeling approach
+          </h2>
+        </div>
+        <div className="section-actions">
+          <Select
+            aria-label="Approach version"
+            value={lost ? 'draft' : (versionId ?? 'draft')}
+            disabled={locked}
+            onChange={(e) => choose(e.target.value === 'draft' ? undefined : e.target.value)}
+          >
+            <option value="draft">Draft</option>
+            {versions.map((v) => (
+              <option key={v.approach_version_id} value={v.approach_version_id}>
+                v{v.version_number} (read-only)
+              </option>
+            ))}
+            {!lost && versionId && !versions.some((v) => v.approach_version_id === versionId) && (
+              <option value={versionId}>
+                {state.saved ? `v${state.saved.version.version_number}` : 'Selected version'}{' '}
+                (read-only)
+              </option>
+            )}
+          </Select>
           {state.saved && <RecordAttribution kind={attributionKind} id={attributionId} />}
-      {!absent && !state.accessLost && (editing&&!state.saved ? <><Button disabled={locked} onClick={()=>navigate(()=>setEditing(false))}>Leave editing</Button><Button variant={controller.dirty?'primary':'secondary'} disabled={locked||!state.local||!controller.dirty&&!!state.server?.draft} onClick={()=>void controller.save()}>Save draft</Button><Button disabled={locked||controller.dirty||!state.server?.draft} onClick={()=>{invoker.current=document.activeElement as HTMLElement;void controller.preview().then(ok=>{if(ok){versionDialog.current?.showModal();versionDialog.current?.querySelector<HTMLButtonElement>('[data-safe-choice]')?.focus();}});}}>Save approach version</Button></>:<Button variant="primary" disabled={locked} onClick={beginEditing}>Edit approach</Button>)}
-      {source&&!absent&&<ActionDialog title="Approach actions" label="…" triggerLabel="Approach actions"><div className="hf-action-list">
+          {!absent &&
+            !state.accessLost &&
+            (editing && !state.saved ? (
+              <>
+                <Button disabled={locked} onClick={() => navigate(() => setEditing(false))}>
+                  Leave editing
+                </Button>
+                <Button
+                  variant={controller.dirty ? 'primary' : 'secondary'}
+                  disabled={locked || !state.local || (!controller.dirty && !!state.server?.draft)}
+                  onClick={() => void controller.save()}
+                >
+                  Save draft
+                </Button>
+                <Button
+                  disabled={locked || controller.dirty || !state.server?.draft}
+                  onClick={() => {
+                    invoker.current = document.activeElement as HTMLElement;
+                    void controller.preview().then((ok) => {
+                      if (ok) {
+                        versionDialog.current?.showModal();
+                        versionDialog.current
+                          ?.querySelector<HTMLButtonElement>('[data-safe-choice]')
+                          ?.focus();
+                      }
+                    });
+                  }}
+                >
+                  Save approach version
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" disabled={locked} onClick={beginEditing}>
+                Edit approach
+              </Button>
+            ))}
+          {source && !absent && (
+            <ActionDialog title="Approach actions" label="…" triggerLabel="Approach actions">
+              <div className="hf-action-list">
                 <ActionDialog title="Approach record" label="Record details">
                   <dl className="hf-record-details">
                     <AttributionDetail
                       kind={attributionKind}
                       id={attributionId}
-                      label={state.saved ? "Saved by" : "Changed by"}
+                      label={state.saved ? 'Saved by' : 'Changed by'}
                     />
                   </dl>
                   <pre tabIndex={0}>
                     {JSON.stringify(state.saved ?? state.server?.draft, null, 2)}
                   </pre>
                 </ActionDialog>
-        <ActionDialog title="Earlier work"><ApproachAnnotations studyId={studyId} content={source.kind==='draft'?source.content:source.record.version.content} resolved={source.kind==='draft'?source.resolved:source.record.closure} onChange={editing&&state.local?controller.edit:undefined} disabled={locked} onEditingChange={setBasisEditing}><ApproachBasis closure={source.kind==='draft'?undefined:source.record.closure} api={editing?api:undefined} studyId={studyId} content={source.kind==='draft'?source.content:source.record.version.content} resolved={source.kind==='draft'?source.resolved:source.record.closure} onChange={editing&&state.local?controller.edit:undefined} disabled={locked}/></ApproachAnnotations></ActionDialog>
-        {state.saved&&<Button disabled={locked} onClick={e=>{e.currentTarget.closest('dialog')?.close();show(restoreDialog.current);}}>Use this version in draft</Button>}
-      </div></ActionDialog>}
+                <ActionDialog title="Earlier work">
+                  <ApproachAnnotations
+                    studyId={studyId}
+                    content={
+                      source.kind === 'draft' ? source.content : source.record.version.content
+                    }
+                    resolved={source.kind === 'draft' ? source.resolved : source.record.closure}
+                    onChange={editing && state.local ? controller.edit : undefined}
+                    disabled={locked}
+                    onEditingChange={setBasisEditing}
+                  >
+                    <ApproachBasis
+                      closure={source.kind === 'draft' ? undefined : source.record.closure}
+                      api={editing ? api : undefined}
+                      studyId={studyId}
+                      content={
+                        source.kind === 'draft' ? source.content : source.record.version.content
+                      }
+                      resolved={source.kind === 'draft' ? source.resolved : source.record.closure}
+                      onChange={editing && state.local ? controller.edit : undefined}
+                      disabled={locked}
+                    />
+                  </ApproachAnnotations>
+                </ActionDialog>
+                {state.saved && (
+                  <Button
+                    disabled={locked}
+                    onClick={(e) => {
+                      e.currentTarget.closest('dialog')?.close();
+                      show(restoreDialog.current);
+                    }}
+                  >
+                    Use this version in draft
+                  </Button>
+                )}
+              </div>
+            </ActionDialog>
+          )}
+        </div>
+      </div>
 
-    </div></div>
-
-      {state.local && !absent && <div className="section-actions approach-draft-status">
+      {state.local && !absent && (
+        <div className="section-actions approach-draft-status">
           <p role="status">
             <StatusTag tone={controller.dirty ? 'advisory' : 'inert'}>
               {controller.dirty
@@ -282,22 +423,383 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
               state.local.cases.length ||
               state.local.basis_refs.length ||
               state.server?.draft?.content.basis_refs.length
-            ) && <Button disabled={locked} onClick={() => void controller.preview()}>
+            ) && (
+              <Button disabled={locked} onClick={() => void controller.preview()}>
                 {controller.dirty ? 'Review approach changes' : 'Load linked records'}
-              </Button>}
-        </div>}
-    {controller.busy && <p role="status"><StatusTag tone="running">{state.status === 'loading' ? 'Loading modeling approach…' : 'Resolving and saving…'}</StatusTag></p>}
-    {state.error && <div role="alert"><p>{state.error}</p>{!!state.diagnostics.length && <ul>{state.diagnostics.map((issue,i) => <li key={i}><p>{issue.message}</p><p className="context-line">Field: <code>{issue.path}</code></p></li>)}</ul>}{state.status === 'stale' && <Button onClick={() => void controller.reviewLatest()}>Review latest draft</Button>}{state.accessLost && controller.dirty && <p>Your unsaved approach edits are kept but cannot be saved. Discard them to read the approach again.</p>}{!source && <Button onClick={() => state.accessLost ? navigate(() => readAgain(versionId)) : readAgain(versionId)}>Retry this version</Button>}</div>}
+              </Button>
+            )}
+        </div>
+      )}
+      {controller.busy && (
+        <p role="status">
+          <StatusTag tone="running">
+            {state.status === 'loading' ? 'Loading modeling approach…' : 'Resolving and saving…'}
+          </StatusTag>
+        </p>
+      )}
+      {state.error && (
+        <div role="alert">
+          <p>{state.error}</p>
+          {!!state.diagnostics.length && (
+            <ul>
+              {state.diagnostics.map((issue, i) => (
+                <li key={i}>
+                  <p>{issue.message}</p>
+                  <p className="context-line">
+                    Field: <code>{issue.path}</code>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {state.status === 'stale' && (
+            <Button onClick={() => void controller.reviewLatest()}>Review latest draft</Button>
+          )}
+          {state.accessLost && controller.dirty && (
+            <p>
+              Your unsaved approach edits are kept but cannot be saved. Discard them to read the
+              approach again.
+            </p>
+          )}
+          {!source && (
+            <Button
+              onClick={() =>
+                state.accessLost ? navigate(() => readAgain(versionId)) : readAgain(versionId)
+              }
+            >
+              Retry this version
+            </Button>
+          )}
+        </div>
+      )}
 
-    {state.preview && state.local && controller.dirty && <Panel title="Approach changes"><ul>{state.preview.changes.map((change,i) => <li key={i}>{change.description}</li>)}</ul><p>These edits change the explanation and its references. They do not modify or execute the referenced models.</p></Panel>}
-    {!!state.preview?.issues.length && <Panel title="References to review"><ul>{state.preview.issues.map((issue,i) => <li role="alert" key={i}><p>{issue.message}</p><p className="context-line">Field: <code>{issue.path}</code></p></li>)}</ul></Panel>}
-    {state.latest && <Panel label="Review latest draft"><h3>Review latest draft</h3><div className="approach-review">{([{ title: 'Your local explanation', content: state.local }, { title: 'Latest saved explanation', content: state.latest.draft?.content }] as const).map(item => <div key={item.title}><h4>{item.title}</h4>{(['question','scope','limitations','open_questions'] as const).map(key => <div key={key}><h5>{({ question: 'Engineering question', scope: 'Scope', limitations: 'Limitations', open_questions: 'Open questions' })[key]}</h5><p className="context-copy">{item.content?.[key] || 'None'}</p></div>)}</div>)}</div><p>Your local content will replace the latest draft only after another preview and save.</p><Button disabled={locked} onClick={controller.reapplyToLatest}>Reapply my changes</Button></Panel>}
-    {!source && !state.error && !controller.busy && <div role="alert"><p>{lost ? accessLostText : 'This approach is unavailable in the current session.'}</p><Button onClick={() => readAgain(versionId)}>Retry this version</Button></div>}
-    {listError && <p role="alert">Versions could not be loaded. {listError}</p>}
-    {cursor && <Button onClick={loadMoreVersions}>Load more versions</Button>}
-    {source && (absent ? <Panel title="No modeling approach yet"><p>Describe the question and method before linking an implementation.</p><Button variant="primary" disabled={locked} onClick={() => {setCreating(true);setEditing(true);}}>Create modeling approach</Button></Panel> : <ApproachReader onAccessLost={clearProtectedApproach} onCreateConfiguration={createForCase} findings={state.saved&&onOpenRecord?slot=><ApproachFindings api={api} studyId={studyId} saved={state.saved!} onOpen={onOpenRecord} focusCase={slot.focusCase} onViewStep={slot.onViewStep} onStudyLimits={slot.onStudyLimits} onCreateConfiguration={createForCase}/>:undefined} focusCase={state.saved&&requestedCase&&state.saved.version.approach_version_id===requestedVersion?requestedCase:undefined} onEditingChange={setAnnotationEditing} onOpenModel={onOpenModel} baseVersion={state.server?.draft?.base_version_id ?? state.server?.latest_version?.approach_version_id} onHandoff={onHandoff} source={source} api={api} studyId={studyId} onChange={editing && state.local ? controller.edit : undefined} disabled={locked} questionActions={editing && state.local && <Button disabled={locked} onClick={beginEdit}>Edit question and scope</Button>} />)}
-    <DialogFrame ref={editor} aria-labelledby="approach-edit-title" onCancel={cancelEdit}><h2 id="approach-edit-title">Edit question and scope</h2><form className="form-stack" onSubmit={e => { e.preventDefault(); setQuestionOpen(false);close(editor.current); }}>{state.local && (['question','scope','limitations','open_questions'] as const).map(key => <label key={key}>{({ question: 'Engineering question', scope: 'Scope', limitations: 'Limitations', open_questions: 'Open questions' })[key]}<TextArea aria-label={({ question: 'Engineering question', scope: 'Scope', limitations: 'Limitations', open_questions: 'Open questions' })[key]} maxLength={4096} value={state.local![key]} onChange={e => controller.edit({ ...state.local!, [key]: e.target.value })} /></label>)}{state.local&&(['original_question','elaboration'] as const).map(key=>{const content=descriptiveApproach(state.local!);const claim=content[key];const title=key==='original_question'?'Original wording':'Detailed elaboration';return <fieldset key={key}><legend>{title}</legend><p className="context-line">{key==='original_question'?'Enter only wording that was actually supplied.':'Keep elaboration separate from the agreed question.'} Attribution is a supplied origin claim.</p><label>{title}<TextArea aria-label={title} maxLength={4096} value={claim?.text??''} onChange={e=>controller.edit({...content,[key]:{text:e.target.value,attribution:claim?.attribution??{kind:'unknown',label:null}}})}/></label><label>{title} attribution<Select aria-label={title+' attribution'} value={claim?.attribution.kind??'unknown'} onChange={e=>{const kind=e.target.value;if(kind==='human'||kind==='agent'||kind==='unknown')controller.edit({...content,[key]:{text:claim?.text??'',attribution:{kind,label:claim?.attribution.label??null}}});}}><option value="unknown">Unknown</option><option value="human">Human (supplied claim)</option><option value="agent">Agent (supplied claim)</option></Select></label><label>{title} attribution label<TextInput aria-label={title+' attribution label'} maxLength={256} value={claim?.attribution.label??''} onChange={e=>controller.edit({...content,[key]:{text:claim?.text??'',attribution:{kind:claim?.attribution.kind??'unknown',label:e.target.value||null}}})}/></label>{claim&&<Button type="button" onClick={()=>controller.edit({...content,[key]:null})}>Remove {title.toLowerCase()}</Button>}</fieldset>;})}<div className="actions"><Button type="submit" variant="primary">Apply to draft</Button><Button type="button" onClick={cancelEdit}>Cancel</Button></div></form></DialogFrame>
-    <DialogFrame ref={versionDialog} aria-labelledby="approach-version-title" onCancel={() => invoker.current?.focus()}><h2 id="approach-version-title">Save approach version</h2><p>Save this draft as a new approach version. Later edits stay in the draft.</p>{state.preview && <p>{state.preview.coverage.proposed} proposed · {state.preview.coverage.partial} partially linked · {state.preview.coverage.linked} linked steps</p>}<div className="actions"><Button variant="primary" disabled={locked} onClick={() => { close(versionDialog.current); void controller.saveVersion(); }}>Save version</Button><Button data-safe-choice onClick={() => close(versionDialog.current)}>Keep editing</Button></div></DialogFrame>
-    <DialogFrame ref={restoreDialog} aria-labelledby="approach-restore-title" onCancel={() => invoker.current?.focus()}><h2 id="approach-restore-title">Use this version in draft</h2><p>Replace the saved draft with this version's content. Existing approach versions, models and evidence remain unchanged.</p><div className="actions"><Button variant="primary" disabled={locked} onClick={() => { close(restoreDialog.current); if (versionId) void controller.restore(versionId).then(ok=>{if(ok)setEditing(true);}); }}>Restore draft</Button><Button data-safe-choice onClick={() => close(restoreDialog.current)}>Keep current draft</Button></div></DialogFrame>
-  </section>;
+      {state.preview && state.local && controller.dirty && (
+        <Panel title="Approach changes">
+          <ul>
+            {state.preview.changes.map((change, i) => (
+              <li key={i}>{change.description}</li>
+            ))}
+          </ul>
+          <p>
+            These edits change the explanation and its references. They do not modify or execute the
+            referenced models.
+          </p>
+        </Panel>
+      )}
+      {!!state.preview?.issues.length && (
+        <Panel title="References to review">
+          <ul>
+            {state.preview.issues.map((issue, i) => (
+              <li role="alert" key={i}>
+                <p>{issue.message}</p>
+                <p className="context-line">
+                  Field: <code>{issue.path}</code>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+      {state.latest && (
+        <Panel label="Review latest draft">
+          <h3>Review latest draft</h3>
+          <div className="approach-review">
+            {(
+              [
+                { title: 'Your local explanation', content: state.local },
+                { title: 'Latest saved explanation', content: state.latest.draft?.content },
+              ] as const
+            ).map((item) => (
+              <div key={item.title}>
+                <h4>{item.title}</h4>
+                {(['question', 'scope', 'limitations', 'open_questions'] as const).map((key) => (
+                  <div key={key}>
+                    <h5>
+                      {
+                        {
+                          question: 'Engineering question',
+                          scope: 'Scope',
+                          limitations: 'Limitations',
+                          open_questions: 'Open questions',
+                        }[key]
+                      }
+                    </h5>
+                    <p className="context-copy">{item.content?.[key] || 'None'}</p>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <p>
+            Your local content will replace the latest draft only after another preview and save.
+          </p>
+          <Button disabled={locked} onClick={controller.reapplyToLatest}>
+            Reapply my changes
+          </Button>
+        </Panel>
+      )}
+      {!source && !state.error && !controller.busy && (
+        <div role="alert">
+          <p>{lost ? accessLostText : 'This approach is unavailable in the current session.'}</p>
+          <Button onClick={() => readAgain(versionId)}>Retry this version</Button>
+        </div>
+      )}
+      {listError && <p role="alert">Versions could not be loaded. {listError}</p>}
+      {cursor && <Button onClick={loadMoreVersions}>Load more versions</Button>}
+      {source &&
+        (absent ? (
+          <Panel title="No modeling approach yet">
+            <p>Describe the question and method before linking an implementation.</p>
+            <Button
+              variant="primary"
+              disabled={locked}
+              onClick={() => {
+                setCreating(true);
+                setEditing(true);
+              }}
+            >
+              Create modeling approach
+            </Button>
+          </Panel>
+        ) : (
+          <ApproachReader
+            onAccessLost={clearProtectedApproach}
+            onCreateConfiguration={createForCase}
+            findings={
+              state.saved && onOpenRecord
+                ? (slot) => (
+                    <ApproachFindings
+                      answerId={slot.answerId}
+                      api={api}
+                      studyId={studyId}
+                      saved={state.saved!}
+                      onOpen={onOpenRecord}
+                      focusCase={slot.focusCase}
+                      onViewStep={slot.onViewStep}
+                      onStudyLimits={slot.onStudyLimits}
+                      onCreateConfiguration={createForCase}
+                    />
+                  )
+                : undefined
+            }
+            focusCase={
+              state.saved &&
+              requestedCase &&
+              state.saved.version.approach_version_id === requestedVersion
+                ? requestedCase
+                : undefined
+            }
+            onEditingChange={setAnnotationEditing}
+            onOpenModel={onOpenModel}
+            baseVersion={
+              state.server?.draft?.base_version_id ??
+              state.server?.latest_version?.approach_version_id
+            }
+            onHandoff={onHandoff}
+            source={source}
+            api={api}
+            studyId={studyId}
+            onChange={editing && state.local ? controller.edit : undefined}
+            disabled={locked}
+            questionActions={
+              editing &&
+              state.local && (
+                <Button disabled={locked} onClick={beginEdit}>
+                  Edit question and scope
+                </Button>
+              )
+            }
+          />
+        ))}
+      <DialogFrame ref={editor} aria-labelledby="approach-edit-title" onCancel={cancelEdit}>
+        <h2 id="approach-edit-title">Edit question and scope</h2>
+        <form
+          className="form-stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setQuestionOpen(false);
+            close(editor.current);
+          }}
+        >
+          {state.local &&
+            (['question', 'scope', 'limitations', 'open_questions'] as const).map((key) => (
+              <label key={key}>
+                {
+                  {
+                    question: 'Engineering question',
+                    scope: 'Scope',
+                    limitations: 'Limitations',
+                    open_questions: 'Open questions',
+                  }[key]
+                }
+                <TextArea
+                  aria-label={
+                    {
+                      question: 'Engineering question',
+                      scope: 'Scope',
+                      limitations: 'Limitations',
+                      open_questions: 'Open questions',
+                    }[key]
+                  }
+                  maxLength={4096}
+                  value={state.local![key]}
+                  onChange={(e) => controller.edit({ ...state.local!, [key]: e.target.value })}
+                />
+              </label>
+            ))}
+          {state.local &&
+            (['original_question', 'elaboration'] as const).map((key) => {
+              const content = descriptiveApproach(state.local!);
+              const claim = content[key];
+              const title =
+                key === 'original_question' ? 'Original wording' : 'Detailed elaboration';
+              return (
+                <fieldset key={key}>
+                  <legend>{title}</legend>
+                  <p className="context-line">
+                    {key === 'original_question'
+                      ? 'Enter only wording that was actually supplied.'
+                      : 'Keep elaboration separate from the agreed question.'}{' '}
+                    Attribution is a supplied origin claim.
+                  </p>
+                  <label>
+                    {title}
+                    <TextArea
+                      aria-label={title}
+                      maxLength={4096}
+                      value={claim?.text ?? ''}
+                      onChange={(e) =>
+                        controller.edit({
+                          ...content,
+                          [key]: {
+                            text: e.target.value,
+                            attribution: claim?.attribution ?? { kind: 'unknown', label: null },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {title} attribution
+                    <Select
+                      aria-label={title + ' attribution'}
+                      value={claim?.attribution.kind ?? 'unknown'}
+                      onChange={(e) => {
+                        const kind = e.target.value;
+                        if (kind === 'human' || kind === 'agent' || kind === 'unknown')
+                          controller.edit({
+                            ...content,
+                            [key]: {
+                              text: claim?.text ?? '',
+                              attribution: { kind, label: claim?.attribution.label ?? null },
+                            },
+                          });
+                      }}
+                    >
+                      <option value="unknown">Unknown</option>
+                      <option value="human">Human (supplied claim)</option>
+                      <option value="agent">Agent (supplied claim)</option>
+                    </Select>
+                  </label>
+                  <label>
+                    {title} attribution label
+                    <TextInput
+                      aria-label={title + ' attribution label'}
+                      maxLength={256}
+                      value={claim?.attribution.label ?? ''}
+                      onChange={(e) =>
+                        controller.edit({
+                          ...content,
+                          [key]: {
+                            text: claim?.text ?? '',
+                            attribution: {
+                              kind: claim?.attribution.kind ?? 'unknown',
+                              label: e.target.value || null,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  {claim && (
+                    <Button
+                      type="button"
+                      onClick={() => controller.edit({ ...content, [key]: null })}
+                    >
+                      Remove {title.toLowerCase()}
+                    </Button>
+                  )}
+                </fieldset>
+              );
+            })}
+          <div className="actions">
+            <Button type="submit" variant="primary">
+              Apply to draft
+            </Button>
+            <Button type="button" onClick={cancelEdit}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </DialogFrame>
+      <DialogFrame
+        ref={versionDialog}
+        aria-labelledby="approach-version-title"
+        onCancel={() => invoker.current?.focus()}
+      >
+        <h2 id="approach-version-title">Save approach version</h2>
+        <p>Save this draft as a new approach version. Later edits stay in the draft.</p>
+        {state.preview && (
+          <p>
+            {state.preview.coverage.proposed} proposed · {state.preview.coverage.partial} partially
+            linked · {state.preview.coverage.linked} linked steps
+          </p>
+        )}
+        <div className="actions">
+          <Button
+            variant="primary"
+            disabled={locked}
+            onClick={() => {
+              close(versionDialog.current);
+              void controller.saveVersion();
+            }}
+          >
+            Save version
+          </Button>
+          <Button data-safe-choice onClick={() => close(versionDialog.current)}>
+            Keep editing
+          </Button>
+        </div>
+      </DialogFrame>
+      <DialogFrame
+        ref={restoreDialog}
+        aria-labelledby="approach-restore-title"
+        onCancel={() => invoker.current?.focus()}
+      >
+        <h2 id="approach-restore-title">Use this version in draft</h2>
+        <p>
+          Replace the saved draft with this version's content. Existing approach versions, models
+          and evidence remain unchanged.
+        </p>
+        <div className="actions">
+          <Button
+            variant="primary"
+            disabled={locked}
+            onClick={() => {
+              close(restoreDialog.current);
+              if (versionId)
+                void controller.restore(versionId).then((ok) => {
+                  if (ok) setEditing(true);
+                });
+            }}
+          >
+            Restore draft
+          </Button>
+          <Button data-safe-choice onClick={() => close(restoreDialog.current)}>
+            Keep current draft
+          </Button>
+        </div>
+      </DialogFrame>
+    </section>
+  );
 }

@@ -181,29 +181,23 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 
 
 /* R2 Methods composition: explanations and exact model records share one selected step. */
-.approach-method-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.45fr);gap:var(--space-4);align-items:start;margin-top:var(--space-4)}
-.approach-method-layout>.hf-panel,.method-detail,.method-detail [role=tabpanel]{min-width:0}
-.method-map>.hf-panel__body>.section-actions{margin-top:var(--space-3)}
-.approach-method-map{list-style:none;padding:0;margin:var(--space-4) 0 0;display:grid;gap:var(--space-3)}
-.approach-method-map>li{display:grid;gap:var(--space-2);min-width:0}
-.method-map-dependency{text-align:center}
-.method-map-step.hf-btn{width:100%;height:auto;min-height:var(--control-floor);margin:0;padding:var(--space-4);display:flex;align-items:flex-start;justify-content:flex-start;gap:var(--space-3);white-space:normal;text-align:left;border-color:var(--line-strong)}
-.method-step-number{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:var(--space-6);height:var(--space-6);border-radius:var(--radius-xs);background:var(--surface-sunken);color:var(--ink-2);font-size:var(--type-small-size);font-weight:var(--type-body-strong-weight)}
-.method-step-text{display:flex;flex-direction:column;gap:var(--space-1);min-width:0}
-.method-step-text span{font-size:var(--type-small-size);font-weight:var(--type-small-weight);color:var(--ink-muted)}
-.method-map-step[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-.method-map-step[aria-pressed=true] .method-step-number{background:var(--surface);color:var(--accent)}
-.method-proposed .method-map-step.hf-btn{border-style:dashed}
+.approach-jumps{display:flex;flex-wrap:wrap;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--line)}
+.approach-page [aria-label="The modeling approach"]{max-width:var(--home-max);margin-inline:auto}
+.approach-section{margin-top:var(--space-8);scroll-margin-top:var(--space-6);min-width:0}
+.approach-section>h3{font-size:var(--type-heading-size);line-height:var(--type-heading-line);margin-bottom:var(--space-4)}
+.approach-method-rows{list-style:none;padding:0;margin:var(--space-4) 0}
+.approach-method-rows>li{border-top:1px solid var(--line);padding:var(--space-4) 0;min-width:0}
+.method-row-toggle,.approach-case-toggle{cursor:pointer;overflow-wrap:anywhere}
+.method-row-toggle .hf-tag,.approach-case-toggle .hf-tag{margin-left:var(--space-3)}
+.method-row-purpose{color:var(--ink-2);margin:var(--space-2) 0 0}
+.method-detail{min-width:0;padding:var(--space-3) 0}
+.approach-case-content{display:grid;gap:var(--space-3);padding-top:var(--space-4)}
+.approach-usage-review{margin-bottom:var(--space-4)}
+.approach-study-answer{border-top:1px solid var(--line);padding-top:var(--space-6)}
 .method-detail h3{font-size:var(--type-subheading-size);line-height:var(--type-subheading-line);margin-top:var(--space-6)}
-.method-detail [role=tabpanel]>h3:first-child{margin-top:var(--space-4)}
 .method-detail h3+.context-copy{margin-top:var(--space-2)}
-.method-detail [role=tabpanel]>.section-header{margin:var(--space-6) 0 var(--space-2)}
-.method-detail [role=tabpanel]>.section-header>h3{margin:0}
-.method-detail .hf-tabs{flex-wrap:wrap;margin-bottom:var(--space-2)}
-.method-detail .hf-tabs button{white-space:normal}
-.method-detail .hf-panel__actions .section-actions{flex-wrap:wrap;justify-content:flex-end}
 .method-binding-choice{margin-bottom:var(--space-4)}
-@media(max-width:900px){.approach-method-layout,.method-intent-groups{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.method-intent-groups{grid-template-columns:minmax(0,1fr)}}
 /* Results-first Cases & results and version-qualified case navigation */
 .approach-results{margin-bottom:var(--space-4)}
 .approach-results .hf-panel__body>.approach-eyebrow{margin:0 0 var(--space-2)}
@@ -321,3 +315,6 @@ main{margin:0 auto;max-width:var(--page-max)}.appbar{height:var(--appbar-height)
 .study-row>.actions{justify-content:flex-end}
 .study-row h2 .hf-tag{margin-left:var(--space-2);vertical-align:middle}
 @media(max-width:600px){.study-row{grid-template-columns:minmax(0,1fr)}.study-row>.actions{justify-content:flex-start}.catalogue-toolbar .hf-tabs--segmented{width:100%}}
+.approach-case-toggle h3{display:inline}
+.approach-case-card{border-width:1px 0 0;border-radius:0;background:transparent;padding:var(--space-4) 0}
+.approach-case-cards{gap:0}

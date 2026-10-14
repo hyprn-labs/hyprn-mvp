@@ -11,55 +11,116 @@ async function login(page:Page,f:any){
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.getByRole('button',{name:'New study',exact:true})).toBeVisible();
 }
-async function inspect(page:Page,f:any,label:string,capture:(part:string)=>Promise<void>){
-  const writes:string[]=[],calls:any[]=[],responses:any[]=[];
-  page.on('request',r=>{if(r.url().includes('/api/1/')){calls.push({method:r.method(),url:r.url()});if(r.method()!=='GET')writes.push(r.url());}});
-  const pending:Promise<void>[]=[];
-  page.on('response',r=>{if(r.url().includes('/api/1/')&&r.request().method()==='GET')pending.push(r.json().then(body=>{responses.push({url:r.url(),status:r.status(),body});}).catch(()=>{}));});
-  await page.goto('/ui/#'+new URLSearchParams({v:'1',study:f.study_id,view:'approach',approach:f.approach_version_id}));
-  // Usage and recorded runs live under the "Cases & results" section tab
-  // (results first; one card per case holds its runs); keyboard activation keeps the 200% keyboard journey honest.
-  const cases=page.getByRole('tab',{name:'Cases & results',exact:true});
-  await cases.focus();await cases.press('Enter');
-  await expect(cases).toHaveAttribute('aria-selected','true');
-  await expect(page.getByRole('tabpanel',{name:'Cases & results',exact:true}).getByRole('heading',{name:'No study answer has been assessed.',exact:true})).toBeVisible();
-  const usage=page.getByRole('region',{name:'Approach usage',exact:true});
+async function inspect(
+  page: Page,
+  f: any,
+  label: string,
+  capture: (part: string) => Promise<void>,
+) {
+  const writes: string[] = [],
+    calls: any[] = [],
+    responses: any[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/1/')) {
+      calls.push({ method: r.method(), url: r.url() });
+      if (r.method() !== 'GET') writes.push(r.url());
+    }
+  });
+  const pending: Promise<void>[] = [];
+  page.on('response', (r) => {
+    if (r.url().includes('/api/1/') && r.request().method() === 'GET')
+      pending.push(
+        r
+          .json()
+          .then((body) => {
+            responses.push({ url: r.url(), status: r.status(), body });
+          })
+          .catch(() => {}),
+      );
+  });
+  await page.goto(
+    '/ui/#' +
+      new URLSearchParams({
+        v: '1',
+        study: f.study_id,
+        view: 'approach',
+        approach: f.approach_version_id,
+      }),
+  );
+  // Section links preserve the route; each case expands to its exact records.
+  const cases = page.getByRole('link', { name: 'Cases and their answers', exact: true });
+  await cases.focus();
+  await cases.press('Enter');
+  await expect(
+    page.getByRole('region', { name: 'Cases and their answers', exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole('region', { name: 'Answer to the study question', exact: true }),
+  ).toContainText('No study answer has been assessed.');
+  const usage = page.getByRole('region', { name: 'Approach usage', exact: true });
+  await usage.getByText('Review configurations and runs', { exact: true }).click();
   await expect(usage).toContainText(f.configuration_name);
-  await usage.getByLabel('Findings case',{exact:true}).selectOption(f.case_id);
+  await usage.getByLabel('Findings case', { exact: true }).selectOption(f.case_id);
   await expect(usage).toContainText('2 usage rows loaded');
-  await expect(usage.getByRole('button',{name:'View run',exact:true})).toHaveCount(1);
-  const run=usage.getByRole('button',{name:'Run details',exact:true});
-  await run.focus();await run.press('Enter');
+  await usage.locator('.approach-case-card>details:not([open])>summary').click();
+  await expect(usage.getByRole('button', { name: 'View run', exact: true })).toHaveCount(1);
+  const run = usage.getByRole('button', { name: 'Run details', exact: true });
+  await run.focus();
+  await run.press('Enter');
   await expect(usage).toContainText('Completed');
   // Applicability is never computed today, so it is not shown.
   await expect(usage).not.toContainText('Not assessed');
   await expect(usage).toContainText('1000000');
-  const runRow=usage.getByRole('article',{name:'run '+f.run_id,exact:true});
-  await runRow.evaluate(e=>e.scrollIntoView({block:'start'}));await capture('downstream');
-  await runRow.getByRole('button',{name:'Review source-linked inputs',exact:true}).press('Enter');
-  const load=usage.getByRole('button',{name:'Load upstream qualifications',exact:true}).first();await load.focus();await load.press('Enter');
+  const runRow = usage.getByRole('article', { name: 'run ' + f.run_id, exact: true });
+  await runRow.evaluate((e) => e.scrollIntoView({ block: 'start' }));
+  await capture('downstream');
+  await runRow
+    .getByRole('button', { name: 'Review source-linked inputs', exact: true })
+    .press('Enter');
+  const load = usage
+    .getByRole('button', { name: 'Load upstream qualifications', exact: true })
+    .first();
+  await load.focus();
+  await load.press('Enter');
   await expect(usage).toContainText('Verified source identity');
   await expect(usage).toContainText('Upstream criterion not met');
   await expect(usage).toContainText('Original 1 MJ/kg');
   await expect(usage).toContainText('factor 1000000 · received 1000000 J/kg');
-  await runRow.getByRole('button',{name:'Review source-linked inputs',exact:true}).focus();
-  await runRow.getByText('Original 1 MJ/kg',{exact:true}).evaluate(e=>e.scrollIntoView({block:'center'}));await capture('source');
-  const exact=usage.getByRole('button',{name:'Full-precision values',exact:true});await exact.focus();await exact.press('Enter');
-  await expect(page.getByRole('dialog')).toContainText('1000000');await capture('downstream-exact');await page.keyboard.press('Escape');await expect(exact).toBeFocused();
-  await usage.getByRole('button',{name:'View upstream run',exact:true}).first().press('Enter');
-  await expect(page.getByRole('tab',{name:'Results',exact:true})).toBeVisible();
+  await runRow.getByRole('button', { name: 'Review source-linked inputs', exact: true }).focus();
+  await runRow
+    .getByText('Original 1 MJ/kg', { exact: true })
+    .evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await capture('source');
+  const exact = usage.getByRole('button', { name: 'Full-precision values', exact: true });
+  await exact.focus();
+  await exact.press('Enter');
+  await expect(page.getByRole('dialog')).toContainText('1000000');
+  await capture('downstream-exact');
+  await page.keyboard.press('Escape');
+  await expect(exact).toBeFocused();
+  await usage
+    .getByRole('button', { name: 'View upstream run', exact: true })
+    .first()
+    .press('Enter');
+  await expect(page.getByRole('tab', { name: 'Results', exact: true })).toBeVisible();
   expect(new URL(page.url()).hash).toContain(f.source_id);
-  await page.getByRole('button',{name:'Full-precision values',exact:true}).press('Enter');
-  await expect(page.getByRole('dialog')).toContainText('MJ/kg');await capture('source-exact');await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Full-precision values', exact: true }).press('Enter');
+  await expect(page.getByRole('dialog')).toContainText('MJ/kg');
+  await capture('source-exact');
+  await page.keyboard.press('Escape');
   await Promise.all(pending);
-  const usages=responses.filter(r=>r.url.includes('/usage')&&r.status===200);
-  expect(usages.length).toBeGreaterThan(0);expect(JSON.stringify(usages)).toContain(f.run_id);
-  const actual=responses.find(r=>new URL(r.url).pathname.endsWith('/runs/'+f.run_id));
+  const usages = responses.filter((r) => r.url.includes('/usage') && r.status === 200);
+  expect(usages.length).toBeGreaterThan(0);
+  expect(JSON.stringify(usages)).toContain(f.run_id);
+  const actual = responses.find((r) => new URL(r.url).pathname.endsWith('/runs/' + f.run_id));
   expect(actual.body.data.history).toEqual(f.downstream.history);
-  const source=responses.find(r=>new URL(r.url).pathname.endsWith('/runs/'+f.source_id));
+  const source = responses.find((r) => new URL(r.url).pathname.endsWith('/runs/' + f.source_id));
   expect(source.body.data.retained_integrity).toEqual(f.source.retained_integrity);
   expect(writes).toEqual([]);
-  await writeFile(join(root,'evidence/'+label+'-http.json'),JSON.stringify({calls,responses,writes},null,2));
+  await writeFile(
+    join(root, 'evidence/' + label + '-http.json'),
+    JSON.stringify({ calls, responses, writes }, null, 2),
+  );
 }
 async function settled(page:Page){
   await expect.poll(()=>page.locator('.hf-btn:visible').evaluateAll(items=>items.every(item=>{getComputedStyle(item).backgroundColor;return item.getAnimations().every(a=>a.playState!=='running');}))).toBe(true);

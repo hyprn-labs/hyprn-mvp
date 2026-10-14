@@ -255,7 +255,7 @@
     },
     "approach-page-02": {
       "spec": "approach.spec.ts",
-      "test": "@approach-method method step explains in two tabs with one implementation line and opens the canonical model version"
+      "test": "@approach-method expandable steps open the canonical model version"
     },
     "approach-page-03": {
       "spec": "approach.spec.ts",

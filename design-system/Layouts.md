@@ -83,3 +83,18 @@ Opening a saved model version, or the model or configuration used by a run, show
 ## Narrow screens and 200% zoom
 
 Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the wordmark shrinks to `subheading` size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.
+
+
+## Continuous modeling approach
+
+Preserve the entire saved question and its line breaks. Follow it with section links,
+expandable method rows, expandable case rows and the study answer. The links focus
+their sections without changing the workspace route. Hairlines and token spacing
+separate rows; avoid a second method map, chapter tabs or an assumptions tab.
+
+Each method shows its purpose and implementation state before expansion. Expanded
+content explains the calculation and basis, dependencies and remaining work; linked
+model versions open the canonical view. Each case keeps all configuration and run
+links, with no implicit latest-run selection. Scientific interpretations require an
+explicit persisted basis. Execution, criteria and full precision stay in supporting
+details. Limits and assumption editing remain at their existing owners.

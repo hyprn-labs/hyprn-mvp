@@ -82,19 +82,50 @@ print('Study archive public routes/types: 2 commands, listing filter and optiona
 
 # Approach wiring. Wiring declarations are not behavioural evidence; the approach browser
 # groups and native groups prove behaviour.
-approach_checks={
- 'src/ApproachFindings.tsx':['retained_integrity','resolvedUnit','groupFindings','sourceMatch','this.active < 2','.slice(0,10)','Retry usage page','Upstream record unavailable','More usage is available'],
- 'src/ApproachController.tsx':['previewApproach','saveApproachDraft','saveApproachVersion','restoreApproach','approachReceipt'],
- 'src/ApproachPanel.tsx':['ApproachReader','ApproachFindings','RecordBar','Review latest draft'],
- 'src/ApproachMethod.tsx':['implementation_refs','connection_id','<ModelView'],  # a method step's model opens in the canonical model view
- 'src/ApproachAssumptions.tsx':['origin','assumption_refs','evidence_links'],
- 'src/ConfigurationApproach.tsx':['case_id','approach_version_id'],
- 'src/ComputationalExportDialog.tsx':['approach_summary','basis_run_ids','basis_configuration_ids'],
- 'src/contract.ts':['ApproachSaved1','ConfigurationRequest4','RunHistory3','RecordRequest2'],
+approach_checks = {
+    'src/ApproachFindings.tsx': [
+        'retained_integrity',
+        'resolvedUnit',
+        'groupFindings',
+        'sourceMatch',
+        'this.active < 2',
+        '.slice(0, 10)',
+        'Retry usage page',
+        'Upstream record unavailable',
+        'More usage is available',
+    ],
+    'src/ApproachController.tsx': [
+        'previewApproach',
+        'saveApproachDraft',
+        'saveApproachVersion',
+        'restoreApproach',
+        'approachReceipt',
+    ],
+    'src/ApproachPanel.tsx': ['ApproachReader', 'ApproachFindings', 'Review latest draft'],
+    'src/ApproachMethod.tsx': [
+        'implementation_refs',
+        'connection_id',
+        '<ModelView',
+    ],  # a method step's model opens in the canonical model view
+    'src/ApproachAssumptions.tsx': ['origin', 'assumption_refs', 'evidence_links'],
+    'src/ConfigurationApproach.tsx': ['case_id', 'approach_version_id'],
+    'src/ComputationalExportDialog.tsx': [
+        'approach_summary',
+        'basis_run_ids',
+        'basis_configuration_ids',
+    ],
+    'src/contract.ts': ['ApproachSaved1', 'ConfigurationRequest4', 'RunHistory3', 'RecordRequest2'],
 }
 # Results-first review and version-qualified case navigation wiring. The
 # @approach-history / @approach-configuration browser groups prove behaviour.
-approach_checks['src/ApproachFindings.tsx']+=['No study answer has been assessed.','function CaseCard(','Remaining method work','Study limits','All usage loaded','Not evaluated in the loaded review']  # one card per case; study limits are a link
+approach_checks['src/ApproachFindings.tsx'] += [
+    'No study answer has been assessed.',
+    'function CaseCard(',
+    'Remaining method work',
+    'Study details',
+    'All usage loaded',
+    'Not evaluated in the loaded review',
+]  # one card per case; study limits are a link
 approach_checks['src/ApproachPanel.tsx']+=['CaseNavigation.Provider value={null}','ApproachResultsSlot']
 approach_checks['src/ConfigurationApproach.tsx']+=['CaseContextLink','No specific case']
 approach_checks['src/RunPanel.tsx']=['case_context','Run case','Case context unavailable','Retry case context','No modeling approach','CaseNavigation.Provider value={null}']
@@ -117,7 +148,7 @@ basis_text=(ROOT/'src/ApproachMethod.tsx').read_text().split('export function Ap
 assert 'CaseNavigation.Provider value={null}' in basis_text,'ApproachBasis must suppress live case navigation'
 for file in ('src/ApproachPanel.tsx','src/ApproachMethod.tsx'):
  text=(ROOT/file).read_text()
- assert 'tabId:' in text and text.count('role="tabpanel"')<=text.count('aria-labelledby='),(file,'Approach tab panels must be named by their tabs')
+ assert 'role="tabpanel"' not in text,(file,'Approach readers stay continuous')
 for file,label in (('src/ApproachFindings.tsx','View results for case'),('src/RunPanel.tsx','`View case ${value.linked.name}'),('src/ConfigurationApproach.tsx','`View case ${caseLabel}')):
  assert label not in (ROOT/file).read_text(),(file,'Accessible name must start with the visible label')
 # No fabricated study verdicts or pooled pass rates in the results review.
@@ -314,10 +345,8 @@ print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assum
 # opens one StudyDetailsDialog (question, current approach, assumptions, limits, open questions)
 # for the
 # exact content shown. Study conditions & limits, Question in detail and the Overview
-# CurrentStudyConditions are gone. Methods: Explanation · Assumptions & evidence, one
-# implementation line and the canonical model version; no Model & quantities tab, quantity cards
-# or source excerpt. Cases & results: results first, then one card per case; the limits aside is
-# a Study limits link.
+# The continuous approach keeps question, methods, cases and synthesis on one page.
+# Assumptions stay at canonical owners; scientific answers never follow from criteria.
 details_text=(ROOT/'src/ApproachAssumptions.tsx').read_text()
 for term in ('export function StudyQuestionBox(', 'export function StudyDetailsDialog(',
  'export function OverviewStudyQuestion(', 'See more details', 'Study details</h2>',
@@ -334,13 +363,38 @@ for term in ('<StudyQuestionBox','<StudyDetailsDialog',"open('limits')",'onCreat
 for removed in ('Question in detail','StudyConditionsAction','conditionsHost','cases:casesPanel'):
  assert removed not in panel_text,('src/ApproachPanel.tsx','Removed approach element',removed)
 method_text=(ROOT/'src/ApproachMethod.tsx').read_text()
-for term in ("['explanation','Explanation'],['assumptions','Assumptions & evidence']","'Implemented in Model version '",'label="Open model version"','Edit definitions in model'):
- assert term in method_text,('src/ApproachMethod.tsx','Two-tab step explanation',term)
+for term in (
+    'approach-method-rows',
+    '<ApproachStepContext step={active} />',
+    "'Implemented in Model version '",
+    'label="Open model version"',
+    'Edit definitions in model',
+):
+    assert term in method_text, ('src/ApproachMethod.tsx', 'Expandable method explanation', term)
 for removed in ('Model & quantities','QuantityCard','QuantityTable','ExactMethodSource','Source excerpt','View exact source','Inspect source and ports','Exact model element','title="Exact model version"','GraphView','method-quantity'):
  assert removed not in method_text,('src/ApproachMethod.tsx','Removed method step element',removed)
+for term in (
+    'aria-label="On this page"',
+    'Reasoning and methods',
+    'Cases and their answers',
+    'Answer to the study question',
+):
+    assert term in panel_text, ('src/ApproachPanel.tsx', 'Continuous approach navigation', term)
+assert '<Tabs' not in panel_text and '<Tabs' not in method_text, (
+    'Approach and method readers must not split the journey into tabs'
+)
+assert 'Method map' not in method_text,'Methods expand in place'
 findings_s5=(ROOT/'src/ApproachFindings.tsx').read_text()
-for term in ('function CaseCard(','Why this case','onStudyLimits','Create configuration for ','aria-label="Approach usage"','<RunOutcomes variant="inline"','<CriterionFacts run={run}/>'):
- assert term in findings_s5,('src/ApproachFindings.tsx','One card per case',term)
+for term in (
+    'function CaseCard(',
+    'What this case tells us',
+    'onStudyLimits',
+    'Create configuration for ',
+    'aria-label="Approach usage"',
+    '<RunFacets run={run} />',
+    '<CriterionFacts run={run} />',
+):
+    assert term in findings_s5, ('src/ApproachFindings.tsx', 'One card per case', term)
 for removed in ('function ResultCard(','function StudyLimits(','Study-wide limits','View case results','Back to results','Cases and recorded runs','approach-result-limits','cases?:ReactNode'):
  assert removed not in findings_s5,('src/ApproachFindings.tsx','Removed duplicate case rendering',removed)
 workspace_s5=(ROOT/'src/Workspace.tsx').read_text()
@@ -359,8 +413,8 @@ for file,exempt in (('src/ApproachAssumptions.tsx',()),('src/ApproachFindings.ts
  assert 'schema_version' not in text,(file,'No new schema_version branch; read through recordViews.ts / descriptiveApproach')
 print(
  'Approach page: canonical saved question in Overview About and an approach question box; '
- 'one Study details dialog; Methods in two tabs with the canonical model version; '
- 'one card per case with Study limits. Browser gates remain separate.'
+ 'one Study details dialog; continuous expandable methods with the canonical model version; '
+ 'all case configurations and runs before synthesis. Browser gates remain separate.'
 )
 
 
@@ -383,12 +437,27 @@ assert 'onOpen={target => navigate(() => void openLink(target))} />}</div>' in \
  (ROOT/'src/views/evidence.tsx').read_text(),\
  ('src/views/evidence.tsx','Evidence page owner links use guarded navigation')
 assert '<Assumptions regionless' not in (ROOT/'src/RunPanel.tsx').read_text() and 'function RunEvidence(' in run_text,('src/RunPanel.tsx','Run evidence renders through the shared index')
-for file,terms in {'src/RunPanel.tsx':('api.artifact(studyId, selected, artifact, read.signal)','api.modifiedRunSeedRead(studyId, detail.run_id, read.signal)','Check modified run again'),
- 'src/ComputationalExportDialog.tsx':('api.computationalRecord(studyId,record!.request_id,read.signal)','api.readFailed(failure,read)','useAccessLoss(api,studyId'),
- 'src/api.ts':("throw new ApiError(value?.error ? { ...value.error, message: unavailable }",),
- 'src/ApproachController.tsx':('this.api.onSessionChange(this.sessionChanged)','loseAccess = (studyId: string)','accessLost: true','if (this.state.accessLost) { this.clear(); return; }'),
- 'src/ApproachPanel.tsx':('controller.loseAccess(studyId)','state.accessLost ? null :'),
- 'src/Workspace.tsx':('approach.dispose()',)}.items():
+for file, terms in {
+    'src/RunPanel.tsx': (
+        'api.artifact(studyId, selected, artifact, read.signal)',
+        'api.modifiedRunSeedRead(studyId, detail.run_id, read.signal)',
+        'Check modified run again',
+    ),
+    'src/ComputationalExportDialog.tsx': (
+        'api.computationalRecord(studyId,record!.request_id,read.signal)',
+        'api.readFailed(failure,read)',
+        'useAccessLoss(api,studyId',
+    ),
+    'src/api.ts': ('throw new ApiError(value?.error ? { ...value.error, message: unavailable }',),
+    'src/ApproachController.tsx': (
+        'this.api.onSessionChange(this.sessionChanged)',
+        'loseAccess = (studyId: string)',
+        'accessLost: true',
+        'if (this.state.accessLost) { this.clear(); return; }',
+    ),
+    'src/ApproachPanel.tsx': ('controller.loseAccess(studyId)', 'state.accessLost\n    ? null'),
+    'src/Workspace.tsx': ('approach.dispose()',),
+}.items():
  text=(ROOT/file).read_text()
  for term in terms:assert term in text,(file,'Session seam',term)
  assert "'unauthorized'" not in text and "'unauthenticated'" not in text or file=='src/api.ts',(file,'Duplicated denial classification')

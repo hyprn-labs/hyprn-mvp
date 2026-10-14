@@ -14,22 +14,39 @@ async function login(page:Page,f:any){
 // Composition: the selected step names its exact model version in one implementation line
 // and opens it in the canonical model view. A version selector exists only when the step links
 // several exact model versions; otherwise the single linked version is shown by its short id.
-async function expectStepModel(approach:any,approachVersion:any,stepIndex:number,unitText:string){
-  await approach.getByRole('button',{name:'Select step '+(stepIndex+1),exact:true}).click();
-  const content=approachVersion.version.content,step=content.steps[stepIndex];
-  const linked=[...new Set(step.implementation_refs.map((r:any)=>r.binding_id))];
+async function expectStepModel(
+  approach: any,
+  approachVersion: any,
+  stepIndex: number,
+  unitText: string,
+) {
+  const stepButton = approach.getByRole('button', {
+    name: 'Select step ' + (stepIndex + 1),
+    exact: true,
+  });
+  if ((await stepButton.getAttribute('aria-expanded')) !== 'true') await stepButton.click();
+  const content = approachVersion.version.content,
+    step = content.steps[stepIndex];
+  const linked = [...new Set(step.implementation_refs.map((r: any) => r.binding_id))];
   expect(linked).toContain(content.model_bindings[1].binding_id);
-  const selector=approach.getByLabel('Approach model version',{exact:true}),id8=content.model_bindings[1].model_revision_id.slice(0,8);
-  if(linked.length>1){await expect(selector).toHaveValue(content.model_bindings[1].binding_id);}
-  else{
+  const selector = approach.getByLabel('Approach model version', { exact: true }),
+    id8 = content.model_bindings[1].model_revision_id.slice(0, 8);
+  if (linked.length > 1) {
+    await expect(selector).toHaveValue(content.model_bindings[1].binding_id);
+  } else {
     expect(linked).toEqual([content.model_bindings[1].binding_id]);
     await expect(selector).toHaveCount(0);
   }
-  await expect(approach.getByRole('region',{name:'Selected method step',exact:true})).toContainText('Implemented in Model version '+id8);
-  await approach.getByRole('button',{name:'Open model version',exact:true}).click();
-  const open=approach.page().getByRole('dialog',{name:'Model version '+id8,exact:true});
-  await expect(open.getByRole('table',{name:'Quantities',exact:true})).toContainText(unitText);
-  await approach.page().keyboard.press('Escape');await expect(open).toBeHidden();
+  await expect(
+    approach.getByRole('region', { name: 'Selected method step', exact: true }),
+  ).toContainText('Implemented in Model version ' + id8);
+  await approach.getByRole('button', { name: 'Open model version', exact: true }).click();
+  const open = approach.page().getByRole('dialog', { name: 'Model version ' + id8, exact: true });
+  await expect(open.getByRole('table', { name: 'Quantities', exact: true })).toContainText(
+    unitText,
+  );
+  await approach.page().keyboard.press('Escape');
+  await expect(open).toBeHidden();
 }
 async function openRun(page:Page,f:any,row:any){
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+row.run_id);
