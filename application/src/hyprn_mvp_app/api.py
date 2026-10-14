@@ -16,13 +16,16 @@ from .store import Store
 from .modeling import Coordinator, ModelingClient
 from .configuration import Configurations
 from .approach import Approaches
+from .answers import ensure as ensure_answers
 from .execution import Submissions
 from .history import History
 from .result_bindings import ResultBindings
 from .modified_runs import ModifiedRuns
 from .computational_export import records_for_store
-from .routes import (approach, capabilities, commands, configurations, evidence, models, readiness, records as record_routes,
-                     runs, session as session_routes, studies)
+from .routes import (
+    answers, approach, capabilities, commands, configurations, evidence, models, readiness,
+    records as record_routes, runs, session as session_routes, studies,
+)
 from .agent_runtime import routes as agent_routes, schema as agent_schema
 
 MALFORMED_BODY=("Request body must be one strict JSON value: no duplicate keys, non-finite or out-of-range "
@@ -45,7 +48,7 @@ def agent_boundary(method,path,session,registry=None):
 # Inclusion order is registration order, which fixes the generated contract's path order and
 # every operation id: append a new owner's router, never reorder.
 ROUTERS=(session_routes,capabilities,studies,readiness,approach,models,evidence,configurations,
-         record_routes,commands,runs,agent_routes)
+         record_routes,commands,runs,agent_routes,answers)
 # Route options an owner router may not set: re-registration carries path, endpoint, method,
 # status code and name only, so any other declared option would be refused, never dropped.
 ROUTE_OPTIONS=("response_model","tags","dependencies","summary","description","responses","deprecated","operation_id",
@@ -68,6 +71,7 @@ def create_app(store,auth,model,*,environ=None,registry=None):
     if store is not None:
         # Runtime-owned agent tables, through the store's connection (idempotent).
         agent_schema.ensure(store)
+        ensure_answers(store)
     app=FastAPI(title="HYPRN MVP API",version="1.0.0",docs_url=None,redoc_url=None,openapi_url=None)
     app.state.store=store;app.state.auth=auth;app.state.model=model
     coordinator=Coordinator(store,model);configs=Configurations(store,coordinator)

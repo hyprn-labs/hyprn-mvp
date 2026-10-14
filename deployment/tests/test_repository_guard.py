@@ -35,7 +35,7 @@ class GuardTests(unittest.TestCase):
         groups = runner.APPROACH_PYTEST_GROUPS | set(runner.APPROACH_BROWSER_GROUPS)
         self.assertEqual(groups, {
             'approach-contracts', 'approach-closure', 'approach-service',
-            'approach-api', 'approach-configuration', 'approach-bundle',
+            'approach-api', 'answers-api', 'approach-configuration', 'approach-bundle',
             'approach-worker', 'approach-history', 'approach-export',
             'approach-native', 'approach-ui-controller',
             'approach-ui-reading', 'approach-ui-method', 'approach-ui-assumptions',

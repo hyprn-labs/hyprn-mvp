@@ -1117,7 +1117,8 @@ def test_relative_import_above_the_project_package_fails_closed():
 API, EDGE, ROUTES = 'hyprn_mvp_app.api', 'hyprn_mvp_app.edge', 'hyprn_mvp_app.routes'
 AGENT_ROUTER = 'hyprn_mvp_app.agent_runtime.routes'
 ROUTE_OWNERS = frozenset('hyprn_mvp_app.' + m for m in (
-    'store', 'auth', 'readiness', 'modeling', 'configuration', 'approach', 'execution', 'history',
+    'store', 'auth', 'readiness', 'modeling', 'configuration', 'approach', 'answers',
+    'execution', 'history',
     'result_bindings', 'modified_runs', 'computational_export'))
 
 
@@ -1187,6 +1188,7 @@ LAYERS = {
     'approach': frozenset(
         {'approach_closure', 'contracts', 'execution_bundle', 'history', 'store'}
     ),
+    'answers': frozenset({'approach', 'contracts', 'history'}),
     'configuration': frozenset(
         {
             'approach',
@@ -1239,6 +1241,7 @@ LAYERS = {
     'edge': frozenset({'contracts'}),
     'routes': frozenset(
         {
+            'answers',
             'approach',
             'auth',
             'computational_export',
@@ -1262,6 +1265,7 @@ LAYERS = {
         {
             'agent_policy',
             'agent_runtime',
+            'answers',
             'approach',
             'auth',
             'computational_export',

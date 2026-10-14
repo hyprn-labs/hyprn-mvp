@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0,str(Path(__file__).parent/"src"))
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.contracts import definitions
+from hyprn_mvp_app.answers import DEFINITIONS as ANSWER_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -20,6 +21,7 @@ def rewrite(value):
     if isinstance(value,list):return [rewrite(v) for v in value]
     return value
 schemas.update(rewrite(definitions()))
+schemas.update(rewrite(ANSWER_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
     'ApproachClosureRead3': 'ApproachClosureRead4',
@@ -179,6 +181,7 @@ recovery_enum={'enum':list(RECOVERY_VALUES)}
 retry_after={'type':'integer','minimum':1,'maximum':60}
 schemas['PublicReceipt']['properties'].update(recovery=recovery_enum,retry_after_s=retry_after)
 schemas['PublicReceipt']['required'].append('recovery')
+schemas['PublicReceipt']['properties']['result']['anyOf'].append(ref('ScientificAnswer1'))
 schemas['ReceiptError']=copy.deepcopy(schemas['Error'])
 schemas['ReceiptError']['properties']['error']['properties'].update(
     recovery=copy.deepcopy(recovery_enum),retry_after_s=copy.deepcopy(retry_after))
@@ -237,6 +240,24 @@ for path,methods in spec["paths"].items():
             op["description"]=("Study-wide archive state (owner or writer, as study edits; reader403; non-member404). Idempotent by command_id "
                 "(receipt category study_archive); the same id for the other operation is command_payload_conflict. Target state: an "
                 "already archived/restored study commits unchanged. Never changes the study record or revision and never deletes anything.")
+        elif path.endswith('/answers') and '/approach/' in path:
+            schema=ref('ScientificAnswerHeads1')
+            op['description']=(
+                'Explicit answer heads for this exact saved approach version. Empty means '
+                'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif path.endswith('/answers') or '/answers/' in path:
+            schema=ref('ScientificAnswer1')
+            if method=='post':
+                status='201'
+                request_schema = op['requestBody']['content']['application/json']
+                request_schema['schema'] = ref('ScientificAnswerSave1')
+                op['description']=(
+                    'Save an immutable authored case answer (case_id) or study synthesis '
+                    '(case_id null). expected_revision is null for the first answer, otherwise '
+                    'its current answer_version_id. Receipt category answer_save. All basis IDs '
+                    'are exact, same-study references; synthesis may cite exact case answers '
+                    'from this approach version. No conclusion is inferred from execution or '
+                    'criteria. Ordinary study owner/writer sessions only.')
         elif '/approach' in path:
             suffix=path.split('/approach',1)[1]
             result_name,request_name={

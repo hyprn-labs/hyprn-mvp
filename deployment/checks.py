@@ -127,6 +127,7 @@ GROUPS = {
     ),
     'approach-service': ('application/tests/test_approach_service.py',),
     'approach-api': ('application/tests/test_approach_api.py',),
+    'answers-api': ('application/tests/test_answers_api.py',),
     'approach-configuration': (
         'application/tests/test_approach_configuration.py',
         'application/tests/test_scientific_configuration.py',
@@ -967,6 +968,7 @@ APPROACH_NATIVE_GROUPS = frozenset(
 APPROACH_APP_GROUPS = frozenset(
     {
         'findings-history',
+        'answers-api',
         'approach-closure',
         'approach-service',
         'approach-api',

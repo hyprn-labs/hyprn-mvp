@@ -1,3 +1,4 @@
+import type { ScientificAnswer1, ScientificAnswerHeads1, ScientificAnswerSave1 } from './contract';
 import type { ApproachContent1, ApproachContent2, ApproachResolution1, ApproachResolution3 } from './contract';
 export type ApproachContent = ApproachContent1 | ApproachContent2;
 export type ApproachResolution = ApproachResolution1 | ApproachResolution3;
@@ -108,6 +109,18 @@ async function attributionPages(
   return items;
 }
 export class HyprnMvpApi {
+  answers = async (sid: string, version: string, signal?: AbortSignal) =>
+    (await this.request<ScientificAnswerHeads1>(
+      `/studies/${sid}/approach/versions/${version}/answers`, undefined, 'GET', signal,
+    )).data;
+  answer = async (sid: string, version: string, signal?: AbortSignal) =>
+    (await this.request<ScientificAnswer1>(
+      `/studies/${sid}/answers/${version}`, undefined, 'GET', signal,
+    )).data;
+  saveAnswer = async (sid: string, body: ScientificAnswerSave1) =>
+    (await this.mutate<ScientificAnswer1>(
+      `/studies/${sid}/answers`, body, 'answer_save', sid,
+    )).data;
   unitCatalog = async (sid: string, signal?: AbortSignal) => (await this.request<UnitCatalog1>(`/studies/${sid}/unit-catalog`, undefined, 'GET', signal)).data;
   approach = async (sid: string, signal?: AbortSignal) => (await this.request<ApproachState2>(`/studies/${sid}/approach`, undefined, 'GET', signal)).data;
   previewApproach = async (sid: string, body: ApproachPreviewRequestRead2, signal?: AbortSignal) => (await this.request<ApproachPreviewRead3>(`/studies/${sid}/approach/preview`, body, 'POST', signal)).data;
