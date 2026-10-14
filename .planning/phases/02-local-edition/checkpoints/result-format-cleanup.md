@@ -186,3 +186,32 @@ This changes application configuration code only, no schema, producer input,
 capture, worker or attested source. Root owns app refresh and real demo retry;
 this lane did not restart the demo or save any live configuration. The focused
 HTTP tests use an explicit private-service transport, not native numerical proof.
+
+## Current worker input-layout correction
+
+The first new demo run58c15e15-bce9-460a-b161-3bf09efd42f8 was recorded with
+native exit300 and no result. Read-only inspection of node66595850-f584-47cb-afed-4ff330130bd1
+showed the retained worker envelope: exit1 before candidate execution at worker.py1876,
+Invalid configuration/model version pairing. The model3/4 gate compared outer
+bundle10 against old input-layout versions6/8/9. Commit8bf2365 changes that condition
+to the already validated bundle_layout(manifest). Adjacent worker, launcher and result
+version guards were inspected; no other instance of this confusion was found there.
+This changes one attested worker source line and requires worker rebuild/attestation;
+it changes no modeling producer/schema/capture input.
+
+At root's request the exact dispatcher6850 command and parent6818 were verified;
+only6850 receivedSIGSTOP and stateT was confirmed. Web remained available. Root
+subsequently terminated the paused child and parent and owns restart/reconciliation.
+No authoring or run records were changed by this lane. Two initial read-only probes
+were refused by the scope guard before accessing the profile because the dedicated
+scratch setting was absent; using the explicit existing demo scratch parent allowed
+the guarded inspection. No computation was rerun during diagnosis.
+
+Current-format test extension initially passed all six independent worker preflights,
+but its in-process imports broke the separate application-only isolation assertion:
+units-bundle120passed/1failed (b69fvwdx,84.8s). Commit2ccc992 moves those preflights
+into a subprocess over exact inert bundle bytes. Final units-bundle121/0 and
+style-ratchet33/0 (0ka4iw9u,98.9/9.6s). Three scopes archived/released, none remain;
+cumulative executor cleanup53 scopes. Runtime source stays frozen at8bf2365.
+Root owns restricted-worker execution of the corrected current demo after rebuild;
+these data-only preflights do not claim a completed engineering calculation.
