@@ -164,7 +164,127 @@ def test_native_compounds_histories_and_archive():
         assert j.prepared(mixed)['schema_version']=='3'
         assert not j.canary()['candidate_side_effect']
         assert j.process_count()==7
+        # Assess the already retained native records through ordinary study HTTP commands.
+        # Answer authoring must neither launch science nor change any retained run/configuration.
+        from approach_native_fixture import step
+
+        bindings = [
+            dict(
+                binding_id=uid(),
+                model_id=saved['configuration']['model_id'],
+                model_revision_id=saved['configuration']['model_revision_id'],
+            )
+            for _, _, saved, _ in records
+        ]
+        method = step('Compare explicit conversions with retained-result reuse')
+        method.update(
+            purpose='Test the independently specified SI scale relationships.',
+            rationale='Compare independently executed identity models and exact retained reuse.',
+            intent=dict(
+                transformation='Scalar identity with explicit compatible SI unit conversion.',
+                inputs='Specified unit-bearing scalars and exact prior recorded outputs.',
+                outputs='Converted scalar outputs with retained units.',
+                depends_on_step_ids=[],
+            ),
+            implementation_state='linked',
+            implementation_refs=[
+                dict(kind='model', binding_id=binding['binding_id']) for binding in bindings
+            ],
+        )
+        case_id = uid()
+        approach = j.save_approach(dict(
+            schema_version='1',
+            question='Do the native fixture calculations preserve the specified SI relationships?',
+            scope='Synthetic scalar identity models with explicit units and exact retained inputs.',
+            limitations='Unit-conversion evidence only; no engineering-validity claim.',
+            open_questions='Independent engineering validation is outside this fixture.',
+            model_bindings=bindings,
+            steps=[method],
+            assumptions=[],
+            cases=[dict(
+                case_id=case_id,
+                title='Direct and retained-result comparison',
+                question='Does retained-result reuse preserve the first SI scale relationship?',
+                rationale='Compare the first native calculation with its retained-result reuse.',
+                binding_id=bindings[0]['binding_id'],
+                evidence_links=[dict(
+                    evidence_version_id=eid, relation='context',
+                    locator='Independent fixture analytical expectations',
+                )],
+            )],
+            basis_refs=[],
+        ))
+        answer_path = 'approach/versions/' + approach['version']['approach_version_id'] + '/answers'
+        assert j.request('GET', answer_path)['items'] == []
+        assert all(
+            result['availability'] == 'available'
+            for _, detail, _, _ in records[:2]
+            for result in detail['history']['results']['outputs']
+        )
+        answer_command = dict(
+            schema_version='1', command_id=uid(), expected_revision=None,
+            approach_version_id=approach['version']['approach_version_id'], case_id=case_id,
+            observations='The two cited native runs retain available outputs and explicit units.',
+            interpretation=(
+                'Direct and result-linked calculations agree with the specified SI scale '
+                'expectations for this synthetic identity-model comparison.'
+            ),
+            qualifications=['This fixture does not validate an engineering model.'],
+            open_deliverables=['Independent engineering validation remains outside this fixture.'],
+            basis=dict(
+                configuration_revision_ids=[
+                    saved['configuration']['configuration_revision_id']
+                    for _, _, saved, _ in records[:2]
+                ],
+                run_ids=[rid for rid, _, _, _ in records[:2]],
+                evidence_version_ids=[eid], case_answer_version_ids=[],
+            ),
+        )
+        case_answer = j.request('POST', 'answers', answer_command, 201)
+        synthesis_command = dict(
+            answer_command, command_id=uid(), case_id=None,
+            observations='Seven retained native runs cover the stated SI conversion fixture.',
+            interpretation=(
+                'The examined computations support unit conversion and exact retained reuse; '
+                'they establish no physical feasibility conclusion.'
+            ),
+            basis=dict(
+                configuration_revision_ids=[
+                    saved['configuration']['configuration_revision_id']
+                    for _, _, saved, _ in records
+                ],
+                run_ids=[rid for rid, _, _, _ in records],
+                evidence_version_ids=[eid],
+                case_answer_version_ids=[case_answer['answer_version_id']],
+            ),
+        )
+        study_answer = j.request('POST', 'answers', synthesis_command, 201)
+        revised_case_answer = j.request('POST', 'answers', dict(
+            answer_command, command_id=uid(),
+            expected_revision=case_answer['answer_version_id'],
+            qualifications=[
+                'This fixture does not validate an engineering model.',
+                'The comparison covers only the explicitly referenced unit relationships.',
+            ],
+        ), 201)
+        assert revised_case_answer['previous_version_id'] == case_answer['answer_version_id']
+        assert j.request('GET', 'answers/' + case_answer['answer_version_id']) == case_answer
+        assert j.request('GET', 'answers/' + study_answer['answer_version_id']) == study_answer
+        assert study_answer['basis']['case_answer_version_ids'] == [
+            case_answer['answer_version_id']
+        ]
+        assert j.process_count() == 7
         j.offline();j.restart_web()
+        for answer in (case_answer, revised_case_answer, study_answer):
+            assert j.request('GET', 'answers/' + answer['answer_version_id']) == answer
+        assert {
+            answer['answer_version_id'] for answer in j.request('GET', answer_path)['items']
+        } == {revised_case_answer['answer_version_id'], study_answer['answer_version_id']}
+        receipt = j.request(
+            'GET', 'commands/' + answer_command['command_id'] + '?category=answer_save'
+        )
+        assert receipt['recovery'] == 'adopt' and receipt['result'] == case_answer
+        assert j.process_count() == 7
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
             assert j.request('GET','configurations/'+saved['configuration']['configuration_revision_id'])==saved
@@ -209,6 +329,11 @@ def test_native_compounds_histories_and_archive():
             assert j.request('GET','runs/'+rid)['history']==history['history']
         browser=j.browser(records)
         proof=dict(passed=True,browser=browser,analytical=EXPECT,records=[dict(run_id=r,history=h,configuration=s,payload_sha256=hashlib.sha256(b).hexdigest()) for r,h,s,b in records],
+            scientific_answers=dict(
+                approach_version_id=approach['version']['approach_version_id'],
+                case_answer=case_answer, revised_case_answer=revised_case_answer,
+                study_answer=study_answer, application_restart=True,
+            ),
             legacy=legacy,mixed=mixed,archives=archives,aggregate_archive_refusal=rejected,selected_run_ids=selected,
             modeling_outage=True,application_restart=True,modeling_restart=True,actual_http_jwt=True,
             attestation=j.native.require_attestation(),human_acceptance='pending')
