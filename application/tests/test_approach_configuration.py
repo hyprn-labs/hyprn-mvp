@@ -113,9 +113,18 @@ def test_stale_preview_selection_mutation_and_current_write_permission(config):
     with e['store'].connection(write=True) as db:db.execute('DELETE FROM memberships')
     with pytest.raises(DomainError):c.commit(e['actor'],e['sid'],request)
 
-def test_http_accepts_request4_and_returns_closed_preview_and_save(config):
+@pytest.mark.parametrize('capabilities', ['legacy', 'current', 'unknown'])
+def test_http_accepts_request4_and_returns_closed_preview_and_save(config, capabilities):
     e,c,r,m,_=config;pin(config);client=e['client'];path='/api/1/studies/'+e['sid']+'/configurations'
+    if capabilities != 'legacy':
+        versions = sample(D['ExecutionVersions2'])
+        if capabilities == 'unknown':versions['artifact_versions'] = ['99']
+        e['transport'].caps['execution_versions'] = versions
     p=client.post(path+'/preview',json=r)
+    if capabilities == 'unknown':
+        assert p.status_code == 503, p.text
+        assert counts(e) == (0, 0, 0)
+        return
     assert p.status_code==200,p.text
     validate('ConfigurationPreview4',p.json()['data'])
     response=client.post(path,json=body(config,p.json()['data']))

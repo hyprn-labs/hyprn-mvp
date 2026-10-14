@@ -21,8 +21,8 @@ class Configurations:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.coordinator.model.call(actor,sid,'GET','/capabilities',
-                response_schema='CapabilitiesResponse',resources=[sid])
-            caps=validate('Capabilities',result['data'],remote=True)
+                response_schema='CapabilitiesResponseRead2',resources=[sid])
+            caps=validate('CapabilitiesRead2',result['data'],remote=True)
             if status!=200:raise DomainError('backend_unavailable',503,outcome='unknown')
         except DomainError:
             if strict:raise
