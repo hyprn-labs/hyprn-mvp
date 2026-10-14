@@ -681,7 +681,9 @@ def test_polish_model2_root_with_unresolved_model4_ancestor(catalog):
 
 
 @pytest.mark.parametrize('layout', ['2', '3', '4', '5', '6', '8'])
-def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(catalog, layout):
+def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(
+    catalog, layout, tmp_path
+):
     from hyprn_mvp_app.execution_bundle import bundle_layout, result_history_version
     if layout in ('5', '6'):
         case = case6(catalog, linked=True, legacy=layout == '5')
@@ -710,6 +712,32 @@ def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(c
     assert manifest['result_protocol_version'] == '2'
     assert result_history_version('10', '2') == '7'
     validate_retained_bundle(bundle, request, case['frozen'])
+    directory = tmp_path / 'current-inputs'
+    directory.mkdir()
+    for name, raw in {**bundle['files'], 'manifest.json': canonical(manifest)}.items():
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+    # Worker admission stays in its own process; application imports remain inert.
+    code = '''
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from hyprn_mvp_integration.worker import read_inputs
+root = Path(sys.argv[2])
+observed = read_inputs(root, sys.argv[3], sys.argv[4])
+expected = tuple(json.loads((root / name).read_bytes()) for name in
+                 ('manifest.json', 'model.json', 'configuration.json'))
+assert observed == expected
+print('current worker inputs accepted')
+'''
+    checked = subprocess.run(
+        [sys.executable, '-B', '-c', code, str(REPO / 'integration/src'), str(directory),
+         manifest['bundle_digest'], raw_hash(canonical(manifest))],
+        capture_output=True, text=True,
+    )
+    assert checked.returncode == 0, checked.stderr
+    assert checked.stdout.strip() == 'current worker inputs accepted'
     for field, value in [('result_protocol_version', '1'), ('input_schema_version', '1')]:
         altered, altered_request = deepcopy((bundle, request))
         altered['manifest'][field] = value
