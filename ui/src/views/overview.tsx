@@ -21,7 +21,7 @@ function renderOverview(ctx: ViewContext) {
           api={api}
           studyId={study.study_id}
         >
-          {(question, details) => (
+          {(question, details, version) => (
             <Panel className="study-about overview-card" label="About this study">
               <SectionHeader
                 level={2}
@@ -81,8 +81,16 @@ function renderOverview(ctx: ViewContext) {
                 {details}
                 <Button
                   ref={approachEntry}
+                  disabled={version === undefined}
                   onClick={() =>
-                    navigate(() => void openLink({ study: study.study_id, view: 'approach' }))
+                    navigate(
+                      () =>
+                        void openLink({
+                          study: study.study_id,
+                          view: 'approach',
+                          approach: version ?? undefined,
+                        }),
+                    )
                   }
                 >
                   View modeling approach

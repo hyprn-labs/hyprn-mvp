@@ -453,7 +453,6 @@ function CriterionFacts({run}:{run:PublicRunDetail}) {
 function CaseCard({
   group,
   complete,
-  cursor,
   headingId,
   content,
   onCreateConfiguration,
@@ -467,7 +466,6 @@ function CaseCard({
   expanded?: number;
   group: Group;
   complete: boolean;
-  cursor: boolean;
   headingId: string;
   content: ApproachSavedRead3['version']['content'];
   onCreateConfiguration?: (caseId: string) => void;
@@ -491,9 +489,7 @@ function CaseCard({
   ).length;
   const tag = loaded.length
     ? { tone: 'inert' as const, label: plural(loaded.length, 'run') + ' loaded' }
-    : complete
-      ? { tone: 'advisory' as const, label: 'Not evaluated' }
-      : { tone: 'advisory' as const, label: 'Coverage incomplete' };
+    : null;
   const item = group.item,
     binding = item?.binding_id
       ? content.model_bindings.find((b) => b.binding_id === item.binding_id)
@@ -505,17 +501,9 @@ function CaseCard({
       : []),
     ...(failed ? [plural(failed, 'record') + ' could not be loaded'] : []),
     ...(pending ? [plural(pending, 'record') + ' loading'] : []),
-    ...(!runs.length
-      ? [
-          complete
-            ? 'Not evaluated in the loaded review · no run found for this case'
-            : cursor
-              ? 'No run loaded for this case; more usage is available.'
-              : 'No run loaded for this case; review coverage is incomplete.',
-        ]
-      : !complete
-        ? ['Review coverage is incomplete; more records may exist for this case.']
-        : []),
+    ...(!runs.length && complete
+      ? ['Not evaluated in the loaded review · no run found for this case']
+      : []),
   ];
   const saved = (id: string) =>
     group.rows.find(
@@ -533,7 +521,7 @@ function CaseCard({
           </StatusTag>
         </summary>
         <div className="approach-case-content">
-          <StatusTag tone={tag.tone}>{tag.label}</StatusTag>
+          {tag && <StatusTag tone={tag.tone}>{tag.label}</StatusTag>}
           <p className="context-copy approach-case-question">
             {item
               ? item.question || 'Case question not described'
@@ -581,7 +569,7 @@ function CaseCard({
               ))}
             </div>
           )}
-          {item && <ApproachCaseContext item={item} />}
+          {item && !!item.evidence_links.length && <ApproachCaseContext item={item} />}
         </div>
       </Disclosure>
     </article>
@@ -1015,7 +1003,6 @@ export function ApproachFindings({
             key={group.id}
             group={group}
             complete={!incomplete}
-            cursor={!!cursor}
             headingId={domId('card', group.id)}
             content={saved.version.content}
             expanded={focusCase?.id === group.id ? focusCase.token : undefined}

@@ -118,7 +118,7 @@ The application is a single-page React client with hash deep links that name exp
 ### 3.3 Overview
 
 - **Study question box** at the top, read from the latest saved approach version only (a draft is never study context). **See more details** at its bottom-right opens the **Study details** dialog: Study question (agreed question, original wording, elaboration, each with attribution) · Study context (scope, open questions) · Assumptions (approach-owned, with evidence) · Limits (with evidence; limits apply to the whole study).
-- **About this study**: Edit, description, and one action, **View modeling approach**.
+- **About this study**: Edit, description, and one action, **View modeling approach**. The action opens the same saved version as the displayed question; it opens Draft only when no saved version exists. Editing remains an explicit choice on the approach page.
 - **Recent runs**: run name and short ID with Execution and Criteria tags. **Recent configurations**: name and revision. Full identities are only in Record details.
 
 ### 3.4 Modeling approach

@@ -552,7 +552,7 @@ export function ApproachCases({content,onChange,disabled=false,models=[],onCreat
                 Create configuration
               </Button>
             )}
-            <ApproachCaseContext item={c} />
+            {(onChange || !!c.evidence_links.length) && <ApproachCaseContext item={c} />}
           </Disclosure>
         </article>
       ))}

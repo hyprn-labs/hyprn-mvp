@@ -614,7 +614,12 @@ export function OverviewStudyQuestion({
 }: {
   api: HyprnMvpApi;
   studyId: string;
-  children: (question: ReactNode, details: ReactNode) => ReactNode;
+  // null means no saved version; undefined means the read is not yet available.
+  children: (
+    question: ReactNode,
+    details: ReactNode,
+    version: string | null | undefined,
+  ) => ReactNode;
 }) {
   const [state, setState] = useState<OverviewQuestion>({ kind: 'loading' }),
     [attempt, setAttempt] = useState(0);
@@ -696,6 +701,7 @@ export function OverviewStudyQuestion({
           <Button aria-haspopup="dialog" onClick={() => details.current?.open()}>
             See more details
           </Button>,
+          record.version.approach_version_id,
         )}
         <StudyDetailsDialog ref={details} />
       </ApproachAnnotations>
@@ -727,5 +733,6 @@ export function OverviewStudyQuestion({
       )}
     </div>,
     null,
+    state.kind === 'none' ? null : undefined,
   );
 }

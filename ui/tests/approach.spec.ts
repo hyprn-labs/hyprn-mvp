@@ -342,6 +342,8 @@ test('@approach-method continuous sections preserve question and route', async (
     nominal.getByRole('button', { name: 'Create configuration for Nominal range', exact: true }),
   ).toBeVisible();
   await expect(nominal).toContainText('No case answer has been assessed.');
+  await expect(nominal).not.toContainText('Coverage incomplete');
+  await expect(nominal.getByText('No evidence linked', { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('region', { name: 'Answer to the study question', exact: true }),
   ).toContainText('No study answer has been assessed.');
@@ -3084,9 +3086,8 @@ test('@approach-history cases precede synthesis across repeats and failures', as
   ).toContainText('No study answer has been assessed.');
   await expect(results).toContainText('More usage is available; review coverage is incomplete');
   await expect(results).not.toContainText('Not evaluated in the loaded review');
-  await expect(card('Upper operating range')).toContainText(
-    'No run loaded for this case; more usage is available.',
-  );
+  await expect(card('Upper operating range')).not.toContainText('Coverage incomplete');
+  await expect(card('Upper operating range')).not.toContainText('more usage is available');
   for (const theme of ['light', 'dark']) {
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
     await results.evaluate((e) => e.scrollIntoView({ block: 'start' }));
@@ -3644,7 +3645,8 @@ test(
   await expect(page.getByRole('heading', { name: 'Modeling approach', exact: true })).toBeVisible();
   const version = (await (await page.request.get(`/api/1/studies/${sid}/approach/versions`)).json())
     .data.items[0].approach_version_id;
-  await page.getByLabel('Approach version', { exact: true }).selectOption(version);
+  await expect(page.getByLabel('Approach version', { exact: true })).toHaveValue(version);
+  expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('approach')).toBe(version);
   const reader = page.getByRole('region', { name: 'The modeling approach', exact: true }),
     approachBox = reader.getByRole('region', { name: 'Study question', exact: true });
   await expect(
