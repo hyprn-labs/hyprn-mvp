@@ -1,11 +1,17 @@
 """Bounded data-only result protocol and fixed scientific criteria."""
+
 import json
 import math
 import operator
 
 ASSESSMENT_VERSION = 'fixed-threshold-1'
-OPERATORS = {'lt': operator.lt, 'le': operator.le, 'eq': operator.eq,
-             'ge': operator.ge, 'gt': operator.gt}
+OPERATORS = {
+    'lt': operator.lt,
+    'le': operator.le,
+    'eq': operator.eq,
+    'ge': operator.ge,
+    'gt': operator.gt,
+}
 
 
 def evaluate_criteria(result, criteria, unit_conversion=None):
@@ -24,27 +30,46 @@ def evaluate_criteria(result, criteria, unit_conversion=None):
         elif output and output['availability'] == 'available':
             try:
                 value, threshold = output['value'], criterion['threshold']
-                absolute, relative = criterion.get('absolute_tolerance', 0), criterion.get('relative_tolerance', 0)
-                if any(type(v) not in (int, float) or not math.isfinite(v) for v in (value, threshold, absolute, relative)) or min(absolute, relative) < 0:
+                absolute, relative = (
+                    criterion.get('absolute_tolerance', 0),
+                    criterion.get('relative_tolerance', 0),
+                )
+                if (
+                    any(
+                        type(v) not in (int, float) or not math.isfinite(v)
+                        for v in (value, threshold, absolute, relative)
+                    )
+                    or min(absolute, relative) < 0
+                ):
                     raise ValueError('Invalid tolerance or value')
                 old, new = output['units'], criterion['units']
                 if bool(old) != bool(new):
                     raise ValueError('Incompatible unit presence')
                 if old:
                     if unit_conversion is None:
-                        if old != new:raise ValueError('Native conversion required')
+                        if old != new:
+                            raise ValueError('Native conversion required')
                     else:
                         factor, offset = unit_conversion(old, new)
-                        if offset:raise ValueError('Affine conversion unsupported')
+                        if offset:
+                            raise ValueError('Affine conversion unsupported')
                         value *= factor
-                if not math.isfinite(value) or not math.isfinite(absolute + relative * abs(threshold)):
+                if not math.isfinite(value) or not math.isfinite(
+                    absolute + relative * abs(threshold)
+                ):
                     raise ValueError('Nonfinite conversion or tolerance')
                 compare = OPERATORS[criterion['operator']]
-                met = abs(value - threshold) <= absolute + relative * abs(threshold) if criterion['operator'] == 'eq' else compare(value, threshold)
+                met = (
+                    abs(value - threshold) <= absolute + relative * abs(threshold)
+                    if criterion['operator'] == 'eq'
+                    else compare(value, threshold)
+                )
                 outcome, reason = ('met' if met else 'violated'), 'threshold_comparison'
             except (ValueError, KeyError, TypeError, OverflowError):
                 reason = 'invalid_criterion_or_units'
-        outcomes.append(dict(criterion_id=criterion['criterion_id'], outcome=outcome, reason=reason))
+        outcomes.append(
+            dict(criterion_id=criterion['criterion_id'], outcome=outcome, reason=reason)
+        )
     return outcomes
 
 
@@ -52,25 +77,44 @@ def validate_criteria(result, configuration):
     """Validate native assessments without importing candidate or numerical code."""
     criteria = configuration['criteria']
     claims = result['criteria']
-    if len(claims) != len(criteria):raise ValueError('Criterion inventory mismatch')
+    if len(claims) != len(criteria):
+        raise ValueError('Criterion inventory mismatch')
     expected = evaluate_criteria(result, criteria)
     outputs = {(o['target']['instance_id'], o['target']['port_id']): o for o in result['outputs']}
     for c, claim, same_units in zip(criteria, claims, expected):
-        if set(claim) != {'criterion_id', 'outcome', 'reason'} or claim['criterion_id'] != c['criterion_id']:
+        if (
+            set(claim) != {'criterion_id', 'outcome', 'reason'}
+            or claim['criterion_id'] != c['criterion_id']
+        ):
             raise ValueError('Criterion identity mismatch')
         output = outputs.get((c['target']['instance_id'], c['target']['port_id']))
-        if output and output['availability'] == 'available' and output['units'] and c['units'] and output['units'] != c['units']:
+        if (
+            output
+            and output['availability'] == 'available'
+            and output['units']
+            and c['units']
+            and output['units'] != c['units']
+        ):
             # Unit conversions are performed by the pinned native worker; never
             # recreate its unit system or silently reinterpret retained claims.
-            if claim not in [dict(criterion_id=c['criterion_id'], outcome=s, reason=r) for s,r in
-                    [('met','threshold_comparison'),('violated','threshold_comparison'),('unresolved','invalid_criterion_or_units')]]:
+            if claim not in [
+                dict(criterion_id=c['criterion_id'], outcome=s, reason=r)
+                for s, r in [
+                    ('met', 'threshold_comparison'),
+                    ('violated', 'threshold_comparison'),
+                    ('unresolved', 'invalid_criterion_or_units'),
+                ]
+            ]:
                 raise ValueError('Invalid native criterion claim')
-        elif claim != same_units:raise ValueError('Inconsistent criterion outcome')
+        elif claim != same_units:
+            raise ValueError('Inconsistent criterion outcome')
     return result
+
 
 def _bounded_json(raw, *, size, depth_limit, collection_limit, kind):
     if len(raw) > size:
-        raise ValueError('Oversized '+kind)
+        raise ValueError('Oversized ' + kind)
+
     def pairs(items):
         result = {}
         for key, value in items:
@@ -78,16 +122,22 @@ def _bounded_json(raw, *, size, depth_limit, collection_limit, kind):
                 raise ValueError('Duplicate key')
             result[key] = value
         return result
-    value = json.loads(raw, object_pairs_hook=pairs,
-                       parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Nonfinite JSON')))
+
+    value = json.loads(
+        raw,
+        object_pairs_hook=pairs,
+        parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Nonfinite JSON')),
+    )
+
     def bound(item, depth=0):
         if depth > depth_limit:
-            raise ValueError(kind+' nesting exceeded')
+            raise ValueError(kind + ' nesting exceeded')
         if isinstance(item, (dict, list)):
             if len(item) > collection_limit:
-                raise ValueError(kind+' collection exceeded')
+                raise ValueError(kind + ' collection exceeded')
             for child in item.values() if isinstance(item, dict) else item:
                 bound(child, depth + 1)
+
     bound(value)
     # Reject overflowed JSON numbers as well as NaN tokens.
     json.dumps(value, allow_nan=False)
@@ -103,22 +153,60 @@ def artifact_json(raw):
     # Closed artifact schemas have at most 2000 inventory entries (1000 model
     # elements); source strings are bounded by the bytes, not stdout policy.
     from hyprn_mvp_app.execution_bundle import MAX_BYTES, MAX_FILES
-    return _bounded_json(raw, size=MAX_BYTES, depth_limit=32, collection_limit=MAX_FILES, kind='artifact')
+
+    return _bounded_json(
+        raw, size=MAX_BYTES, depth_limit=32, collection_limit=MAX_FILES, kind='artifact'
+    )
 
 
 def _result_unit(value, model_version):
     """Resolve only the closed retained spelling; never parse or convert units."""
-    if isinstance(value,str):
-        if len(value)>4096:raise ValueError('Invalid retained unit')
-        if model_version=='3' and value:
-            return _result_unit({'kind':'physical','expression':value}, '3')
+    if isinstance(value, str):
+        if len(value) > 4096:
+            raise ValueError('Invalid retained unit')
+        if model_version == '3' and value:
+            return _result_unit({'kind': 'physical', 'expression': value}, '3')
         return value  # Legacy meanings remain exact, including empty string.
-    if model_version not in ('3','4') or not isinstance(value,dict):raise ValueError('Invalid retained unit declaration')
-    if value=={'kind':'dimensionless'}:return ''
-    if (set(value)=={'kind','expression'} and value['kind']=='physical'
-            and isinstance(value['expression'],str) and value['expression'] in {
-                'm','km','cm','mm','s','min','h','kg','g','N','Pa','kPa','MPa','K','degC','degF',
-                'rad','deg','m/s','km/h','J/kg','kJ/kg','MJ/kg','kg/m**3','g/cm**3','m**2','cm**2','mm**2'}):
+    if model_version not in ('3', '4') or not isinstance(value, dict):
+        raise ValueError('Invalid retained unit declaration')
+    if value == {'kind': 'dimensionless'}:
+        return ''
+    if (
+        set(value) == {'kind', 'expression'}
+        and value['kind'] == 'physical'
+        and isinstance(value['expression'], str)
+        and value['expression']
+        in {
+            'm',
+            'km',
+            'cm',
+            'mm',
+            's',
+            'min',
+            'h',
+            'kg',
+            'g',
+            'N',
+            'Pa',
+            'kPa',
+            'MPa',
+            'K',
+            'degC',
+            'degF',
+            'rad',
+            'deg',
+            'm/s',
+            'km/h',
+            'J/kg',
+            'kJ/kg',
+            'MJ/kg',
+            'kg/m**3',
+            'g/cm**3',
+            'm**2',
+            'cm**2',
+            'mm**2',
+        }
+    ):
         return value['expression']
     raise ValueError('Unresolved or malformed retained output unit')
 
@@ -126,54 +214,101 @@ def _result_unit(value, model_version):
 def validate_result(raw, request, model):
     """Accept data only, bound to the immutable native inputs and port inventory."""
     envelope = bounded_json(raw)
-    if envelope['reason'] != 'exited' or type(envelope['exit_code']) is not int or envelope['exit_code'] != 0:
+    if (
+        envelope['reason'] != 'exited'
+        or type(envelope['exit_code']) is not int
+        or envelope['exit_code'] != 0
+    ):
         raise ValueError('Worker did not exit normally')
-    lines = [line[len('HYPRN_MVP_RESULT_V1 '):] for line in envelope['output'].splitlines()
-             if line.startswith('HYPRN_MVP_RESULT_V1 ')]
+    lines = [
+        line[len('HYPRN_MVP_RESULT_V1 ') :]
+        for line in envelope['output'].splitlines()
+        if line.startswith('HYPRN_MVP_RESULT_V1 ')
+    ]
     if len(lines) != 1:
         raise ValueError('Ambiguous worker result')
     result = bounded_json(lines[0])
-    if result['schema_version'] != '1' or any(result[key] != request[key] for key in ('run_id', 'bundle_digest')):
+    if result['schema_version'] != '1' or any(
+        result[key] != request[key] for key in ('run_id', 'bundle_digest')
+    ):
         raise ValueError('Result identity mismatch')
-    if set(result) != {'schema_version', 'run_id', 'bundle_digest', 'execution', 'convergence',
-                       'optimization', 'completeness', 'outputs', 'criteria', 'applicability', 'artifacts'}:
+    if set(result) != {
+        'schema_version',
+        'run_id',
+        'bundle_digest',
+        'execution',
+        'convergence',
+        'optimization',
+        'completeness',
+        'outputs',
+        'criteria',
+        'applicability',
+        'artifacts',
+    }:
         raise ValueError('Unexpected result field')
-    if model.get('schema_version') not in ('1','2','3','4'):
+    if model.get('schema_version') not in ('1', '2', '3', '4'):
         raise ValueError('Unsupported result model version')
     definitions = {d['definition_version_id']: d for d in model['definitions']}
-    if len(definitions)!=len(model['definitions']) or len({i['instance_id'] for i in model['instances']})!=len(model['instances']):
+    if len(definitions) != len(model['definitions']) or len(
+        {i['instance_id'] for i in model['instances']}
+    ) != len(model['instances']):
         raise ValueError('Ambiguous result model inventory')
-    if model['schema_version']=='4':
-        flattened=[]
+    if model['schema_version'] == '4':
+        flattened = []
         for d in definitions.values():
-            ports=d['ports'];ids={p['port_id'] for p in ports}
-            if len(ids)!=len(ports) or len({isinstance(p['units'],str) for p in ports})>1:
+            ports = d['ports']
+            ids = {p['port_id'] for p in ports}
+            if len(ids) != len(ports) or len({isinstance(p['units'], str) for p in ports}) > 1:
                 raise ValueError('Ambiguous retained definition')
-            descriptions=d.get('quantity_definitions',[]);seen_descriptions=set()
-            if not isinstance(descriptions,list) or len(descriptions)>1000:raise ValueError('Quantity bound')
+            descriptions = d.get('quantity_definitions', [])
+            seen_descriptions = set()
+            if not isinstance(descriptions, list) or len(descriptions) > 1000:
+                raise ValueError('Quantity bound')
             for q in descriptions:
-                if (set(q)!={'port_id','statement'} or q['port_id'] not in ids or q['port_id'] in seen_descriptions
-                        or not isinstance(q['statement'],str) or not q['statement'].strip() or len(q['statement'])>4096):
+                if (
+                    set(q) != {'port_id', 'statement'}
+                    or q['port_id'] not in ids
+                    or q['port_id'] in seen_descriptions
+                    or not isinstance(q['statement'], str)
+                    or not q['statement'].strip()
+                    or len(q['statement']) > 4096
+                ):
                     raise ValueError('Invalid retained quantity definition')
                 seen_descriptions.add(q['port_id'])
             for p in ports:
-                if p['definition_version_id']!=d['definition_version_id']:raise ValueError('Retained port owner')
-                if p['units']!={'kind':'unspecified'}:_result_unit(p['units'],'4')
+                if p['definition_version_id'] != d['definition_version_id']:
+                    raise ValueError('Retained port owner')
+                if p['units'] != {'kind': 'unspecified'}:
+                    _result_unit(p['units'], '4')
             flattened.extend(ports)
-        if flattened!=model['ports']:raise ValueError('Retained port aggregate')
+        if flattened != model['ports']:
+            raise ValueError('Retained port aggregate')
     for instance in model['instances']:
-        definition=definitions[instance['definition_version_id']]
-        if len({p['port_id'] for p in definition['ports']})!=len(definition['ports']):
+        definition = definitions[instance['definition_version_id']]
+        if len({p['port_id'] for p in definition['ports']}) != len(definition['ports']):
             raise ValueError('Ambiguous result port inventory')
         for p in definition['ports']:
-            if p['definition_version_id']!=definition['definition_version_id']:
+            if p['definition_version_id'] != definition['definition_version_id']:
                 raise ValueError('Result port owner mismatch')
-            if model['schema_version'] in ('3','4'):_result_unit(p['units'], model['schema_version'])
-    expected = {(i['instance_id'], p['port_id']): _result_unit(p['units'], model['schema_version']) for i in model['instances']
-                for p in definitions[i['definition_version_id']]['ports'] if p['direction'] == 'output'}
+            if model['schema_version'] in ('3', '4'):
+                _result_unit(p['units'], model['schema_version'])
+    expected = {
+        (i['instance_id'], p['port_id']): _result_unit(p['units'], model['schema_version'])
+        for i in model['instances']
+        for p in definitions[i['definition_version_id']]['ports']
+        if p['direction'] == 'output'
+    }
     seen = set()
     for output in result['outputs']:
-        if set(output) != {'target', 'value', 'units', 'availability', 'reason', 'producer_completed', 'assigned'}:
+        if set(output) != {
+            'target',
+            'value',
+            'units',
+            'availability',
+            'reason',
+            'producer_completed',
+            'assigned',
+        }:
             raise ValueError('Unexpected output field')
         if set(output['target']) != {'instance_id', 'port_id'}:
             raise ValueError('Invalid target')
@@ -184,33 +319,54 @@ def validate_result(raw, request, model):
         if type(output['producer_completed']) is not bool or type(output['assigned']) is not bool:
             raise ValueError('Invalid completion evidence')
         if output['availability'] == 'available':
-            if (not output['producer_completed'] or not output['assigned'] or output['reason'] is not None
-                    or type(output['value']) not in (int, float) or not math.isfinite(output['value'])):
+            if (
+                not output['producer_completed']
+                or not output['assigned']
+                or output['reason'] is not None
+                or type(output['value']) not in (int, float)
+                or not math.isfinite(output['value'])
+            ):
                 raise ValueError('Invalid available value')
-        elif output['availability'] != 'unavailable' or output['value'] is not None or not isinstance(output['reason'], str):
+        elif (
+            output['availability'] != 'unavailable'
+            or output['value'] is not None
+            or not isinstance(output['reason'], str)
+        ):
             raise ValueError('Unavailable output must be explicit')
     if seen != set(expected):
         raise ValueError('Missing output record')
     available = sum(o['availability'] == 'available' for o in result['outputs'])
-    if result['completeness'] != dict(expected=len(expected), available=available,
-            failed=sum(not o['producer_completed'] for o in result['outputs']), unavailable=len(expected)-available):
+    if result['completeness'] != dict(
+        expected=len(expected),
+        available=available,
+        failed=sum(not o['producer_completed'] for o in result['outputs']),
+        unavailable=len(expected) - available,
+    ):
         raise ValueError('Inconsistent completeness')
     # This workload has no candidate-produced files or independent applicability evidence.
     if result['artifacts'] or result['applicability'] != dict(state='unassessed', evidence_refs=[]):
         raise ValueError('Untrusted scientific evidence claim')
-    if result['convergence'] != dict(state='not_applicable', diagnostics_ref=None) or result['optimization'] != dict(termination='not_applicable', feasibility='not_applicable'):
+    if result['convergence'] != dict(state='not_applicable', diagnostics_ref=None) or result[
+        'optimization'
+    ] != dict(termination='not_applicable', feasibility='not_applicable'):
         raise ValueError('Unsupported numerical status')
     execution = result['execution']
-    if (set(execution) != {'state', 'exit_code', 'message'} or execution['state'] not in ('finished', 'failed')
-            or type(execution['exit_code']) is not int or execution['exit_code'] != (0 if execution['state'] == 'finished' else 1)
-            or not isinstance(execution['message'], str) or len(execution['message']) > 4096
-            or (execution['state'] == 'finished' and available != len(expected))):
+    if (
+        set(execution) != {'state', 'exit_code', 'message'}
+        or execution['state'] not in ('finished', 'failed')
+        or type(execution['exit_code']) is not int
+        or execution['exit_code'] != (0 if execution['state'] == 'finished' else 1)
+        or not isinstance(execution['message'], str)
+        or len(execution['message']) > 4096
+        or (execution['state'] == 'finished' and available != len(expected))
+    ):
         raise ValueError('Invalid execution status')
     return result
 
 
 class UnsupportedRecordVersion(ValueError):
     """A retained record remains intact but cannot be interpreted by this reader."""
+
     code = 'unsupported_record_version'
 
 
@@ -220,8 +376,14 @@ def read_stored_result(result, request, model, assessment=None):
         raise UnsupportedRecordVersion('Unsupported retained result version')
     if assessment is not None and assessment.get('version') != 'fixed-threshold-1':
         raise UnsupportedRecordVersion('Unsupported retained assessment version')
-    raw = json.dumps(dict(reason='exited', exit_code=0,
-        output='HYPRN_MVP_RESULT_V1 ' + json.dumps(result, allow_nan=False)), allow_nan=False)
+    raw = json.dumps(
+        dict(
+            reason='exited',
+            exit_code=0,
+            output='HYPRN_MVP_RESULT_V1 ' + json.dumps(result, allow_nan=False),
+        ),
+        allow_nan=False,
+    )
     return validate_result(raw, request, model)
 
 
@@ -243,7 +405,10 @@ def _prepared_v2(manifest, prepared, files):
         if manifest[key] != prepared[key]:
             raise ValueError('Retained program binding mismatch')
     entry = prepared['entrypoint']
-    if entry['protocol'] != 'hyprn_mvp.openmdao.program/1' or prepared['result_protocol_version'] != '1':
+    if (
+        entry['protocol'] != 'hyprn_mvp.openmdao.program/1'
+        or prepared['result_protocol_version'] != '1'
+    ):
         raise UnsupportedRecordVersion('Unsupported retained program or result protocol')
     for key in ('module_path', 'bindings_path', 'source_map_path'):
         if entry[key] not in files:
@@ -254,22 +419,48 @@ def retained_bundle(repository, request):
     """Read bounded AiiDA repository bytes and verify the immutable request pin."""
     from hyprn_mvp_app.contracts import canonical, check_digest
     from hyprn_mvp_app.execution_bundle import verify_files, safe_path, MAX_BYTES
+
     with repository.open('manifest.json', mode='rb') as stream:
         raw = stream.read(MAX_BYTES + 1)
     manifest = artifact_json(raw)
-    readers = {'1': _prepared_v1, '2': _prepared_v2, '3': _prepared_v2, '4': _prepared_v2, '5': _prepared_v2, '6': _prepared_v2, '8': _prepared_v2}
+    readers = {
+        '1': _prepared_v1,
+        '2': _prepared_v2,
+        '3': _prepared_v2,
+        '4': _prepared_v2,
+        '5': _prepared_v2,
+        '6': _prepared_v2,
+        '8': _prepared_v2,
+    }
     reader = readers.get(manifest.get('schema_version'))
     if reader is None:
         raise UnsupportedRecordVersion('Unsupported retained bundle version')
-    manifest_fields = {'schema_version','bundle_id','run_id','prepared_digest','model_revision_id',
-        'configuration_revision_id','model_digest','configuration_digest','files','generator',
-        'dependencies','runtime','required_capabilities','licenses','result_protocol_version','bundle_digest'}
-    if manifest['schema_version'] in ('2','3','4','5','6','8'):
-        manifest_fields |= {'entrypoint','executable_content_digest'}
-    if manifest['schema_version'] in ('3','4','5','6','8'):
-        manifest_fields |= {'modeling_configuration_digest','result_dependencies'}
-    if manifest['schema_version'] in ('5','6','8'):manifest_fields |= {'approach_digest','approach_closure_digest'}
-    if manifest['schema_version']=='8':manifest_fields.add('model_schema_version')
+    manifest_fields = {
+        'schema_version',
+        'bundle_id',
+        'run_id',
+        'prepared_digest',
+        'model_revision_id',
+        'configuration_revision_id',
+        'model_digest',
+        'configuration_digest',
+        'files',
+        'generator',
+        'dependencies',
+        'runtime',
+        'required_capabilities',
+        'licenses',
+        'result_protocol_version',
+        'bundle_digest',
+    }
+    if manifest['schema_version'] in ('2', '3', '4', '5', '6', '8'):
+        manifest_fields |= {'entrypoint', 'executable_content_digest'}
+    if manifest['schema_version'] in ('3', '4', '5', '6', '8'):
+        manifest_fields |= {'modeling_configuration_digest', 'result_dependencies'}
+    if manifest['schema_version'] in ('5', '6', '8'):
+        manifest_fields |= {'approach_digest', 'approach_closure_digest'}
+    if manifest['schema_version'] == '8':
+        manifest_fields.add('model_schema_version')
     if set(manifest) != manifest_fields:
         raise ValueError('Unexpected retained manifest fields')
     if manifest['result_protocol_version'] != '1':
@@ -278,50 +469,82 @@ def retained_bundle(repository, request):
     if any(manifest[k] != request[k] for k in ('run_id', 'bundle_digest')):
         raise ValueError('Native request/bundle mismatch')
     files = {}
-    if len(manifest['files']) > 2000:raise ValueError('File count exceeded')
+    if len(manifest['files']) > 2000:
+        raise ValueError('File count exceeded')
     total = 0
     for item in manifest['files']:
         safe_path(item['path'])
         size = item['size']
-        if type(size) is not int or not 0 <= size <= 32*1024*1024:raise ValueError('Invalid artifact size')
+        if type(size) is not int or not 0 <= size <= 32 * 1024 * 1024:
+            raise ValueError('Invalid artifact size')
         total += size
-        if total > 32*1024*1024:raise ValueError('Bundle size exceeded')
+        if total > 32 * 1024 * 1024:
+            raise ValueError('Bundle size exceeded')
         with repository.open(item['path'], mode='rb') as stream:
             files[item['path']] = stream.read(size + 1)
     verify_files(manifest['files'], files)
-    if manifest['schema_version'] in ('3','4','5','6','8'):
+    if manifest['schema_version'] in ('3', '4', '5', '6', '8'):
         # Data-only validation, imported here so worker results1 remains stdlib
         # at import time. No runtime attestation, native lookup or model fetch.
         from hyprn_mvp_app.execution_bundle import validate_retained_bundle
-        reader(manifest,artifact_json(files['preparation.json']),files)
-        model=artifact_json(files['model.json']);config=artifact_json(files['configuration.json'])
-        if config['study_id']!=request['scope']:raise ValueError('Retained study mismatch')
-        bundle=dict(manifest=manifest,files=files)
-        frozen=dict(configuration=config,model_snapshot=model)
-        if config['schema_version']=='4':
-            frozen['approach_closure']=artifact_json(files['approach/closure.json']) if 'approach/closure.json' in files else None
-        validate_retained_bundle(bundle,request,frozen,raw_snapshot=True)
+
+        reader(manifest, artifact_json(files['preparation.json']), files)
+        model = artifact_json(files['model.json'])
+        config = artifact_json(files['configuration.json'])
+        if config['study_id'] != request['scope']:
+            raise ValueError('Retained study mismatch')
+        bundle = dict(manifest=manifest, files=files)
+        frozen = dict(configuration=config, model_snapshot=model)
+        if config['schema_version'] == '4':
+            frozen['approach_closure'] = (
+                artifact_json(files['approach/closure.json'])
+                if 'approach/closure.json' in files
+                else None
+            )
+        validate_retained_bundle(bundle, request, frozen, raw_snapshot=True)
         return bundle
     prepared = artifact_json(files['preparation.json'])
-    prepared_fields = {'schema_version','preparation_id','model_id','model_revision_id','model_digest',
-        'configuration_revision_id','configuration_digest','required_capabilities','generator_identity',
-        'dependency_requirements','model_package_manifest','files','license_notices','prepared_digest'}
+    prepared_fields = {
+        'schema_version',
+        'preparation_id',
+        'model_id',
+        'model_revision_id',
+        'model_digest',
+        'configuration_revision_id',
+        'configuration_digest',
+        'required_capabilities',
+        'generator_identity',
+        'dependency_requirements',
+        'model_package_manifest',
+        'files',
+        'license_notices',
+        'prepared_digest',
+    }
     if manifest['schema_version'] == '2':
-        prepared_fields |= {'entrypoint','executable_content_digest','result_protocol_version'}
+        prepared_fields |= {'entrypoint', 'executable_content_digest', 'result_protocol_version'}
     if set(prepared) != prepared_fields:
         raise ValueError('Unexpected retained preparation fields')
     check_digest(prepared, 'prepared_digest')
     if manifest['prepared_digest'] != prepared['prepared_digest']:
         raise ValueError('Retained preparation mismatch')
-    verify_files(prepared['files'], {item['path']: files[item['path']] for item in prepared['files']})
+    verify_files(
+        prepared['files'], {item['path']: files[item['path']] for item in prepared['files']}
+    )
     reader(manifest, prepared, files)
     model = artifact_json(files['model.json'])
     config = artifact_json(files['configuration.json'])
-    check_digest(model); check_digest(config)
-    for key, value in dict(model_digest=model['digest'], configuration_digest=config['digest'],
-            model_revision_id=model['model_revision_id'], configuration_revision_id=config['configuration_revision_id']).items():
+    check_digest(model)
+    check_digest(config)
+    for key, value in dict(
+        model_digest=model['digest'],
+        configuration_digest=config['digest'],
+        model_revision_id=model['model_revision_id'],
+        configuration_revision_id=config['configuration_revision_id'],
+    ).items():
         if manifest[key] != value or prepared[key] != value:
             raise ValueError('Scientific snapshot mismatch')
-    if files['context.json'] != canonical(config['context_snapshot']) or files['evidence/index.json'] != canonical(config['evidence_snapshots']):
+    if files['context.json'] != canonical(config['context_snapshot']) or files[
+        'evidence/index.json'
+    ] != canonical(config['evidence_snapshots']):
         raise ValueError('Evidence snapshot mismatch')
     return dict(manifest=manifest, files=files)

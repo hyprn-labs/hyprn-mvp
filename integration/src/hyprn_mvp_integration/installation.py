@@ -24,6 +24,7 @@ checks from the configuration loaded here, and the modeling and application mana
 container, network and project names, ownership label, engine endpoint and the owner's sign-in
 name from it.
 """
+
 import json
 import os
 from pathlib import Path
@@ -42,10 +43,27 @@ MAX_BYTES = 65536
 PORTS = (1024, 65535)
 TOKEN_TTL_HOURS = (1, 168)
 LOOPBACK = 'http://127.0.0.1:'
-FIELDS = ('schema', 'edition', 'installation_id', 'owner_username', 'host_home', 'data_root', 'ports', 'origin',
-          'docker', 'release', 'agent', 'upstream')
-OBJECTS = {'ports': ('app',), 'docker': ('endpoint', 'engine'), 'release': ('mode', 'require_review', 'immutable'),
-           'agent': ('enabled', 'token_ttl_hours'), 'upstream': ('cache',)}
+FIELDS = (
+    'schema',
+    'edition',
+    'installation_id',
+    'owner_username',
+    'host_home',
+    'data_root',
+    'ports',
+    'origin',
+    'docker',
+    'release',
+    'agent',
+    'upstream',
+)
+OBJECTS = {
+    'ports': ('app',),
+    'docker': ('endpoint', 'engine'),
+    'release': ('mode', 'require_review', 'immutable'),
+    'agent': ('enabled', 'token_ttl_hours'),
+    'upstream': ('cache',),
+}
 USERNAME = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}')
 ENGINE = re.compile(r'[A-Za-z0-9][A-Za-z0-9 ._:()+/-]{0,127}')
 UNIX = 'unix://'
@@ -65,7 +83,9 @@ def _unique(pairs):
     document = {}
     for key, value in pairs:
         if key in document:
-            raise InstallationError('duplicate key ' + json.dumps(key) + ' in the installation configuration')
+            raise InstallationError(
+                'duplicate key ' + json.dumps(key) + ' in the installation configuration'
+            )
         document[key] = value
     return document
 
@@ -83,7 +103,9 @@ def parse(raw):
     try:
         document = json.loads(text, object_pairs_hook=_unique, parse_constant=_constant)
     except json.JSONDecodeError as error:
-        raise InstallationError('the installation configuration is not JSON: ' + error.msg) from None
+        raise InstallationError(
+            'the installation configuration is not JSON: ' + error.msg
+        ) from None
     if not isinstance(document, dict):
         raise InstallationError('the installation configuration is not a JSON object')
     return document
@@ -113,7 +135,9 @@ def _boolean(value, where):
 
 def _integer(value, where, bounds):
     if isinstance(value, bool) or not isinstance(value, int) or not bounds[0] <= value <= bounds[1]:
-        raise InstallationError(where + ' must be an integer from ' + str(bounds[0]) + ' to ' + str(bounds[1]))
+        raise InstallationError(
+            where + ' must be an integer from ' + str(bounds[0]) + ' to ' + str(bounds[1])
+        )
     return value
 
 
@@ -127,7 +151,9 @@ def _path(value, where):
 def _admitted(path, where, host):
     reason = location_refusal(path, host)
     if reason is not None:
-        raise InstallationError('refusing ' + where + ' ' + str(path) + ': ' + reason, 'location_refused')
+        raise InstallationError(
+            'refusing ' + where + ' ' + str(path) + ': ' + reason, 'location_refused'
+        )
     return path
 
 
@@ -142,8 +168,14 @@ def validate(document, *, edition, host=None):
         raise InstallationError('schema must be ' + SCHEMA)
     if document['edition'] != edition:
         if document['edition'] in PRODUCT_EDITIONS:
-            raise InstallationError('this configuration belongs to the ' + document['edition'] + ' edition, not the '
-                                    + edition + ' edition', 'edition_mismatch')
+            raise InstallationError(
+                'this configuration belongs to the '
+                + document['edition']
+                + ' edition, not the '
+                + edition
+                + ' edition',
+                'edition_mismatch',
+            )
         raise InstallationError('edition is invalid')
     identity = _string(document['installation_id'], 'installation_id')
     try:
@@ -178,9 +210,16 @@ def validate(document, *, edition, host=None):
     _admitted(cache, 'the upstream cache', host)
     if os.path.lexists(data_root):
         status = os.lstat(data_root)
-        if not stat.S_ISDIR(status.st_mode) or status.st_uid != os.getuid() or status.st_mode & 0o077:
-            raise InstallationError('refusing the data root ' + str(data_root) + ': it is not a folder owned by this '
-                                    'user and closed to group and others', 'location_refused')
+        if (
+            not stat.S_ISDIR(status.st_mode)
+            or status.st_uid != os.getuid()
+            or status.st_mode & 0o077
+        ):
+            raise InstallationError(
+                'refusing the data root ' + str(data_root) + ': it is not a folder owned by this '
+                'user and closed to group and others',
+                'location_refused',
+            )
     return json.loads(json.dumps(document))
 
 
@@ -198,14 +237,18 @@ def read(path):
             raise _unsafe('the installation configuration path has a symbolic link at ' + str(part))
     folder = os.lstat(location.parent)
     if not stat.S_ISDIR(folder.st_mode) or folder.st_uid != os.getuid() or folder.st_mode & 0o077:
-        raise _unsafe('the folder of the installation configuration must be owned by this user and closed to '
-                      'group and others (0700)')
+        raise _unsafe(
+            'the folder of the installation configuration must be owned by this user and closed to '
+            'group and others (0700)'
+        )
     try:
         descriptor = os.open(location, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, 'O_CLOEXEC', 0))
     except FileNotFoundError:
         raise InstallationError('no installation configuration at ' + str(location)) from None
     except OSError as error:
-        raise _unsafe('the installation configuration cannot be opened safely: ' + error.strerror) from None
+        raise _unsafe(
+            'the installation configuration cannot be opened safely: ' + error.strerror
+        ) from None
     status = os.fstat(descriptor)
     if not stat.S_ISREG(status.st_mode):
         os.close(descriptor)
@@ -216,10 +259,14 @@ def read(path):
         if status.st_uid != os.getuid():
             raise _unsafe('the installation configuration is owned by another user')
         if status.st_mode & 0o077:
-            raise _unsafe('the installation configuration must be readable only by its owner (0600)')
+            raise _unsafe(
+                'the installation configuration must be readable only by its owner (0600)'
+            )
         raw = stream.read(MAX_BYTES + 1)
     if len(raw) > MAX_BYTES:
-        raise InstallationError('the installation configuration exceeds ' + str(MAX_BYTES) + ' bytes')
+        raise InstallationError(
+            'the installation configuration exceeds ' + str(MAX_BYTES) + ' bytes'
+        )
     return raw
 
 
