@@ -72,6 +72,11 @@ export async function harness(page: Page) {
     const body = method === 'GET' ? undefined : request.postDataJSON();
     const ok = (data: unknown) => route.fulfill({ json: { schema_version: '1', data, next_cursor: null } });
     if (path === '/session') { if (method === 'POST') state.actor = body.username; return ok({ actor_id: state.actor, csrf_token: 'isolated-fixture-token' }); }
+    // The study shell's attribution reads: no record in these studies was written by an agent.
+    // Answered before the expiry switch, which belongs to the request each test exercises.
+    const attribution =
+      path === '/agent/attribution/studies' || /^\/studies\/[^/]+\/agent\/attribution$/.test(path);
+    if (attribution && method === 'GET') return ok({ items: [], next_cursor: null });
     if (state.expire) { state.expire = false; return route.fulfill({ status: 401, json: { error: { code: 'unauthenticated', message: 'Session expired', fields: [], outcome: 'unchanged' } } }); }
     if (method !== 'GET') state.writes.push({ path, method, body });
     if (path === '/capabilities') return ok({engineering: []});
