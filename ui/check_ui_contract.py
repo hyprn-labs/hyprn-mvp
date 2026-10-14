@@ -315,7 +315,8 @@ print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assum
 # or source excerpt. Cases & results: results first, then one card per case; the limits aside is
 # a Study limits link.
 details_text=(ROOT/'src/ApproachAssumptions.tsx').read_text()
-for term in ('export function StudyQuestionBox(','export function StudyDetailsDialog(','export function OverviewStudyQuestion(','See more details','Study details</h2>',
+for term in ('export function StudyQuestionBox(', 'export function StudyDetailsDialog(',
+ 'export function OverviewStudyQuestion(', 'See more details', 'Study details</h2>',
  'aria-label="Study question"','aria-label="Current approach"','aria-label="Study assumptions"',
  'aria-label="Study limits"','aria-label="Open questions"',
  'api.fence({ studyId })','api.readFailed(error, read)',
