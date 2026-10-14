@@ -120,7 +120,36 @@ def run(*, group):
             if self.path.startswith('/api/1/'):
                 route = urlsplit(self.path).path
                 # P4-S6b: study archive/restore commands (S6a) for the Home archive journey.
-                writable = route in ('/api/1/session', '/api/1/studies') or re.fullmatch(r'/api/1/studies/[0-9a-f-]{36}/(archive|restore)', route) is not None or '/approach/' in route or group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') and any(part in route for part in ('/model-imports','/models/','/configurations','/runs','/evidence','/computational-record'))
+                answer_write = (
+                    group == 'approach-ui-method'
+                    and self.command == 'POST'
+                    and re.fullmatch(r'/api/1/studies/[0-9a-f-]{36}/answers', route) is not None
+                )
+                writable = (
+                    route in ('/api/1/session', '/api/1/studies')
+                    or re.fullmatch(r'/api/1/studies/[0-9a-f-]{36}/(archive|restore)', route)
+                    is not None
+                    or '/approach/' in route
+                    or answer_write
+                    or group
+                    in (
+                        'approach-ui-method',
+                        'approach-ui-assumptions',
+                        'approach-ui-configuration',
+                        'approach-ui-history',
+                    )
+                    and any(
+                        part in route
+                        for part in (
+                            '/model-imports',
+                            '/models/',
+                            '/configurations',
+                            '/runs',
+                            '/evidence',
+                            '/computational-record',
+                        )
+                    )
+                )
                 if self.command != 'GET' and not writable:
                     return self.respond(403, b'Outside bounded controller fixture', 'text/plain')
                 raw = self.rfile.read(length)

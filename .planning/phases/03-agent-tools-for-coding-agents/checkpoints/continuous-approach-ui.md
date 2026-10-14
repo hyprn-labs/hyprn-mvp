@@ -100,3 +100,22 @@ this remaining verification under the approved integrated-batch cadence.
 
 Implementation commit exists; explicit owned paths only; no file deletions. Final
 candidate static and style checks passed. Browser qualification remains open.
+
+## Fixture follow-up
+
+Root preflight found that the method fixture refused the new answer POST before
+the saved-answer browser scenario could run. Its closed write allowlist now admits
+only POST to the exact study answers collection, only in the method group. The
+reading group still refuses it; DELETE and descendant POST routes remain refused.
+Browser assertions cover these three negative cases. Other scenario actions use
+existing permitted model-import, evidence, approach and session routes. No product
+API or production permission changes were made.
+
+`./hyprn-mvp dev check style-ratchet`: 33 passed, 0 failed, 0 skipped; scope
+`a42f4cfe-ea7d-41eb-8178-8589a0ff2338`. Browser runs remain assigned to root's
+integrated union; none were started during its active native lane.
+
+All 17 earlier executor scopes and this follow-up scope were archived externally
+with per-file SHA-256 verification before release: 18 scopes, 353 evidence/metadata
+files, no remaining source scopes. The archive includes a release ledger and each
+scope's hash manifest. No live or other executor scope was targeted.

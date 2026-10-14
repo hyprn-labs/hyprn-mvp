@@ -299,6 +299,14 @@ test('@approach-configuration saved case opens explicit configuration with exact
   await page.keyboard.press('Escape');
 });
 
+test('@approach-reading lightweight fixture refuses scientific answer writes', async ({ page }) => {
+  await openProduct(page);
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  const response = await page.request.post(`/api/1/studies/${sid}/answers`, { data: {} });
+  expect(response.status()).toBe(403);
+  expect(await response.text()).toBe('Outside bounded controller fixture');
+});
+
 test('@approach-method continuous sections preserve question and route', async ({
   page,
   browser,
@@ -349,6 +357,14 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
   baseURL,
 }) => {
   const data = await seededConditions(page, browser, baseURL, { cases: true });
+  for (const [method, suffix] of [['DELETE', 'answers'], ['POST', 'answers/extra']]) {
+    const refused = await page.request.fetch(`/api/1/studies/${data.sid}/${suffix}`, {
+      method,
+      data: {},
+    });
+    expect(refused.status()).toBe(403);
+    expect(await refused.text()).toBe('Outside bounded controller fixture');
+  }
   await page
     .getByLabel('Approach version', { exact: true })
     .selectOption(data.saved.version.approach_version_id);
