@@ -19,6 +19,7 @@ replaced by the scope's. Guarded tests never run docker compose, so a scope's co
 network are created with docker from the reviewed recipe (start_scoped), and the scope may use
 an existing image only when it was built from the current reviewed sources (reviewed_image).
 """
+
 import argparse
 import contextlib
 import difflib
@@ -65,6 +66,7 @@ SOURCE_NOTICE = '/usr/share/hyprn-mvp-modeling-source'
 class Deployment(NamedTuple):
     """One owned modeling deployment: its root, container, internal network and the ownership
     label (key and value) carried by the container and the network."""
+
     root: object
     container: str
     network: str
@@ -84,11 +86,14 @@ def scoped_deployment(root, scope_id):
     root = Path(root)
     scratch = local_paths.scratch_root()
     if not root.is_absolute() or root.resolve() != root or scratch not in root.parents:
-        raise ValueError('A scoped modeling deployment root must be an absolute folder below the scratch root')
+        raise ValueError(
+            'A scoped modeling deployment root must be an absolute folder below the scratch root'
+        )
     prefix = 'hyprn-mvp-test-' + scope_id.replace('-', '')[:8]
     return Deployment(root, prefix + '-modeling', prefix + '-private', TEST_SCOPE_LABEL, scope_id)
 
-START = '''#!/bin/sh
+
+START = """#!/bin/sh
 set -eu
 cd /native
 if [ ! -e /store/model.sqlite3 ]; then
@@ -99,7 +104,8 @@ elif [ ! -f /store/initialized ]; then
   exit 1
 fi
 exec bundle exec rails server -b 0.0.0.0 -p 3000
-'''
+"""
+
 
 def checked_root(path, deployment=INSTALLATION):
     path = Path(path)
@@ -112,9 +118,11 @@ def checked_root(path, deployment=INSTALLATION):
             raise ValueError('Runtime children must not be symlinks')
     return path
 
+
 def run(*args, input=None):
-    return subprocess.run(args, input=input, check=True, capture_output=True, text=True,
-                          env=DOCKER_ENVIRONMENT).stdout.strip()
+    return subprocess.run(
+        args, input=input, check=True, capture_output=True, text=True, env=DOCKER_ENVIRONMENT
+    ).stdout.strip()
 
 
 def readable_context(root, executables=()):
@@ -135,6 +143,7 @@ def readable_context(root, executables=()):
             path.chmod(0o755 if path in executables else 0o644)
     return root
 
+
 @contextlib.contextmanager
 def base_reference(image):
     """A transient tag naming the verified base image id for one build (BuildKit cannot build
@@ -149,54 +158,115 @@ def base_reference(image):
         if reference in tags and len(tags) > 1:
             run('docker', 'image', 'rm', '--no-prune', reference)
 
+
 def inspect(name, kind='container'):
-    result = subprocess.run(['docker', kind, 'inspect', name], capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
+    result = subprocess.run(
+        ['docker', kind, 'inspect', name], capture_output=True, text=True, env=DOCKER_ENVIRONMENT
+    )
     if result.returncode:
-        if 'No such' in result.stderr or f'network {name} not found' in result.stderr: return None
+        if 'No such' in result.stderr or f'network {name} not found' in result.stderr:
+            return None
         raise RuntimeError(result.stderr)
     return json.loads(result.stdout)[0]
 
+
 def assert_owned(info, kind, deployment=INSTALLATION):
     expected = deployment.container if kind == 'container' else deployment.network
-    labels = info.get('Config', {}).get('Labels', {}) if kind == 'container' else info.get('Labels', {})
-    if info.get('Name', '').lstrip('/') != expected or labels.get(deployment.label) != deployment.owner:
+    labels = (
+        info.get('Config', {}).get('Labels', {}) if kind == 'container' else info.get('Labels', {})
+    )
+    if (
+        info.get('Name', '').lstrip('/') != expected
+        or labels.get(deployment.label) != deployment.owner
+    ):
         raise ValueError('Resource identity/ownership mismatch; refusing action')
 
+
 def source_hashes():
-    paths = ['deployment/modeling.Dockerfile', 'deployment/modeling_policy.rb', 'deployment/modeling-compose.yaml', 'deployment/modeling_runtime.py', 'modeling/provenance.md', 'modeling/generate_unit_catalog.py', 'modeling/rehearsal.py', 'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json', 'integration/worker-requirements.lock']
-    paths += ['deployment/images/whatsopt-source.Dockerfile',
-              'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json']
-    paths += sorted(str(p.relative_to(REPO)) for p in (REPO / 'upstream/whatsopt-patches').glob('*.patch'))
+    paths = [
+        'deployment/modeling.Dockerfile',
+        'deployment/modeling_policy.rb',
+        'deployment/modeling-compose.yaml',
+        'deployment/modeling_runtime.py',
+        'modeling/provenance.md',
+        'modeling/generate_unit_catalog.py',
+        'modeling/rehearsal.py',
+        'contracts/schemas/model.schema.json',
+        'contracts/schemas/execution.schema.json',
+        'integration/worker-requirements.lock',
+    ]
+    paths += [
+        'deployment/images/whatsopt-source.Dockerfile',
+        'deployment/locks/upstream.json',
+        'deployment/locks/whatsopt-gems.json',
+    ]
+    paths += sorted(
+        str(p.relative_to(REPO)) for p in (REPO / 'upstream/whatsopt-patches').glob('*.patch')
+    )
     return {p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in paths}
+
 
 def check(root, *, allow_source_change=False, deployment=INSTALLATION):
     root = checked_root(root, deployment)
     identity = json.loads((root / 'identity.json').read_text())
-    if identity.get('owner') != deployment.owner or identity.get('container') != deployment.container or identity.get('network') != deployment.network or identity.get('runtime') != str(root):
+    if (
+        identity.get('owner') != deployment.owner
+        or identity.get('container') != deployment.container
+        or identity.get('network') != deployment.network
+        or identity.get('runtime') != str(root)
+    ):
         raise ValueError('Deployment identity mismatch')
     if not allow_source_change and identity['source_hashes'] != source_hashes():
         raise ValueError('Deployment source changed; explicit reviewed rebuild required')
-    model = inspect(deployment.container); net = inspect(deployment.network, 'network')
-    if model is None or net is None: raise ValueError('Owned resource missing')
-    assert_owned(model, 'container', deployment); assert_owned(net, 'network', deployment)
+    model = inspect(deployment.container)
+    net = inspect(deployment.network, 'network')
+    if model is None or net is None:
+        raise ValueError('Owned resource missing')
+    assert_owned(model, 'container', deployment)
+    assert_owned(net, 'network', deployment)
     host = model['HostConfig']
     if model['Image'] != identity['image'] or model['Config']['User'] != '10001:10001':
         raise ValueError('Unexpected modeling image or user')
-    if not host['ReadonlyRootfs'] or host['Privileged'] or host['CapAdd'] or host['CapDrop'] != ['ALL']:
+    if (
+        not host['ReadonlyRootfs']
+        or host['Privileged']
+        or host['CapAdd']
+        or host['CapDrop'] != ['ALL']
+    ):
         raise ValueError('Unsafe effective privileges')
     if 'no-new-privileges:true' not in host['SecurityOpt'] or host['PortBindings']:
         raise ValueError('Unsafe security options or published endpoint')
     if set(model['NetworkSettings']['Networks']) != {deployment.network} or not net['Internal']:
         raise ValueError('Modeling network must be internal and exclusive')
-    expected = {'/store': (str(root / 'modeling'), True), '/run/model.key': (str(root / 'credentials/model.key'), False), '/run/rails.key': (str(root / 'credentials/rails.key'), False)}
-    mounts = {m['Destination']: (m['Source'], m['RW']) for m in model['Mounts'] if m['Type'] == 'bind'}
-    if mounts != expected or any(m['Type'] not in ('bind','tmpfs') for m in model['Mounts']):
+    expected = {
+        '/store': (str(root / 'modeling'), True),
+        '/run/model.key': (str(root / 'credentials/model.key'), False),
+        '/run/rails.key': (str(root / 'credentials/rails.key'), False),
+    }
+    mounts = {
+        m['Destination']: (m['Source'], m['RW']) for m in model['Mounts'] if m['Type'] == 'bind'
+    }
+    if mounts != expected or any(m['Type'] not in ('bind', 'tmpfs') for m in model['Mounts']):
         raise ValueError('Unexpected modeling store/credential mount')
-    if host['PidsLimit'] != 128 or host['Memory'] != 768 * 1024 * 1024 or host['NanoCpus'] != 1000000000:
+    if (
+        host['PidsLimit'] != 128
+        or host['Memory'] != 768 * 1024 * 1024
+        or host['NanoCpus'] != 1000000000
+    ):
         raise ValueError('Resource limits changed')
-    if not allow_source_change and host['Tmpfs'] != {'/tmp': 'rw,noexec,nosuid,size=192m,mode=1777', '/native/tmp': 'rw,noexec,nosuid,size=32m,uid=10001,gid=10001'}:
+    if not allow_source_change and host['Tmpfs'] != {
+        '/tmp': 'rw,noexec,nosuid,size=192m,mode=1777',
+        '/native/tmp': 'rw,noexec,nosuid,size=32m,uid=10001,gid=10001',
+    }:
         raise ValueError('Scratch limits changed')
-    return {'container': deployment.container, 'image': model['Image'], 'running': model['State']['Running'], 'private_network': deployment.network, 'candidate_execution': 'blocked_pending_plan_01_12_consumer_attestation'}
+    return {
+        'container': deployment.container,
+        'image': model['Image'],
+        'running': model['State']['Running'],
+        'private_network': deployment.network,
+        'candidate_execution': 'blocked_pending_plan_01_12_consumer_attestation',
+    }
+
 
 def stage_modeling_contract(ctx):
     """Materialize the audited adapter patch chain, never stale image source.
@@ -209,14 +279,26 @@ def stage_modeling_contract(ctx):
     section = text.split('+++ b/' + service + '\n', 1)[1].split('\n--- ', 1)[0]
     lines = section.splitlines()
     import re
+
     match = re.fullmatch(r'@@ -0,0 \+1,(\d+) @@', lines[0])
-    if not match or any(not line.startswith('+') for line in lines[1:]) or int(match[1]) != len(lines)-1:
+    if (
+        not match
+        or any(not line.startswith('+') for line in lines[1:])
+        or int(match[1]) != len(lines) - 1
+    ):
         raise ValueError('Invalid audited adapter addition')
     with tempfile.TemporaryDirectory(prefix='adapter-', dir=ctx) as temporary:
-        stage = Path(temporary); target = stage / service
+        stage = Path(temporary)
+        target = stage / service
         target.parent.mkdir(parents=True)
         target.write_text('\n'.join(line[1:] for line in lines[1:]) + '\n')
-        for name in ('050-native-generation.patch', '060-ui-discovery.patch', '070-assumptions-evidence.patch', '080-unit-declarations.patch', '090-quantity-definitions.patch'):
+        for name in (
+            '050-native-generation.patch',
+            '060-ui-discovery.patch',
+            '070-assumptions-evidence.patch',
+            '080-unit-declarations.patch',
+            '090-quantity-definitions.patch',
+        ):
             patch = (REPO / 'upstream/whatsopt-patches' / name).read_text()
             if name == '090-quantity-definitions.patch':
                 headers = [line for line in patch.splitlines() if line.startswith(('--- ', '+++ '))]
@@ -225,10 +307,17 @@ def stage_modeling_contract(ctx):
             start = patch.index('--- a/' + service + '\n')
             end = patch.find('\n--- ', start + 1)
             patch = patch[start:] if end == -1 else patch[start:end] + '\n'
-            result = subprocess.run(['patch', '--batch', '--fuzz=0', '--forward', '-p1'], input=patch,
-                                    cwd=stage, capture_output=True, text=True)
+            result = subprocess.run(
+                ['patch', '--batch', '--fuzz=0', '--forward', '-p1'],
+                input=patch,
+                cwd=stage,
+                capture_output=True,
+                text=True,
+            )
             (ctx / (name + '.adapter.log')).write_text(result.stdout + result.stderr)
-            if result.returncode or any(word in (result.stdout + result.stderr).lower() for word in ('fuzz', 'offset')):
+            if result.returncode or any(
+                word in (result.stdout + result.stderr).lower() for word in ('fuzz', 'offset')
+            ):
                 raise ValueError('Audited adapter patch chain failed: ' + name)
         destination = ctx / 'modeling_contract.rb'
         shutil.copyfile(target, destination)
@@ -241,10 +330,15 @@ def patch_sections(text):
     Refuses any line outside a file header or a hunk, so a section boundary is never guessed
     from a removed line that happens to start with dashes."""
     import re
+
     lines = text.splitlines(keepends=True)
     sections, index = [], 0
     while index < len(lines):
-        if not (lines[index].startswith('--- ') and index + 1 < len(lines) and lines[index + 1].startswith('+++ ')):
+        if not (
+            lines[index].startswith('--- ')
+            and index + 1 < len(lines)
+            and lines[index + 1].startswith('+++ ')
+        ):
             raise ValueError('Unexpected patch line outside a file section')
         start = index
         old, new = lines[index][4:].rstrip('\n'), lines[index + 1][4:].rstrip('\n')
@@ -376,10 +470,16 @@ def stage_replayed_sources(ctx, upstream):
     if hashlib.sha256(upstream).hexdigest() != ARCHIVE_SHA256:
         raise ValueError('Upstream archive identity mismatch')
     with tarfile.open(fileobj=io.BytesIO(upstream)) as archive:
-        members = {str(Path(*Path(m.name).parts[1:])): m for m in archive.getmembers()
-                   if m.isfile() and len(Path(m.name).parts) > 1}
-        originals = {path: archive.extractfile(members[path]).read()
-                     for _, path in REPLAYED_SOURCES if path in members}
+        members = {
+            str(Path(*Path(m.name).parts[1:])): m
+            for m in archive.getmembers()
+            if m.isfile() and len(Path(m.name).parts) > 1
+        }
+        originals = {
+            path: archive.extractfile(members[path]).read()
+            for _, path in REPLAYED_SOURCES
+            if path in members
+        }
     replay = ctx / 'replay'
     for name, path in REPLAYED_SOURCES:
         patch = (REPO / 'upstream/whatsopt-patches' / name).read_text()
@@ -387,13 +487,16 @@ def stage_replayed_sources(ctx, upstream):
             notice = '# SPDX-License-Identifier: AGPL-3.0-only\n'
             if not patch.startswith(notice):
                 raise ValueError('Model source baseline patch must retain its licence notice')
-            patch = patch[len(notice):]
+            patch = patch[len(notice) :]
             original = originals.get(path)
             before = None if original is None else hashlib.sha256(original).hexdigest()
             if before != BASELINE_SOURCES[path][0]:
                 raise ValueError('Model source baseline differs from the pinned original')
-        sections = [text for old, new, text in patch_sections(patch)
-                    if new == 'b/' + path and old in ('a/' + path, '/dev/null')]
+        sections = [
+            text
+            for old, new, text in patch_sections(patch)
+            if new == 'b/' + path and old in ('a/' + path, '/dev/null')
+        ]
         if len(sections) != 1:
             raise ValueError('Replayed source must have exactly one section: ' + name + ' ' + path)
         creates = sections[0].startswith('--- /dev/null\n')
@@ -404,8 +507,13 @@ def stage_replayed_sources(ctx, upstream):
             if not creates:
                 (stage / path).parent.mkdir(parents=True, exist_ok=True)
                 (stage / path).write_bytes(originals[path])
-            result = subprocess.run(['patch', '--batch', '--fuzz=0', '--forward', '-p1'], input=sections[0],
-                                    cwd=stage, capture_output=True, text=True)
+            result = subprocess.run(
+                ['patch', '--batch', '--fuzz=0', '--forward', '-p1'],
+                input=sections[0],
+                cwd=stage,
+                capture_output=True,
+                text=True,
+            )
             output = result.stdout + result.stderr
             if result.returncode or any(word in output.lower() for word in ('fuzz', 'offset')):
                 raise ValueError('Replayed source patch failed: ' + name + ' ' + path)
@@ -431,8 +539,9 @@ def stage_assumptions_native_patch(ctx):
     sections = [sections[0], *['--- a/' + part for part in sections[1:]]]
     paths = ('app/services/modeling_contract.rb', 'app/services/native_materializer.rb')
     if len(sections) != len(paths) or any(
-            not section.startswith('--- a/' + path + '\n+++ b/' + path + '\n@@ ')
-            for section, path in zip(sections, paths)):
+        not section.startswith('--- a/' + path + '\n+++ b/' + path + '\n@@ ')
+        for section, path in zip(sections, paths)
+    ):
         raise ValueError('Unexpected assumptions patch sections')
     destination = ctx / 'assumptions.patch'
     destination.write_text(sections[1])
@@ -463,19 +572,27 @@ def stage_generation_patch(ctx, upstream):
     if hashlib.sha256(upstream).hexdigest() != ARCHIVE_SHA256:
         raise ValueError('Upstream archive identity mismatch')
     with tarfile.open(fileobj=io.BytesIO(upstream)) as archive:
-        matches = [m for m in archive if m.isfile()
-                   and '/'.join(Path(m.name).parts[1:]) == template]
+        matches = [
+            m for m in archive if m.isfile() and '/'.join(Path(m.name).parts[1:]) == template
+        ]
         if len(matches) != 1:
             raise ValueError('Upstream discipline template is not unique')
         original = archive.extractfile(matches[0]).read().decode()
-    exact = ''.join(difflib.unified_diff(original.splitlines(keepends=True),
-                                       replacement.splitlines(keepends=True),
-                                       fromfile='a/' + template, tofile='b/' + template))
-    patch = ''.join(exact if new == 'b/' + template else text
-                    for _, new, text in sections if new != adapter)
+    exact = ''.join(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            replacement.splitlines(keepends=True),
+            fromfile='a/' + template,
+            tofile='b/' + template,
+        )
+    )
+    patch = ''.join(
+        exact if new == 'b/' + template else text for _, new, text in sections if new != adapter
+    )
     (ctx / 'native.patch').write_text(patch)
-    discovery = patch_sections((REPO / 'upstream/whatsopt-patches/060-ui-discovery.patch')
-                               .read_text())
+    discovery = patch_sections(
+        (REPO / 'upstream/whatsopt-patches/060-ui-discovery.patch').read_text()
+    )
     if len(discovery) != 1 or discovery[0][1] != adapter:
         raise ValueError('Discovery patch must contain only the cumulative adapter')
 
@@ -485,11 +602,16 @@ def stage_units_native_patch(ctx):
     text = (REPO / 'upstream/whatsopt-patches/080-unit-declarations.patch').read_text()
     sections = text.split('\n--- a/')
     sections = [sections[0], *['--- a/' + part for part in sections[1:]]]
-    paths = ('app/services/modeling_contract.rb', 'app/services/native_materializer.rb',
-             'app/services/native_program.rb', 'config/modeling.units.json')
+    paths = (
+        'app/services/modeling_contract.rb',
+        'app/services/native_materializer.rb',
+        'app/services/native_program.rb',
+        'config/modeling.units.json',
+    )
     if len(sections) != len(paths) or any(
-            not section.startswith('--- a/' + path + '\n+++ b/' + path + '\n@@ ')
-            for section, path in zip(sections, paths)):
+        not section.startswith('--- a/' + path + '\n+++ b/' + path + '\n@@ ')
+        for section, path in zip(sections, paths)
+    ):
         raise ValueError('Unexpected units patch sections')
     destination = ctx / 'units.patch'
     destination.write_text('\n'.join(sections[1:]))
@@ -506,9 +628,15 @@ def upstream_archive(path=None):
     path = local_paths.require(ARCHIVE) if path is None else Path(path)
     try:
         info = os.lstat(path)
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                or info.st_mode & 0o077 or info.st_mode & 0o222):
-            raise ValueError('Upstream archive is not an owner-private read-only file: ' + str(path))
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_mode & 0o077
+            or info.st_mode & 0o222
+        ):
+            raise ValueError(
+                'Upstream archive is not an owner-private read-only file: ' + str(path)
+            )
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd, 'rb') as stream:
             raw = stream.read()
@@ -517,6 +645,7 @@ def upstream_archive(path=None):
     if len(raw) != UPSTREAM['size'] or hashlib.sha256(raw).hexdigest() != ARCHIVE_SHA256:
         raise ValueError('Upstream archive identity mismatch')
     return io.BytesIO(raw)
+
 
 def acquire_upstream(cache=None, *, opener=None):
     """Fetch the pinned archive only when absent; never repair an invalid cached copy.
@@ -573,39 +702,64 @@ def acquire_upstream(cache=None, *, opener=None):
 # prepared artifact records their identities (path, SHA-256, length) in this support record
 # instead of carrying copies of their bytes. The modeling schema the service reads is still
 # part of the patched inventory (config/modeling.schema.json).
-SCHEMA_IDENTITY_SOURCES = ('contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json')
+SCHEMA_IDENTITY_SOURCES = (
+    'contracts/schemas/model.schema.json',
+    'contracts/schemas/execution.schema.json',
+)
 SCHEMA_IDENTITY_FILE = 'schema-identities.json'
 
 
 def support_sources():
     """Build inputs copied byte for byte into every artifact's provenance support set."""
-    return [name for name in source_hashes() if not name.endswith('.patch') and name not in SCHEMA_IDENTITY_SOURCES]
+    return [
+        name
+        for name in source_hashes()
+        if not name.endswith('.patch') and name not in SCHEMA_IDENTITY_SOURCES
+    ]
 
 
 def schema_identities():
     """Identity of every schema that the support set records instead of copying."""
-    return dict(schema_version='1', schemas=[dict(path=name, sha256=hashlib.sha256((REPO / name).read_bytes()).hexdigest(),
-                                                  size=len((REPO / name).read_bytes())) for name in SCHEMA_IDENTITY_SOURCES])
+    return dict(
+        schema_version='1',
+        schemas=[
+            dict(
+                path=name,
+                sha256=hashlib.sha256((REPO / name).read_bytes()).hexdigest(),
+                size=len((REPO / name).read_bytes()),
+            )
+            for name in SCHEMA_IDENTITY_SOURCES
+        ],
+    )
 
 
 def stage_native_inputs(ctx):
     """Retain audited original bytes and every build input; no dependency fetch."""
     upstream = upstream_archive()
-    prov = ctx / 'provenance-inputs'; prov.mkdir()
+    prov = ctx / 'provenance-inputs'
+    prov.mkdir()
     (prov / 'upstream.tar.gz').write_bytes(upstream.getvalue())
     with tarfile.open(fileobj=upstream) as archive:
         for member in archive.getmembers():
             parts = Path(member.name).parts[1:]
-            if not member.isfile() or not parts or '..' in parts: continue
+            if not member.isfile() or not parts or '..' in parts:
+                continue
             relative = Path(*parts)
-            if str(relative).startswith(('app/lib/whats_opt/', 'app/models/')) or str(relative) in ('Gemfile.lock', 'LICENSE', 'db/schema.rb', 'VERSION'):
+            if str(relative).startswith(('app/lib/whats_opt/', 'app/models/')) or str(relative) in (
+                'Gemfile.lock',
+                'LICENSE',
+                'db/schema.rb',
+                'VERSION',
+            ):
                 destination = prov / 'upstream' / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(archive.extractfile(member).read())
     (prov / 'support').mkdir()
     for name in support_sources():
         shutil.copyfile(REPO / name, prov / 'support' / Path(name).name)
-    (prov / 'support' / SCHEMA_IDENTITY_FILE).write_text(json.dumps(schema_identities(), indent=2, sort_keys=True) + '\n')
+    (prov / 'support' / SCHEMA_IDENTITY_FILE).write_text(
+        json.dumps(schema_identities(), indent=2, sort_keys=True) + '\n'
+    )
     shutil.copytree(REPO / 'upstream/whatsopt-patches', prov / 'patches')
     stage_generation_patch(ctx, upstream.getvalue())
     stage_assumptions_native_patch(ctx)
@@ -615,13 +769,20 @@ def stage_native_inputs(ctx):
     stage_modeling_contract(ctx)
     readable_context(ctx)
 
+
 def source_build_inputs():
     """Content identity of the source recipe, archive, gem lock and digest-pinned bases."""
     pins = json.loads((REPO / 'deployment/pins.json').read_text())
-    paths = ('deployment/images/whatsopt-source.Dockerfile',
-             'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json')
-    return dict(ruby_image=pins['ruby_base_image'], node_image=pins['node_base_image'],
-                sources={p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in paths})
+    paths = (
+        'deployment/images/whatsopt-source.Dockerfile',
+        'deployment/locks/upstream.json',
+        'deployment/locks/whatsopt-gems.json',
+    )
+    return dict(
+        ruby_image=pins['ruby_base_image'],
+        node_image=pins['node_base_image'],
+        sources={p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in paths},
+    )
 
 
 def source_image(*, evidence=None, no_cache=False, recorded=None):
@@ -632,8 +793,11 @@ def source_image(*, evidence=None, no_cache=False, recorded=None):
     digest = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     tag = 'hyprn-mvp-modeling-source:' + digest[:16]
     if recorded is not None:
-        if (evidence is not None or not isinstance(recorded, str)
-                or not recorded.startswith('sha256:')):
+        if (
+            evidence is not None
+            or not isinstance(recorded, str)
+            or not recorded.startswith('sha256:')
+        ):
             raise ValueError('Recorded source identity requires a read-only image-id lookup')
         tag = recorded
     existing = inspect(tag, 'image')
@@ -641,8 +805,9 @@ def source_image(*, evidence=None, no_cache=False, recorded=None):
         evidence = Path(evidence)
         evidence.mkdir(parents=True, exist_ok=True)
         archive = acquire_upstream()
-        with tempfile.TemporaryDirectory(prefix='hyprn-mvp-source-build-',
-                                         dir=local_paths.scratch_root()) as temp:
+        with tempfile.TemporaryDirectory(
+            prefix='hyprn-mvp-source-build-', dir=local_paths.scratch_root()
+        ) as temp:
             ctx = Path(temp)
             destination = ctx / 'upstream'
             destination.mkdir()
@@ -661,23 +826,42 @@ def source_image(*, evidence=None, no_cache=False, recorded=None):
                     else:
                         target.parent.mkdir(parents=True, exist_ok=True)
                         target.write_bytes(source.extractfile(member).read())
-            shutil.copyfile(REPO / 'deployment/images/whatsopt-source.Dockerfile',
-                            ctx / 'Dockerfile')
-            shutil.copyfile(REPO / 'deployment/locks/whatsopt-gems.json',
-                            ctx / 'whatsopt-gems.json')
+            shutil.copyfile(
+                REPO / 'deployment/images/whatsopt-source.Dockerfile', ctx / 'Dockerfile'
+            )
+            shutil.copyfile(
+                REPO / 'deployment/locks/whatsopt-gems.json', ctx / 'whatsopt-gems.json'
+            )
             readable_context(ctx)
-            staged = {'deployment/images/whatsopt-source.Dockerfile': ctx / 'Dockerfile',
-                      'deployment/locks/whatsopt-gems.json': ctx / 'whatsopt-gems.json'}
-            if any(hashlib.sha256(path.read_bytes()).hexdigest() != inputs['sources'][name]
-                   for name, path in staged.items()) or source_build_inputs() != inputs:
+            staged = {
+                'deployment/images/whatsopt-source.Dockerfile': ctx / 'Dockerfile',
+                'deployment/locks/whatsopt-gems.json': ctx / 'whatsopt-gems.json',
+            }
+            if (
+                any(
+                    hashlib.sha256(path.read_bytes()).hexdigest() != inputs['sources'][name]
+                    for name, path in staged.items()
+                )
+                or source_build_inputs() != inputs
+            ):
                 raise ValueError('Source build inputs changed during staging')
-            command = ['docker', 'build', '--build-arg', 'RUBY_IMAGE=' + inputs['ruby_image'],
-                       '--build-arg', 'NODE_IMAGE=' + inputs['node_image'],
-                       '--build-arg', 'BUILD_INPUT_DIGEST=' + digest, '-t', tag]
+            command = [
+                'docker',
+                'build',
+                '--build-arg',
+                'RUBY_IMAGE=' + inputs['ruby_image'],
+                '--build-arg',
+                'NODE_IMAGE=' + inputs['node_image'],
+                '--build-arg',
+                'BUILD_INPUT_DIGEST=' + digest,
+                '-t',
+                tag,
+            ]
             if no_cache:
                 command.append('--no-cache')
-            result = subprocess.run([*command, str(ctx)], capture_output=True, text=True,
-                                    env=DOCKER_ENVIRONMENT)
+            result = subprocess.run(
+                [*command, str(ctx)], capture_output=True, text=True, env=DOCKER_ENVIRONMENT
+            )
             (evidence / 'source-build.log').write_text(result.stdout + result.stderr)
             result.check_returncode()
             if source_build_inputs() != inputs:
@@ -708,45 +892,86 @@ def build(root=None, *, evidence=None, no_cache=False, source_no_cache=None):
     image = source_image(evidence=evidence, no_cache=source_no_cache)
     hashes = source_hashes()
     source_inputs = source_build_inputs()
-    with tempfile.TemporaryDirectory(prefix='hyprn-mvp-modeling-build-', dir=local_paths.scratch_root()) as temp:
+    with tempfile.TemporaryDirectory(
+        prefix='hyprn-mvp-modeling-build-', dir=local_paths.scratch_root()
+    ) as temp:
         ctx = Path(temp)
         stage_native_inputs(ctx)
-        for src, dst in [('deployment/modeling.Dockerfile', 'Dockerfile'), ('deployment/modeling_policy.rb', 'modeling_policy.rb')]:
+        for src, dst in [
+            ('deployment/modeling.Dockerfile', 'Dockerfile'),
+            ('deployment/modeling_policy.rb', 'modeling_policy.rb'),
+        ]:
             shutil.copyfile(REPO / src, ctx / dst)
         (ctx / 'start.sh').write_text(START)
-        notices = ctx / 'notices'; notices.mkdir()
+        notices = ctx / 'notices'
+        notices.mkdir()
         (notices / 'upstream.tar.gz').write_bytes(upstream_archive().getvalue())
-        for name in ('deployment/images/whatsopt-source.Dockerfile',
-                     'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
-                     'deployment/modeling_runtime.py'):
+        for name in (
+            'deployment/images/whatsopt-source.Dockerfile',
+            'deployment/locks/upstream.json',
+            'deployment/locks/whatsopt-gems.json',
+            'deployment/modeling_runtime.py',
+        ):
             shutil.copyfile(REPO / name, notices / Path(name).name)
         shutil.copytree(REPO / 'upstream/whatsopt-patches', notices / 'patches')
-        for name in ('modeling/provenance.md', 'deployment/modeling_policy.rb', 'deployment/modeling.Dockerfile'):
+        for name in (
+            'modeling/provenance.md',
+            'deployment/modeling_policy.rb',
+            'deployment/modeling.Dockerfile',
+        ):
             shutil.copyfile(REPO / name, notices / Path(name).name)
         pins_snapshot = (REPO / 'deployment/pins.json').read_bytes()
         (notices / 'pins.json').write_bytes(pins_snapshot)
         pins_snapshot_sha256 = hashlib.sha256(pins_snapshot).hexdigest()
-        identity = dict(upstream=dict(repository=UPSTREAM['repository'],
-                                      commit=UPSTREAM['commit'], archive_sha256=UPSTREAM['sha256']),
-                        source_image=image, source_hashes=hashes, source_build_inputs=source_inputs,
-                        pins_snapshot_sha256=pins_snapshot_sha256)
+        identity = dict(
+            upstream=dict(
+                repository=UPSTREAM['repository'],
+                commit=UPSTREAM['commit'],
+                archive_sha256=UPSTREAM['sha256'],
+            ),
+            source_image=image,
+            source_hashes=hashes,
+            source_build_inputs=source_inputs,
+            pins_snapshot_sha256=pins_snapshot_sha256,
+        )
         (notices / 'source-identity.json').write_text(json.dumps(identity, indent=2))
         readable_context(ctx, executables=(ctx / 'start.sh',))
         # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
         if source_hashes() != hashes or source_build_inputs() != source_inputs:
             raise ValueError('Modeling build inputs changed during staging')
-        inputs = dict(source_image=image, ruby_image=source_inputs['ruby_image'], source_hashes=hashes,
-                      source_build_inputs=source_inputs)
-        tag = 'hyprn-mvp-modeling:' + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
+        inputs = dict(
+            source_image=image,
+            ruby_image=source_inputs['ruby_image'],
+            source_hashes=hashes,
+            source_build_inputs=source_inputs,
+        )
+        tag = (
+            'hyprn-mvp-modeling:'
+            + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
+        )
         with base_reference(image) as reference:
-            command = ['docker', 'build', '--network', 'none', '--build-arg',
-                       'SOURCE_IMAGE=' + reference, '--build-arg', 'RUBY_IMAGE=' + source_inputs['ruby_image'],
-                       '--build-arg', 'NODE_IMAGE=' + source_inputs['node_image'], '-t', tag]
+            command = [
+                'docker',
+                'build',
+                '--network',
+                'none',
+                '--build-arg',
+                'SOURCE_IMAGE=' + reference,
+                '--build-arg',
+                'RUBY_IMAGE=' + source_inputs['ruby_image'],
+                '--build-arg',
+                'NODE_IMAGE=' + source_inputs['node_image'],
+                '-t',
+                tag,
+            ]
             if no_cache:
                 command.append('--no-cache')
-            result = subprocess.run([*command, str(ctx)], capture_output=True, text=True,
-                                    env=DOCKER_ENVIRONMENT)
-        (evidence / ('build-'+secrets.token_hex(4)+'.log')).write_text(result.stdout + result.stderr)
+            result = subprocess.run(
+                [*command, str(ctx)], capture_output=True, text=True, env=DOCKER_ENVIRONMENT
+            )
+        (evidence / ('build-' + secrets.token_hex(4) + '.log')).write_text(
+            result.stdout + result.stderr
+        )
         result.check_returncode()
     if source_hashes() != hashes or source_build_inputs() != source_inputs:
         raise ValueError('Modeling build inputs changed during build')
@@ -756,20 +981,27 @@ def build(root=None, *, evidence=None, no_cache=False, source_no_cache=None):
     (evidence / 'modeling-build-identity.json').write_text(json.dumps(record, indent=2) + '\n')
     return image
 
+
 def compose_environment(root, image):
     """Clean compose environment: no inherited COMPOSE_*/DOCKER_* (project name, file, host,
     context) can redirect the owned deployment. Only PATH/HOME, the reviewed inputs (root, image,
     and the installation's container, network and owner names) and, for an installation,
     DOCKER_HOST set to its configured engine endpoint."""
-    environment = {'PATH': os.environ.get('PATH', '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin'),
-                   'HOME': os.environ.get('HOME', pwd.getpwuid(os.getuid()).pw_dir),
-                   'HYPRN_MVP_MODELING_ROOT': str(root), 'HYPRN_MVP_MODELING_IMAGE': image,
-                   'HYPRN_MVP_MODELING_CONTAINER': INSTALLATION.container,
-                   'HYPRN_MVP_MODELING_NETWORK': INSTALLATION.network,
-                   'HYPRN_MVP_MODELING_OWNER': INSTALLATION.owner}
+    environment = {
+        'PATH': os.environ.get(
+            'PATH', '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin'
+        ),
+        'HOME': os.environ.get('HOME', pwd.getpwuid(os.getuid()).pw_dir),
+        'HYPRN_MVP_MODELING_ROOT': str(root),
+        'HYPRN_MVP_MODELING_IMAGE': image,
+        'HYPRN_MVP_MODELING_CONTAINER': INSTALLATION.container,
+        'HYPRN_MVP_MODELING_NETWORK': INSTALLATION.network,
+        'HYPRN_MVP_MODELING_OWNER': INSTALLATION.owner,
+    }
     if DOCKER_ENVIRONMENT is not None:
         environment['DOCKER_HOST'] = DOCKER_ENVIRONMENT['DOCKER_HOST']
     return environment
+
 
 def image_identity(image):
     """An existing modeling image may back a deployment only when it is exactly the image of the
@@ -777,20 +1009,56 @@ def image_identity(image):
     names the reviewed source image and the current source hashes."""
     if run('docker', 'image', 'inspect', '--format', '{{.Id}}', image) != image:
         raise ValueError('Modeling image identity mismatch')
-    recorded = json.loads(run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
-                              '--security-opt', 'no-new-privileges', '--user', '10001:10001', '--entrypoint', 'cat',
-                              image, SOURCE_NOTICE + '/source-identity.json'))
-    bundled_digest = run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
-                         '--security-opt', 'no-new-privileges', '--user', '10001:10001',
-                         '--entrypoint', 'sha256sum', image, SOURCE_NOTICE + '/pins.json').split()[0]
+    recorded = json.loads(
+        run(
+            'docker',
+            'run',
+            '--rm',
+            '--network',
+            'none',
+            '--read-only',
+            '--cap-drop',
+            'ALL',
+            '--security-opt',
+            'no-new-privileges',
+            '--user',
+            '10001:10001',
+            '--entrypoint',
+            'cat',
+            image,
+            SOURCE_NOTICE + '/source-identity.json',
+        )
+    )
+    bundled_digest = run(
+        'docker',
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--read-only',
+        '--cap-drop',
+        'ALL',
+        '--security-opt',
+        'no-new-privileges',
+        '--user',
+        '10001:10001',
+        '--entrypoint',
+        'sha256sum',
+        image,
+        SOURCE_NOTICE + '/pins.json',
+    ).split()[0]
     if recorded.get('pins_snapshot_sha256') != bundled_digest:
         raise ValueError('Modeling image bundled pins snapshot identity mismatch')
     source = recorded.get('source_image')
     if not isinstance(source, str) or source_image(recorded=source) != source:
         raise ValueError('Modeling image source identity mismatch')
-    if (recorded.get('source_hashes') != source_hashes()
-            or recorded.get('source_build_inputs') != source_build_inputs()):
-        raise ValueError('Modeling image was not built from the current reviewed sources; rebuild it')
+    if (
+        recorded.get('source_hashes') != source_hashes()
+        or recorded.get('source_build_inputs') != source_build_inputs()
+    ):
+        raise ValueError(
+            'Modeling image was not built from the current reviewed sources; rebuild it'
+        )
     return recorded
 
 
@@ -801,8 +1069,24 @@ def reviewed_image(image):
 
 
 # Recipe keys start_scoped reproduces; any other key fails closed instead of being dropped.
-SCOPED_SERVICE_KEYS = frozenset({'image', 'container_name', 'labels', 'user', 'read_only', 'cap_drop', 'security_opt',
-                                 'pids_limit', 'mem_limit', 'cpus', 'restart', 'networks', 'tmpfs', 'volumes'})
+SCOPED_SERVICE_KEYS = frozenset(
+    {
+        'image',
+        'container_name',
+        'labels',
+        'user',
+        'read_only',
+        'cap_drop',
+        'security_opt',
+        'pids_limit',
+        'mem_limit',
+        'cpus',
+        'restart',
+        'networks',
+        'tmpfs',
+        'volumes',
+    }
+)
 
 
 def start_scoped(root, image, log, deployment):
@@ -810,22 +1094,62 @@ def start_scoped(root, image, log, deployment):
     setting of the recipe's service and internal network, with the scope's names and label."""
     recipe = json.loads(RECIPE.read_text())
     service, network = recipe['services']['modeling'], recipe['networks']['model_private']
-    if set(service) != SCOPED_SERVICE_KEYS or set(network) != {'name', 'internal', 'labels'} or service['networks'] != ['model_private']:
+    if (
+        set(service) != SCOPED_SERVICE_KEYS
+        or set(network) != {'name', 'internal', 'labels'}
+        or service['networks'] != ['model_private']
+    ):
         raise ValueError('Unreviewed modeling recipe setting; refusing a scoped deployment')
     label = deployment.label + '=' + deployment.owner
-    run('docker', 'network', 'create', *(['--internal'] if network['internal'] else []), '--label', label, deployment.network)
+    run(
+        'docker',
+        'network',
+        'create',
+        *(['--internal'] if network['internal'] else []),
+        '--label',
+        label,
+        deployment.network,
+    )
     mounts = []
     for volume in service['volumes']:
         if set(volume) - {'type', 'source', 'target', 'read_only'} or volume['type'] != 'bind':
             raise ValueError('Unreviewed modeling recipe volume')
         source = volume['source'].replace('${HYPRN_MVP_MODELING_ROOT}', str(root))
-        mounts += ['--mount', 'type=bind,src=' + source + ',dst=' + volume['target'] + (',readonly' if volume.get('read_only') else '')]
-    args = ['docker', 'run', '-d', '--name', deployment.container, '--label', label, '--network', deployment.network,
-            '--user', service['user'], *(['--read-only'] if service['read_only'] else []),
-            *[a for c in service['cap_drop'] for a in ('--cap-drop', c)],
-            *[a for s in service['security_opt'] for a in ('--security-opt', s)],
-            '--pids-limit', str(service['pids_limit']), '--memory', service['mem_limit'], '--cpus', str(service['cpus']),
-            '--restart', service['restart'], *[a for s in service['tmpfs'] for a in ('--tmpfs', s)], *mounts, image]
+        mounts += [
+            '--mount',
+            'type=bind,src='
+            + source
+            + ',dst='
+            + volume['target']
+            + (',readonly' if volume.get('read_only') else ''),
+        ]
+    args = [
+        'docker',
+        'run',
+        '-d',
+        '--name',
+        deployment.container,
+        '--label',
+        label,
+        '--network',
+        deployment.network,
+        '--user',
+        service['user'],
+        *(['--read-only'] if service['read_only'] else []),
+        *[a for c in service['cap_drop'] for a in ('--cap-drop', c)],
+        *[a for s in service['security_opt'] for a in ('--security-opt', s)],
+        '--pids-limit',
+        str(service['pids_limit']),
+        '--memory',
+        service['mem_limit'],
+        '--cpus',
+        str(service['cpus']),
+        '--restart',
+        service['restart'],
+        *[a for s in service['tmpfs'] for a in ('--tmpfs', s)],
+        *mounts,
+        image,
+    ]
     result = subprocess.run(args, capture_output=True, text=True, env=DOCKER_ENVIRONMENT)
     Path(log).write_text(result.stdout + result.stderr)
     return result.returncode
@@ -836,15 +1160,31 @@ def compose_up(root, image, log, *options):
     in the installation's compose project.
 
     Every compose call goes through here, so none can inherit a redirecting environment."""
-    result = subprocess.run(['docker', 'compose', '--project-name', PROJECT, '-f', str(RECIPE), 'up', '-d',
-                             '--no-build', *options], env=compose_environment(root, image), capture_output=True, text=True)
+    result = subprocess.run(
+        [
+            'docker',
+            'compose',
+            '--project-name',
+            PROJECT,
+            '-f',
+            str(RECIPE),
+            'up',
+            '-d',
+            '--no-build',
+            *options,
+        ],
+        env=compose_environment(root, image),
+        capture_output=True,
+        text=True,
+    )
     Path(log).write_text(result.stdout + result.stderr)
     return result.returncode
 
 
 def setup(root, rebuild=False, *, deployment=INSTALLATION, image=None):
     """Set up (or start) the owned deployment. ``image``: an existing image built from the current
-    reviewed sources, used instead of a build; a test scope's deployment is never rebuilt in place."""
+    reviewed sources, used instead of a build; a test scope's deployment is never
+    rebuilt in place."""
     root = checked_root(root, deployment)
     if rebuild and (image is not None or deployment != INSTALLATION):
         raise ValueError('Only the installation is rebuilt in place, from its sources')
@@ -857,38 +1197,60 @@ def setup(root, rebuild=False, *, deployment=INSTALLATION, image=None):
         identity = json.loads((root / 'identity.json').read_text())
         # A rebuild never erases the evidence of an earlier rebuild or failure.
         evidence = Path(tempfile.mkdtemp(prefix='rebuild-', dir=root / 'evidence'))
-        (evidence / 'identity-before.json').write_text(json.dumps(identity, indent=2)+'\n')
+        (evidence / 'identity-before.json').write_text(json.dumps(identity, indent=2) + '\n')
         identity.update(image=image, source_hashes=source_hashes())
-        (evidence / 'identity-requested.json').write_text(json.dumps(identity, indent=2)+'\n')
-        (root / 'identity.json').write_text(json.dumps(identity, indent=2)+'\n')
-        returncode = compose_up(root, image, evidence / 'rebuild.log', '--force-recreate', 'modeling')
-        (evidence / 'result.json').write_text(json.dumps({'returncode': returncode, 'image': image}, indent=2)+'\n')
+        (evidence / 'identity-requested.json').write_text(json.dumps(identity, indent=2) + '\n')
+        (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
+        returncode = compose_up(
+            root, image, evidence / 'rebuild.log', '--force-recreate', 'modeling'
+        )
+        (evidence / 'result.json').write_text(
+            json.dumps({'returncode': returncode, 'image': image}, indent=2) + '\n'
+        )
         if returncode:
             raise ValueError('Modeling rebuild compose failed; evidence retained for diagnosis')
         return check(root, deployment=deployment)
-    if root.exists() and any(root.iterdir()) and not ((root / '.setup-owner').is_file() and (root / '.setup-owner').read_text() == deployment.owner and not any((root / 'modeling').iterdir())):
+    if (
+        root.exists()
+        and any(root.iterdir())
+        and not (
+            (root / '.setup-owner').is_file()
+            and (root / '.setup-owner').read_text() == deployment.owner
+            and not any((root / 'modeling').iterdir())
+        )
+    ):
         raise ValueError('Refuse adopting existing unowned runtime contents')
     # Inspect name collisions before creating files or touching resources.
-    if inspect(deployment.container) is not None or inspect(deployment.network, 'network') is not None:
+    if (
+        inspect(deployment.container) is not None
+        or inspect(deployment.network, 'network') is not None
+    ):
         raise ValueError('Refuse pre-existing resources without local deployment identity')
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     (root / '.setup-owner').write_text(deployment.owner)
-    for sub in ('modeling', 'credentials', 'evidence'): (root / sub).mkdir(mode=0o700, exist_ok=True)
+    for sub in ('modeling', 'credentials', 'evidence'):
+        (root / sub).mkdir(mode=0o700, exist_ok=True)
     # Host root and credentials directory are 0700; Docker receives only individual
     # immutable files. Readability inside the nonroot container is intentional.
     (root / 'modeling').chmod(0o777)
     for key in ('model.key', 'rails.key'):
         path = root / 'credentials' / key
-        if not path.exists(): path.write_text(secrets.token_hex(64))
+        if not path.exists():
+            path.write_text(secrets.token_hex(64))
         path.chmod(0o444)
     image = build(root) if image is None else reviewed_image(image)
     # Identity precedes compose creation; failures retain evidence and require explicit
     # diagnosis, never automatic deletion or store reset.
-    identity = {'owner': deployment.owner, 'container': deployment.container,
-                'network': deployment.network, 'image': image,
-                'source_image': image_identity(image)['source_image'],
-                'source_hashes': source_hashes(), 'runtime': str(root)}
-    (root / 'identity.json').write_text(json.dumps(identity, indent=2)+'\n')
+    identity = {
+        'owner': deployment.owner,
+        'container': deployment.container,
+        'network': deployment.network,
+        'image': image,
+        'source_image': image_identity(image)['source_image'],
+        'source_hashes': source_hashes(),
+        'runtime': str(root),
+    }
+    (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     start = compose_up if deployment == INSTALLATION else (lambda *a: start_scoped(*a, deployment))
     if start(root, image, root / 'evidence/setup.log'):
         raise ValueError('Modeling setup compose failed; evidence retained for diagnosis')
@@ -907,17 +1269,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['setup', 'check', 'stop'])
     parser.add_argument('--root', type=Path, default=DEFAULT_ROOT)
-    parser.add_argument('--rebuild', action='store_true', help='Explicit reviewed rebuild of the owned deployment; preserves stores and keys')
+    parser.add_argument(
+        '--rebuild',
+        action='store_true',
+        help='Explicit reviewed rebuild of the owned deployment; preserves stores and keys',
+    )
     args = parser.parse_args()
-    if args.rebuild and args.action != 'setup': parser.error('--rebuild requires setup')
-    if args.action == 'setup': result = setup(args.root, rebuild=args.rebuild)
+    if args.rebuild and args.action != 'setup':
+        parser.error('--rebuild requires setup')
+    if args.action == 'setup':
+        result = setup(args.root, rebuild=args.rebuild)
     else:
         result = stop(args.root) if args.action == 'stop' else check(args.root)
     print(json.dumps(result, indent=2))
+
 
 if __name__ == '__main__':
     # check is read-only and import-free; setup and stop require the selected release.
     action = sys.argv[1] if len(sys.argv) > 1 else ''
     import release_binding
-    release_binding.entrypoint(__file__, read_only=action == 'check', project_imports=action != 'check')
+
+    release_binding.entrypoint(
+        __file__, read_only=action == 'check', project_imports=action != 'check'
+    )
     main()
