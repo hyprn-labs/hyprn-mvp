@@ -2,26 +2,26 @@
 
 Read this file first, then `AGENTS.md`, `.planning/STATE.md` (decisions and "Session Continuity") and `.planning/ROADMAP.md`. Each phase plan and its checkpoints are under `.planning/phases/`.
 
-## Demo target approved by the product owner (2026-10-14)
+## Delivery priority approved by the product owner (2026-10-14)
 
-For the 2026-10-15 demo, prioritize completion of Phase 2 and Phase 3 through the
-live full-workflow checkpoint 3.35 and status recording 3.36. Then freeze feature
-work and rehearse on the exact demo machine and committed tree. Defer Phase 4
-Documents and the broader Phase 5 release process until after the demo; the
-first-release roadmap and its qualification requirements remain in force.
+Read [DELIVERY-PLAN.md](DELIVERY-PLAN.md) before dispatching pending Phase 2/3
+work. It supersedes the earlier whole-Phase-2-plus-Phase-3 demo target with
+value buckets A–D first: clear application ownership, a consistent public API,
+a narrow visible agent write, then the complete engineering workflow.
 
-The target is a working local installation connected to the user's local Codex
-and Claude Code clients: study folder, tool discovery, model authoring, explicit
-configurations, real run submission, result inspection, and a saved conclusion,
-with attribution and Agent activity visible in the UI. Rehearse the planned
-pressure-loss example (110 kPa met and 121 kPa violated against a 120 kPa limit)
-on each claimed client. Record live human evaluation separately from automation.
+C is an earlier useful stop: both Codex and Claude Code save an evidence note
+in an existing study; the UI shows the persisted version, attribution and Agent
+activity, including access revocation. Refresh/navigation is the freshness promise.
+D adds model authoring, configurations, real runs, results and a saved conclusion;
+then freeze features and rehearse the pressure-loss example on the exact committed
+tree. The October 15 demo is a target, never a waiver of verification.
 
-Keep all task dependencies, acceptance checks and decision gates, including
-PD-2.4 and the client and write-control checkpoints. The date is a target, not
-evidence of completion. If the full workflow is unfinished, 3.19 (read-only
-client connection) and 3.30 (authoring) are fallback demo checkpoints, with their
-scope stated explicitly; neither satisfies the full workflow target.
+E retains the broader installation, adapter/probe, clean-room and documentation
+proofs. F retains Documents and the qualified release. All original task IDs,
+completed checkpoints, invariants, current-host safety checks and human decision
+gates remain. Named slices close separately; original tasks close only when all
+original acceptance is satisfied. Do not repeat the full live scenario suite per
+OS: its original matrix is scenario by client; platform connection probes are E.
 
 ## Where the work is
 
@@ -41,9 +41,15 @@ scope stated explicitly; neither satisfies the full workflow target.
 | 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Independent implementation `5c58720` and incomplete checkpoint `5ec1de4` on `agent-modeling-image-build`. | Rebase onto verified 2.7 (`77f47a9` plus its verification record), retain both runner changes, finish combined inventory, producer pin and fixture capture. No-cache runtime equivalence and 25 upstream tests passed before integration; final units-native, native-a and strict inventory checks remain. 2.6 alone owns pins and uses the fixed scratch folder groups. |
 | 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Eleven merged-tree groups pass, including attestation and image-built UI. Approved Flit transformations preserve runtime equivalence. Combined 2.6 sources require fresh native verification. |
 
-After 2.6 and 2.7: task 2.8a needs the product owner's decision PD-2.4 on the contract schema split. Its default is recorded in STATE. Then come 2.8b, 2.8c, 2.8, and 2.9–2.14. Task 2.11 covers the store schema version, refusal on mismatch and `setup --reset-data`, with no migrations.
+After 2.6 is merged and verified: prepare the concrete PD-2.4 decision at 2.8a.
+Then follow DELIVERY-PLAN.md waves: 2.8b → 2.8c → 3.16-paths → 2.8, keeping the
+study-folder configuration change inside the same re-attestation window. Continue
+with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
+The amendment owns the detailed ordering and every dependency replacement.
 
-Phase 3 after 3.7: 3.12 (`/mcp` server), then the plan's waves. Checkpoints 3.17, 3.18 and 3.28 need the product owner. Phase 4 follows `04-PLAN.md`.
+Product-owner gates remain at PD-2.4, 3.18, 3.28-evidence and 3.28-full; live
+both-client checkpoints remain mandatory. The queue-limit ambiguity is decided
+for D. Phase 4 is deferred until A–D and E are complete.
 
 ## Decisions waiting for the product owner
 

@@ -6,6 +6,24 @@ The product already delivers the manual modeling workflow. This milestone turns 
 
 ## Phases
 
+Execution priority is now governed by [the A–D delivery amendment](DELIVERY-PLAN.md),
+approved on 2026-10-14. It preserves the phase scope and original task IDs while
+ordering pending work by delivered value:
+
+| Priority | Outcome | Stop/checkpoint |
+|---|---|---|
+| A | Clear application ownership and attested installed source | Schema decision and split, study-folder paths, then 2.8 re-attestation |
+| B | Consistent public API, authority and recoverable outcomes | Shared API and agent recovery/activity contracts verified |
+| C | Both local clients save an evidence note visible in the UI | 3.30-evidence: persisted record, attribution, activity and revocation |
+| D | Full engineering workflow from model to saved conclusion | 3.35-host and 3.36-delivery-status, then feature freeze/rehearsal |
+| E | Complete installation portability and documentation | Remaining adapter/probe/clean-room/docs slices and Phase 2/3 closure |
+| F | Documents and qualified first release | Original Phases 4 and 5 |
+
+A/B foundations are substantially implemented; their remaining checks and changes
+feed C. Local lifecycle, safe cleanup and current-host smoke remain C prerequisites.
+The amendment's waves supersede the original whole-phase ordering for pending work.
+Partial delivery never closes an original task or requirement without its full evidence.
+
 - [x] **Phase 1: Repository baseline** - One `hyprn-mvp` namespace, clean tree, every must-pass test group green through the renamed runner
 - [ ] **Phase 2: Local edition** - Clone, `./hyprn-mvp setup`, `./hyprn-mvp start` on macOS and Linux from pinned sources, with attestation at setup and no hard-coded location
 - [ ] **Phase 3: Agent tools for coding agents** - Attributed agent principal, agent-practices research, local MCP server, study folders, attributed authoring with the Agent activity page, configurations and runs, evaluation
@@ -39,7 +57,7 @@ Plans:
   3. Images, the native environment and the WhatsOpt source are built only from pinned, verified inputs; non-acquisition builds run without network.
   4. Setup snapshots the committed checkout and attests the worker; start refuses a changed checkout or a stale attestation and never rebuilds.
   5. `status`, `doctor`, `open`, `logs`, `stop` and `uninstall` behave as documented in `docs/operations/`, with no secret in output, arguments or logs.
-**Plans**: 1 plan, 17 tasks (2.1–2.14 plus 2.8a–2.8c), one task per fresh executor
+**Plans**: 1 plan, 18 original tasks (2.1–2.14 plus 2.1a and 2.8a–2.8c), sliced by DELIVERY-PLAN.md; one task or named slice per fresh executor
 
 Plans:
 - [ ] 02-PLAN.md — Entry point and pinned toolchain (tracer), installation configuration and path policy, installation-driven managers, native environment, reproducible images, checkout-mode release, CLI, OS adapters, lifecycle, uninstall, smoke and clean-room installs, operations docs
