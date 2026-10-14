@@ -29,7 +29,7 @@ scope stated explicitly; neither satisfies the full workflow target.
 - Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
 - Merged and verified on the work branch:
   - Phase 1: complete.
-  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.7.
   - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
   - Each task has a checkpoint.
 - Combined-tree results are in STATE "Stopped at". Every listed group is green.
@@ -38,8 +38,8 @@ scope stated explicitly; neither satisfies the full workflow target.
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Independent implementation `5c58720` and incomplete checkpoint `5ec1de4` on `agent-modeling-image-build`. | No-cache runtime equivalence passed; 25 upstream tests pass. Final combined inventory, producer pin and fixture capture wait for verified 2.7; two strict inventory-count failures remain. 2.6 alone uses the fixed scratch folder groups. |
-| 2.7 (engine, worker and application images) | In progress on `agent-runtime-image-build`, from `3d2d813`. | Owns `deployment/pins.json` until merged and verified; 2.6 then rebases before its final pin and fixture work. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Independent implementation `5c58720` and incomplete checkpoint `5ec1de4` on `agent-modeling-image-build`. | Rebase onto verified 2.7 (`77f47a9` plus its verification record), retain both runner changes, finish combined inventory, producer pin and fixture capture. No-cache runtime equivalence and 25 upstream tests passed before integration; final units-native, native-a and strict inventory checks remain. 2.6 alone owns pins and uses the fixed scratch folder groups. |
+| 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Eleven merged-tree groups pass, including attestation and image-built UI. Approved Flit transformations preserve runtime equivalence. Combined 2.6 sources require fresh native verification. |
 
 After 2.6 and 2.7: task 2.8a needs the product owner's decision PD-2.4 on the contract schema split. Its default is recorded in STATE. Then come 2.8b, 2.8c, 2.8, and 2.9–2.14. Task 2.11 covers the store schema version, refusal on mismatch and `setup --reset-data`, with no migrations.
 

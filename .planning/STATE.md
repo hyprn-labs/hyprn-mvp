@@ -10,9 +10,9 @@ See: `PROJECT.md` (planning directory)
 ## Current Position
 
 Phase: 3 of 5 (Agent tools), alongside Phase 2 (Local edition)
-Plan: `phases/03-agent-tools-for-coding-agents/03-PLAN.md`; 3.6 and 3.7 verified; 2.6 and 2.7 in progress
+Plan: `phases/03-agent-tools-for-coding-agents/03-PLAN.md`; 3.6, 3.7 and 2.7 verified; 2.6 integration in progress
 Status: Phase 1 complete — gate 102/103 on a66a1f3, and the remaining findings chain (preflight, findings-native, findings-native-read) passes through `./hyprn-mvp dev check` on the continuation branch after the harness fixes; Phase 2 and Phase 3 in progress
-Last activity: task 3.7 merged at `9546cc1` and verified: attribution on saved records and run views; 25 agent-ui cases and all six browser regression groups green.
+Last activity: task 2.7 merged through `77f47a9` and independently verified: source-built engine, worker and application; all eleven merged-tree verification groups pass. Task 2.6 resumes for combined inventory, producer pin and native fixture capture.
 
 Progress: [██████████] 100% (Phase 1)
 
@@ -107,5 +107,5 @@ Progress: [██████████] 100% (Phase 1)
 ## Session Continuity
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
-Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 merged at `088e528`; all 18 task and baseline groups, design checks, build and term scan pass on the merged tree; 18 verification scopes released. Task 3.7 merged at `9546cc1`; all 15 required groups, design checks, build and term scan pass on the merged tree; 15 verification scopes released. Tasks 2.6 and 2.7 started in separate worktrees from `3d2d813`; 2.7 owns pins until verified, then 2.6 rebases for its producer pin and fixture capture. See `.planning/HANDOVER.md`
-Resume: follow `.planning/HANDOVER.md` (2.6 ∥ 2.7 next; stop before 2.8a for the product owner's PD-2.4 decision)
+Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 merged at `088e528`; all 18 task and baseline groups, design checks, build and term scan pass on the merged tree; 18 verification scopes released. Task 3.7 merged at `9546cc1`; all 15 required groups, design checks, build and term scan pass on the merged tree; 15 verification scopes released. Task 2.7 merged through `77f47a9`; all eleven verification groups pass (naming 9, hygiene 5, guard 115, units-guards 137, style 32, locality 125, contracts 115, deployment-hardening 67, api-a 119, units-attestation 74, image-built ui-a 9), term scan 0. A merged-tree mock regression was corrected before acceptance. Fifteen orchestrator scopes across the failed and successful attempts and three labeled Docker objects were released. Task 2.6 rebases onto this verified tree for combined inventory, producer pin and native fixture capture; it alone owns those paths and the fixed scratch groups. See `.planning/HANDOVER.md`
+Resume: follow `.planning/HANDOVER.md` (finish 2.6 integration and verification; stop before schema changes for the product owner's PD-2.4 decision at 2.8a)
