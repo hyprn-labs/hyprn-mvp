@@ -320,14 +320,6 @@ def store_roots(*, required=True):
     return () if root is None else tuple(root / name for name in (APPLICATION, MODELING, EXECUTION, RELEASES))
 
 
-def old_runtime_root(*, required=True):
-    """The neutral layout holds no retired runtime: always None, or a refusal when required,
-    so every check that compares against one fails closed."""
-    if required:
-        raise LocationUnset('No retired runtime exists in the development data root layout')
-    return None
-
-
 def native_python(*, required=True):
     """The native development interpreter (an interpreter only; no profile is ever used)."""
     return located(NATIVE_PYTHON, NATIVE_ENVIRONMENT + '/' + INTERPRETER, required=required)

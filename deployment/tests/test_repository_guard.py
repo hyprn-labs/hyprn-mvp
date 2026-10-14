@@ -1283,9 +1283,8 @@ class LocationResolutionTests(unittest.TestCase):
             self.assertEqual(self.paths.live_roots(), ())
             import tempfile
             self.assertEqual(self.paths.scratch_root(), Path(os.path.realpath(tempfile.gettempdir())))
-            self.assertIsNone(self.paths.old_runtime_root(required=False))
-            with self.assertRaises(self.paths.LocationUnset):
-                self.paths.old_runtime_root()
+            # No location names a retired runtime: the native environment is built from pins.
+            self.assertFalse(hasattr(self.paths, 'old_runtime_root'))
 
     def test_unset_or_invalid_locations_refuse_with_a_message_naming_the_variable(self):
         with self.clean():

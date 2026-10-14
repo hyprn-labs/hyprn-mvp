@@ -650,6 +650,15 @@ GROUP_INTERPRETERS.update({group: fixture.APPROVED_CONTRACT_PYTHON for group in 
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | INSTALLATION_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | INSTALLATION_PYTEST_GROUPS
 
+# The native host environment built from pinned packages: one scratch preparation (locked
+# distributions, the snapshot's wheels, inventory and licences) under the locked native
+# interpreter; the native profile and the plugin entry point run only in the prepared
+# environment's own interpreter, never in the test process. Needs network for acquisition.
+NATIVE_ENVIRONMENT_PYTEST_GROUPS = frozenset({'native-environment'})
+GROUPS.update({'native-environment': ('deployment/tests/test_native_environment.py',)})
+PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
+CHILD_GROUPS = CHILD_GROUPS | NATIVE_ENVIRONMENT_PYTEST_GROUPS
+
 
 def directory_target(group, target, path):
     """Validate an agent group's directory target: closed set, existing, with test modules."""

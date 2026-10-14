@@ -1,11 +1,17 @@
-"""Copy reviewed installed dependency bytes into a clean execution environment.
+"""The native host environment of an execution root and its release-bound launch wrapper.
 
-Reads only distribution artifacts in the historical environment, never profiles,
-stores, jobs or service source. No package resolution, download or installation.
-Every copied RECORD hash is checked; a full resolved content lock and license
-inventory accompany every numerical bundle.
+``prepare`` builds ``<execution root>/venv-<first 16 hex of the native host lock's SHA-256>``
+from a release snapshot: the pinned CPython of ``deployment/locks/tools.json``, exactly the
+hashed distributions of ``deployment/locks/native-host.txt``, and the snapshot's own packages
+(``hyprn-mvp-app``, ``hyprn-mvp-integration``) as wheels built offline by the hashed build
+backend of ``deployment/locks/build-backend.json`` and installed without dependencies. It
+writes the installed inventory (``locks/native-installed.json``) and the dependency licence
+texts (``licenses/native/``). ``extend`` adds the restricted worker's licence inventory once
+the worker is built and binds the launch wrapper; ``initialize`` creates the installation's
+native profile. Network is used only to acquire pinned artifacts; every build runs offline.
+No profile, store, job or service source of another installation is ever read.
 
-Every location comes from deployment/local_paths.py; the commands refuse while it is
+Every default location comes from deployment/local_paths.py; the commands refuse while it is
 unset.
 """
 import base64
@@ -21,23 +27,35 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
+import urllib.request
 from datetime import datetime, timezone
 from uuid import uuid4
 import local_paths
-# packaging is imported only by prepare(): the launch-worker gate stays stdlib-only so the
-# executor and activation managers can import it.
 
 REPO=Path(__file__).resolve().parents[1]
 ROOT=local_paths.execution_root(required=False)
 REVIEWED=local_paths.native_inventory(required=False)
 PYTHON=local_paths.native_python(required=False)
-# Installed dependency bytes are read from the two development interpreters' environments; the
-# reviewed AiiDA wheel comes from a retired runtime that the neutral layout does not hold, so
-# prepare() refuses before any read while PRIOR is None.
-PRIOR=local_paths.old_runtime_root(required=False)
-CONTRACT_PYTHON=local_paths.contract_python(required=False)
-SITES=None if PYTHON is None or CONTRACT_PYTHON is None else [
-      Path(PYTHON).parents[1]/'lib/python3.12/site-packages',Path(CONTRACT_PYTHON).parents[1]/'lib/python3.12/site-packages']
+
+# Inputs of prepare, read from the release snapshot (never from a checkout).
+NATIVE_HOST_LOCK = 'deployment/locks/native-host.txt'
+BUILD_BACKEND_LOCK = 'deployment/locks/build-backend.json'
+TOOLS_LOCK = 'deployment/locks/tools.json'
+# Snapshot folders of the packages that are built into wheels.
+PROJECT_FOLDERS = ('application', 'integration')
+ENVIRONMENT_PREFIX = 'venv-'
+INSTALLED_INVENTORY = 'locks/native-installed.json'
+NATIVE_LICENSES = 'licenses/native'
+ENVIRONMENT_EVIDENCE = 'evidence/native-environment.json'
+# Fixed wheel timestamp (1980-01-01, the earliest a zip entry records): the wheels of one
+# snapshot are byte-identical whenever they are built.
+SOURCE_DATE_EPOCH = '315532800'
+DOWNLOAD_TIMEOUT_SECONDS = 60
+# uv settings that survive the hermetic environment: the TLS trust choice only.
+UV_KEPT = ('UV_SYSTEM_CERTS', 'UV_NATIVE_TLS')
+PLATFORMS = {('darwin', 'arm64'): 'darwin-arm64', ('linux', 'x86_64'): 'linux-x86_64',
+             ('linux', 'aarch64'): 'linux-aarch64', ('linux', 'arm64'): 'linux-aarch64'}
 
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def emit(path,value):path.write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
@@ -205,128 +223,607 @@ def reuse_reviewed():
     write_launch_worker(ROOT,BINDING)
     emit(ROOT/'evidence/dependency-reuse.json',dict(interpreter=str(PYTHON),source=str(REVIEWED),selected_sha256=runtime['selected_sha256'],copied_scientific_records=False))
 
-def prepare(extend=False):
-    refuse_populated(ROOT)  # before any import, read or write
-    from packaging.requirements import Requirement
-    from packaging.utils import canonicalize_name
-    if (ROOT/'venv').exists() and not extend:raise ValueError('New environment already exists; refuse replacement')
-    if PRIOR is None:raise ValueError('No retired runtime holds the reviewed AiiDA wheel; prepare is unavailable')
-    wheel=PRIOR/'downloads/aiida_core-2.9.3-py3-none-any.whl'
-    pins=json.loads((REPO/'deployment/pins.json').read_bytes())
-    if sha(wheel.read_bytes())!=pins['verified_artifacts']['aiida-core'][0]['sha256']:
-        raise ValueError('Reviewed AiiDA artifact changed')
-    distributions={}
-    for site in SITES:
-        for dist in metadata.distributions(path=[str(site)]):
-            distributions.setdefault(canonicalize_name(dist.metadata['Name']),dist)
-    selected={};visited=set()
-    def visit(name,extras=()):
-        name=canonicalize_name(name)
-        key=(name,tuple(sorted(extras)))
-        if key in visited:return
-        visited.add(key)
-        dist=distributions[name];selected[name]=dist
-        for requirement in dist.requires or []:
-            req=Requirement(requirement)
-            if req.marker and not any(req.marker.evaluate({'extra':extra}) for extra in ('',*extras)):continue
-            if distributions[canonicalize_name(req.name)].version not in req.specifier:raise ValueError('Dependency constraint mismatch')
-            visit(req.name,req.extras)
-    for name in ('aiida-core','pytest','rfc8785','jsonschema','httpx'):visit(name)
-    inventory=[];copy_files=[];license_files={}
-    for name,dist in sorted(selected.items()):
-        records=[]
-        for entry in dist.files or []:
-            rel=str(entry)
-            # Console wrappers are not used; bytecode and installed RECORD itself
-            # are generated artifacts, not imported package source.
-            if rel.startswith('../') or rel.endswith('.pyc') or rel.endswith('/RECORD'):continue
-            if entry.hash is None:raise ValueError('Unhashed dependency artifact: '+rel)
-            raw=Path(dist.locate_file(entry)).read_bytes()
-            actual=base64.urlsafe_b64encode(hashlib.sha256(raw).digest()).decode().rstrip('=')
-            if entry.hash.mode!='sha256' or actual!=entry.hash.value:raise ValueError('Installed artifact mismatch: '+rel)
-            records.append(dict(path=rel,sha256=sha(raw),size=len(raw)))
-            copy_files.append((rel,raw))
-            if '.dist-info/' in rel and (Path(rel).name=='METADATA' or any(x in rel.lower() for x in ('license','copying','notice'))):
-                license_files['licenses/native/'+rel]=raw
-        inventory.append(dict(name=name,version=dist.version,origin=dist.metadata.get_all('Project-URL') or [],
-            license=dist.metadata.get('License-Expression') or dist.metadata.get('License') or dist.metadata.get_all('Classifier'),files=records))
-    # Provenance validation is complete before copying package files.
-    # The native development interpreter creates the environment from its own base interpreter.
-    if not extend:subprocess.run([str(local_paths.require(PYTHON,local_paths.NATIVE_PYTHON)),'-m','venv','--without-pip',str(ROOT/'venv')],check=True)
-    destination=ROOT/'venv/lib/python3.12/site-packages'
-    for rel,raw in copy_files:
-        target=destination/rel
-        if target.exists() and target.read_bytes()!=raw:raise ValueError('Refusing changed deployed dependency bytes')
-        target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
-    # Authored entry points only. No historical editable package or startup .pth.
-    plugin=destination/'hyprn_mvp_integration-0.1.0.dist-info';plugin.mkdir(exist_ok=extend)
-    (plugin/'METADATA').write_text('Metadata-Version: 2.1\nName: hyprn-mvp-integration\nVersion: 0.1.0\n')
-    (plugin/'entry_points.txt').write_text('[aiida.calculations]\nhyprn_mvp.scalar = hyprn_mvp_integration.calculation:ScalarCalculation\n\n[aiida.parsers]\nhyprn_mvp.scalar = hyprn_mvp_integration.calculation:ScalarParser\n')
-    emit(ROOT/'locks/native-installed.json',inventory)
-    for rel,raw in license_files.items():
-        target=ROOT/rel;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
-    # Read actual worker distribution metadata/license bytes in the verified
-    # numerical image with network disabled. This imports no candidate code.
-    runtime=json.loads((ROOT/'runtime.json').read_bytes())
-    script="""import base64,importlib.metadata as m,json
-out=[]
-for d in m.distributions():
- files={}
- for f in d.files or []:
-  s=str(f)
-  if '.dist-info/' in s and (s.endswith('/METADATA') or any(x in s.lower() for x in ('license','copying','notice'))):files[s]=base64.b64encode(d.locate_file(f).read_bytes()).decode()
- out.append({'name':d.metadata['Name'],'version':d.version,'files':files})
-print(json.dumps(out))
-"""
-    output=subprocess.run(['docker','run','--rm','--network=none','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges',runtime['worker_image'],'python','-B','-c',script],capture_output=True,text=True,check=True).stdout
-    workers=json.loads(output)
+
+def normalized(name):
+    return re.sub(r'[-_.]+', '-', name).lower()
+
+
+def locked_distributions(raw):
+    """{name: version} of a hashed requirements lock. Every entry is one exact pin starting at
+    the first column, followed by at least one SHA-256; anything else is refused."""
+    pinned, current = {}, None
+    for line in raw.decode().splitlines():
+        if not line.strip() or line.startswith('#'):
+            continue
+        if not line[0].isspace():
+            match = re.match(
+                r'([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9.+!]+)(?: ;[^\\]*)? \\$', line
+            )
+            if match is None or normalized(match[1]) in pinned:
+                raise ValueError(
+                    'Native host lock entry is not one exact, hashed pin: ' + line[:80]
+                )
+            current = normalized(match[1])
+            pinned[current] = [match[2], 0]
+        elif current is not None and re.fullmatch(r' {4}--hash=sha256:[0-9a-f]{64}(?: \\)?', line):
+            pinned[current][1] += 1
+        else:
+            raise ValueError('Native host lock line refused: ' + line[:80])
+    if not pinned or any(hashes == 0 for _, hashes in pinned.values()):
+        raise ValueError('Native host lock holds an entry without a hash')
+    return {name: version for name, (version, _) in pinned.items()}
+
+
+def safe_folder(path, name):
+    """An existing absolute folder with no symlink in any component."""
+    path = Path(path)
+    if (
+        not path.is_absolute()
+        or any(p.is_symlink() for p in (path, *path.parents))
+        or not path.is_dir()
+    ):
+        raise ValueError(
+            name + ' must be an existing absolute folder without a symlink: ' + str(path)
+        )
+    return path
+
+
+def snapshot_file(source, relative):
+    path = source / relative
+    if any(p.is_symlink() for p in (path, *path.parents)) or not path.is_file():
+        raise ValueError('Release snapshot file missing or linked: ' + relative)
+    return path
+
+
+def run(command, env, what):
+    """Run one tool command; a failure names the step and the tail of its output."""
+    result = subprocess.run(
+        [str(part) for part in command], env=env, capture_output=True, text=True
+    )
+    if result.returncode:
+        output = (result.stdout + '\n' + result.stderr).strip()
+        raise ValueError(what + ' failed: ' + output[-3000:])
+    return result.stdout
+
+
+def hermetic(tools, cache, **extra):
+    """Process environment of uv and the pinned interpreter: no ambient uv or Python setting,
+    the tool cache's interpreters, the given package cache, no interpreter download."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not (k.startswith('UV_') and k not in UV_KEPT)
+        and not k.startswith('PYTHON')
+        and k not in ('VIRTUAL_ENV', 'CONDA_PREFIX', 'PIP_REQUIRE_VIRTUALENV')
+    }
+    env.update(
+        UV_NO_CONFIG='1',
+        UV_PYTHON_PREFERENCE='only-managed',
+        UV_PYTHON_DOWNLOADS='never',
+        UV_PYTHON_INSTALL_DIR=str(tools / 'python'),
+        UV_CACHE_DIR=str(cache),
+        UV_NO_PROGRESS='1',
+        PYTHONDONTWRITEBYTECODE='1',
+        **extra,
+    )
+    return env
+
+
+def platform_key(pins):
+    uname = os.uname()
+    key = PLATFORMS.get((uname.sysname.lower(), uname.machine))
+    if key is None or key not in pins['uv_archives']:
+        raise ValueError(
+            'Unsupported host for the native environment: ' + uname.sysname + ' ' + uname.machine
+        )
+    return key
+
+
+def pinned_toolchain(tools, pins, env):
+    """The tool cache's uv and uv-managed CPython, each checked against tools.json."""
+    uv = tools / 'uv' / pins['uv_version'] / platform_key(pins) / 'uv'
+    if not uv.is_file() or run([uv, '--version'], env, 'uv').split(' ')[:2] != [
+        'uv',
+        pins['uv_version'],
+    ]:
+        raise ValueError('uv ' + pins['uv_version'] + ' is not in the tool cache; run ./hyprn-mvp')
+    found = run(
+        [
+            uv,
+            'python',
+            'find',
+            '--no-python-downloads',
+            '--no-project',
+            pins['cpython_version'],
+        ],
+        env,
+        'Pinned CPython lookup',
+    ).strip()
+    probe = 'import sys;print("%d.%d.%d" % sys.version_info[:3]);print(sys.base_prefix)'
+    version, prefix = run([found, '-I', '-B', '-c', probe], env, 'Pinned CPython').split('\n')[:2]
+    try:
+        build = (Path(prefix) / 'BUILD').read_text().strip()
+    except OSError:
+        build = None
+    if version != pins['cpython_version'] or build != pins['cpython_build']:
+        raise ValueError(
+            'The tool cache interpreter is not CPython '
+            + pins['cpython_version']
+            + ' build '
+            + pins['cpython_build']
+            + ': '
+            + found
+        )
+    return uv, Path(found)
+
+
+def acquire_backend(backend, folder):
+    """The build backend's wheel, fetched from its pinned URL and verified by size and SHA-256
+    before any use. Acquisition is the only network step of a build."""
+    wheel = backend['wheel']
+    if not wheel['url'].startswith('https://') or Path(wheel['filename']).name != wheel['filename']:
+        raise ValueError('Build backend lock refused')
+    with urllib.request.urlopen(wheel['url'], timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+        raw = response.read(wheel['size'] + 1)
+    if len(raw) != wheel['size'] or sha(raw) != wheel['sha256']:
+        raise ValueError('Build backend artifact differs from its pin: ' + wheel['filename'])
+    folder.mkdir(mode=0o700)
+    (folder / wheel['filename']).write_bytes(raw)
+    return folder
+
+
+def project_identity(source, folder, backend):
+    """Distribution name and version of one snapshot package whose build system is exactly the
+    pinned backend."""
+    project = tomllib.loads(snapshot_file(source, folder + '/pyproject.toml').read_text())
+    expected = {'requires': [backend['requirement']], 'build-backend': backend['build_backend']}
+    if project.get('build-system') != expected:
+        raise ValueError(
+            folder
+            + '/pyproject.toml does not build with the pinned backend '
+            + backend['requirement']
+        )
+    return normalized(project['project']['name']), project['project']['version']
+
+
+def stage_package(source, folder, work):
+    """Copy one snapshot package (pyproject.toml and the Python files of src/) into the build
+    folder: the build never writes into the release and sees no other file. Any other file
+    under src/ is refused rather than left out of the wheel."""
+    package = source / folder
+    target = work / folder
+    files = [snapshot_file(source, folder + '/pyproject.toml')]
+    for path in sorted((package / 'src').rglob('*')):
+        relative = path.relative_to(package)
+        if path.is_symlink():
+            raise ValueError('Release snapshot file linked: ' + str(relative))
+        if '__pycache__' in relative.parts or path.is_dir():
+            continue
+        if path.suffix != '.py':
+            raise ValueError(
+                'Package file the wheel would not carry: ' + folder + '/' + str(relative)
+            )
+        files.append(path)
+    for path in files:
+        destination = target / path.relative_to(package)
+        destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        destination.write_bytes(path.read_bytes())
+        destination.chmod(0o644)
+    return target
+
+
+def installed(site):
+    """{normalized name: distribution} of one site-packages folder, read as data only."""
+    found = {}
+    for dist in metadata.distributions(path=[str(site)]):
+        name = normalized(dist.metadata['Name'])
+        if name in found:
+            raise ValueError('Two installed distributions are named ' + name)
+        found[name] = dist
+    return found
+
+
+def verified_files(dist):
+    """Every installed file of a distribution with its RECORD hash re-checked. Console wrappers
+    outside site-packages, bytecode and RECORD itself are generated, not package content."""
+    records = []
+    for entry in dist.files or []:
+        relative = str(entry)
+        if relative.startswith('../') or relative.endswith('.pyc') or relative.endswith('/RECORD'):
+            continue
+        if entry.hash is None or entry.hash.mode != 'sha256':
+            raise ValueError('Unhashed installed artifact: ' + relative)
+        raw = Path(dist.locate_file(entry)).read_bytes()
+        if (
+            base64.urlsafe_b64encode(hashlib.sha256(raw).digest()).decode().rstrip('=')
+            != entry.hash.value
+        ):
+            raise ValueError('Installed artifact differs from its RECORD: ' + relative)
+        records.append((relative, raw))
+    return records
+
+
+def check_environment(site, source, expected, projects):
+    """Refuse an environment that differs from its locks: exactly the expected distributions,
+    no startup path file, no install-origin record, every RECORD hash verified, and the
+    project modules byte-identical to the snapshot's sources."""
+    distributions = installed(site)
+    actual = {name: dist.version for name, dist in distributions.items()}
+    if actual != expected:
+        extra = sorted(f'{n}=={v}' for n, v in actual.items() if expected.get(n) != v)
+        missing = sorted(f'{n}=={v}' for n, v in expected.items() if actual.get(n) != v)
+        raise ValueError(
+            'Native environment differs from its locks (unexpected: '
+            + (', '.join(extra) or 'none')
+            + '; missing: '
+            + (', '.join(missing) or 'none')
+            + ')'
+        )
+    startup = sorted(p.name for p in site.glob('*.pth'))
+    if startup:
+        raise ValueError('Native environment holds a startup path file: ' + ', '.join(startup))
+    for name, folder in projects.items():
+        sources = {
+            str(p.relative_to(source / folder / 'src')): p.read_bytes()
+            for p in (source / folder / 'src').rglob('*.py')
+            if '__pycache__' not in p.parts
+        }
+        modules = {}
+        for relative, raw in verified_files(distributions[name]):
+            if relative.endswith('/direct_url.json'):
+                raise ValueError('Project wheel installed with an origin record: ' + relative)
+            if '.dist-info/' not in relative:
+                modules[relative] = raw
+        if modules != sources:
+            raise ValueError('Installed ' + name + ' modules differ from the release snapshot')
+    return distributions
+
+
+def prepare(root, source, *, tools, cache):
+    """Build the native host environment of ``root`` from the release snapshot ``source``.
+
+    Refused before any effect on a populated root or a root already prepared for any lock.
+    A failure removes what this call created; nothing is ever replaced."""
+    refuse_populated(root)  # before any read or write
+    root, source = safe_folder(root, 'Execution root'), safe_folder(source, 'Release snapshot')
+    tools, cache = safe_folder(tools, 'Tool cache'), Path(cache)
+    lock_raw = snapshot_file(source, NATIVE_HOST_LOCK).read_bytes()
+    environment = root / (ENVIRONMENT_PREFIX + sha(lock_raw)[:16])
+    prepared = [p.name for p in root.glob(ENVIRONMENT_PREFIX + '*')]
+    prepared += [n for n in (INSTALLED_INVENTORY, NATIVE_LICENSES) if (root / n).exists()]
+    if prepared:
+        raise ValueError(
+            'Native environment already prepared ('
+            + ', '.join(sorted(prepared))
+            + '); refusing replacement'
+        )
+    third_party = locked_distributions(lock_raw)
+    backend = json.loads(snapshot_file(source, BUILD_BACKEND_LOCK).read_bytes())
+    pins = json.loads(snapshot_file(source, TOOLS_LOCK).read_bytes())
+    projects = {}
+    for folder in PROJECT_FOLDERS:
+        name, version = project_identity(source, folder, backend)
+        if name in third_party or name in projects:
+            raise ValueError('Project distribution name collides with a locked one: ' + name)
+        projects[name] = (folder, version)
+    env = hermetic(tools, cache)
+    uv, python = pinned_toolchain(tools, pins, env)
+    work = root / ('.native-build-' + uuid4().hex)
+    created = []
+    work.mkdir(mode=0o700)
+    try:
+        backend_folder = acquire_backend(backend, work / 'backend')
+        constraints = work / 'build-constraints.txt'
+        constraints.write_text(
+            backend['requirement'] + ' --hash=sha256:' + backend['wheel']['sha256'] + '\n'
+        )
+        wheels = work / 'wheels'
+        build_env = hermetic(tools, cache, SOURCE_DATE_EPOCH=SOURCE_DATE_EPOCH)
+        for name, (folder, version) in projects.items():
+            staged = stage_package(source, folder, work / 'build')
+            run(
+                [
+                    uv,
+                    'build',
+                    '--wheel',
+                    '--offline',
+                    '--no-index',
+                    '--find-links',
+                    backend_folder,
+                    '--build-constraints',
+                    constraints,
+                    '--require-hashes',
+                    '--python',
+                    python,
+                    '--no-create-gitignore',
+                    '--out-dir',
+                    wheels,
+                    staged,
+                ],
+                build_env,
+                'Wheel build of ' + name,
+            )
+        built = {}
+        for name, (folder, version) in projects.items():
+            wheel = wheels / (name.replace('-', '_') + '-' + version + '-py3-none-any.whl')
+            if not wheel.is_file():
+                raise ValueError('Wheel build of ' + name + ' produced no ' + wheel.name)
+            built[name] = sha(wheel.read_bytes())
+        if sorted(p.name for p in wheels.iterdir()) != sorted(
+            name.replace('-', '_') + '-' + version + '-py3-none-any.whl'
+            for name, (_, version) in projects.items()
+        ):
+            raise ValueError('Wheel builds produced unexpected files')
+        requirements = work / 'project-wheels.txt'
+        requirements.write_text(
+            ''.join(
+                name + '==' + projects[name][1] + ' --hash=sha256:' + digest + '\n'
+                for name, digest in sorted(built.items())
+            )
+        )
+        created.append(environment)
+        run(
+            [python, '-I', '-B', '-m', 'venv', '--without-pip', environment],
+            env,
+            'Environment creation',
+        )
+        target = environment / 'bin/python'
+        run(
+            [
+                uv,
+                'pip',
+                'sync',
+                '--python',
+                target,
+                '--require-hashes',
+                '--no-build',
+                '--strict',
+                '--link-mode',
+                'copy',
+                '--quiet',
+                source / NATIVE_HOST_LOCK,
+            ],
+            env,
+            'Locked dependency install',
+        )
+        run(
+            [
+                uv,
+                'pip',
+                'install',
+                '--python',
+                target,
+                '--no-deps',
+                '--require-hashes',
+                '--offline',
+                '--no-index',
+                '--find-links',
+                wheels,
+                '--link-mode',
+                'copy',
+                '--quiet',
+                '-r',
+                requirements,
+            ],
+            env,
+            'Project wheel install',
+        )
+        series = '.'.join(pins['cpython_version'].split('.')[:2])
+        site = environment / 'lib' / ('python' + series) / 'site-packages'
+        expected = {**third_party, **{name: version for name, (_, version) in projects.items()}}
+        distributions = check_environment(
+            site, source, expected, {n: f for n, (f, _) in projects.items()}
+        )
+        inventory, licenses = [], {}
+        for name in sorted(third_party):
+            dist = distributions[name]
+            records = []
+            for relative, raw in verified_files(dist):
+                records.append(dict(path=relative, sha256=sha(raw), size=len(raw)))
+                lowered = relative.lower()
+                if '.dist-info/' in relative and (
+                    Path(relative).name == 'METADATA'
+                    or any(word in lowered for word in ('license', 'copying', 'notice'))
+                ):
+                    licenses[NATIVE_LICENSES + '/' + relative] = raw
+            inventory.append(
+                dict(
+                    name=name,
+                    version=dist.version,
+                    origin=dist.metadata.get_all('Project-URL') or [],
+                    license=dist.metadata.get('License-Expression')
+                    or dist.metadata.get('License')
+                    or dist.metadata.get_all('Classifier'),
+                    files=records,
+                )
+            )
+        for folder in ('locks', 'licenses', 'evidence'):
+            (root / folder).mkdir(mode=0o700, exist_ok=True)
+        created.append(root / NATIVE_LICENSES)
+        for relative, raw in licenses.items():
+            target_file = root / relative
+            target_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            target_file.write_bytes(raw)
+        record = dict(
+            environment=environment.name,
+            native_host_lock_sha256=sha(lock_raw),
+            python=dict(version=pins['cpython_version'], build=pins['cpython_build']),
+            build_backend=dict(
+                name=backend['name'], version=backend['version'], sha256=backend['wheel']['sha256']
+            ),
+            project_wheels=built,
+            distributions=len(expected),
+            prepared_at=datetime.now(timezone.utc).isoformat(),
+        )
+        created.append(root / ENVIRONMENT_EVIDENCE)
+        emit(root / ENVIRONMENT_EVIDENCE, record)
+        created.append(root / INSTALLED_INVENTORY)
+        emit(root / INSTALLED_INVENTORY, inventory)
+    except BaseException:
+        for path in reversed(created):
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            elif path.exists():
+                path.unlink()
+        raise
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return record
+
+
+def extend(root, binding):
+    """Add the restricted worker's distribution inventory and licence texts to a prepared root,
+    select the runtime inventory and bind the launch wrapper. Runs once the worker is built
+    (runtime.json names its image); the worker metadata is read in that image with network
+    disabled and imports no candidate code."""
+    refuse_populated(root)  # before any read or write
+    root = Path(root)
+    if not (root / INSTALLED_INVENTORY).is_file():
+        raise ValueError('Native environment not prepared; run prepare first')
+    inventory = json.loads((root / INSTALLED_INVENTORY).read_bytes())
+    runtime = json.loads((root / 'runtime.json').read_bytes())
+    script = (
+        'import base64, importlib.metadata as m, json\n'
+        'out = []\n'
+        'for d in m.distributions():\n'
+        '    files = {}\n'
+        '    for f in d.files or []:\n'
+        '        s = str(f)\n'
+        "        named = ('/METADATA', 'license', 'copying', 'notice')\n"
+        "        if '.dist-info/' in s and any(x in s.lower() or s.endswith(x) for x in named):\n"
+        '            files[s] = base64.b64encode(d.locate_file(f).read_bytes()).decode()\n'
+        "    out.append({'name': d.metadata['Name'], 'version': d.version, 'files': files})\n"
+        'print(json.dumps(out))\n'
+    )
+    output = subprocess.run(
+        [
+            'docker',
+            'run',
+            '--rm',
+            '--network=none',
+            '--read-only',
+            '--cap-drop=ALL',
+            '--security-opt=no-new-privileges',
+            runtime['worker_image'],
+            'python',
+            '-B',
+            '-c',
+            script,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    workers = json.loads(output)
     for dist in workers:
-        for rel,encoded in dist.pop('files').items():
-            path=ROOT/'licenses/worker'/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(base64.b64decode(encoded))
-    emit(ROOT/'locks/worker-installed.json',workers)
-    dependencies=[dict(name=d['name'],version=d['version'],lock_path='locks/native-installed.json') for d in inventory]
-    dependencies += [dict(name=d['name'],version=d['version'],lock_path='locks/worker-installed.json') for d in workers]
-    descriptors=[]
-    for top in ('locks','licenses'):
-        for path in sorted((ROOT/top).rglob('*')):
-            if path.is_file():descriptors.append(dict(path=str(path.relative_to(ROOT)),size=path.stat().st_size,sha256=sha(path.read_bytes())))
-    emit(ROOT/'selected.json',dict(dependencies=dependencies,files=descriptors,licenses=[d['path'] for d in descriptors if d['path'].startswith('licenses/')]))
-    runtime['selected_sha256']=sha((ROOT/'selected.json').read_bytes())
-    emit(ROOT/'runtime.json',runtime)
+        for relative, encoded in dist.pop('files').items():
+            path = root / 'licenses/worker' / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(base64.b64decode(encoded))
+    emit(root / 'locks/worker-installed.json', workers)
+    dependencies = [
+        dict(name=d['name'], version=d['version'], lock_path=INSTALLED_INVENTORY) for d in inventory
+    ]
+    dependencies += [
+        dict(name=d['name'], version=d['version'], lock_path='locks/worker-installed.json')
+        for d in workers
+    ]
+    descriptors = []
+    for top in ('locks', 'licenses'):
+        for path in sorted((root / top).rglob('*')):
+            if path.is_file():
+                descriptors.append(
+                    dict(
+                        path=str(path.relative_to(root)),
+                        size=path.stat().st_size,
+                        sha256=sha(path.read_bytes()),
+                    )
+                )
+    licenses = [d['path'] for d in descriptors if d['path'].startswith('licenses/')]
+    emit(
+        root / 'selected.json',
+        dict(dependencies=dependencies, files=descriptors, licenses=licenses),
+    )
+    runtime['selected_sha256'] = sha((root / 'selected.json').read_bytes())
+    emit(root / 'runtime.json', runtime)
     # The same wrapper (reviewed interpreter) that require_launch_worker accepts.
-    write_launch_worker(ROOT,BINDING)
-    print(json.dumps(dict(native_distributions=len(inventory),worker_distributions=len(workers),selected_sha256=runtime['selected_sha256'])))
+    write_launch_worker(root, binding)
+    summary = dict(
+        native_distributions=len(inventory),
+        worker_distributions=len(workers),
+        selected_sha256=runtime['selected_sha256'],
+    )
+    print(json.dumps(summary))
+    return summary
+
 
 def profile_name():
     """The native profile of the execution store as the attested launcher names it: the
     installation's own profile, or the development store's."""
     from hyprn_mvp_integration import launcher
-    return launcher.profile
 
-def initialize():
-    profile=profile_name()
-    expected=str(ROOT/'aiida')
-    if os.environ.get('AIIDA_PATH')!=expected:raise ValueError('Explicit new profile path required')
+    return launcher.PROFILE
+
+
+def initialize(root, configuration):
+    """Create the native profile of an installation (``hyprn-mvp-<edition>-<id8>``; the
+    development store's own name without one) in an empty ``<root>/aiida``: a core.sqlite_dos
+    store, no broker, no default profile, the local computer and the launch-worker code."""
+    from hyprn_mvp_integration import installation
+
+    root = Path(root)
+    profile = installation.profile_name(configuration)
+    if os.environ.get('AIIDA_PATH') != str(root / 'aiida'):
+        raise ValueError('Explicit new profile path required')
     import aiida
     from aiida import orm
-    from aiida.manage.configuration import get_config,create_profile
-    config=get_config(create=True)
-    if config.profile_names:raise ValueError('Refusing to initialize existing profile')
-    create_profile(config,name=profile,email='owner@hyprn-mvp.invalid',
-        storage_backend='core.sqlite_dos',storage_config={'filepath':str(ROOT/'aiida-store')},
-        broker_backend=None,broker_config={})
+    from aiida.manage.configuration import get_config, create_profile
+
+    config = get_config(create=True)
+    if config.profile_names:
+        raise ValueError('Refusing to initialize existing profile')
+    create_profile(
+        config,
+        name=profile,
+        email='owner@hyprn-mvp.invalid',
+        storage_backend='core.sqlite_dos',
+        storage_config={'filepath': str(root / 'aiida-store')},
+        broker_backend=None,
+        broker_config={},
+    )
     config.store()
-    if config.default_profile_name is not None:raise ValueError('Default profile is forbidden')
+    if config.default_profile_name is not None:
+        raise ValueError('Default profile is forbidden')
     aiida.load_profile(profile)
-    computer=orm.Computer(label='hyprn-mvp-local',hostname='localhost',transport_type='core.local',
-        scheduler_type='core.direct',workdir=str(ROOT/'aiida-work/{username}')).store()
+    computer = orm.Computer(
+        label='hyprn-mvp-local',
+        hostname='localhost',
+        transport_type='core.local',
+        scheduler_type='core.direct',
+        workdir=str(root / 'aiida-work/{username}'),
+    ).store()
     computer.configure(safe_interval=0.1)
-    code=orm.InstalledCode(label='hyprn-mvp-scalar',computer=computer,filepath_executable=str(ROOT/'launch-worker'),default_calc_job_plugin='hyprn_mvp.scalar').store()
+    code = orm.InstalledCode(
+        label='hyprn-mvp-scalar',
+        computer=computer,
+        filepath_executable=str(root / 'launch-worker'),
+        default_calc_job_plugin='hyprn_mvp.scalar',
+    ).store()
     from aiida.manage import get_manager
-    emit(ROOT/'profile-identity.json',dict(profile_uuid=config.get_profile(profile).uuid,
-        repository_uuid=get_manager().get_profile_storage().get_repository().uuid,
-        computer_uuid=computer.uuid,code_uuid=code.uuid,profile=profile))
+
+    emit(
+        root / 'profile-identity.json',
+        dict(
+            profile_uuid=config.get_profile(profile).uuid,
+            repository_uuid=get_manager().get_profile_storage().get_repository().uuid,
+            computer_uuid=computer.uuid,
+            code_uuid=code.uuid,
+            profile=profile,
+        ),
+    )
     print('Fresh isolated profile initialized without broker or daemon')
+    return profile
+
 
 def evidence():
     profile=profile_name()
@@ -344,6 +841,7 @@ def evidence():
     emit(ROOT/'evidence/native-records.json',dict(profile=profile,store_uuid=native.store_uuid,records=records))
     print(json.dumps(dict(records=len(records),unique_matches=all(r['retained_exact_match'] for r in records))))
 
+
 if __name__=='__main__':
     import release_binding
     # check-* are read-only; every other operation has effects. None may run from an
@@ -355,8 +853,14 @@ if __name__=='__main__':
     elif sys.argv[1:] == ['check-launch-worker']:print(json.dumps(require_launch_worker(ROOT,BINDING)))
     elif sys.argv[1:] == ['check-launcher-evidence']:print(json.dumps(launcher_evidence(ROOT,BINDING)))
     elif sys.argv[1:] == ['reuse-reviewed']:reuse_reviewed()
-    elif sys.argv[1:] == ['prepare']:prepare()
-    elif sys.argv[1:] == ['extend']:prepare(extend=True)
-    elif sys.argv[1:] == ['initialize']:initialize()
+    elif sys.argv[1:] == ['prepare']:
+        # The selected release's snapshot is the source; the tool cache's uv cache holds downloads.
+        tools = local_paths.tools_root()
+        print(json.dumps(prepare(ROOT, BINDING.source, tools=tools, cache=tools / 'uv-cache')))
+    elif sys.argv[1:] == ['extend']:
+        extend(ROOT, BINDING)
+    elif sys.argv[1:] == ['initialize']:
+        from hyprn_mvp_integration import launcher
+        initialize(ROOT, launcher.INSTALLATION)
     elif sys.argv[1:] == ['evidence']:evidence()
     else:raise ValueError('Choose prepare or initialize')

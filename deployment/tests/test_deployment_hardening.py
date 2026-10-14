@@ -170,9 +170,11 @@ def legacy_wrapper(root):
             + native.shlex.quote(str(native.PYTHON)) + ' -B -m hyprn_mvp_integration.launcher "$@"\n')
 
 
-@pytest.mark.parametrize('extend', [False, True])
+@pytest.mark.parametrize('operation', ['prepare', 'extend'])
 @pytest.mark.parametrize('marker', ['aiida', 'aiida-store', 'profile-identity.json', 'executor.json', 'executor.lock'])
-def test_prepare_and_extend_refuse_a_populated_execution_root(tmp_path, monkeypatch, extend, marker):
+def test_prepare_and_extend_refuse_a_populated_execution_root(
+    tmp_path, monkeypatch, operation, marker
+):
     root = tmp_path / 'execution'
     (root / 'venv').mkdir(parents=True)
     target = root / marker
@@ -181,25 +183,32 @@ def test_prepare_and_extend_refuse_a_populated_execution_root(tmp_path, monkeypa
     else:
         target.mkdir()
     before = {p: p.read_bytes() for p in root.rglob('*') if p.is_file()}
-    monkeypatch.setattr(native, 'ROOT', root)
     refuse_effects(monkeypatch)
-    monkeypatch.setitem(sys.modules, 'packaging', None)  # refusal precedes even the lazy packaging import
+    # The refusal precedes every read: the snapshot and tool cache below do not even exist.
     with pytest.raises(ValueError, match='populated'):
-        native.prepare(extend=extend)
+        if operation == 'prepare':
+            native.prepare(root, tmp_path / 'missing-release', tools=tmp_path / 'missing-tools',
+                           cache=tmp_path / 'missing-cache')
+        else:
+            native.extend(root, None)
     assert {p: p.read_bytes() for p in root.rglob('*') if p.is_file()} == before
 
 
-def test_prepare_and_reuse_write_the_wrapper_the_launch_gate_accepts():
-    """prepare and reuse_reviewed write exactly the wrapper that require_launch_worker accepts
-    (the reviewed interpreter, never ROOT/venv/bin/python): both use
-    write_launch_worker(ROOT, BINDING) and no other wrapper text."""
+def test_extend_and_reuse_write_the_wrapper_the_launch_gate_accepts():
+    """extend and reuse_reviewed write exactly the wrapper that require_launch_worker accepts
+    (the reviewed interpreter, never the root's own environment): both use write_launch_worker
+    on the root and binding they were given and no other wrapper text; prepare writes none."""
     tree = ast.parse(Path(native.__file__).read_text())
     functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
-    for name in ('prepare', 'reuse_reviewed'):
+    expected = (('extend', ['root', 'binding']), ('reuse_reviewed', ['ROOT', 'BINDING']))
+    for name, arguments in expected:
         calls = [n for n in ast.walk(functions[name]) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
         writers = [c for c in calls if c.func.id == 'write_launch_worker']
-        assert len(writers) == 1 and [ast.unparse(a) for a in writers[0].args] == ['ROOT', 'BINDING'], name
+        assert len(writers) == 1 and [ast.unparse(a) for a in writers[0].args] == arguments, name
         assert not [c for c in calls if c.func.id == 'launch_worker_text'], name
+    calls = [n for n in ast.walk(functions['prepare'])
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    assert not [c for c in calls if c.func.id in ('write_launch_worker', 'launch_worker_text')]
 
 
 def test_write_launch_worker_is_exclusive_and_never_follows_a_planted_symlink(tmp_path, monkeypatch):
