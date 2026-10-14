@@ -1126,7 +1126,7 @@ def contracts_child(group='contracts', *, units_mixed_repair=False):
     return 0 if passed else 1
 
 
-def prepare_ui_builder(scope):
+def prepare_image_builder(scope):
     """Retain only the installed builder executable in the isolated Docker CLI home."""
     import hashlib
 
@@ -1198,8 +1198,8 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
         raise ValueError('Group fixture/runner not implemented yet: ' + group)
     require_environment(group)
     scope = fixture.allocate_scope(replace(fixture.new_scope(), interpreter=GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON)))
-    if group == 'ui-a':
-        prepare_ui_builder(scope)
+    if group == 'ui-a' or group in NATIVE_BACKEND_GROUPS:
+        prepare_image_builder(scope)
     env = fixture.clean_environment(scope)
     command = [scope.interpreter, '-B', str(Path(__file__).resolve()), '--' + group + '-child']
     if units_mixed_repair:

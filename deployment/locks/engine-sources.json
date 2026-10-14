@@ -1,0 +1,402 @@
+{
+  "schema": "hyprn_mvp.engine-sources/1",
+  "approval_date": "2026-10-14",
+  "proposal_sha256": "e60ff64202d200fa085bef63270ec3457bd4362bc43e04991a576696f2afdcf7",
+  "packages": [
+    {
+      "name": "openmdao_extensions",
+      "version": "1.6.3",
+      "module": "openmdao_extensions",
+      "archive": {
+        "filename": "openmdao_extensions-1.6.3.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/6b/d2/d4dd4e86fdaf3dedd7b859824d3b34b66de2ace8cbcbdcd616c325f3057c/openmdao_extensions-1.6.3.tar.gz",
+        "size": 17657,
+        "sha256": "f9ef20afd886a6b21f62e23be29ba14d4502897cc7b4603d4da0187024ee3e59"
+      },
+      "patch_sha256": "c7400bbe4929ae2f5f86b4287c34b7f1e13016c54cae16460cb684ff0a9c6581",
+      "original_pyproject_sha256": "9820fcae49b7fd1df73cabcff808abb59db4ab106c1b931fda390d53bc3757c5",
+      "proposed_pyproject_sha256": "471996fb6e87e012bf151248633230142fd252a2875c70b4802f8c4874847e5d",
+      "changed_or_added_files": [
+        "pyproject.toml"
+      ],
+      "runtime_comparison": [
+        {
+          "path": "openmdao_extensions/__init__.py",
+          "original_sha256": "fa256b36f6cf23409ac8f51aac2dca3a89fad674a31ebc37ae3168c07944e223",
+          "proposed_sha256": "fa256b36f6cf23409ac8f51aac2dca3a89fad674a31ebc37ae3168c07944e223",
+          "bytes": 85
+        },
+        {
+          "path": "openmdao_extensions/egobox_doe_driver.py",
+          "original_sha256": "c8fb0f6dbb6e590e13803eb2dc23c802dce682ffdfd9d4a72dcf80414cbb1212",
+          "proposed_sha256": "c8fb0f6dbb6e590e13803eb2dc23c802dce682ffdfd9d4a72dcf80414cbb1212",
+          "bytes": 2795
+        },
+        {
+          "path": "openmdao_extensions/egobox_egor_driver.py",
+          "original_sha256": "664f0f41ba2d592b8c141e557d25b2728764581d7daca806749aff82f3180e66",
+          "proposed_sha256": "664f0f41ba2d592b8c141e557d25b2728764581d7daca806749aff82f3180e66",
+          "bytes": 10905
+        },
+        {
+          "path": "openmdao_extensions/onera_sego_driver.py",
+          "original_sha256": "2f89d21aed8af65ad56d8d7bbf404afe496b6eceac583008b0d7a12bf35820c3",
+          "proposed_sha256": "2f89d21aed8af65ad56d8d7bbf404afe496b6eceac583008b0d7a12bf35820c3",
+          "bytes": 12842
+        },
+        {
+          "path": "openmdao_extensions/openturns_doe_driver.py",
+          "original_sha256": "d6cac6e0e754b563bd3befe8b2e115fdbd70d6b96f3b247424098be6fa7e0c80",
+          "proposed_sha256": "d6cac6e0e754b563bd3befe8b2e115fdbd70d6b96f3b247424098be6fa7e0c80",
+          "bytes": 3388
+        },
+        {
+          "path": "openmdao_extensions/reckless_nonlinear_block_gs.py",
+          "original_sha256": "57bc9a741b5f09e791c447e42a30ee2e9a0d0ed91cfa61521ee0bcf9d803783b",
+          "proposed_sha256": "57bc9a741b5f09e791c447e42a30ee2e9a0d0ed91cfa61521ee0bcf9d803783b",
+          "bytes": 9669
+        },
+        {
+          "path": "openmdao_extensions/salib_doe_driver.py",
+          "original_sha256": "1a89426150823a0539f156ecfd9c6df01391cbf45c351d26866f8e56cdfb5ee3",
+          "proposed_sha256": "1a89426150823a0539f156ecfd9c6df01391cbf45c351d26866f8e56cdfb5ee3",
+          "bytes": 6103
+        },
+        {
+          "path": "openmdao_extensions/smt_doe_driver.py",
+          "original_sha256": "9f3666e55145cb6bf2f16c129a007f6c06e429b66c2311e2992dda28db54de81",
+          "proposed_sha256": "9f3666e55145cb6bf2f16c129a007f6c06e429b66c2311e2992dda28db54de81",
+          "bytes": 3350
+        }
+      ],
+      "all_original_non_recipe_files_unchanged": true,
+      "expected_wheel_payload": [
+        {
+          "path": "openmdao_extensions/__init__.py",
+          "original_sha256": "fa256b36f6cf23409ac8f51aac2dca3a89fad674a31ebc37ae3168c07944e223",
+          "proposed_sha256": "fa256b36f6cf23409ac8f51aac2dca3a89fad674a31ebc37ae3168c07944e223",
+          "bytes": 85
+        },
+        {
+          "path": "openmdao_extensions/egobox_doe_driver.py",
+          "original_sha256": "c8fb0f6dbb6e590e13803eb2dc23c802dce682ffdfd9d4a72dcf80414cbb1212",
+          "proposed_sha256": "c8fb0f6dbb6e590e13803eb2dc23c802dce682ffdfd9d4a72dcf80414cbb1212",
+          "bytes": 2795
+        },
+        {
+          "path": "openmdao_extensions/egobox_egor_driver.py",
+          "original_sha256": "664f0f41ba2d592b8c141e557d25b2728764581d7daca806749aff82f3180e66",
+          "proposed_sha256": "664f0f41ba2d592b8c141e557d25b2728764581d7daca806749aff82f3180e66",
+          "bytes": 10905
+        },
+        {
+          "path": "openmdao_extensions/onera_sego_driver.py",
+          "original_sha256": "2f89d21aed8af65ad56d8d7bbf404afe496b6eceac583008b0d7a12bf35820c3",
+          "proposed_sha256": "2f89d21aed8af65ad56d8d7bbf404afe496b6eceac583008b0d7a12bf35820c3",
+          "bytes": 12842
+        },
+        {
+          "path": "openmdao_extensions/openturns_doe_driver.py",
+          "original_sha256": "d6cac6e0e754b563bd3befe8b2e115fdbd70d6b96f3b247424098be6fa7e0c80",
+          "proposed_sha256": "d6cac6e0e754b563bd3befe8b2e115fdbd70d6b96f3b247424098be6fa7e0c80",
+          "bytes": 3388
+        },
+        {
+          "path": "openmdao_extensions/reckless_nonlinear_block_gs.py",
+          "original_sha256": "57bc9a741b5f09e791c447e42a30ee2e9a0d0ed91cfa61521ee0bcf9d803783b",
+          "proposed_sha256": "57bc9a741b5f09e791c447e42a30ee2e9a0d0ed91cfa61521ee0bcf9d803783b",
+          "bytes": 9669
+        },
+        {
+          "path": "openmdao_extensions/salib_doe_driver.py",
+          "original_sha256": "1a89426150823a0539f156ecfd9c6df01391cbf45c351d26866f8e56cdfb5ee3",
+          "proposed_sha256": "1a89426150823a0539f156ecfd9c6df01391cbf45c351d26866f8e56cdfb5ee3",
+          "bytes": 6103
+        },
+        {
+          "path": "openmdao_extensions/smt_doe_driver.py",
+          "original_sha256": "9f3666e55145cb6bf2f16c129a007f6c06e429b66c2311e2992dda28db54de81",
+          "proposed_sha256": "9f3666e55145cb6bf2f16c129a007f6c06e429b66c2311e2992dda28db54de81",
+          "bytes": 3350
+        }
+      ],
+      "license_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "pyproject": "[build-system]\nrequires = [\"flit_core==4.1.0\"]\nbuild-backend = \"flit_core.buildapi\"\n\n[project]\nname = \"openmdao_extensions\"\nversion = \"1.6.3\"\ndescription = \"Additional solvers and drivers for OpenMDAO framework\"\nreadme = \"README.md\"\nlicense = \"Apache-2.0\"\nrequires-python = \">=3.10\"\nauthors = [{ name = \"R\u00e9mi Lafage\", email = \"remi.lafage@onera.fr\" }]\nkeywords = [\"openmdao\", \"openmdao_driver\", \"openmdao_nl_solver\"]\nclassifiers = [\n    \"Development Status :: 5 - Production/Stable\",\n    \"Intended Audience :: Science/Research\",\n    \"Intended Audience :: Developers\",\n    \"Programming Language :: Python\",\n    \"Programming Language :: Python :: 3\",\n    \"Topic :: Software Development\",\n    \"Topic :: Scientific/Engineering\",\n    \"Operating System :: Microsoft :: Windows\",\n    \"Operating System :: Unix\",\n    \"Operating System :: MacOS\",\n]\ndependencies = [\"openmdao>=3.0.0\", \"packaging\"]\n\n[project.optional-dependencies]\negobox = [\"egobox>=0.37.2\"]\n\n[project.urls]\nHomepage = \"https://github.com/OneraHub/openmdao_extensions\"\nDownload = \"https://github.com/OneraHub/openmdao_extensions/releases\"\n\n[project.entry-points.openmdao_driver]\negoboxegordriver = \"openmdao_extensions.egobox_egor_driver:EgoboxEgorDriver\"\nonerasegodriver = \"openmdao_extensions.onera_sego_driver:OneraSegoDriver\"\nopenturnsdoedriver = \"openmdao_extensions.openturns_doe_driver:OpenturnsDOEDriver\"\nsalibdoedriver = \"openmdao_extensions.salib_doe_driver:SalibDOEDriver\"\nsmtdoedriver = \"openmdao_extensions.smt_doe_driver:SmtDOEDriver\"\n\n[project.entry-points.openmdao_nl_solver]\nrecklessnonlinearblockgs = \"openmdao_extensions.reckless_nonlinear_block_gs:RecklessNonlinearBlockGS\"\n\n[tool.flit.module]\nname = \"openmdao_extensions\"\n",
+      "patch_path": "upstream/engine-packaging/openmdao_extensions.patch",
+      "expected_wheel_metadata": {
+        "openmdao_extensions-1.6.3.dist-info/METADATA": "3567d3cc959f8c08a630ce0ec2d4fb743a2eff68952836dca26f55ec2c34b03d",
+        "openmdao_extensions-1.6.3.dist-info/WHEEL": "96a37c8d7b7f425a05386731f644adbd66ebca17c45e8236176cfe614466df9d",
+        "openmdao_extensions-1.6.3.dist-info/entry_points.txt": "fad1a08aa6491967b822b110bee93e358ff0e022f67e4b9790252f2462771007",
+        "openmdao_extensions-1.6.3.dist-info/licenses/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      }
+    },
+    {
+      "name": "wop",
+      "version": "2.6.1",
+      "module": "whatsopt",
+      "archive": {
+        "filename": "wop-2.6.1.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/65/2a/47d3bc6e5b3cb7f3d80433b332d048893e47305bf8304e722a69b312a5df/wop-2.6.1.tar.gz",
+        "size": 34865,
+        "sha256": "3aa59f30a99c505227328e9a152c8563537318e3b98e32e45d427b67611f9d88"
+      },
+      "patch_sha256": "2e0f2f8c21eb09a790aa43e0a554bf6322afdd90696a579b1faa05c113239c48",
+      "original_pyproject_sha256": "dfecbaeb78dbd45f4929de63d6b8cc8b0dcb4295caceb84fdbf04ed53842b786",
+      "proposed_pyproject_sha256": "90400798a5725f61e0c9e8a295b3e8295b1b529259c155c08f98ee66b51222d2",
+      "changed_or_added_files": [
+        "pyproject.toml"
+      ],
+      "runtime_comparison": [
+        {
+          "path": "whatsopt/__init__.py",
+          "original_sha256": "cafd3026eabb75dfcf94184b37c8ae3d4615b280022ae9364771a0e5653eb479",
+          "proposed_sha256": "cafd3026eabb75dfcf94184b37c8ae3d4615b280022ae9364771a0e5653eb479",
+          "bytes": 22
+        },
+        {
+          "path": "whatsopt/convert_utils.py",
+          "original_sha256": "d9aad3b6ffcb28ccfb5b65dada38841786b0b747779bf2f2b9a090ae2c96c5ce",
+          "proposed_sha256": "d9aad3b6ffcb28ccfb5b65dada38841786b0b747779bf2f2b9a090ae2c96c5ce",
+          "bytes": 1453
+        },
+        {
+          "path": "whatsopt/logging.py",
+          "original_sha256": "ca3e0dfa1f5327c3be7cf4cabf34e96bb7642fb57ff272a2aa7602721184df77",
+          "proposed_sha256": "ca3e0dfa1f5327c3be7cf4cabf34e96bb7642fb57ff272a2aa7602721184df77",
+          "bytes": 474
+        },
+        {
+          "path": "whatsopt/mooptimization.py",
+          "original_sha256": "21cb6f85254d3f36b9c9254f7938ad9c116cafc71af4faa941b04482da4eeef9",
+          "proposed_sha256": "21cb6f85254d3f36b9c9254f7938ad9c116cafc71af4faa941b04482da4eeef9",
+          "bytes": 3108
+        },
+        {
+          "path": "whatsopt/optimization.py",
+          "original_sha256": "44c6104e85e177ba254ce59c6c1812a40a05cc5f71aa1e55a2f0168ec5ed4de0",
+          "proposed_sha256": "44c6104e85e177ba254ce59c6c1812a40a05cc5f71aa1e55a2f0168ec5ed4de0",
+          "bytes": 10778
+        },
+        {
+          "path": "whatsopt/push_command.py",
+          "original_sha256": "b6e1a31be147ccc34acbc4ad883af92b5c211509142f04a915f9c5a061199111",
+          "proposed_sha256": "b6e1a31be147ccc34acbc4ad883af92b5c211509142f04a915f9c5a061199111",
+          "bytes": 15223
+        },
+        {
+          "path": "whatsopt/push_utils.py",
+          "original_sha256": "5436077200d0875d4aa22e8dc7fa1622753a4cb9e47a4db7d7baf46f8688f534",
+          "proposed_sha256": "5436077200d0875d4aa22e8dc7fa1622753a4cb9e47a4db7d7baf46f8688f534",
+          "bytes": 5924
+        },
+        {
+          "path": "whatsopt/show_utils.py",
+          "original_sha256": "ceca5897a092b8d41d500e14752d53b15d1aee198a0f39c7d09ea2cfd912c2db",
+          "proposed_sha256": "ceca5897a092b8d41d500e14752d53b15d1aee198a0f39c7d09ea2cfd912c2db",
+          "bytes": 1417
+        },
+        {
+          "path": "whatsopt/upload_utils.py",
+          "original_sha256": "0de9f391735e56ae45dcc6ca3124fb845ad09f285c9873dc89bd0ee548dd29e6",
+          "proposed_sha256": "0de9f391735e56ae45dcc6ca3124fb845ad09f285c9873dc89bd0ee548dd29e6",
+          "bytes": 7234
+        },
+        {
+          "path": "whatsopt/utils.py",
+          "original_sha256": "ef90513ac5a661f3dd2bd5613aa968c421f6ccbc64f26b76dc96242b29e7843d",
+          "proposed_sha256": "ef90513ac5a661f3dd2bd5613aa968c421f6ccbc64f26b76dc96242b29e7843d",
+          "bytes": 5821
+        },
+        {
+          "path": "whatsopt/whatsopt_client.py",
+          "original_sha256": "1874d37a93ea699208b2a14b586872aa6b0be7b485cffcdb1ac8494655e75cdc",
+          "proposed_sha256": "1874d37a93ea699208b2a14b586872aa6b0be7b485cffcdb1ac8494655e75cdc",
+          "bytes": 33657
+        },
+        {
+          "path": "whatsopt/wop.py",
+          "original_sha256": "dba3bfe48dbd9cea3304ef33821bb800aec352f26c7a89200c73a69cef606211",
+          "proposed_sha256": "dba3bfe48dbd9cea3304ef33821bb800aec352f26c7a89200c73a69cef606211",
+          "bytes": 11278
+        }
+      ],
+      "all_original_non_recipe_files_unchanged": true,
+      "expected_wheel_payload": [
+        {
+          "path": "whatsopt/__init__.py",
+          "original_sha256": "cafd3026eabb75dfcf94184b37c8ae3d4615b280022ae9364771a0e5653eb479",
+          "proposed_sha256": "cafd3026eabb75dfcf94184b37c8ae3d4615b280022ae9364771a0e5653eb479",
+          "bytes": 22
+        },
+        {
+          "path": "whatsopt/convert_utils.py",
+          "original_sha256": "d9aad3b6ffcb28ccfb5b65dada38841786b0b747779bf2f2b9a090ae2c96c5ce",
+          "proposed_sha256": "d9aad3b6ffcb28ccfb5b65dada38841786b0b747779bf2f2b9a090ae2c96c5ce",
+          "bytes": 1453
+        },
+        {
+          "path": "whatsopt/logging.py",
+          "original_sha256": "ca3e0dfa1f5327c3be7cf4cabf34e96bb7642fb57ff272a2aa7602721184df77",
+          "proposed_sha256": "ca3e0dfa1f5327c3be7cf4cabf34e96bb7642fb57ff272a2aa7602721184df77",
+          "bytes": 474
+        },
+        {
+          "path": "whatsopt/mooptimization.py",
+          "original_sha256": "21cb6f85254d3f36b9c9254f7938ad9c116cafc71af4faa941b04482da4eeef9",
+          "proposed_sha256": "21cb6f85254d3f36b9c9254f7938ad9c116cafc71af4faa941b04482da4eeef9",
+          "bytes": 3108
+        },
+        {
+          "path": "whatsopt/optimization.py",
+          "original_sha256": "44c6104e85e177ba254ce59c6c1812a40a05cc5f71aa1e55a2f0168ec5ed4de0",
+          "proposed_sha256": "44c6104e85e177ba254ce59c6c1812a40a05cc5f71aa1e55a2f0168ec5ed4de0",
+          "bytes": 10778
+        },
+        {
+          "path": "whatsopt/push_command.py",
+          "original_sha256": "b6e1a31be147ccc34acbc4ad883af92b5c211509142f04a915f9c5a061199111",
+          "proposed_sha256": "b6e1a31be147ccc34acbc4ad883af92b5c211509142f04a915f9c5a061199111",
+          "bytes": 15223
+        },
+        {
+          "path": "whatsopt/push_utils.py",
+          "original_sha256": "5436077200d0875d4aa22e8dc7fa1622753a4cb9e47a4db7d7baf46f8688f534",
+          "proposed_sha256": "5436077200d0875d4aa22e8dc7fa1622753a4cb9e47a4db7d7baf46f8688f534",
+          "bytes": 5924
+        },
+        {
+          "path": "whatsopt/show_utils.py",
+          "original_sha256": "ceca5897a092b8d41d500e14752d53b15d1aee198a0f39c7d09ea2cfd912c2db",
+          "proposed_sha256": "ceca5897a092b8d41d500e14752d53b15d1aee198a0f39c7d09ea2cfd912c2db",
+          "bytes": 1417
+        },
+        {
+          "path": "whatsopt/upload_utils.py",
+          "original_sha256": "0de9f391735e56ae45dcc6ca3124fb845ad09f285c9873dc89bd0ee548dd29e6",
+          "proposed_sha256": "0de9f391735e56ae45dcc6ca3124fb845ad09f285c9873dc89bd0ee548dd29e6",
+          "bytes": 7234
+        },
+        {
+          "path": "whatsopt/utils.py",
+          "original_sha256": "ef90513ac5a661f3dd2bd5613aa968c421f6ccbc64f26b76dc96242b29e7843d",
+          "proposed_sha256": "ef90513ac5a661f3dd2bd5613aa968c421f6ccbc64f26b76dc96242b29e7843d",
+          "bytes": 5821
+        },
+        {
+          "path": "whatsopt/whatsopt_client.py",
+          "original_sha256": "1874d37a93ea699208b2a14b586872aa6b0be7b485cffcdb1ac8494655e75cdc",
+          "proposed_sha256": "1874d37a93ea699208b2a14b586872aa6b0be7b485cffcdb1ac8494655e75cdc",
+          "bytes": 33657
+        },
+        {
+          "path": "whatsopt/wop.py",
+          "original_sha256": "dba3bfe48dbd9cea3304ef33821bb800aec352f26c7a89200c73a69cef606211",
+          "proposed_sha256": "dba3bfe48dbd9cea3304ef33821bb800aec352f26c7a89200c73a69cef606211",
+          "bytes": 11278
+        }
+      ],
+      "license_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ],
+      "pyproject": "[build-system]\nrequires = [\"flit_core==4.1.0\"]\nbuild-backend = \"flit_core.buildapi\"\n\n[tool.flit.module]\nname = \"whatsopt\"\n\n[project]\nname = \"wop\"\nversion = \"2.6.1\"\nauthors = [{ name = \"R\u00e9mi Lafage\", email = \"remi.lafage@onera.fr\" }]\ndescription = \"WhatsOpt Command Line Interface\"\nreadme = \"README.md\"\nrequires-python = \">=3.7\"\nkeywords = [\"WhatsOpt\", \"command\"]\nlicense = \"Apache-2.0\"\nclassifiers = [\n    \"Development Status :: 5 - Production/Stable\",\n    \"Intended Audience :: Science/Research\",\n    \"Intended Audience :: Developers\",\n    \"Programming Language :: Python :: 3\",\n    \"Topic :: Software Development\",\n    \"Topic :: Scientific/Engineering\",\n    \"Operating System :: Microsoft :: Windows\",\n    \"Operating System :: Unix\",\n    \"Operating System :: MacOS\",\n]\ndependencies = [\n    \"build\",\n    \"click>=6.7\",\n    \"openmdao>=3.30.0\",\n    \"openmdao_extensions>=1.2.0\",\n    \"packaging\",\n    \"pkginfo\",\n    \"requests\",\n    \"tabulate>=0.8.2\",\n    \"tomli\",\n    \"tomli-w\",\n    \"xdsmjs>=1.0.0\",\n]\n\n[project.optional-dependencies]\ntest = [\"pytest\"]\n\n[project.urls]\nhomepage = \"https://github.com/whatsopt\"\nrepository = \"https://github.com/whatsopt/WhatsOpt-CLI\"\ndocumentation = \"https://github.com/whatsopt/WhatsOpt-Doc#whatsopt-documentation\"\n\n[project.scripts]\nwop = \"whatsopt.wop:wop\"\n",
+      "patch_path": "upstream/engine-packaging/wop.patch",
+      "expected_wheel_metadata": {
+        "wop-2.6.1.dist-info/METADATA": "86cf20db30e306177e01969ddd26460c4c0ff1f7daca9a036e90bc854a937fe5",
+        "wop-2.6.1.dist-info/WHEEL": "96a37c8d7b7f425a05386731f644adbd66ebca17c45e8236176cfe614466df9d",
+        "wop-2.6.1.dist-info/entry_points.txt": "3152470ba5700ed47aae3c378c7a2401867ab6bdb39c007e4e41df7ff833009c",
+        "wop-2.6.1.dist-info/licenses/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      }
+    },
+    {
+      "name": "xdsmjs",
+      "version": "2.1.0",
+      "module": "xdsmjs",
+      "archive": {
+        "filename": "xdsmjs-2.1.0.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/61/68/13d1f44b3aec099e64ff865b1738ff0f14a2d7c40094214cf0dbd90b3c31/xdsmjs-2.1.0.tar.gz",
+        "size": 35977,
+        "sha256": "55a0bb065496edfcf92fb751b33cdcbcbdf4d8237bdbe317b938f94d46be0746"
+      },
+      "patch_sha256": "77df5d44f1f5cbb76bf57ec191927c83d4ab6a0d82cc1105c1ef42ab3a4f2a66",
+      "original_pyproject_sha256": null,
+      "proposed_pyproject_sha256": "37056e9ed9595c31bf76009b74ac0ce33034fb9857c7372246f22adf4eda14ea",
+      "changed_or_added_files": [
+        "pyproject.toml"
+      ],
+      "runtime_comparison": [
+        {
+          "path": "xdsmjs/__init__.py",
+          "original_sha256": "d5601defef63c20d86677fb206846978cda5c558b3f33c2a72a5ec36ce69edd4",
+          "proposed_sha256": "d5601defef63c20d86677fb206846978cda5c558b3f33c2a72a5ec36ce69edd4",
+          "bytes": 368
+        },
+        {
+          "path": "xdsmjs/dist/fontello.css",
+          "original_sha256": "c67f3d6382660fdc1838965e93c96372d04b8e9c0660c195f3e23767325a6eb0",
+          "proposed_sha256": "c67f3d6382660fdc1838965e93c96372d04b8e9c0660c195f3e23767325a6eb0",
+          "bytes": 5091
+        },
+        {
+          "path": "xdsmjs/dist/xdsmjs.css",
+          "original_sha256": "f4aa01cd78075b12f1290aa7b079c3d82cc6d6a47d6f7ee58e3019a774784bea",
+          "proposed_sha256": "f4aa01cd78075b12f1290aa7b079c3d82cc6d6a47d6f7ee58e3019a774784bea",
+          "bytes": 4505
+        },
+        {
+          "path": "xdsmjs/dist/xdsmjs.js",
+          "original_sha256": "c8103b56a04f14c49ccc6243670e358eff2b1bb380ae444de5e7b4e8d9b168ac",
+          "proposed_sha256": "c8103b56a04f14c49ccc6243670e358eff2b1bb380ae444de5e7b4e8d9b168ac",
+          "bytes": 109941
+        },
+        {
+          "path": "xdsmjs/tests/test_xdsmjs.py",
+          "original_sha256": "01930441c1aca8aee71458670b726d49bc94d79fdebb87adf1078fcd5f16ba06",
+          "proposed_sha256": "01930441c1aca8aee71458670b726d49bc94d79fdebb87adf1078fcd5f16ba06",
+          "bytes": 275
+        }
+      ],
+      "all_original_non_recipe_files_unchanged": true,
+      "expected_wheel_payload": [
+        {
+          "path": "xdsmjs/__init__.py",
+          "original_sha256": "d5601defef63c20d86677fb206846978cda5c558b3f33c2a72a5ec36ce69edd4",
+          "proposed_sha256": "d5601defef63c20d86677fb206846978cda5c558b3f33c2a72a5ec36ce69edd4",
+          "bytes": 368
+        },
+        {
+          "path": "xdsmjs/dist/fontello.css",
+          "original_sha256": "c67f3d6382660fdc1838965e93c96372d04b8e9c0660c195f3e23767325a6eb0",
+          "proposed_sha256": "c67f3d6382660fdc1838965e93c96372d04b8e9c0660c195f3e23767325a6eb0",
+          "bytes": 5091
+        },
+        {
+          "path": "xdsmjs/dist/xdsmjs.css",
+          "original_sha256": "f4aa01cd78075b12f1290aa7b079c3d82cc6d6a47d6f7ee58e3019a774784bea",
+          "proposed_sha256": "f4aa01cd78075b12f1290aa7b079c3d82cc6d6a47d6f7ee58e3019a774784bea",
+          "bytes": 4505
+        },
+        {
+          "path": "xdsmjs/dist/xdsmjs.js",
+          "original_sha256": "c8103b56a04f14c49ccc6243670e358eff2b1bb380ae444de5e7b4e8d9b168ac",
+          "proposed_sha256": "c8103b56a04f14c49ccc6243670e358eff2b1bb380ae444de5e7b4e8d9b168ac",
+          "bytes": 109941
+        }
+      ],
+      "license_files": [],
+      "pyproject": "[build-system]\nrequires = [\"flit_core==4.1.0\"]\nbuild-backend = \"flit_core.buildapi\"\n\n[project]\nname = \"xdsmjs\"\nversion = \"2.1.0\"\ndescription = \"XDSMjs Python module\"\nreadme = { text = \"Python module to distribute [XDSMjs](https://github.com/WhatsOpt/XDSMjs#xdsmjs) js/css resources\", content-type = \"text/plain\" }\nauthors = [{ name = \"R\u00e9mi Lafage\", email = \"remi.lafage@onera.fr\" }]\nlicense = \"Apache-2.0\"\nclassifiers = [\n    \"Development Status :: 5 - Production/Stable\",\n    \"Intended Audience :: Science/Research\",\n    \"Intended Audience :: Developers\",\n    \"Programming Language :: Python :: 3\",\n    \"Topic :: Software Development\",\n    \"Topic :: Scientific/Engineering\",\n    \"Operating System :: Microsoft :: Windows\",\n    \"Operating System :: Unix\",\n    \"Operating System :: MacOS\",\n]\n\n[project.urls]\nHomepage = \"https://github.com/WhatsOpt/XDSMjs\"\n\n[tool.flit.module]\nname = \"xdsmjs\"\n\n[tool.flit.sdist]\nexclude = [\"xdsmjs/tests/**\"]\n",
+      "patch_path": "upstream/engine-packaging/xdsmjs.patch",
+      "expected_wheel_metadata": {
+        "xdsmjs-2.1.0.dist-info/METADATA": "fb0a1acd6de0e9cb3be3de6aefced60f5daf2580dd4f0b6e63d058949272d952",
+        "xdsmjs-2.1.0.dist-info/WHEEL": "96a37c8d7b7f425a05386731f644adbd66ebca17c45e8236176cfe614466df9d"
+      }
+    }
+  ]
+}

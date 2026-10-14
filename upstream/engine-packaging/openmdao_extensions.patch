@@ -1,0 +1,20 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,6 +1,6 @@
+ [build-system]
+-requires = ["setuptools>=61.0"]
+-build-backend = "setuptools.build_meta"
++requires = ["flit_core==4.1.0"]
++build-backend = "flit_core.buildapi"
+ 
+ [project]
+ name = "openmdao_extensions"
+@@ -42,6 +42,5 @@
+ [project.entry-points.openmdao_nl_solver]
+ recklessnonlinearblockgs = "openmdao_extensions.reckless_nonlinear_block_gs:RecklessNonlinearBlockGS"
+ 
+-[tool.setuptools]
+-zip-safe = true
+-packages = ["openmdao_extensions"]
++[tool.flit.module]
++name = "openmdao_extensions"

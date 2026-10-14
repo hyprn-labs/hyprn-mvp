@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 import types
+import zipfile
 
 import pytest
 
@@ -33,9 +34,55 @@ import application_runtime as app  # noqa: E402
 import dispatch_runtime as dispatch  # noqa: E402
 import modeling_runtime as modeling  # noqa: E402
 import native_environment as native  # noqa: E402
+from images import build_engine as engine_builder  # noqa: E402
 
 INDEPENDENT = 'closed: verified through the independent code and security review of this delta'
 PLAIN = 'closed: task checkpoints'
+
+
+@pytest.mark.parametrize('extra', [b'Tag: cp312-none-any\n', b'Build: 1\n', b''])
+def test_source_wheel_tag_normalization_preserves_only_the_reviewed_reference_tag(tmp_path, extra):
+    wheel = tmp_path / 'xdsmjs-2.1.0-py2.py3-none-any.whl'
+    prefix = 'xdsmjs-2.1.0.dist-info/'
+    metadata = (b'Wheel-Version: 1.0\nGenerator: flit 4.1.0\nRoot-Is-Purelib: true\n'
+                b'Tag: py2-none-any\nTag: py3-none-any\n')
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr(prefix + 'WHEEL', metadata + extra)
+        archive.writestr(prefix + 'METADATA', b'Name: xdsmjs\nVersion: 2.1.0\n')
+        archive.writestr('xdsmjs/__init__.py', b'unchanged runtime')
+        archive.writestr(prefix + 'RECORD', b'old record')
+    if extra:
+        with pytest.raises(ValueError, match='Unexpected XDSMjs'):
+            engine_builder.normalize_xdsm_tag(wheel)
+        assert not (tmp_path / 'xdsmjs-2.1.0-py3-none-any.whl').exists()
+        return
+    normalized = engine_builder.normalize_xdsm_tag(wheel)
+    with zipfile.ZipFile(normalized) as archive:
+        assert archive.read(prefix + 'WHEEL') == metadata.replace(b'Tag: py2-none-any\n', b'')
+        assert archive.read('xdsmjs/__init__.py') == b'unchanged runtime'
+        assert archive.read(prefix + 'METADATA') == b'Name: xdsmjs\nVersion: 2.1.0\n'
+        record = io.StringIO(archive.read(prefix + 'RECORD').decode())
+        rows = list(engine_builder.csv.reader(record))
+        assert len(rows) == 4
+        for path, digest, size in rows:
+            if path.endswith('/RECORD'):
+                assert (digest, size) == ('', '')
+                continue
+            raw = archive.read(path)
+            expected = base64.urlsafe_b64encode(engine_builder.hashlib.sha256(raw).digest())
+            assert digest == 'sha256=' + expected.rstrip(b'=').decode()
+            assert int(size) == len(raw)
+
+
+@pytest.mark.parametrize('member', ['../escape', '/absolute', 'other/source'])
+def test_engine_source_archive_refuses_unreviewed_paths(tmp_path, member):
+    archive = tmp_path / 'source.tar.gz'
+    with engine_builder.tarfile.open(archive, 'w:gz') as source:
+        item = engine_builder.tarfile.TarInfo(member)
+        item.size = 1
+        source.addfile(item, io.BytesIO(b'x'))
+    with pytest.raises(ValueError, match='Unsafe engine source'):
+        engine_builder.extract(archive, tmp_path / 'output', 'reviewed-1.0')
 
 
 # ---- Synthetic retained releases (no Git, no selection pipeline) -------------------------

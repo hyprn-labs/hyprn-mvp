@@ -182,6 +182,7 @@ def build_image(evidence, *, no_cache=False):
     if build_inputs() != expected:
         raise ValueError('Application source changed during image build')
     image = run('docker', 'image', 'inspect', tag, '--format', '{{.Id}}')
+    run('docker', 'tag', image, 'hyprn-mvp-application:built-' + image.removeprefix('sha256:'))
     identity = dict(image=image, inputs=inputs, inputs_sha256=digest)
     (evidence / 'build-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     return identity

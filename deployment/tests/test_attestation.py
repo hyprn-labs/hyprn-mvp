@@ -48,6 +48,11 @@ EXECUTION_SOURCES = (
     'application/src/hyprn_mvp_app/execution_bundle.py',
     'deployment/execution_runtime.py',
     'deployment/worker.Dockerfile',
+    'deployment/images/engine.Dockerfile', 'deployment/images/install_python.py',
+    'deployment/images/build_engine.py', 'deployment/locks/tools.json',
+    'deployment/locks/engine-sources.json', 'deployment/locks/build-backend.json',
+    'upstream/engine-packaging/openmdao_extensions.patch',
+    'upstream/engine-packaging/wop.patch', 'upstream/engine-packaging/xdsmjs.patch',
     'deployment/pins.json',
 )
 SOURCE_PATHS = tuple(sorted(set(EXECUTION_SOURCES) | set(model.source_hashes())))
@@ -56,7 +61,7 @@ SOURCE_PATHS = tuple(sorted(set(EXECUTION_SOURCES) | set(model.source_hashes()))
 @pytest.fixture(scope='module')
 def attested():
     scope = guard.validate_scope(runner.PROJECTION_SCOPE)
-    runtime = worker.build_worker(root=scope.root)
+    runtime = worker.build_worker(root=scope.root, no_cache=True)
     evidence = launcher.attest(root=scope.root)
     assert evidence['passed'] and evidence['candidate_executions'] == 0
     assert all(evidence['access_checks'].values())
@@ -224,6 +229,8 @@ def test_units_attestation_source_change_during_build_never_publishes_runtime(mo
     calls = iter([current,changed])
     monkeypatch.setattr(launcher,'execution_source_hashes',lambda:next(calls))
     def command(*args):
+        if args[:2] == ('docker', 'run'):
+            return '3.12.15'
         if args[:3] == ('docker','image','inspect'):
             if args[3] == worker.ENGINE:
                 return json.dumps([{'Id':worker.ENGINE,'Architecture':'arm64',
@@ -232,6 +239,7 @@ def test_units_attestation_source_change_during_build_never_publishes_runtime(mo
         assert args[:2] == ('docker','tag')
         return ''
     monkeypatch.setattr(worker,'run',command)
+    monkeypatch.setattr(worker, 'build_engine', lambda *a, **kw: {'image': worker.ENGINE})
     monkeypatch.setattr(worker.subprocess,'run',lambda *a,**kw:CompletedProcess(a[0],0,'synthetic build',''))
     with pytest.raises(RuntimeError,match='source changed during worker build'):
         worker.build_worker(root=scope.root)
@@ -274,7 +282,7 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     assert inventories[2]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch']
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 36
+    assert len(inventories[2]) == 45
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
 

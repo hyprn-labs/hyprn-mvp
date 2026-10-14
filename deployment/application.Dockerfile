@@ -16,6 +16,9 @@ RUN /opt/runtime/uv pip install --python /opt/runtime/venv/bin/python \
     --require-hashes --only-binary=:all: --no-deps -r /build/requirements.lock
 
 FROM ${PYTHON_IMAGE}
+RUN --network=none rm -rf /usr/local/bin/python* /usr/local/bin/pip* /usr/local/bin/idle* \
+    /usr/local/bin/pydoc* /usr/local/bin/2to3* /usr/local/lib/python* /usr/local/lib/libpython* \
+    /usr/local/include/python* /usr/local/lib/pkgconfig/python* /usr/local/share/man/man1/python*
 COPY --from=python /opt/runtime/python /opt/runtime/python
 COPY --from=python /opt/runtime/venv /opt/runtime/venv
 COPY application /app/application

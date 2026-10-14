@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -53,6 +54,17 @@ def install(lock_path, destination):
     # The reviewed distribution route excludes Berkeley DB's separate extension (L6).
     for extension in (Path(destination) / 'python').glob('*/lib/python*/lib-dynload/_dbm*.so'):
         extension.unlink()
+    # Only the venv's hashed application/runtime distributions are shipped.
+    for folder in (Path(destination) / 'python').glob('*/lib/python*/site-packages'):
+        for child in folder.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    for folder in (Path(destination) / 'python').glob('*/lib/python*/ensurepip'):
+        shutil.rmtree(folder)
+    for executable in (Path(destination) / 'python').glob('*/bin/pip*'):
+        executable.unlink()
 
 
 if __name__ == '__main__':

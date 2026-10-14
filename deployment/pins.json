@@ -12,7 +12,7 @@
     }
   },
   "docker_cli_image": "docker@sha256:35cfcf893c20f2931f4909151b5407aaaeab711277de7ce8b8f521f095d54c32",
-  "python": "3.12",
+  "python": "3.12.15",
   "ruby": "3.3.5",
   "yarn": "4.14.1",
   "packages": {
@@ -96,10 +96,18 @@
     }
   },
   "build_inputs": {
-    "deployment/application.Dockerfile": "94713aed658b5882a20d576b75aaf636a4b847fc5675d28b83b76cfdb0eaa4fe",
-    "deployment/images/install_python.py": "2ed2e1db0ace00b9794b04cf63cf91d77f0fad4aedcf440115367b0fa5fc59ca",
-    "deployment/locks/tools.json": "b260f903917e34f015db91cefd479b8994b21dbd86ac5e5533bbfb718a5ee860",
     "application/requirements.lock": "159a23fe11b8e5bceca146597e1857a602637fef49771026c11c8817531e6188",
-    "ui/package-lock.json": "9388196671a0b307e25a9128dd4195a5216ce4f34fa9ea80565613ca08dbdadf"
+    "deployment/application.Dockerfile": "fc5d98c450553789c11cd224e18cb5b3c4c6964a6354266e59e012aa533e6f2a",
+    "deployment/images/build_engine.py": "d394592e1d65d589b1e926bdbf5f0a7def9d9fe8c423cb1b4adb913b6bc1b338",
+    "deployment/images/engine.Dockerfile": "3d7be240c30060e63e69932da79373a85e31dbaba37c244d755f324b3a020131",
+    "deployment/images/install_python.py": "7cf3f65f72a19f101dff89472bf2bd5685f5d6606e49f782b678c8684cc28b8b",
+    "deployment/locks/build-backend.json": "f215a05a12f84ae9923b06a5955952e3ae54fb9945682f38910dba4bf14b93f1",
+    "deployment/locks/engine-sources.json": "4054c355c6d1b5e4cafa6bdec8935974d4a28812f0e770e729e1deca163b847c",
+    "deployment/locks/tools.json": "b260f903917e34f015db91cefd479b8994b21dbd86ac5e5533bbfb718a5ee860",
+    "integration/worker-requirements.lock": "b2fb5237f3c0b3f989339dc150b24e471997574d11ccd0974aa348eef44d9d20",
+    "ui/package-lock.json": "9388196671a0b307e25a9128dd4195a5216ce4f34fa9ea80565613ca08dbdadf",
+    "upstream/engine-packaging/openmdao_extensions.patch": "c7400bbe4929ae2f5f86b4287c34b7f1e13016c54cae16460cb684ff0a9c6581",
+    "upstream/engine-packaging/wop.patch": "2e0f2f8c21eb09a790aa43e0a554bf6322afdd90696a579b1faa05c113239c48",
+    "upstream/engine-packaging/xdsmjs.patch": "77df5d44f1f5cbb76bf57ec191927c83d4ab6a0d82cc1105c1ef42ab3a4f2a66"
   }
 }

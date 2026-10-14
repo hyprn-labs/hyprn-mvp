@@ -744,3 +744,54 @@ D6 (b) of §10 is applied with **flit_core 4.1.0** instead of setuptools. The bu
 - https://github.com/pypa/flit (tag `4.1.0`, API https://api.github.com/repos/pypa/flit/git/ref/tags/4.1.0), release history https://github.com/pypa/flit/blob/main/doc/history.rst
 - Alternatives: https://pypi.org/pypi/setuptools/json, https://pypi.org/pypi/uv-build/0.12.24/json, and the integrity API for both
 - Advisories: OSV batch API https://api.osv.dev/v1/querybatch (PyPI `flit-core` 4.1.0, `setuptools` 84.0.0 and 83.0.0, `uv-build` 0.12.24: no results)
+
+## 16. Numerical source-wheel packaging decision
+
+On 2026-10-14 the product owner explicitly approved the Flit proposal for
+`openmdao_extensions==1.6.3`, `wop==2.6.1` and `xdsmjs==2.1.0`. This authorizes the
+three packaging-only transformations in `upstream/engine-packaging/`; it does not
+authorize setuptools or a licence exception. The approved proposal SHA-256 is
+`e60ff64202d200fa085bef63270ec3457bd4362bc43e04991a576696f2afdcf7`; its manifest is
+`2faa1a433783ea23e8851d901f9e57d7b0f12ad69c147333969586167895bf91`.
+
+`deployment/locks/engine-sources.json` records official archive URLs, sizes, hashes,
+the exact original and replacement packaging metadata, patch hashes and every runtime
+source/resource hash. Only `pyproject.toml` changes. Every other upstream file remains
+unchanged. The XDSMjs generated sdist excludes its upstream test before wheel creation;
+its four runtime files remain exact. No dependency, extra, Python requirement or entry
+point changes. All three packages retain Apache-2.0; XDSMjs has no standalone licence
+file in its published sdist, so its existing declarations and embedded notices remain.
+
+The already audited BSD-3-Clause Flit 4.1.0 is used only in the build stage, with its
+MIT-licensed vendored TOML parser. Source builds run offline from verified artifacts.
+Each wheel is built twice and must be byte-identical. Flit, setuptools, pip and their
+build-time vendored dependencies are absent from the engine runtime environment.
+The managed CPython distribution excludes its separate `_dbm` extension as required
+by the existing distribution decision in `docs/legal/licensing.md` L6.
+
+Approved metadata differences are the Flit generator, reproducible ZIP/RECORD layout,
+metadata 2.5 serialization, Import-Name, redundant Dynamic/top-level/zip-safe bookkeeping,
+and the documented equivalent Apache-2.0, homepage and author serialization. Runtime
+payloads, dependencies, extras, Python requirements, non-licence classifiers and entry
+point mappings remain equivalent. Flit's initial XDSMjs wheel additionally advertises
+Python 2; the recipe strictly recognizes that exact intermediate WHEEL and removes only
+its Python 2 tag, rewrites RECORD and restores the reference `py3-none-any` filename.
+No Python requirement is added, and any unexpected intermediate WHEEL field is refused.
+
+The rebuilt engine and retained reference have 20 matching runtime distribution
+versions and 4,430 identical recorded file hashes, with zero unexpected differences or
+runtime RECORD integrity errors. The reference's additional pip is a build tool and is
+excluded. Explicit installation differences are bytecode, generated console launchers,
+INSTALLER/REQUESTED/direct-url/RECORD bookkeeping and three inspected uv cache records;
+these do not exempt arbitrary package or metadata files. The exact metadata comparison
+report SHA-256 is `82aa685393b0a97e0dc51a30f932c3aee84299beed27cf8b366a074729cb45af`;
+the complete RECORD comparison report is
+`0c8c0243322d02071af3eb46e189bcdeafc56ade3fc98ffe2a909fc6c42b9d31`.
+
+Whole-image inspection covers all interpreter and site-packages locations, not only the
+active venv. The engine has 4,481 package files and the application has 1,228, with zero
+unrecorded files. The managed interpreter site-packages is empty, the base interpreter
+is removed, and no pip, Flit, setuptools, `_dbm` or `.pth` files remain. Only the managed
+CPython 3.12.15 binary and its aliases remain executable. Engine whole-image evidence
+SHA-256: `ad4f365cd6fa38de7c909f4318d6dd71fc6690e1f4d409ea77e482267d954b1f`;
+application: `1d2a6e012d9c3ad1aaa1c8622cb2626756e4934469b5c3e56c92fb2405519b3f`.

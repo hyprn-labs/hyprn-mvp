@@ -59,18 +59,35 @@ def test_store_root_refuses_nonempty_unknown_or_alias(tmp_path, monkeypatch):
         recovery.guarded_empty_root(alias)
 
 
-@pytest.mark.parametrize('difference', ['running','image','owner','retained_mount'])
-def test_container_archive_refuses_unexpected_or_retained_resources(tmp_path, monkeypatch, difference):
-    info = {'Image': recovery.APP_IMAGE, 'State': {'Running': False},
-            'Config': {'Labels': {modeling_runtime.LABEL: application_runtime.OWNER}}, 'Mounts': []}
-    if difference == 'running': info['State']['Running'] = True
-    if difference == 'image': info['Image'] = 'another-image'
-    if difference == 'owner': info['Config']['Labels'] = {}
-    if difference == 'retained_mount': info['Mounts'] = [{'Type':'bind','Source':str(tmp_path)}]
-    monkeypatch.setattr(modeling_runtime, 'inspect', lambda name: info)
-    monkeypatch.setattr(recovery, 'run', lambda *a, **kw: pytest.fail('Unsafe mutation'))
-    with pytest.raises(ValueError):
-        recovery.archive_missing_container(application_runtime.NAME, recovery.APP_IMAGE, application_runtime.OWNER)
+@pytest.mark.parametrize('collision', range(4))
+def test_bootstrap_preserves_every_existing_deployment_resource(tmp_path, monkeypatch, collision):
+    monkeypatch.setattr(local_paths, 'port', lambda: 8000)
+    monkeypatch.setattr(recovery, 'STORES', (tmp_path / 'application', tmp_path / 'modeling'))
+    calls = []
+
+    def inspect(*args):
+        calls.append(args)
+        return {} if len(calls) - 1 == collision else None
+
+    monkeypatch.setattr(modeling_runtime, 'inspect', inspect)
+    monkeypatch.setattr(modeling_runtime, 'setup', lambda *a: pytest.fail('Unsafe setup'))
+    monkeypatch.setattr(application_runtime, 'setup', lambda: pytest.fail('Unsafe setup'))
+    with pytest.raises(ValueError, match='Existing deployment resource'):
+        recovery.bootstrap()
+    assert not any(tmp_path.iterdir())
+
+
+def test_bootstrap_uses_current_build_managers_after_all_preflights(tmp_path, monkeypatch):
+    monkeypatch.setattr(local_paths, 'port', lambda: 8000)
+    monkeypatch.setattr(recovery, 'STORES', (tmp_path / 'application', tmp_path / 'modeling'))
+    monkeypatch.setattr(recovery, 'EVIDENCE', tmp_path / 'evidence')
+    monkeypatch.setattr(modeling_runtime, 'inspect', lambda *a: None)
+    calls = []
+    monkeypatch.setattr(modeling_runtime, 'setup', lambda root: calls.append('modeling') or {})
+    monkeypatch.setattr(application_runtime, 'setup', lambda: calls.append('application') or {})
+    recovery.bootstrap()
+    assert calls == ['modeling', 'application']
+    assert (tmp_path / 'evidence/bootstrap.json').is_file()
 
 
 def test_recovery_evidence_is_append_only(tmp_path):
