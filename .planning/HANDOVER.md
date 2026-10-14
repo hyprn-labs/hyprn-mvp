@@ -62,6 +62,9 @@ waves: 2.8c → 3.16-paths → 2.8, keeping the
 study-folder configuration change inside the same re-attestation window. Continue
 with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
 The amendment owns the detailed ordering and every dependency replacement.
+The after-split `public-api` run also waits for 2.8's current-source producer;
+its 70-test baseline is recorded by 2.8c. This follows the existing stale-image
+restriction and retains every public API assertion and identity check.
 
 Product-owner gates remain at 3.18, 3.28-evidence and 3.28-full; live
 both-client checkpoints remain mandatory. The queue-limit ambiguity is decided

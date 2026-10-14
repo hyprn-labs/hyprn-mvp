@@ -177,6 +177,7 @@ the original task unchanged except the dependency replacements below. The two pl
 |---|---|
 | 3.16 steps 1–2 wait for 2.9–2.14 | Extract `3.16-paths` after 2.8c and before 2.8. It needs completed 2.2; only the later kit needs CLI/install prerequisites. |
 | Re-attestation window ends after 2.8c alone | 2.8 closes changes from both 2.8c and 3.16-paths, with all original pending native groups, pins and captures; no execution against stale attestation. |
+| 2.8c lists public-api among its immediate checks | Apply its existing current-source-image prerequisite to this group too: preserve the 70-test pre-edit baseline, then run public-api after 2.8 rebuilds and pins the producer. Its test_api fixture uses owned_modeling → setup → reviewed_image, which refuses the old producer after schema edits. No assertion or image-identity check is removed; 2.8c records this acceptance as pending. |
 | 2.11 requires completed 2.10 | `2.10-host` provides every adapter interface and current-host round trip; other real OS proofs remain E. No unqualified OS is claimed. |
 | 3.14/3.15/3.16 need full 2.14 | Require verified `2.14-runtime-docs` and `./hyprn-mvp dev check docs`; broad guide completion remains E. |
 | 3.16 needs full 2.13 | Require `2.13-smoke`, including the owner API client, and completed 2.12. Clean-room transportability is E. |
