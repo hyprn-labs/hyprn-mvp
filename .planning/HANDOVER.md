@@ -37,7 +37,7 @@ required no-cache builds, exact artifact checks and both-client live evidence re
 - Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
 - Merged and verified on the work branch:
   - Phase 1: complete.
-  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.7.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7.
   - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
   - Each task has a checkpoint.
 - Combined-tree results are in STATE "Stopped at". Every listed group is green.
@@ -46,10 +46,10 @@ required no-cache builds, exact artifact checks and both-client live evidence re
 
 | Task | State | Next step |
 |---|---|---|
-| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Independent implementation `5c58720` and incomplete checkpoint `5ec1de4` on `agent-modeling-image-build`. | Rebase onto verified 2.7 (`77f47a9` plus its verification record), retain both runner changes, finish combined inventory, producer pin and fixture capture. No-cache runtime equivalence and 25 upstream tests passed before integration; final units-native, native-a and strict inventory checks remain. 2.6 alone owns pins and uses the fixed scratch folder groups. |
-| 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Eleven merged-tree groups pass, including attestation and image-built UI. Approved Flit transformations preserve runtime equivalence. Combined 2.6 sources require fresh native verification. |
+| 2.6 (WhatsOpt acquisition, source and modeling images, notices) | Complete at `94a631f`; 17 integrated acceptance groups passed. | Source-built producer, 49-file attestation inventory, native-program capture and durable fixture verified. All task scopes released. PD-2.4 is next. |
+| 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Approved Flit transformations preserve runtime equivalence. Combined 2.6 tree passed fresh attestation and native acceptance. |
 
-After 2.6 is merged and verified: prepare the concrete PD-2.4 decision at 2.8a.
+Tasks 2.6 and 2.7 are merged and verified. Present the concrete PD-2.4 decision at 2.8a.
 Then follow DELIVERY-PLAN.md waves: 2.8b → 2.8c → 3.16-paths → 2.8, keeping the
 study-folder configuration change inside the same re-attestation window. Continue
 with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
@@ -88,6 +88,6 @@ for D. Phase 4 is deferred until A–D and E are complete.
 ## Small open items
 
 - Regenerate `ui/dependency-audit.json` for the prettier addition.
-- `units-native` failed with `unsafe_export` once, when run from a worktree folder. It passes from the primary checkout.
+- An earlier worktree `units-native` run reported `unsafe_export`; final task 2.6 acceptance passed from both its worktree and the primary checkout.
 - Section 5.4 of `docs/agents/tooling-spec.md` mentions a run-read cache that no tool has; fix it in 3.32.
 - Agent runtime client names (`claude-code`, `codex-mcp-client`) are unconfirmed until the client-facts probe (3.17/3.19).
