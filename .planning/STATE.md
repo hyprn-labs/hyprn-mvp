@@ -8,16 +8,16 @@ See: `PROJECT.md` (planning directory)
 **Current focus:** Phases 2 and 3 — Local edition and agent tools
 
 Delivery order and approved execution cadence: [DELIVERY-PLAN.md](DELIVERY-PLAN.md).
-A–D come first; 2.6 is verified and PD-2.4 option a is approved. Next: 2.8b, then the schema/study-path attestation window.
+A–D come first; 2.8b is verified and PD-2.4 option a is approved. Next: the schema/study-path attestation window.
 Related tasks may share a small executor batch with focused development checks and one
 combined acceptance run after integration; original final criteria and human gates remain.
 
 ## Current Position
 
 Phase: 3 of 5 (Agent tools), alongside Phase 2 (Local edition)
-Plan: `DELIVERY-PLAN.md`; 3.6, 3.7, 2.6 and 2.7 verified; PD-2.4 approved; 2.8b ready
+Plan: `DELIVERY-PLAN.md`; 3.6, 3.7, 2.6, 2.7 and 2.8b verified; PD-2.4 approved; 2.8c ready
 Status: Phase 1 complete — gate 102/103 on a66a1f3, and the remaining findings chain (preflight, findings-native, findings-native-read) passes through `./hyprn-mvp dev check` on the continuation branch after the harness fixes; Phase 2 and Phase 3 in progress
-Last activity: task 2.6 merged at `94a631f`; all 17 integrated acceptance groups pass, including full native execution, browser authoring and durable-fixture restoration. Exact source/artifact identities and cleanup are recorded in checkpoint 2.6. The product owner subsequently approved PD-2.4 option a and the exact decision packet; 2.8a is complete.
+Last activity: task 2.8b merged at `577e30d`; all seven integrated acceptance groups pass, including locality-contracts 139 and contracts 115. Seven scopes released; term scan 0. Checkpoint 2.8b records the exact evidence. PD-2.4 option a and its exact packet are approved; 2.8a is complete.
 
 Progress: [██████████] 100% (Phase 1)
 
@@ -115,4 +115,5 @@ Progress: [██████████] 100% (Phase 1)
 
 Last session: first publication done (`main` = structure commit plus the initial application); work continues on `feat/local-edition-continued`, branched from `main`, for the next pull request
 Stopped at: Phase 1 complete; tasks 2.1a, 2.2–2.5, 3.3a–3.3d, 3.4, 3.8, 3.9 and 3.10 merged on the continuation branch and green on the combined tree (guards, `style-ratchet`, `contracts` 115, `locality-contracts` 125, `agent-tools` 265, `api-a` 119, `access-control` 9, term scan 0; after 2.5 also `native-environment`, `units-attestation`, `deployment-hardening`, `local-edition`, `native-a`; findings chain and `approach-ui-history` green on the 3.3d tree). Task 3.6 merged at `088e528`; all 18 task and baseline groups, design checks, build and term scan pass on the merged tree; 18 verification scopes released. Task 3.7 merged at `9546cc1`; all 15 required groups, design checks, build and term scan pass on the merged tree; 15 verification scopes released. Task 2.7 merged through `77f47a9`; all eleven verification groups pass (naming 9, hygiene 5, guard 115, units-guards 137, style 32, locality 125, contracts 115, deployment-hardening 67, api-a 119, units-attestation 74, image-built ui-a 9), term scan 0. A merged-tree mock regression was corrected before acceptance. Fifteen orchestrator scopes across the failed and successful attempts and three labeled Docker objects were released. Task 2.6 merged at `94a631f`; all 17 integrated groups passed (including units-native 14 with the existing one-test deselection, native-a 2, attestation 78, isolation 17 and fixture restoration 1). All 16 allocated verification scopes, the durable materialization and five exact scope-labelled Docker objects were released; immutable and historical fixtures remain. Checkpoint 2.6 records evidence and one resolved cleanup-helper reporting mismatch. See `.planning/HANDOVER.md`.
-Resume: execute and verify 2.8b, then 2.8c and 3.16-paths within the approved attestation window; 2.8 closes it. Follow `.planning/DELIVERY-PLAN.md` and the approved batch cadence.
+Task 2.8b integrated acceptance: `577e30d`, seven groups passed; locality-contracts 139, contracts 115, seven scopes released. Checkpoint 2.8b records the remaining counts and evidence.
+Resume: execute 2.8c and 3.16-paths within the approved attestation window; 2.8 closes it. Follow `.planning/DELIVERY-PLAN.md` and the approved batch cadence.

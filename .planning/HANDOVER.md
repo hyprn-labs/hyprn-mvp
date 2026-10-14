@@ -37,7 +37,7 @@ required no-cache builds, exact artifact checks and both-client live evidence re
 - Ignore the remote branch `agent/codd/mvp-resume`; never merge it.
 - Merged and verified on the work branch:
   - Phase 1: complete.
-  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7.
+  - Phase 2: 2.1, 2.1a, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8a, 2.8b.
   - Phase 3: 3.1, 3.2, 3.2a, 3.3, 3.3a, 3.3b, 3.3c, 3.3d, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10.
   - Each task has a checkpoint.
 - Combined-tree results are in STATE "Stopped at". Every listed group is green.
@@ -50,7 +50,9 @@ required no-cache builds, exact artifact checks and both-client live evidence re
 | 2.7 (engine, worker and application images) | Complete through `77f47a9`; checkpoint verified. | Approved Flit transformations preserve runtime equivalence. Combined 2.6 tree passed fresh attestation and native acceptance. |
 
 Tasks 2.6 and 2.7 are merged and verified. PD-2.4 option a and its exact packet are approved; checkpoint 2.8a is complete.
-Then follow DELIVERY-PLAN.md waves: 2.8b → 2.8c → 3.16-paths → 2.8, keeping the
+Task 2.8b is merged at `577e30d` and verified: all seven integrated groups pass,
+including locality-contracts 139; all seven scopes released. Follow DELIVERY-PLAN.md
+waves: 2.8c → 3.16-paths → 2.8, keeping the
 study-folder configuration change inside the same re-attestation window. Continue
 with C's local lifecycle/credential/smoke prerequisites and MCP/write/UI slices.
 The amendment owns the detailed ordering and every dependency replacement.
