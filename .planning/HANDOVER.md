@@ -19,9 +19,14 @@ attestation, immutable records and receipt recovery remain. Focused changed-beha
 checks and required API/UI contract checks apply; full qualification, delegated-agent
 reviews, other clients/hosts, installation productization and release audits are later.
 
-Next: establish the current runtime and legitimate fuel source material, reuse or add
-the smallest local API helper, then perform the actual Codex rehearsal. Record real
-blockers and observed timings. No new permission gate for this owner-operated route.
+The rehearsal is now demonstrated: see [DEMO-REHEARSAL.md](DEMO-REHEARSAL.md).
+Ten real runs, two model versions, two approach versions and a revised conclusion
+are retained and visible in the UI. Focused client/guard/style checks pass. The
+scientific conclusion is cruise screening only; complete-mission feasibility and
+ticket pricing remain unresolved. Preserve the running services and authoring scope;
+stop adding features until the next product-owner instruction. Optional batches are
+cleanly checkpointed and unmerged; their heads and remaining findings are in the
+rehearsal record.
 
 ## Earlier delivery priority — superseded for the current demo (2026-10-14)
 

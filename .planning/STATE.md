@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** Restore the owner-operated fuel workflow through the cleaned public API, under the latest [delivery instruction](DELIVERY-PLAN.md#current-instruction--simplest-working-demo-2026-10-14).
+**Current focus:** The owner-operated fuel workflow is demonstrated. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). Full mission/cost closure and release qualification remain separate.
 
 ## Current Position
 
@@ -14,8 +14,8 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 - Task 2.8 closes the combined schema/study-path/release attestation window. The current modeling producer and native captures are verified; the final runtime retains exactly 49 reviewed source paths and one unreplaced attestation. See [checkpoint 2.8](phases/02-local-edition/checkpoints/2.8.md).
 - Latest integrated acceptance: all 23 initial groups pass at `b5a7b62`; the docstring-only correction passes affected release checks at `a5ef4eb`; the final native journey passes 14 tests plus its existing one deselection, with seven runs, four archive pairs and three browser checks. The two-constant durable pin at `d4467eb` passes guards 17 and preflight 1, preserving seven processes and 5,675 original files; final style 33 and term scan 0. All 29 allocated orchestrator scopes and the fresh materialized copy are released; the referenced worker image and immutable captures are retained.
 - Every current-image/native group deferred by 2.8c now passes, including public-api 70, ae-model 26 and fuel-native-provenance 16 (one added historical-export case). The earlier 30-group schema/path acceptance remains recorded in [2.8c](phases/02-local-edition/checkpoints/2.8c.md#integrated-orchestrator-verification) and [3.16-paths](phases/03-agent-tools-for-coding-agents/checkpoints/3.16-paths.md); unchanged checks are not repeated.
-- Current demo outcome: Codex creates a study in an ordinary authorized local user session, authors evidence/approach/components/model/configurations, runs and revises through the public API, and answers the fuel brief from real retained outputs visible in the UI. No seeded model/result substitutes for the rehearsal.
-- Optional 2.9/2.10-host and 3.11/3.12 work is being preserved in its isolated branches at deferred checkpoints; it is not integrated or claimed complete. The previous A–D queue and delegated-agent gates are later product obligations.
+- Current demo: Codex completed the real public-API author–run–inspect–revise loop: ten successful restricted-worker runs, two model versions, two approach versions and a revised saved conclusion. Actual UI results and frozen history were inspected. The result is a conditional cruise fuel comparison; full-mission feasibility and ticket pricing are unresolved. See [DEMO-REHEARSAL.md](DEMO-REHEARSAL.md) for exact identities, focused checks, failures and retained runtime scope.
+- Optional 2.9/2.10-host and 3.11/3.12 work is preserved in isolated branches at deferred checkpoints and remains unmerged. The previous A–D queue is not the active demo queue; future product scope follows the roadmap decisions.
 
 ## Decisions and Authority
 
@@ -47,6 +47,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 | Documents / final qualification | Make the parser lock's real-wheel verification runnable through the scoped entry point; it currently depends on a wheel variable not passed by the runner. |
 | E / Phase 5 | Real served-installation browser evidence, remaining OS/clean-room proofs, final gate and genuine human acceptance. `ui-fidelity` still needs reference images. |
 | Product owner | Decide whether to retain or remove old unpinned durable-fixture folders; preserve them until then. |
+| Later evidence-label fix | Run-scoped evidence expects a synthetic root instance absent from the production model. Preserve frozen identities; the demonstrated conclusion uses study scope with exact run references. |
 | Later performance work | `get_study_overview` reads whole owner lists; large-study scaling remains unqualified. |
 
 ## Verification Constraints and Known Limits
@@ -62,4 +63,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: finish safe preservation/cleanup of optional work, run the current application against real services, and provide the smallest usable authenticated public API client. Rehearse the actual fuel author–run–inspect–revise loop and inspect persisted records in the UI. The delegated-agent human gates remain deferred product obligations, not gates on this owner-operated demo. No publication or production writer-token enablement is requested.
+Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The thin API helper is integrated and verified at `c6c0078`. No additional feature work is needed for the completed screening rehearsal. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
