@@ -23,6 +23,14 @@ gates remain. Named slices close separately; original tasks close only when all
 original acceptance is satisfied. Do not repeat the full live scenario suite per
 OS: its original matrix is scenario by client; platform connection probes are E.
 
+The approved execution-cadence amendment in DELIVERY-PLAN.md permits 2–4 related tasks per
+fresh executor, focused development checks and one union of required acceptance groups after
+integration on the exact committed tree. Keep separate commits and task/evidence mapping;
+never batch across a human decision, capability review or stale-attestation boundary.
+Documentation-only status/checkpoint changes do not repeat application checks when behavioral
+inputs are unchanged. Relevant changes or failures require affected reruns. All final gates,
+required no-cache builds, exact artifact checks and both-client live evidence remain mandatory.
+
 ## Where the work is
 
 - Work branch: `feat/local-edition-continued`, branched from `main`, with no upstream. The next pull request to `main` comes from it. Push or open a pull request only when the product owner asks.
@@ -60,11 +68,11 @@ for D. Phase 4 is deferred until A–D and E are complete.
 ## Facts a new orchestrator needs
 
 - Every check runs through `./hyprn-mvp dev check <group>` (see `AGENTS.md`, "Running checks"). The phase gate is `./hyprn-mvp dev check qualification --jobs 3` on a fixed commit. Hold heavy work (native groups, browser groups, image builds) while the gate runs.
-- Per-task verification by the orchestrator, after merging:
+- Per-batch verification by the orchestrator, after merging (one union of all required groups):
   - review the commits: explicit paths, and the files match the task's list;
   - run `naming`, `hygiene`, `guard`, `units-guards` and `style-ratchet`;
   - run the task's fast contract and application groups, and the term scan;
-  - spot-check one long native or browser group that is relevant to the task.
+  - preserve all task-specific native/browser acceptance and special assertions.
 - Modeling images are not reproducible. Any change to a modeling source needs:
   - a rebuild;
   - a new `modeling_producer` pin in `deployment/pins.json`;

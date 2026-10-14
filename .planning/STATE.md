@@ -7,6 +7,11 @@ See: `PROJECT.md` (planning directory)
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
 **Current focus:** Phases 2 and 3 — Local edition and agent tools
 
+Delivery order and approved execution cadence: [DELIVERY-PLAN.md](DELIVERY-PLAN.md).
+A–D come first; finish and independently verify 2.6, then present PD-2.4 at 2.8a.
+Related tasks may share a small executor batch with focused development checks and one
+combined acceptance run after integration; original final criteria and human gates remain.
+
 ## Current Position
 
 Phase: 3 of 5 (Agent tools), alongside Phase 2 (Local edition)

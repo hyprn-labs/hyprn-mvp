@@ -12,13 +12,43 @@ Read this amendment before either original plan. Where this document changes a d
 slice or acceptance boundary it governs; otherwise the original task's files, actions,
 read-first references, checks and done definition apply in full.
 
-One named task or slice runs in each fresh executor context. A slice checkpoint is
+Closely related tasks or slices may share a fresh executor context under the cadence
+amendment below. A slice checkpoint is
 `phases/<original-phase>/checkpoints/<task>-<slice>.md`; the original `<task>.md` closes
 only when every slice and every original acceptance item is verified. Never rewrite a
 historical checkpoint to make a partial task appear complete. Every checkpoint records
 explicit-path commits, exact commands and pass/fail/skip counts, all failures, source and
 artifact identities, released scratch scopes and remaining risks. The orchestrator reruns
 acceptance on the committed tree before dispatching dependants; it alone updates status.
+
+### Execution cadence amendment approved 2026-10-14
+
+This approval supersedes the earlier one-task-per-context and duplicate broad executor/orchestrator
+acceptance rules for remaining A–D work. Batch 2–4 related tasks with explicit file ownership,
+separate atomic commits and task-to-evidence mapping. Never cross an unresolved human decision,
+capability enablement review or stale-attestation boundary. Run specific prerequisite checks
+before dependent steps within a batch; dispatch no outside dependant before integrated acceptance.
+
+Executors run focused behavior checks and useful cheap guards. Every API change still passes
+contract tests and the UI contract checker. After integration, the orchestrator reviews the diff
+and runs the union of all required acceptance groups once on the exact committed tree; a group
+may satisfy several tasks. Preserve every special assertion, comparison, required no-cache build,
+artifact/attestation check and visual review. Rerun affected groups after relevant source, test,
+fixture, dependency, configuration or runtime changes, conflict resolution, failure or concern.
+Never reuse pre-integration evidence for a changed tree.
+
+Checkpoint/status-only commits need document, whitespace and term checks, not repeated application
+acceptance, when behavioral inputs are unchanged. Record the tested implementation commit and exact
+documentation delta; generated instructions/playbooks and executable examples are behavioral inputs.
+Keep compact task checkpoints or one shared evidence table with commits, commands/counts, identities,
+every failure, cleanup and remaining risks. No new reporting or result-cache framework is required.
+
+Parallelize disjoint work and lightweight checks where resources permit; name one shared-wiring
+owner and serialize fixed-scratch/native users. Keep competing heavy work out of qualification.
+Reuse verified development caches while retaining all required clean builds. Current-host final
+qualification, scientific/security invariants, native numerical execution, safe cleanup, both-client
+live UI evidence and human gates are unchanged. E/F remain deferred, not removed. Continue in-flight
+2.6 without restarting successful builds/checks; apply this cadence at the next safe boundary.
 
 All `CHECK` references in the original plans now mean `./hyprn-mvp dev check`.
 No direct invocation of `deployment/checks.py`, second deployment harness, alternate agent
@@ -257,7 +287,7 @@ New group registrations fail on a missing target/environment or zero selected te
 
 ## Common verification and retained human gates
 
-Every implementation slice runs the original TG-1 dependency and TG-2 attested-source checks
+Every implementation slice retains the original TG-1 dependency and TG-2 attested-source checks
 against its own commits (with only the documented A-window exception), then the orchestrator
 runs `./hyprn-mvp dev check naming`, `hygiene`, `guard`, `units-guards`, `style-ratchet`,
 `locality-contracts` and `contracts` as separate invocations, plus its affected application
