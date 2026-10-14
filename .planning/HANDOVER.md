@@ -36,6 +36,13 @@ foundation and seven scenarios are available for later agent integration. They a
 not loaded by the runtime. The rehearsal follow-up records live UI evidence and
 the integration checkpoint; keep broader feature work deferred.
 
+The next requested presentation cleanup consolidates Overview into About this study,
+aligns evidence rows, removes the arbitrary first-four run preview and redundant
+availability column, and distinguishes model/data export from computational-record
+export. See the [presentation checkpoint](phases/02-local-edition/checkpoints/study-overview-run-cleanup.md).
+The existing demo dispatcher omits export processing: one retained preview is queued,
+identified in STATE. Preserve it and reconcile it before any future retry.
+
 ## Earlier delivery priority — superseded for the current demo (2026-10-14)
 
 Read [DELIVERY-PLAN.md](DELIVERY-PLAN.md) before dispatching pending Phase 2/3

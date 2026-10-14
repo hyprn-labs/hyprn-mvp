@@ -104,3 +104,29 @@ foundation is not installed or loaded by the workflow agent; future integration
 must reconcile it with the single packaged playbook and evaluate actual agent
 responses. No API or runtime instruction source changed. See the
 [foundation checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/scientific-engineering-foundation.md).
+
+## Overview, evidence and run presentation follow-up
+
+The subsequent requested cleanup keeps one About this study card with the saved
+engineering question and adjacent details/approach actions. Evidence rows in limits
+match assumptions; source content and visible authorship precede technical metadata.
+Run Results shows all outputs once, with unavailable reasons beside the value.
+The old preview selected the first four API outputs without scientific ranking.
+The renamed Export model and data action distinguishes model/diagram/CSV/source
+downloads from the computational archive. The
+[presentation checkpoint](phases/02-local-edition/checkpoints/study-overview-run-cleanup.md)
+records integrated checks, corrections and scope cleanup.
+
+The live UI from `ed27ba8` retains the full question, displays all eleven outputs
+for the revised hydrogen run and downloads model version
+`420b8ed0-dbc6-465b-968b-3e1ca7dc0df6`. Runtime bytes and all 49 attested source paths
+remain unchanged. No scientific record, numerical input or result changed. Screenshots,
+DOM, model download and output-table evidence are in the retained scope's
+`evidence/overview-run-cleanup`, indexed by `file-identities.json`.
+
+Computational-record review request `6488355f-f5ca-4005-8aea-7ecb3b4aa0a9` remains
+queued: the demo dispatcher was started without the existing export-processing mode.
+Its command is `3923d30a-a01b-48e9-92de-fa116c58cfdf`. No duplicate was submitted and
+no archive download is claimed. Export-loop integration is deferred separately from
+this UI cleanup. Automated browser verification does not establish human acceptance
+or release qualification.

@@ -5,7 +5,7 @@
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).
 
 **Core value:** An engineer can reach a defensible feasibility answer whose every number is reproducible and traceable, without shell or database steps, on their own machine.
-**Current focus:** The fuel demo now has a revised Study details brief and a project-owned scientific guidance foundation. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The guidance is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
+**Current focus:** The fuel demo has a consolidated Overview, consistent evidence rows and a complete run-output table. Preserve the running demo and authoring records; see [rehearsal evidence and limits](DEMO-REHEARSAL.md). The scientific guidance foundation is not yet integrated into the agent. Full mission/cost closure and release qualification remain separate.
 
 ## Current Position
 
@@ -49,6 +49,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 | E / Phase 5 | Real served-installation browser evidence, remaining OS/clean-room proofs, final gate and genuine human acceptance. `ui-fidelity` still needs reference images. |
 | Product owner | Decide whether to retain or remove old unpinned durable-fixture folders; preserve them until then. |
 | Later evidence-label fix | Run-scoped evidence expects a synthetic root instance absent from the production model. Preserve frozen identities; the demonstrated conclusion uses study scope with exact run references. |
+| Demo export integration | The retained demo dispatcher runs without export processing. Computational-record preview request `6488355f-f5ca-4005-8aea-7ecb3b4aa0a9` is queued; reconcile this request when enabling the existing export loop. Do not submit a duplicate. Model export is verified. |
 | Later performance work | `get_study_overview` reads whole owner lists; large-study scaling remains unqualified. |
 | Workflow-agent integration | Evaluate the scientific foundation against independent scenario responses and real client behavior, then reconcile it into the single packaged playbook before activation. No current agent behavior is changed by the foundation files. |
 
@@ -65,4 +66,4 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 Work branch: `feat/local-edition-continued`, no upstream. No push or pull request is authorized.
 
-Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The Study details follow-up is delivered, and the scientific guidance foundation is ready for later agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.
+Next: preserve the running demonstrated study and its native records; do not clean its retained scope. The Overview/evidence/run presentation follow-up is delivered; its checkpoint records focused acceptance and the queued computational export limitation. The scientific guidance foundation awaits agent integration and behavioral evaluation. Follow the product owner’s next scope decision; full scientific mission/cost closure, broader product work and release qualification remain explicit. No publication or production writer-token enablement is requested.

@@ -5,8 +5,9 @@ local demo delivery plan. Implementation commit: `8453b83`, based on `cdc6e08`.
 
 ## Delivered behavior
 
-Overview has one About this study card. Its Study question comes from the latest saved
-approach through the existing fenced read, never from the draft or study-list description.
+Overview has one About this study card. Its Study question reads the most recent saved
+modeling approach through existing access checks. Draft questions and study descriptions
+do not replace it.
 Loading, unavailable, retry, absent-version and denied states retain their distinctions.
 The card omits repeated approach scope. See more details and View modeling approach share
 a wrapping action row with token spacing. The separate Edit study dialog preserves the
@@ -22,7 +23,7 @@ Run Results contains one complete output table, with Output, Value and Units col
 arbitrary first-four preview is removed. Missing outputs retain not computed and their
 reason in the Value cell. Full precision remains available. Export model and data names the
 existing portable model/diagram/quantities/source capability; Export computational record
-still identifies the complete computational archive. Run export help points to that run's
+still identifies the run archive with dependencies and scientific context. Run export help points to that run's
 Model tab, avoiding a change to the current model.
 
 No API, numerical model, runtime or stored scientific content changed. Formatting expansion
@@ -64,13 +65,67 @@ because formatting changed literal source substrings. Restored untouched RunPane
 and adjusted the Overview guards to the same formatted calls. The final six-command run
 passed. No API behavior or security guard was relaxed.
 
-## Remaining integration
+## Integrated acceptance and live demo
 
-Root owns the committed-tree union: style/static, ui-reading, ui-navigation, foundry-nav,
-approach-ui-reading, approach-ui-assumptions, agent-ui, ae-ui-model, ae-ui-evidence and
-units-ui-history. The executor stopped after the agreed focused navigation check to avoid
-duplicating the complete union. Root also owns rebuilding the live UI and checking the real
-saved question, evidence, all eleven outputs, both themes and narrow/zoom behavior.
-Reference-image comparison is unavailable; automated browser checks and screenshots are
-not human acceptance. No phase qualification, release, deployment or product-owner
-acceptance is claimed here.
+Integrated UI commit `36d9967`; corrections `9026f91` (guard wrapping), `7ed69fa`
+(zoom selectors), `05bb96b` (visible-copy assertions), and `ed27ba8` (visible evidence
+attribution). The final application UI is `ed27ba8`. Later changes only record evidence
+and clarify the matching design rule; no API or runtime behavior changes.
+
+Each group used `./hyprn-mvp dev check <group>`:
+
+| Group | Passed | Failed / skipped |
+|---|---:|---:|
+| naming | 9 | 0 / 0 |
+| hygiene | 5 | 0 / 0 |
+| guard | 116 | 0 / 0 |
+| units-guards | 138 | 0 / 0 |
+| style-ratchet | 33 | 0 / 0 |
+| combined-static | 6 commands | 0 / 0 |
+| ui-navigation | 6 | 0 / 0 |
+| foundry-nav | 8 | 0 / 0 |
+| ui-reading | 15 | 0 / 0 |
+| approach-ui-reading | 16 | 0 / 0 |
+| approach-ui-assumptions | 18 | 0 / 0 |
+| agent-ui | 25 | 0 / 0 |
+| ae-ui-model | 6 | 0 / 0 |
+| ae-ui-evidence | 12 | 0 / 0 |
+| units-ui-history | 14 | 0 / 0 |
+
+The final evidence/attribution change reran style, static, agent-ui, ui-reading, both
+approach groups and the three evidence/history groups on `ed27ba8`. Earlier navigation,
+run-output and guard passes remain applicable: the later delta restores only the evidence
+author label and corrects test selectors. All 120 browser tests in the union pass.
+Design tooling and smoke evidence above remain applicable. Final term scan: 0;
+`git diff --check`: pass.
+
+Integrated failures were corrected, without changing baselines or weakening assertions:
+style 32/33 identified one guard line; foundry-nav 7/8 found old metadata selectors;
+ui-reading 13/15 included the closed editor's text instead of visible copy; agent-ui 23/25
+found the removed author label. Restoring the label preserves the distinction between the
+note's author and its cited source. One terminology scan finding in this checkpoint was
+rewritten; the final scan has zero findings.
+
+External archives are `hyprn-orchestration-verification-` plus `swnfk0hv`, `a6ljso68`,
+`zmdp30wr`, `_ws6arma` and `pyph828h`. This checkpoint pins commits; reports retain exact
+commands, timings, artifact identities, failures and releases. All 26 integrated scopes were archived and
+released, zero remaining. The demo scope remains retained.
+
+The production UI was rebuilt into the existing owned static directory without restarting
+services. Runtime bytes and all 49 attested source paths remain unchanged. Actual browser
+inspection verifies one About card, the full saved question, adjacent footer actions with
+a 12px token gap, matching assumption/limit evidence rows, the exact source version, and
+all eleven hydrogen-run outputs in three columns. Model download retains exact version
+`420b8ed0-dbc6-465b-968b-3e1ca7dc0df6`. Light-theme live captures and dark/200%-zoom
+fixture checks are retained; reference-image comparison remains unavailable.
+
+The computational-record preview is queued because the retained demo dispatcher omits
+export processing. Request `6488355f-f5ca-4005-8aea-7ecb3b4aa0a9`, original command
+`3923d30a-a01b-48e9-92de-fa116c58cfdf`, was not resubmitted. Archive completion/download
+is unverified. Preserve and reconcile that request when the export loop is enabled.
+No scientific authoring records or numerical results changed.
+
+Live evidence is retained under the demo scope's `evidence/overview-run-cleanup` and
+indexed by `file-identities.json`. Automated verification is not human acceptance.
+Full qualification, the unregistered legacy export-test tag and broader served-suite
+repair remain outside this presentation task; no phase or release completion is claimed.
