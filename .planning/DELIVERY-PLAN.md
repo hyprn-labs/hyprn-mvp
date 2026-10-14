@@ -51,6 +51,37 @@ live UI evidence and human gates are unchanged. E/F remain deferred, not removed
 2.6 without restarting successful builds/checks; apply this cadence at the next safe boundary.
 
 All `CHECK` references in the original plans now mean `./hyprn-mvp dev check`.
+
+### Parallel scheduling amendment approved 2026-10-14
+
+Use two implementation lanes by default after verified prerequisites; a third is only for
+independent lightweight work with spare resources. Preserve the exclusive ordered
+2.8c → 3.16-paths → 2.8 attestation window and its tested source tree. Do not interrupt
+valid in-flight baseline work or mix unrelated implementation into that tree.
+
+The following administrative edges supersede the wave table's serialization:
+
+| Earlier ordering | Approved replacement |
+|---|---|
+| Wave 4: 2.10-host → 3.12 because runner/guard registration overlaps | Their disjoint implementation/test files may overlap once their real prerequisites pass; one integrator owns runner/guard registration and verifies it before dependants proceed. |
+| Waves 5–6: all local lifecycle work before MCP/evaluation implementation | Local-installation and MCP implementation may overlap where shared registration is the only remaining constraint. Keep genuine interface/store/fixture dependencies; explicitly serialize 2.11's store-creation test migration and any intersecting files. |
+| Wave 10: 3.23 waits for the whole 3.22 ∥ 3.24-evidence wave | Start 3.23 once 3.22's actual activity API/contracts are integrated and verified and all other original prerequisites hold. 3.27-evidence still waits for both verified UI and evidence-write results. |
+
+Use the existing approved overlaps (2.9/3.11, 3.20/3.21, 3.22/3.24-evidence,
+3.24-remaining/3.25/3.26, 3.32/3.33) from verified dependencies without unnecessary
+whole-wave barriers. Keep one editor for each shared contract/type generator, API composition,
+store/schema, UI shell and CLI documentation surface. The orchestrator owns current state
+and integration of `deployment/checks.py` and `deployment/tests/test_repository_guard.py`
+when parallel workers need them; workers provide exact registration changes without editing
+those shared files concurrently. If genuine dependencies make overlap unhelpful, keep the
+existing order; do not introduce compatibility layers for scheduling.
+
+Budget CPU, Docker, browser, database and port use as well as files. Native/fixed-scratch
+work stays serialized; qualification freezes its tree and excludes competing heavy work.
+Focused executor checks, integrated acceptance, exact artifact comparisons, clean builds,
+real public-boundary/live-client evidence, cleanup and human capability gates remain intact.
+No new planning cycle, orchestration framework, publication or capability approval is implied.
+
 No direct invocation of `deployment/checks.py`, second deployment harness, alternate agent
 stack, new dependency, native payload exposed to a client or direct scientific-store access.
 The existing operator mint command remains the credential administration seam; scientific

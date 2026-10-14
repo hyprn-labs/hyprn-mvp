@@ -31,6 +31,12 @@ Documentation-only status/checkpoint changes do not repeat application checks wh
 inputs are unchanged. Relevant changes or failures require affected reruns. All final gates,
 required no-cache builds, exact artifact checks and both-client live evidence remain mandatory.
 
+The approved parallel scheduling amendment in DELIVERY-PLAN.md uses two implementation lanes
+after the exclusive schema/study-path/re-attestation window. It removes runner-only ordering
+between local installation and MCP work with one shared-wiring integrator, and allows 3.23
+after verified 3.22 while 3.24-evidence finishes. Genuine interface/store dependencies,
+2.11's overlapping test migration, native-resource serialization and human gates remain.
+
 ## Where the work is
 
 - Work branch: `feat/local-edition-continued`, branched from `main`, with no upstream. The next pull request to `main` comes from it. Push or open a pull request only when the product owner asks.
