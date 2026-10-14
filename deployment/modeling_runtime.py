@@ -1287,7 +1287,7 @@ def main():
 if __name__ == '__main__':
     # check is read-only and import-free; setup and stop require the selected release.
     action = sys.argv[1] if len(sys.argv) > 1 else ''
-    import release_binding
+    import release as release_binding
 
     release_binding.entrypoint(
         __file__, read_only=action == 'check', project_imports=action != 'check'

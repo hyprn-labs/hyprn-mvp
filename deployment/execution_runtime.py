@@ -317,7 +317,7 @@ def main():
 
 if __name__ == '__main__':
     # Every operation imports execution source; check is the only read-only one.
-    import release_binding
+    import release as release_binding
 
     release_binding.entrypoint(__file__, read_only=sys.argv[1:] == ['check'], project_imports=True)
     main()

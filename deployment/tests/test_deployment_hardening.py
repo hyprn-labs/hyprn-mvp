@@ -3,12 +3,15 @@
 Every root is a disposable directory under tmp_path; docker, HTTP, signals and the live runtime
 are faked or refused. No test needs Git history.
 """
+
 # Live-runtime fence (deployment/tests/live_fence.py): refuses live roots, live ports, docker, live entry points and real signals.
 import sys as _fence_sys
 from pathlib import Path as _FencePath
+
 if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
     _fence_sys.path.append(str(_FencePath(__file__).resolve().parent))
 import live_fence  # noqa: E402
+
 live_runtime_fence = live_fence.pytest_fixture('unit')
 import ast
 import base64
@@ -29,7 +32,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'deployment'))
-import release_binding as release  # noqa: E402
+import release as release  # noqa: E402
 import application_runtime as app  # noqa: E402
 import dispatch_runtime as dispatch  # noqa: E402
 import modeling_runtime as modeling  # noqa: E402
@@ -44,8 +47,10 @@ PLAIN = 'closed: task checkpoints'
 def test_source_wheel_tag_normalization_preserves_only_the_reviewed_reference_tag(tmp_path, extra):
     wheel = tmp_path / 'xdsmjs-2.1.0-py2.py3-none-any.whl'
     prefix = 'xdsmjs-2.1.0.dist-info/'
-    metadata = (b'Wheel-Version: 1.0\nGenerator: flit 4.1.0\nRoot-Is-Purelib: true\n'
-                b'Tag: py2-none-any\nTag: py3-none-any\n')
+    metadata = (
+        b'Wheel-Version: 1.0\nGenerator: flit 4.1.0\nRoot-Is-Purelib: true\n'
+        b'Tag: py2-none-any\nTag: py3-none-any\n'
+    )
     with zipfile.ZipFile(wheel, 'w') as archive:
         archive.writestr(prefix + 'WHEEL', metadata + extra)
         archive.writestr(prefix + 'METADATA', b'Name: xdsmjs\nVersion: 2.1.0\n')
@@ -87,9 +92,10 @@ def test_engine_source_archive_refuses_unreviewed_paths(tmp_path, member):
 
 # ---- Synthetic retained releases (no Git, no selection pipeline) -------------------------
 
+
 def make_release(releases_root, files=None, *, basis=PLAIN):
     """A minimal release that release.verify accepts: canonical manifest, exact tree."""
-    files = files or {'deployment/release_binding.py': b'# release\n', 'ui/index.html': b'<html>\n'}
+    files = files or {'deployment/release.py': b'# release\n', 'ui/index.html': b'<html>\n'}
     releases_root = Path(releases_root)
     staging = releases_root / '.staging-test'
     for relative, raw in files.items():
@@ -99,12 +105,21 @@ def make_release(releases_root, files=None, *, basis=PLAIN):
     tree = release.scan(staging / 'source')
     digest = release.tree_digest(tree)
     release_id = release.RELEASE_PREFIX + digest[:16]
-    manifest = dict(schema=release.MANIFEST_SCHEMA, release_id=release_id,
-                    review_state=dict(state='reviewed', provisional_tasks=[], note='synthetic'),
-                    tree=dict(digest=digest, file_count=len(tree), bytes=sum(f['size'] for f in tree), files=tree),
-                    selection=dict(polish_commits=[dict(commit='a' * 40, task='t', review='closed', basis=basis, paths=[])],
-                                   binding_commits=[dict(commit='b' * 40, task='t', basis=PLAIN, paths=[])]),
-                    build=dict(ui=None, reason='synthetic'))
+    manifest = dict(
+        schema=release.MANIFEST_SCHEMA,
+        release_id=release_id,
+        review_state=dict(state='reviewed', provisional_tasks=[], note='synthetic'),
+        tree=dict(
+            digest=digest, file_count=len(tree), bytes=sum(f['size'] for f in tree), files=tree
+        ),
+        selection=dict(
+            polish_commits=[
+                dict(commit='a' * 40, task='t', review='closed', basis=basis, paths=[])
+            ],
+            binding_commits=[dict(commit='b' * 40, task='t', basis=PLAIN, paths=[])],
+        ),
+        build=dict(ui=None, reason='synthetic'),
+    )
     raw = release.canonical(manifest)
     (staging / 'manifest.json').write_bytes(raw)
     (staging / 'manifest.sha256').write_text(release.sha256(raw) + '\n')
@@ -114,15 +129,24 @@ def make_release(releases_root, files=None, *, basis=PLAIN):
 
 
 def binding_for(path, manifest, sha):
-    return release.Binding(bound=True, script=str(path / 'source/deployment/dispatch_runtime.py'), source=path / 'source',
-                           manifest_path=path / 'manifest.json', manifest_sha256=sha, release_id=manifest['release_id'],
-                           roots=tuple(path / 'source' / r for r in ('deployment', 'application/src', 'integration/src')),
-                           inventory={f['path']: f['sha256'] for f in manifest['tree']['files']})
+    return release.Binding(
+        bound=True,
+        script=str(path / 'source/deployment/dispatch_runtime.py'),
+        source=path / 'source',
+        manifest_path=path / 'manifest.json',
+        manifest_sha256=sha,
+        release_id=manifest['release_id'],
+        roots=tuple(
+            path / 'source' / r for r in ('deployment', 'application/src', 'integration/src')
+        ),
+        inventory={f['path']: f['sha256'] for f in manifest['tree']['files']},
+    )
 
 
 def refuse_effects(monkeypatch):
     def refused(*args, **kwargs):
         raise AssertionError('runtime effect attempted: ' + repr(args)[:200])
+
     monkeypatch.setattr(subprocess, 'Popen', refused)
     monkeypatch.setattr(subprocess, 'run', refused)
     monkeypatch.setattr(app, 'run', refused)
@@ -132,13 +156,24 @@ def refuse_effects(monkeypatch):
 
 def executor_json(root, *, running_identity=None, raw=None):
     """executor.json naming an unused pid; running_identity makes process_identity report it alive."""
-    (root / 'executor.json').write_text(raw if raw is not None else json.dumps(dict(
-        pid=999999, identity=dict(command='/python -B /x/deployment/dispatch_runtime.py --serve', started='t'),
-        release=dict(release_id='r'))))
+    (root / 'executor.json').write_text(
+        raw
+        if raw is not None
+        else json.dumps(
+            dict(
+                pid=999999,
+                identity=dict(
+                    command='/python -B /x/deployment/dispatch_runtime.py --serve', started='t'
+                ),
+                release=dict(release_id='r'),
+            )
+        )
+    )
 
 
 class HeldLock:
     """Another open file description holding executor.lock exclusively (as a running executor does)."""
+
     def __init__(self, path):
         self.fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -151,18 +186,25 @@ class HeldLock:
 
 # ---- Executor quiescence: shared fail-closed gate ----------------------------------------
 
+
 def test_executor_quiescence_requires_parsable_state_and_a_free_lock(tmp_path, monkeypatch):
     root = tmp_path / 'execution'
     root.mkdir()
     monkeypatch.setattr(dispatch, 'ROOT', root)
-    assert dispatch.executor_quiescence(root) == dict(running=False, executor_json='absent', lock='absent')
+    assert dispatch.executor_quiescence(root) == dict(
+        running=False, executor_json='absent', lock='absent'
+    )
     executor_json(root)
     (root / 'executor.lock').write_bytes(b'')
-    assert dispatch.executor_quiescence(root) == dict(running=False, executor_json='valid', lock='free')
+    assert dispatch.executor_quiescence(root) == dict(
+        running=False, executor_json='valid', lock='free'
+    )
     for raw in ('{not json', '[]', json.dumps(dict(pid='1', identity={})), json.dumps(dict(pid=1))):
         (root / 'executor.json').write_text(raw)
         with pytest.raises(ValueError, match='executor.json'):
-            dispatch.executor_quiescence(root)  # fail closed: process_status() treats these as stopped
+            dispatch.executor_quiescence(
+                root
+            )  # fail closed: process_status() treats these as stopped
     executor_json(root)
     held = HeldLock(root / 'executor.lock')
     try:
@@ -170,7 +212,9 @@ def test_executor_quiescence_requires_parsable_state_and_a_free_lock(tmp_path, m
             dispatch.executor_quiescence(root)
     finally:
         held.release()
-    identity = dict(command='/python -B ' + str(Path(dispatch.__file__).resolve()) + ' --serve', started='t')
+    identity = dict(
+        command='/python -B ' + str(Path(dispatch.__file__).resolve()) + ' --serve', started='t'
+    )
     executor_json(root, raw=json.dumps(dict(pid=999999, identity=identity)))
     monkeypatch.setattr(dispatch, 'process_identity', lambda pid: identity)
     with pytest.raises(ValueError, match='Executor is running'):
@@ -184,12 +228,24 @@ def test_executor_quiescence_requires_parsable_state_and_a_free_lock(tmp_path, m
 
 # ---- dispatch_runtime main() fails closed unbound ----------------------------------------
 
-@pytest.mark.parametrize('argv', [['--serve'], ['--once'], ['--run-id', 'r'], ['--stop'], ['--start'],
-                                  ['--exports-only', '--once']])
+
+@pytest.mark.parametrize(
+    'argv',
+    [
+        ['--serve'],
+        ['--once'],
+        ['--run-id', 'r'],
+        ['--stop'],
+        ['--start'],
+        ['--exports-only', '--once'],
+    ],
+)
 def test_dispatch_main_refuses_unbound_operations_before_any_runtime_effect(argv, monkeypatch):
     refuse_effects(monkeypatch)
     monkeypatch.setattr(release, 'ACTIVE', None)
-    monkeypatch.setattr(dispatch.application_runtime, 'check', lambda: pytest.fail('runtime touched while unbound'))
+    monkeypatch.setattr(
+        dispatch.application_runtime, 'check', lambda: pytest.fail('runtime touched while unbound')
+    )
     monkeypatch.setattr(dispatch, 'manage', lambda op: pytest.fail('manager reached while unbound'))
     monkeypatch.setattr(sys, 'argv', ['dispatch_runtime', *argv])
     with pytest.raises(RuntimeError, match='selected release binding'):
@@ -210,18 +266,26 @@ def test_dispatch_status_stays_available_unbound(monkeypatch, tmp_path, capsys):
 
 # ---- native_environment: populated roots, bind lock probe, symlink-safe write ------------
 
+
 def native_binding(tmp_path):
     path, manifest, sha = make_release(tmp_path / 'releases')
     return binding_for(path, manifest, sha)
 
 
 def legacy_wrapper(root):
-    return ('#!/bin/sh\nexport AIIDA_PATH=' + native.shlex.quote(str(root / 'aiida')) + '\nexec '
-            + native.shlex.quote(str(native.PYTHON)) + ' -B -m hyprn_mvp_integration.launcher "$@"\n')
+    return (
+        '#!/bin/sh\nexport AIIDA_PATH='
+        + native.shlex.quote(str(root / 'aiida'))
+        + '\nexec '
+        + native.shlex.quote(str(native.PYTHON))
+        + ' -B -m hyprn_mvp_integration.launcher "$@"\n'
+    )
 
 
 @pytest.mark.parametrize('operation', ['prepare', 'extend'])
-@pytest.mark.parametrize('marker', ['aiida', 'aiida-store', 'profile-identity.json', 'executor.json', 'executor.lock'])
+@pytest.mark.parametrize(
+    'marker', ['aiida', 'aiida-store', 'profile-identity.json', 'executor.json', 'executor.lock']
+)
 def test_prepare_and_extend_refuse_a_populated_execution_root(
     tmp_path, monkeypatch, operation, marker
 ):
@@ -237,8 +301,12 @@ def test_prepare_and_extend_refuse_a_populated_execution_root(
     # The refusal precedes every read: the snapshot and tool cache below do not even exist.
     with pytest.raises(ValueError, match='populated'):
         if operation == 'prepare':
-            native.prepare(root, tmp_path / 'missing-release', tools=tmp_path / 'missing-tools',
-                           cache=tmp_path / 'missing-cache')
+            native.prepare(
+                root,
+                tmp_path / 'missing-release',
+                tools=tmp_path / 'missing-tools',
+                cache=tmp_path / 'missing-cache',
+            )
         else:
             native.extend(root, None)
     assert {p: p.read_bytes() for p in root.rglob('*') if p.is_file()} == before
@@ -252,16 +320,25 @@ def test_extend_and_reuse_write_the_wrapper_the_launch_gate_accepts():
     functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
     expected = (('extend', ['root', 'binding']), ('reuse_reviewed', ['ROOT', 'BINDING']))
     for name, arguments in expected:
-        calls = [n for n in ast.walk(functions[name]) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+        calls = [
+            n
+            for n in ast.walk(functions[name])
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        ]
         writers = [c for c in calls if c.func.id == 'write_launch_worker']
         assert len(writers) == 1 and [ast.unparse(a) for a in writers[0].args] == arguments, name
         assert not [c for c in calls if c.func.id == 'launch_worker_text'], name
-    calls = [n for n in ast.walk(functions['prepare'])
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    calls = [
+        n
+        for n in ast.walk(functions['prepare'])
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    ]
     assert not [c for c in calls if c.func.id in ('write_launch_worker', 'launch_worker_text')]
 
 
-def test_write_launch_worker_is_exclusive_and_never_follows_a_planted_symlink(tmp_path, monkeypatch):
+def test_write_launch_worker_is_exclusive_and_never_follows_a_planted_symlink(
+    tmp_path, monkeypatch
+):
     binding = native_binding(tmp_path)
     root = tmp_path / 'execution'
     (root / 'evidence').mkdir(parents=True)
@@ -279,10 +356,14 @@ def test_write_launch_worker_is_exclusive_and_never_follows_a_planted_symlink(tm
     assert (root / 'launch-worker').read_bytes() == text
     assert stat.S_IMODE((root / 'launch-worker').stat().st_mode) == 0o700
     assert native.require_launch_worker(root, binding)['sha256'] == release.sha256(text)
-    assert not [p for p in root.iterdir() if p.name.startswith('.launch-worker-') and not p.is_symlink()]
+    assert not [
+        p for p in root.iterdir() if p.name.startswith('.launch-worker-') and not p.is_symlink()
+    ]
 
 
-def test_bind_step_refuses_a_held_executor_lock_and_unparsable_executor_state(tmp_path, monkeypatch):
+def test_bind_step_refuses_a_held_executor_lock_and_unparsable_executor_state(
+    tmp_path, monkeypatch
+):
     binding = native_binding(tmp_path)
     root = tmp_path / 'execution'
     (root / 'evidence').mkdir(parents=True)
@@ -294,7 +375,9 @@ def test_bind_step_refuses_a_held_executor_lock_and_unparsable_executor_state(tm
     held = HeldLock(root / 'executor.lock')
     try:
         with pytest.raises(ValueError, match='executor.lock is held'):
-            native.bind_step(root, binding)  # executor.json absent: process_status alone said "stopped"
+            native.bind_step(
+                root, binding
+            )  # executor.json absent: process_status alone said "stopped"
     finally:
         held.release()
     executor_json(root, raw='{truncated')
@@ -310,13 +393,20 @@ def test_launcher_evidence_must_carry_the_manifest_launcher_sha256(tmp_path):
     """A launcher-binding record naming this release counts only if its launcher module bytes
     equal the release manifest entry."""
     launcher = 'integration/src/hyprn_mvp_integration/launcher.py'
-    path, manifest, sha = make_release(tmp_path / 'releases', {launcher: b'# launcher\n', 'deployment/x.py': b'#\n'})
+    path, manifest, sha = make_release(
+        tmp_path / 'releases', {launcher: b'# launcher\n', 'deployment/x.py': b'#\n'}
+    )
     binding = binding_for(path, manifest, sha)
     root = tmp_path / 'execution'
     directory = root / 'evidence/release-binding'
     module = dict(file=str(binding.source / launcher), relative=launcher, sha256='0' * 64)
-    record = dict(release_id=binding.release_id, manifest_sha256=binding.manifest_sha256, source_root=str(binding.source),
-                  pid=7, modules={'hyprn_mvp_integration.launcher': module})
+    record = dict(
+        release_id=binding.release_id,
+        manifest_sha256=binding.manifest_sha256,
+        source_root=str(binding.source),
+        pid=7,
+        modules={'hyprn_mvp_integration.launcher': module},
+    )
     release.write_evidence(directory, record, 'launcher-binding')
     with pytest.raises(ValueError, match='sha256'):
         native.launcher_evidence(root, binding)
@@ -329,12 +419,15 @@ def test_launcher_evidence_must_carry_the_manifest_launcher_sha256(tmp_path):
 
 # ---- application_runtime: retained UI builds and atomic identity writes -----------------
 
+
 def with_ui_build(path, manifest, **extra):
     """Add a retained UI build (and optional manifest fields); rewrite the digest record."""
     ui = path / 'build/ui-dist'
     (ui / 'assets').mkdir(parents=True)
     (ui / 'index.html').write_text('<!doctype html>\n')
-    manifest['build'] = dict(ui=dict(files=release.scan(ui), digest=release.tree_digest(release.scan(ui))))
+    manifest['build'] = dict(
+        ui=dict(files=release.scan(ui), digest=release.tree_digest(release.scan(ui)))
+    )
     manifest.update(extra)
     raw = release.canonical(manifest)
     (path / 'manifest.json').write_bytes(raw)
@@ -418,10 +511,14 @@ def fresh_application(tmp_path, monkeypatch):
     (root / 'wheels').mkdir(parents=True)
     (root / 'wheels/reviewed.whl').write_bytes(b'wheel')
     repo = private_tree(tmp_path / 'repo', APPLICATION_SOURCES)
-    (repo / 'deployment/pins.json').write_text(json.dumps({
-        'base_image': 'python@sha256:' + '1' * 64,
-        'node_base_image': 'node@sha256:' + '2' * 64,
-    }))
+    (repo / 'deployment/pins.json').write_text(
+        json.dumps(
+            {
+                'base_image': 'python@sha256:' + '1' * 64,
+                'node_base_image': 'node@sha256:' + '2' * 64,
+            }
+        )
+    )
     ui = private_tree(tmp_path / 'ui', ('index.html', 'assets/app.js'))
     names = dict(
         NAME=INSTALLATION + '-application',
@@ -515,10 +612,14 @@ def test_image_tool_download_refuses_unreviewed_bytes(tmp_path, monkeypatch, dif
         len(raw) + 1 if difference == 'size' else '0' * 64
     )
     lock = tmp_path / 'tools.json'
-    lock.write_text(json.dumps(dict(
-        uv_download_base='https://github.com/astral-sh/uv/releases/download/reviewed/',
-        uv_archives={'linux-aarch64': artifact},
-    )))
+    lock.write_text(
+        json.dumps(
+            dict(
+                uv_download_base='https://github.com/astral-sh/uv/releases/download/reviewed/',
+                uv_archives={'linux-aarch64': artifact},
+            )
+        )
+    )
     monkeypatch.setattr(installer.platform, 'machine', lambda: 'aarch64')
     monkeypatch.setattr(installer.urllib.request, 'urlopen', lambda url: io.BytesIO(raw))
     monkeypatch.setattr(installer.subprocess, 'run', lambda *a, **kw: pytest.fail('executed'))
@@ -534,9 +635,16 @@ def test_image_ui_refuses_path_escape_without_modifying_retained_assets(tmp_path
     monkeypatch.setattr(app, 'UI_DIST', ui)
     monkeypatch.setattr(app, 'bound_release', lambda: None)
     encoded = base64.b64encode(b'image').decode()
-    monkeypatch.setattr(app, 'run', lambda *a: json.dumps({
-        'index.html': encoded, '../outside': encoded,
-    }))
+    monkeypatch.setattr(
+        app,
+        'run',
+        lambda *a: json.dumps(
+            {
+                'index.html': encoded,
+                '../outside': encoded,
+            }
+        ),
+    )
     with pytest.raises(ValueError, match='Unsafe application UI inventory'):
         app.retain_image_ui('sha256:scoped')
     assert (ui / 'index.html').read_bytes() == b'retained'
@@ -549,10 +657,15 @@ def test_changed_ui_input_invalidates_the_running_application(tmp_path, monkeypa
     inventory = app.build_inputs()
     identity = dict(source_hashes=app.hashes(), image='sha256:built', build={'inputs': inventory})
     (env.root / 'identity.json').write_text(json.dumps(identity))
-    monkeypatch.setattr(app, 'inspect', lambda: {
-        'Name': '/' + app.NAME, 'Image': 'sha256:built',
-        'Config': {'Labels': {modeling.LABEL: app.OWNER}},
-    })
+    monkeypatch.setattr(
+        app,
+        'inspect',
+        lambda: {
+            'Name': '/' + app.NAME,
+            'Image': 'sha256:built',
+            'Config': {'Labels': {modeling.LABEL: app.OWNER}},
+        },
+    )
     # Keep the legacy served-byte inventory unchanged: the source inventory must catch this.
     monkeypatch.setattr(app, 'hashes', lambda: identity['source_hashes'])
     (app.REPO / 'ui/package-lock.json').write_bytes(b'changed dependency lock')
@@ -579,13 +692,19 @@ def test_source_changes_during_build_refuse_image_admission(tmp_path, monkeypatc
 
 # ---- modeling_runtime: every compose call runs in a clean environment ---------------------
 
+
 def test_compose_runs_with_a_clean_environment(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setenv('COMPOSE_PROJECT_NAME', 'hijack')
     monkeypatch.setenv('COMPOSE_FILE', '/tmp/other.yaml')
     monkeypatch.setenv('DOCKER_HOST', 'tcp://elsewhere:2375')
-    monkeypatch.setattr(subprocess, 'run', lambda args, **kw: calls.append((args, kw['env'])) or
-                        subprocess.CompletedProcess(args, 0, '', ''))
+    monkeypatch.setattr(
+        subprocess,
+        'run',
+        lambda args, **kw: (
+            calls.append((args, kw['env'])) or subprocess.CompletedProcess(args, 0, '', '')
+        ),
+    )
     (tmp_path / 'evidence').mkdir()
     assert modeling.compose_up(tmp_path, 'sha256:img', tmp_path / 'evidence/compose.log') == 0
     args, env = calls[0]
@@ -607,17 +726,21 @@ def test_compose_runs_with_a_clean_environment(tmp_path, monkeypatch):
     source = Path(modeling.__file__).read_text()
     tree = ast.parse(source)
     commands = [
-        node for node in ast.walk(tree)
+        node
+        for node in ast.walk(tree)
         if isinstance(node, (ast.List, ast.Tuple))
         and [getattr(item, 'value', None) for item in node.elts[:2]] == ['docker', 'compose']
     ]
     environment_calls = [
-        node for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
         and node.func.id == 'compose_environment'
     ]
     environment_definitions = [
-        node for node in ast.walk(tree)
+        node
+        for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef) and node.name == 'compose_environment'
     ]
     assert len(commands) == len(environment_calls) == len(environment_definitions) == 1
@@ -626,8 +749,10 @@ def test_compose_runs_with_a_clean_environment(tmp_path, monkeypatch):
 
 # ---- modeling_runtime: a test scope's deployment never names the installation ---------------
 
+
 def test_scoped_modeling_deployment_names_only_its_scope(tmp_path, monkeypatch):
     import uuid
+
     monkeypatch.setattr(modeling.local_paths, 'scratch_root', lambda: tmp_path)
     scope = str(uuid.uuid4())
     root = tmp_path / ('hyprn-mvp-test-' + scope) / 'artifacts/modeling-deployment'
@@ -636,7 +761,11 @@ def test_scoped_modeling_deployment_names_only_its_scope(tmp_path, monkeypatch):
     assert not {deployment.container, deployment.network, deployment.owner} & installation
     assert deployment.container.startswith('hyprn-mvp-test-' + scope.replace('-', '')[:8] + '-')
     assert (deployment.label, deployment.owner) == ('org.hyprn-mvp.test-scope', scope)
-    for outside in (Path('relative/root'), tmp_path.parent / 'elsewhere', tmp_path / 'link' / '..' / 'x'):
+    for outside in (
+        Path('relative/root'),
+        tmp_path.parent / 'elsewhere',
+        tmp_path / 'link' / '..' / 'x',
+    ):
         with pytest.raises(ValueError):
             modeling.scoped_deployment(outside, scope)
     with pytest.raises(ValueError):
@@ -650,29 +779,51 @@ def test_scoped_modeling_deployment_names_only_its_scope(tmp_path, monkeypatch):
 
 def test_scoped_start_reproduces_every_reviewed_recipe_setting(tmp_path, monkeypatch):
     import uuid
+
     monkeypatch.setattr(modeling.local_paths, 'scratch_root', lambda: tmp_path)
     scope = str(uuid.uuid4())
     root = tmp_path / 'scope' / 'deployment'
     deployment = modeling.scoped_deployment(root, scope)
     calls = []
     monkeypatch.setattr(modeling, 'run', lambda *args, **kw: calls.append(list(args)) or '')
-    monkeypatch.setattr(subprocess, 'run', lambda args, **kw: calls.append(list(args)) or
-                        subprocess.CompletedProcess(args, 0, '', ''))
+    monkeypatch.setattr(
+        subprocess,
+        'run',
+        lambda args, **kw: calls.append(list(args)) or subprocess.CompletedProcess(args, 0, '', ''),
+    )
     log = tmp_path / 'setup.log'
     assert modeling.start_scoped(root, 'sha256:' + 'a' * 64, log, deployment) == 0
     network, container = calls
     label = 'org.hyprn-mvp.test-scope=' + scope
-    assert network == ['docker', 'network', 'create', '--internal', '--label', label, deployment.network]
+    assert network == [
+        'docker',
+        'network',
+        'create',
+        '--internal',
+        '--label',
+        label,
+        deployment.network,
+    ]
     recipe = json.loads(modeling.RECIPE.read_text())['services']['modeling']
     assert container[:3] == ['docker', 'run', '-d'] and container[-1] == 'sha256:' + 'a' * 64
     text = ' '.join(container)
-    for expected in ('--name ' + deployment.container, '--label ' + label, '--network ' + deployment.network,
-                     '--user ' + recipe['user'], '--read-only', '--cap-drop ALL', '--security-opt no-new-privileges:true',
-                     '--pids-limit 128', '--memory 768m', '--cpus 1', '--restart no',
-                     *('--tmpfs ' + value for value in recipe['tmpfs']),
-                     '--mount type=bind,src=' + str(root) + '/modeling,dst=/store',
-                     '--mount type=bind,src=' + str(root) + '/credentials/model.key,dst=/run/model.key,readonly',
-                     '--mount type=bind,src=' + str(root) + '/credentials/rails.key,dst=/run/rails.key,readonly'):
+    for expected in (
+        '--name ' + deployment.container,
+        '--label ' + label,
+        '--network ' + deployment.network,
+        '--user ' + recipe['user'],
+        '--read-only',
+        '--cap-drop ALL',
+        '--security-opt no-new-privileges:true',
+        '--pids-limit 128',
+        '--memory 768m',
+        '--cpus 1',
+        '--restart no',
+        *('--tmpfs ' + value for value in recipe['tmpfs']),
+        '--mount type=bind,src=' + str(root) + '/modeling,dst=/store',
+        '--mount type=bind,src=' + str(root) + '/credentials/model.key,dst=/run/model.key,readonly',
+        '--mount type=bind,src=' + str(root) + '/credentials/rails.key,dst=/run/rails.key,readonly',
+    ):
         assert expected in text
     assert '--publish' not in container and '-p' not in container
     # A recipe setting the scoped start does not reproduce fails closed.
@@ -687,12 +838,30 @@ def test_scoped_start_reproduces_every_reviewed_recipe_setting(tmp_path, monkeyp
 
 # ---- Release binding: review record, immutability, binding paths ----------------------------
 
+
 def test_review_requirement_follows_the_allowlist_basis(tmp_path):
     _, plain, _ = make_release(tmp_path / 'a')
     _, cited, _ = make_release(tmp_path / 'b', basis=INDEPENDENT)
     assert release.review_required(plain) is False and release.review_required(cited) is True
-    assert release.review_required(json.loads(json.dumps(dict(selection=dict(binding_commits=[dict(
-        basis='the independent ASVS review of this delta required before start')]))))) is True
+    assert (
+        release.review_required(
+            json.loads(
+                json.dumps(
+                    dict(
+                        selection=dict(
+                            binding_commits=[
+                                dict(
+                                    basis='the independent ASVS review of this delta '
+                                    'required before start'
+                                )
+                            ]
+                        )
+                    )
+                )
+            )
+        )
+        is True
+    )
 
 
 def review_file(tmp_path, release_id, name='code-review.md', text=None):
@@ -705,32 +874,58 @@ def test_record_review_is_create_only_private_and_digest_named(tmp_path):
     path, manifest, sha = make_release(tmp_path / 'releases', basis=INDEPENDENT)
     reviews = tmp_path / 'releases/.reviews'
     with pytest.raises(release.ReleaseError, match='name the release'):
-        release.record_review(path, sha, [review_file(tmp_path, release.RELEASE_PREFIX + '0' * 16)], 'ref',
-                              reviews_root=reviews, retained=False)
+        release.record_review(
+            path,
+            sha,
+            [review_file(tmp_path, release.RELEASE_PREFIX + '0' * 16)],
+            'ref',
+            reviews_root=reviews,
+            retained=False,
+        )
     with pytest.raises(release.ReleaseError, match='qualified manifest'):
-        release.record_review(path, '0' * 64, [review_file(tmp_path, manifest['release_id'])], 'ref',
-                              reviews_root=reviews, retained=False)
+        release.record_review(
+            path,
+            '0' * 64,
+            [review_file(tmp_path, manifest['release_id'])],
+            'ref',
+            reviews_root=reviews,
+            retained=False,
+        )
     link = tmp_path / 'link.md'
     link.symlink_to(review_file(tmp_path, manifest['release_id'], 'target.md'))
     with pytest.raises(release.ReleaseError, match='regular'):
         release.record_review(path, sha, [link], 'ref', reviews_root=reviews, retained=False)
     for reference in ('', ' ', 'x' * 600):
         with pytest.raises(release.ReleaseError, match='reference'):
-            release.record_review(path, sha, [review_file(tmp_path, manifest['release_id'])], reference,
-                                  reviews_root=reviews, retained=False)
-    files = [review_file(tmp_path, manifest['release_id']),
-             review_file(tmp_path, manifest['release_id'], 'security.md')]
-    record = release.record_review(path, sha, files, 'parent verification reference', reviews_root=reviews, retained=False)
+            release.record_review(
+                path,
+                sha,
+                [review_file(tmp_path, manifest['release_id'])],
+                reference,
+                reviews_root=reviews,
+                retained=False,
+            )
+    files = [
+        review_file(tmp_path, manifest['release_id']),
+        review_file(tmp_path, manifest['release_id'], 'security.md'),
+    ]
+    record = release.record_review(
+        path, sha, files, 'parent verification reference', reviews_root=reviews, retained=False
+    )
     directory = reviews / manifest['release_id']
     saved = directory / 'review-record.json'
     assert record['record_sha256'] == release.sha256(saved.read_bytes())
-    assert stat.S_IMODE(saved.stat().st_mode) == 0o600 and stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert (
+        stat.S_IMODE(saved.stat().st_mode) == 0o600
+        and stat.S_IMODE(directory.stat().st_mode) == 0o700
+    )
     data = json.loads(saved.read_text())
     assert data['manifest_sha256'] == sha and data['release_id'] == manifest['release_id']
     assert [f['sha256'] for f in data['files']] == [release.sha256(f.read_bytes()) for f in files]
     for item in data['files']:
-        assert (directory / item['name']).read_bytes() == next(f.read_bytes() for f in files
-                                                                if release.sha256(f.read_bytes()) == item['sha256'])
+        assert (directory / item['name']).read_bytes() == next(
+            f.read_bytes() for f in files if release.sha256(f.read_bytes()) == item['sha256']
+        )
     with pytest.raises(release.ReleaseError, match='already recorded'):
         release.record_review(path, sha, files, 'again', reviews_root=reviews, retained=False)
     assert release.sha256(saved.read_bytes()) == record['record_sha256']
@@ -743,8 +938,12 @@ def test_start_and_activation_require_the_recorded_review(tmp_path, monkeypatch)
     with pytest.raises(release.ReleaseBindingError, match='record-review'):
         release.require_review(path, manifest, sha)
     _, plain, plain_sha = make_release(tmp_path / 'plain')
-    assert release.require_review(tmp_path / 'plain' / plain['release_id'], plain, plain_sha) == dict(required=False)
-    record = release.record_review(path, sha, [review_file(tmp_path, manifest['release_id'])], 'ref', retained=False)
+    assert release.require_review(
+        tmp_path / 'plain' / plain['release_id'], plain, plain_sha
+    ) == dict(required=False)
+    record = release.record_review(
+        path, sha, [review_file(tmp_path, manifest['release_id'])], 'ref', retained=False
+    )
     checked = release.require_review(path, manifest, sha)
     assert checked['required'] and checked['record_sha256'] == record['record_sha256']
     copy = next((reviews / manifest['release_id']).glob('*-code-review.md'))
@@ -756,24 +955,35 @@ def test_start_and_activation_require_the_recorded_review(tmp_path, monkeypatch)
 
 def test_executor_start_names_the_review_record_digest(tmp_path, monkeypatch):
     path, manifest, sha = make_release(tmp_path / 'releases', basis=INDEPENDENT)
-    manifest, sha = with_ui_build(path, manifest, inventories=dict(runtime_sources=dict(
-        application={'deployment/application_runtime.py': '1' * 64})))
+    manifest, sha = with_ui_build(
+        path,
+        manifest,
+        inventories=dict(
+            runtime_sources=dict(application={'deployment/application_runtime.py': '1' * 64})
+        ),
+    )
     binding = binding_for(path, manifest, sha)
     execution = tmp_path / 'execution'
     execution.mkdir()
     (execution / 'launch-worker').write_text(native.launch_worker_text(execution, binding))
     application = tmp_path / 'application'
     application.mkdir()
-    identity = {'deployment/application_runtime.py': '1' * 64, 'ui-dist/index.html': manifest['build']['ui']['files'][0]['sha256']}
+    identity = {
+        'deployment/application_runtime.py': '1' * 64,
+        'ui-dist/index.html': manifest['build']['ui']['files'][0]['sha256'],
+    }
     (application / 'identity.json').write_text(json.dumps(dict(source_hashes=identity)))
     monkeypatch.setattr(dispatch, 'ROOT', execution)
     monkeypatch.setattr(app, 'ROOT', application)
     monkeypatch.setattr(release, 'ACTIVE', binding)
     monkeypatch.setattr(release, 'REVIEWS_ROOT', tmp_path / 'releases/.reviews')
+    monkeypatch.setattr(app, 'require_release_inventory', lambda binding: {'verified': True})
     refuse_effects(monkeypatch)
     with pytest.raises(RuntimeError, match='record-review'):
         dispatch.require_release_start()
-    record = release.record_review(path, sha, [review_file(tmp_path, manifest['release_id'])], 'ref', retained=False)
+    record = release.record_review(
+        path, sha, [review_file(tmp_path, manifest['release_id'])], 'ref', retained=False
+    )
     started = dispatch.require_release_start()
     assert started['review']['record_sha256'] == record['record_sha256']  # lands in executor.json
 
@@ -783,8 +993,11 @@ def test_release_binding_paths_are_the_repository_managers_that_bind_before_any_
     deployment managers whose __main__ guard binds to the selected release before any effect."""
     for relative in release.RELEASE_BINDING_PATHS:
         assert (REPO / relative).is_file(), relative
-    binding = {'deployment/' + p.name for p in (REPO / 'deployment').glob('*.py')
-               if p.name == 'release_binding.py' or 'release_binding.entrypoint(' in p.read_text()}
+    binding = {
+        'deployment/' + p.name
+        for p in (REPO / 'deployment').glob('*.py')
+        if p.name == 'release.py' or 'release_binding.entrypoint(' in p.read_text()
+    }
     assert binding == set(release.RELEASE_BINDING_PATHS)
 
 
@@ -812,10 +1025,14 @@ def test_release_immutability_is_an_explicit_reversible_opt_in(tmp_path):
 def test_release_commands_document_review_and_immutability_steps(tmp_path):
     path, manifest, sha = make_release(tmp_path / 'releases')
     commands = release.release_commands(path, sha)
-    assert "release_binding.py' record-review --expected-sha256 " + sha in commands['record_review']
-    assert "release_binding.py' require-review --expected-sha256 " + sha in commands['require_review']
+    assert "release.py' record-review --expected-sha256 " + sha in commands['record_review']
+    assert "release.py' require-review --expected-sha256 " + sha in commands['require_review']
     # Every script a command names is a release binding entry point of this repository.
-    named = {m.group(1) for text in commands.values() for m in re.finditer(r"/source/(deployment/[\w./-]+\.py)'", text)}
+    named = {
+        m.group(1)
+        for text in commands.values()
+        for m in re.finditer(r"/source/(deployment/[\w./-]+\.py)'", text)
+    }
     assert named and named <= release.RELEASE_BINDING_PATHS, named
     assert 'make-immutable' in commands['make_immutable'] and 'opt-in' in commands['make_immutable']
     assert 'chflags -R nouchg' in commands['quarantine']
@@ -827,6 +1044,7 @@ def test_qualification_requires_the_attestation_coverage_group():
     """The narrowed attestation is safe only while its coverage test runs, so the qualification
     aggregate includes the must-pass group that runs the module-boundary test."""
     import checks as runner
+
     assert runner.group_class('locality-contracts') == 'must-pass'
     assert 'locality-contracts' in runner.must_pass_groups()
     assert 'application/tests/test_module_boundaries.py' in runner.GROUPS['locality-contracts']

@@ -5,12 +5,13 @@ started from a worktree or a selected-release copy could execute that checkout's
 This entry removes every project path that is not this tree, prepends this tree's
 integration/src and application/src, refuses any project module already imported or resolved
 elsewhere, records the actual module files and hashes, then runs the launcher exactly as `-m`
-would. Fixture use only; production uses the release bootstrap (release_binding.py
+would. Fixture use only; production uses the release bootstrap (release.py
 exec-module).
 
   scoped_fixture_launcher.py --check-only          print the binding record, run nothing
   scoped_fixture_launcher.py --runtime-root R ...  record evidence under R/evidence, run launcher
 """
+
 import hashlib
 import importlib.util
 import json
@@ -26,7 +27,9 @@ ROOTS = (TREE / 'integration/src', TREE / 'application/src')
 PACKAGES = ('hyprn_mvp_integration', 'hyprn_mvp_app')
 # Scoped roots are <scratch root>/hyprn-mvp-test-<uuid> (deployment/local_paths.py); the
 # scoped child environment always names the scratch root explicitly.
-SCRATCH_ROOT = Path(os.environ.get('HYPRN_MVP_SCRATCH_ROOT') or os.path.realpath(tempfile.gettempdir()))
+SCRATCH_ROOT = Path(
+    os.environ.get('HYPRN_MVP_SCRATCH_ROOT') or os.path.realpath(tempfile.gettempdir())
+)
 SCOPE_PREFIX = 'hyprn-mvp-test-'
 
 
@@ -36,8 +39,11 @@ def _project(entry):
     so a checkout that predates the current package names is still removed from the path."""
     path = Path(entry or os.getcwd())
     try:
-        return (any((path / name).is_dir() for name in PACKAGES) or (path / 'dispatch_runtime.py').is_file()
-                or (path.name == 'src' and path.parent.name in ('application', 'integration')))
+        return (
+            any((path / name).is_dir() for name in PACKAGES)
+            or (path / 'dispatch_runtime.py').is_file()
+            or (path.name == 'src' and path.parent.name in ('application', 'integration'))
+        )
     except OSError:
         return False
 
@@ -48,7 +54,14 @@ def _record(name):
         raise SystemExit('Fixture launcher refused: ' + name + ' not found')
     file = Path(spec.origin).resolve()
     if not any(file.is_relative_to(root) for root in ROOTS):
-        raise SystemExit('Fixture launcher refused: ' + name + ' resolves outside ' + str(TREE) + ': ' + str(file))
+        raise SystemExit(
+            'Fixture launcher refused: '
+            + name
+            + ' resolves outside '
+            + str(TREE)
+            + ': '
+            + str(file)
+        )
     return dict(file=str(file), sha256=hashlib.sha256(file.read_bytes()).hexdigest())
 
 
@@ -57,10 +70,22 @@ def bind():
     if loaded:
         raise SystemExit('Fixture launcher refused: project module already imported: ' + loaded[0])
     removed = [p for p in sys.path if _project(p) and Path(p or os.getcwd()).resolve() not in ROOTS]
-    sys.path[:] = [str(r) for r in ROOTS] + [p for p in sys.path if p not in removed and Path(p or '.').resolve() not in ROOTS]
-    modules = {name: _record(name) for name in ('hyprn_mvp_app', 'hyprn_mvp_integration', 'hyprn_mvp_integration.launcher')}
-    return dict(tree=str(TREE), pid=os.getpid(), executable=sys.executable, cwd=os.getcwd(),
-                sys_path=list(sys.path), removed_sys_path=removed, modules=modules)
+    sys.path[:] = [str(r) for r in ROOTS] + [
+        p for p in sys.path if p not in removed and Path(p or '.').resolve() not in ROOTS
+    ]
+    modules = {
+        name: _record(name)
+        for name in ('hyprn_mvp_app', 'hyprn_mvp_integration', 'hyprn_mvp_integration.launcher')
+    }
+    return dict(
+        tree=str(TREE),
+        pid=os.getpid(),
+        executable=sys.executable,
+        cwd=os.getcwd(),
+        sys_path=list(sys.path),
+        removed_sys_path=removed,
+        modules=modules,
+    )
 
 
 def main():
@@ -75,8 +100,12 @@ def main():
     if args[:1] == ['--runtime-root'] and len(args) > 1:
         root = Path(args[1])
         evidence = root / 'evidence'
-        if (root.parent == SCRATCH_ROOT and root.name.startswith(SCOPE_PREFIX)
-                and evidence.is_dir() and not evidence.is_symlink()):
+        if (
+            root.parent == SCRATCH_ROOT
+            and root.name.startswith(SCOPE_PREFIX)
+            and evidence.is_dir()
+            and not evidence.is_symlink()
+        ):
             name = 'fixture-launcher-binding-' + str(os.getpid()) + '-' + uuid.uuid4().hex + '.json'
             with (evidence / name).open('x') as output:
                 json.dump(dict(record, argv=args), output, indent=2, sort_keys=True)
