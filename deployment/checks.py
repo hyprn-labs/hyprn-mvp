@@ -1203,7 +1203,7 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
         raise ValueError('Group fixture/runner not implemented yet: ' + group)
     require_environment(group)
     scope = fixture.allocate_scope(replace(fixture.new_scope(), interpreter=GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON)))
-    if group == 'ui-a' or group in NATIVE_BACKEND_GROUPS:
+    if group == 'ui-a' or group in NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS:
         prepare_image_builder(scope)
     env = fixture.clean_environment(scope)
     command = [scope.interpreter, '-B', str(Path(__file__).resolve()), '--' + group + '-child']

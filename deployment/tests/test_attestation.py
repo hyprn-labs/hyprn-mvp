@@ -268,7 +268,11 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
         ('application/src/hyprn_mvp_app/units.py', 'application/src/hyprn_mvp_app/history.py',
          'application/src/hyprn_mvp_app/modified_runs.py', 'ui/src/UnitEditor.tsx',
          'ui/src/unitLabels.ts', 'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json'),
-        ('upstream/whatsopt-patches/080-unit-declarations.patch', 'modeling/generate_unit_catalog.py',
+        ('deployment/images/whatsopt-source.Dockerfile',
+         'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
+         'upstream/whatsopt-patches/005-model-source-baseline.patch',
+         'upstream/whatsopt-patches/080-unit-declarations.patch',
+         'modeling/generate_unit_catalog.py',
          'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json'),
         SOURCE_PATHS,
     )
@@ -282,7 +286,7 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     assert inventories[2]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch']
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 45
+    assert len(inventories[2]) == 49
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
 

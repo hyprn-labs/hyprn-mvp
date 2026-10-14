@@ -168,6 +168,8 @@ def execution_source_hashes():
         'upstream/engine-packaging/openmdao_extensions.patch',
         'upstream/engine-packaging/wop.patch', 'upstream/engine-packaging/xdsmjs.patch',
         'deployment/pins.json',
+        'deployment/images/whatsopt-source.Dockerfile',
+        'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
         'deployment/modeling.Dockerfile', 'deployment/modeling_policy.rb',
         'deployment/modeling-compose.yaml', 'deployment/modeling_runtime.py',
         'modeling/provenance.md', 'modeling/generate_unit_catalog.py',
