@@ -4,7 +4,9 @@ import { startFixture, stopFixture, guardOrigin, harness, login, sid, runFixture
 test.skip(!process.env.HYPRN_MVP_NAV_BUILD, 'Isolated fixture build required');
 test.beforeAll(startFixture); test.beforeEach(async ({page}) => { await guardOrigin(page); await page.emulateMedia({reducedMotion:'reduce'}); }); test.afterAll(stopFixture);
 
-test('overview distinguishes 42 families and 122 revisions with retained run names', async ({page}) => {
+test('Canonical lists distinguish 42 families and 122 revisions with retained run names', async ({
+  page,
+}) => {
   const state = await harness(page);
   runFixture(state);
   const base = {
@@ -24,14 +26,6 @@ test('overview distinguishes 42 families and 122 revisions with retained run nam
   state.studies[0].description =
     'Compare heat transfer methods.\n\nRetain the assumptions and limits.';
   await login(page, `#v=1&study=${sid}&view=overview`);
-  await expect(
-    page.getByText('42 configurations · 122 saved versions · Showing 5 recent versions', {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open run run-fixture', exact: true })).toHaveText(
-    'Original design · run-fixt',
-  );
   const about = page.getByRole('region', { name: 'About this study', exact: true });
   await expect(about).toContainText('No study question yet');
   await expect(about).not.toContainText(state.studies[0].description, { useInnerText: true });
@@ -39,10 +33,9 @@ test('overview distinguishes 42 families and 122 revisions with retained run nam
   const action = about.getByRole('button', { name: 'View modeling approach', exact: true });
   await expect(action).toBeVisible();
   const card = await about.boundingBox(),
-    recent = await page.getByRole('region', { name: 'Recent runs', exact: true }).boundingBox(),
     button = await action.boundingBox();
-  expect(Math.abs(card!.height - recent!.height)).toBeLessThan(1);
-  expect(Math.abs(card!.width - recent!.width)).toBeLessThan(1);
+  expect(card!.width).toBeGreaterThan(button!.width);
+  expect(button!.y).toBeGreaterThanOrEqual(card!.y);
   expect(card!.x + card!.width - button!.x - button!.width).toBeGreaterThan(16);
   expect(card!.x + card!.width - button!.x - button!.width).toBeLessThan(30);
   expect(card!.y + card!.height - button!.y - button!.height).toBeLessThan(30);
@@ -54,7 +47,11 @@ test('overview distinguishes 42 families and 122 revisions with retained run nam
       path: `${process.env.HYPRN_MVP_UI_EVIDENCE_ROOT}/names-overview-${colorScheme}.png`,
     });
   }
-  await page.getByRole('button', { name: 'View all configurations', exact: true }).click();
+  await page.getByRole('button', { name: 'Runs', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }),
+  ).toHaveText('Original design · run-fixt');
+  await page.getByRole('button', { name: 'Configurations', exact: true }).click();
   await expect(
     page.getByText('42 configurations · 122 saved versions · All saved versions', { exact: true }),
   ).toBeVisible();
@@ -91,8 +88,13 @@ test('run history searches retained names and preserves exact identifiers', asyn
 
 test('older server run labels remain usable without inventing configuration names',async({page})=>{
   const state=await harness(page);runFixture(state);
-  await login(page,`#v=1&study=${sid}&view=overview`);
-  await expect(page.getByRole('button',{name:'Open run run-fixture',exact:true})).toHaveText('Run · run-fixt');
-  await expect(page.getByText('0 configurations · 0 saved versions · Showing 0 recent versions',{exact:true})).toBeVisible();
+  await login(page, `#v=1&study=${sid}&view=runs`);
+  await expect(
+    page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }),
+  ).toHaveText('Run · run-fixt');
+  await page.getByRole('button', { name: 'Configurations', exact: true }).click();
+  await expect(
+    page.getByText('0 configurations · 0 saved versions · All saved versions', { exact: true }),
+  ).toBeVisible();
   expect(state.writes).toEqual([]);
 });

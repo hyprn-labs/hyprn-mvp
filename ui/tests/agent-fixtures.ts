@@ -167,6 +167,16 @@ function serveRecorded(path: string, query: URLSearchParams): Served | null {
   if (head === 'approach' && id === 'versions' && tail && !more) {
     return found(d.approach_saved[tail]);
   }
+  if (
+    parts.length === 4 &&
+    head === 'approach' &&
+    id === 'versions' &&
+    more === 'answers' &&
+    Object.hasOwn(d.approach_saved, tail)
+  ) {
+    // These recorded versions predate answer records; other identities remain unknown.
+    return { data: { approach_version_id: tail, items: [] } };
+  }
   if (head === 'approach' && id === 'versions' && more === 'usage') {
     const caseId = query.get('case_id');
     const items = (d.approach_usage[tail] ?? []).filter(

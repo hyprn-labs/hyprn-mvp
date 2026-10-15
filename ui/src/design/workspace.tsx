@@ -1,20 +1,29 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type ComponentProps } from 'react';
 import { BrandLogo } from './BrandLogo';
-import { Tabs, type TabItem } from './components';
+import { Button, Panel, Tabs, type TabItem } from './components';
+import { Assertion, ActionGroup } from './compositions';
 
 /** Layout only: the application owns destinations, guards and record reads. */
 export function WorkspaceShell({
   navigation,
   children,
+  context,
+  assistant,
 }: {
   navigation: ReactNode;
   children: ReactNode;
+  context?: ReactNode;
+  assistant?: ReactNode;
 }) {
   return (
     <div className="hf-workspace">
       {navigation}
-      <div className="hf-workspace__canvas">
-        <div className="hf-workspace__content">{children}</div>
+      <div className="hf-workspace__stage">
+        <div className="hf-workspace__canvas">
+          <div className="hf-workspace__content">{children}</div>
+        </div>
+        {context && <div className="hf-workspace__context">{context}</div>}
+        {assistant && <div className="hf-workspace__assistant">{assistant}</div>}
       </div>
     </div>
   );
@@ -50,16 +59,206 @@ export function NavigationRail({
           </div>
         )}
       </nav>
-      {items && value && (
-        <Tabs
-          navigation
-          className="hf-navigation__sections"
-          label="Workspace sections"
-          items={items}
-          value={value}
-          onChange={onChange}
-        />
-      )}
+      {items && value && <WorkflowNavigation items={items} value={value} onChange={onChange} />}
     </aside>
+  );
+}
+
+export function WorkflowNavigation(props: {
+  items: TabItem[];
+  value: string;
+  onChange?: (id: string) => void;
+}) {
+  return (
+    <Tabs navigation className="hf-navigation__sections" label="Workspace sections" {...props} />
+  );
+}
+
+export function ResourceCard({
+  title,
+  metadata,
+  actions,
+  children,
+  className = '',
+}: {
+  title: ReactNode;
+  metadata?: ReactNode;
+  actions?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <article className={'hf-resource-card ' + className}>
+      <div>
+        <h2>{title}</h2>
+        {children}
+        {metadata}
+      </div>
+      {actions && <ActionGroup>{actions}</ActionGroup>}
+    </article>
+  );
+}
+
+export function SettingsSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="hf-settings" aria-label={title}>
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** Domain kind, statement scope and basis are supplied, never inferred. */
+export function ClaimCard({
+  kind,
+  statement,
+  scope,
+  limits,
+  attribution,
+  children,
+  actions,
+}: {
+  kind: string;
+  statement: ReactNode;
+  scope: ReactNode;
+  limits?: ReactNode;
+  attribution?: ReactNode;
+  children?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <Assertion className="hf-claim">
+      <h3>{kind}</h3>
+      <p className="hf-claim__scope">{scope}</p>
+      <div className="hf-claim__statement">{statement}</div>
+      {attribution}
+      {limits && <div className="hf-claim__limits">{limits}</div>}
+      {children}
+      {actions && <ActionGroup>{actions}</ActionGroup>}
+    </Assertion>
+  );
+}
+
+export type StatementSet = {
+  owner: string;
+  version: string;
+  ids: readonly string[];
+  state: 'complete' | 'partial' | 'unknown';
+  label: string;
+};
+
+/** Count identities within one explicit owner/version, never source records or prose fragments. */
+export function ClaimButton({ set, onClick }: { set: StatementSet; onClick: () => void }) {
+  const count = new Set(set.ids).size;
+  if (set.state === 'unknown')
+    return <p className="hf-claim__scope">Statements unavailable · {set.label}</p>;
+  if (!count)
+    return (
+      <p className="hf-claim__scope">
+        {set.state === 'complete' ? 'No linked statements' : 'Statements partially loaded'} ·{' '}
+        {set.label}
+      </p>
+    );
+  const label =
+    set.state === 'partial'
+      ? count + ' loaded statements · partial set'
+      : count + (count === 1 ? ' statement' : ' statements');
+  return (
+    <Button
+      className="hf-claim-button"
+      size="sm"
+      onClick={onClick}
+      aria-label={label + ' · ' + set.label}
+    >
+      {label}
+    </Button>
+  );
+}
+
+/** A nonmodal dock/stack: Escape closes only this layer; modal descendants keep their Escape. */
+export function ContextualPanel({
+  title,
+  onClose,
+  onBack,
+  children,
+  focusOnOpen = false,
+  ...props
+}: Omit<ComponentProps<typeof Panel>, 'title'> & {
+  title: string;
+  onClose?: () => void;
+  onBack?: () => void;
+  focusOnOpen?: boolean;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null),
+    id = useId();
+  useEffect(() => {
+    if (focusOnOpen) heading.current?.focus();
+  }, [focusOnOpen]);
+  return (
+    <Panel
+      {...props}
+      label={props.label ?? title}
+      className={'hf-context-panel ' + (props.className ?? '')}
+    >
+      <div
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Escape' &&
+            onClose &&
+            !event.currentTarget.contains((event.target as HTMLElement).closest('dialog'))
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+          }
+        }}
+      >
+        <div className="hf-context-panel__heading">
+          <h2 id={id} ref={heading} tabIndex={-1}>
+            {title}
+          </h2>
+          <ActionGroup>
+            {onBack && (
+              <Button size="sm" onClick={onBack}>
+                Back to statements
+              </Button>
+            )}
+            {onClose && (
+              <Button size="sm" aria-label={'Close ' + title} onClick={onClose}>
+                Close
+              </Button>
+            )}
+          </ActionGroup>
+        </div>
+        <div className="hf-context-panel__body">{children}</div>
+      </div>
+    </Panel>
+  );
+}
+
+/** Connection, transcript and sends remain the integration owner's responsibility. */
+export function AssistantPane({
+  state,
+  context,
+  children,
+  actions,
+  onClose,
+}: {
+  state: 'unavailable' | 'disconnected' | 'connected';
+  context: ReactNode;
+  children?: ReactNode;
+  actions?: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <ContextualPanel title="Assistant" onClose={onClose} focusOnOpen>
+      <p>{context}</p>
+      {state !== 'connected' ? (
+        <p>Not connected. Assistant conversations are unavailable in this workspace.</p>
+      ) : (
+        children
+      )}
+      {state === 'connected' && actions}
+    </ContextualPanel>
   );
 }

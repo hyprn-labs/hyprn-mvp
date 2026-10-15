@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { PublicRunDetail, RunHistoryItem } from './contract';
-import { Ledger, StatusTag, type Tone } from './design';
+import { Ledger, StatusTag, type Tone } from './design/components';
 
 export type OutcomeLabel = { label: string; tone: Tone };
 

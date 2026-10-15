@@ -133,7 +133,9 @@ test('Home, separate study creation, five study sections and minimal Profile', a
   await page.getByRole('button', { name: 'Profile', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
   await expect(page.locator('.profile-page dd')).toHaveText('owner');
-  await expect(page.locator('.profile-page button')).toHaveText(['Sign out']);
+  await expect(page.getByRole('combobox', { name: 'Appearance', exact: true })).toHaveValue(
+    'system',
+  );
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await login(page, '', 'other-user');
   await expect(page.getByText('No studies yet.', { exact: false })).toBeVisible();
@@ -347,3 +349,24 @@ for (const theme of ['light', 'dark'] as const) {
     expect(state.unknown).toEqual([]);
   });
 }
+
+test('Appearance is browser-local and the unavailable assistant cannot send', async ({ page }) => {
+  const state = await harness(page);
+  await login(page);
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Appearance', exact: true }).selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await login(page);
+  await openStudy(page);
+  const opener = page.getByRole('button', { name: 'Open assistant', exact: true });
+  await opener.click();
+  const assistant = page.getByRole('region', { name: 'Assistant', exact: true });
+  await expect(assistant).toContainText('Not connected');
+  await expect(assistant.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(assistant).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(state.writes).toEqual([]);
+});

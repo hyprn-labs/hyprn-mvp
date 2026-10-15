@@ -109,15 +109,15 @@ test('model headings and Record details name the agent that wrote the draft or v
 }) => {
   const state = await agentHarness(page);
   await login(page, studyLink(agentStudy, `&model=${mid}&view=model`));
-  await expect(modelHeading(page).getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(modelHeading(page).getByText('Saved draft', { exact: true })).toBeVisible();
   await expectChip(modelHeading(page).locator('.model-context'), names.claudeForBen);
   await page.getByLabel('Model version', { exact: true }).selectOption(version);
   await expect(
-    modelHeading(page).getByText('Read-only model version', { exact: true }),
+    modelHeading(page).getByText('Saved version · read-only', { exact: true }),
   ).toBeVisible();
   await expectChip(modelHeading(page).locator('.model-context'), names.codexForAda);
   await page.getByRole('button', { name: 'Model actions', exact: true }).click();
-  await page.getByRole('button', { name: 'Record details', exact: true }).click();
+  await page.getByRole('button', { name: 'Model record details', exact: true }).click();
   const record = page.getByRole('dialog', { name: 'Model version record', exact: true });
   const details = record.locator('dl');
   await expect(details.locator('dt')).toHaveText(['Model version', 'SHA-256', 'Saved by']);
@@ -128,15 +128,15 @@ test('model headings and Record details name the agent that wrote the draft or v
   expect(state.attribution.reads).toEqual([agentStudy]);
 
   await page.goto(origin + '/ui/' + studyLink(humanStudy, `&model=${mid}&view=model`));
-  await expect(modelHeading(page).getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(modelHeading(page).getByText('Saved draft', { exact: true })).toBeVisible();
   await expect(modelHeading(page).locator('.hf-attr')).toHaveCount(0);
   await page.getByLabel('Model version', { exact: true }).selectOption(version);
   await expect(
-    modelHeading(page).getByText('Read-only model version', { exact: true }),
+    modelHeading(page).getByText('Saved version · read-only', { exact: true }),
   ).toBeVisible();
   await expect(modelHeading(page).locator('.hf-attr')).toHaveCount(0);
   await page.getByRole('button', { name: 'Model actions', exact: true }).click();
-  await page.getByRole('button', { name: 'Record details', exact: true }).click();
+  await page.getByRole('button', { name: 'Model record details', exact: true }).click();
   const human = page.getByRole('dialog', { name: 'Model version record', exact: true });
   await expect(human.locator('dl dt')).toHaveText(['Model version', 'SHA-256']);
   expect(state.writes).toEqual([]);
@@ -225,10 +225,10 @@ test('genuine 200 percent zoom keeps every chip whole with 200-character names',
       await page.getByRole('button', { name: 'Models', exact: true }).click();
       await page.getByRole('button', { name: /^Open model / }).click();
       const context = modelHeading(page).locator('.model-context');
-      await expect(context.getByText('Draft · saved', { exact: true })).toBeVisible();
+      await expect(context.getByText('Saved draft', { exact: true })).toBeVisible();
       await expectWhole(page, await expectChip(context, long.claudeForBen), long.claudeForBen);
       await page.getByLabel('Model version', { exact: true }).selectOption(version);
-      await expect(context.getByText('Read-only model version', { exact: true })).toBeVisible();
+      await expect(context.getByText('Saved version · read-only', { exact: true })).toBeVisible();
       observations.push({
         theme: colorScheme,
         model: await expectWhole(
@@ -385,9 +385,9 @@ const placements: Placement[] = [
     open: async (page) => {
       await visit(page, 'configurations', '&configuration=' + recorded.configurations[0]);
       await page.getByRole('button', { name: 'Copy configuration to draft' }).click();
-      await page.getByRole('button', { name: 'Edit context', exact: true }).click();
+      await page.getByRole('button', { name: 'Input tools', exact: true }).click();
       await page
-        .getByRole('dialog', { name: 'Edit context', exact: true })
+        .getByRole('dialog', { name: 'Input tools and model binding', exact: true })
         .getByRole('button', { name: 'Add evidence', exact: true })
         .click();
     },
@@ -408,7 +408,7 @@ const placements: Placement[] = [
     open: async (page) => {
       await visit(page, 'approach');
       await page.getByLabel('Approach version', { exact: true }).selectOption('draft');
-      await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+      await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
     },
     scope: (page) => page.locator('.approach-draft-status'),
     author: 'claudeForBen',
@@ -442,16 +442,18 @@ const placements: Placement[] = [
     human: true,
   },
   {
-    name: 'Overview recent configuration rows',
-    open: (page) => visit(page, 'overview'),
+    name: 'Overview navigation to configuration attribution',
+    open: async (page) => {
+      await visit(page, 'overview');
+      await page.getByRole('button', { name: 'Configurations', exact: true }).click();
+    },
     scope: (page, human) =>
-      byAction(
-        page,
-        '.recent-configurations li',
-        (human ? 'Liquid hydrogen, 12,000 km' : 'Liquid hydrogen, 9,000 km') +
-          ' · Open configuration ' +
-          recorded.configurations[human ? 1 : 0],
-      ),
+      page.locator('.configurations-page .model-row').filter({
+        has: page.getByRole('heading', {
+          name: human ? 'Liquid hydrogen, 12,000 km' : 'Liquid hydrogen, 9,000 km',
+          exact: true,
+        }),
+      }),
     author: 'claudeForBen',
     human: true,
   },
@@ -471,10 +473,13 @@ const placements: Placement[] = [
     human: true,
   },
   {
-    name: 'Overview recent run rows',
-    open: (page) => visit(page, 'overview'),
+    name: 'Overview navigation to run attribution',
+    open: async (page) => {
+      await visit(page, 'overview');
+      await page.getByRole('button', { name: 'Runs', exact: true }).click();
+    },
     scope: (page, human) =>
-      byAction(page, '.recent-runs li', 'Open run ' + recorded.runs[human ? 1 : 0]),
+      byAction(page, '.run-list li', 'Inspect run ' + recorded.runs[human ? 1 : 0]),
     author: 'codexForAda',
     human: true,
   },
@@ -482,7 +487,12 @@ const placements: Placement[] = [
     name: 'case card run rows',
     open: async (page) => {
       await visit(page, 'approach', '&approach=' + recorded.approachVersions[0]);
-      await page.getByRole('tab', { name: 'Cases & results', exact: true }).click();
+      await page.getByRole('button', { name: 'Cases', exact: true }).click();
+      await page
+        .locator('.case-list-row')
+        .first()
+        .getByRole('button', { name: 'Open case' })
+        .click();
     },
     scope: (page, human) =>
       page.getByRole('article', { name: 'run ' + recorded.runs[human ? 1 : 0], exact: true }),
@@ -511,9 +521,10 @@ async function checkDetails(
   if (placement.details.title === 'Approach record')
     await page.getByRole('button', { name: 'Approach actions', exact: true }).click();
   const scope = placement.scope(page);
-  const trigger = scope.getByRole('button', { name: 'Record details', exact: true });
+  const name = placement.details.title + ' details';
+  const trigger = scope.getByRole('button', { name, exact: true });
   if (await trigger.count()) await trigger.click();
-  else await page.getByRole('button', { name: 'Record details', exact: true }).click();
+  else await page.getByRole('button', { name, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: placement.details.title, exact: true });
   const term = dialog
     .locator('dt')
@@ -606,7 +617,7 @@ test('human historical versions and records never inherit current agent attribut
     await expect(page.locator(headingSelector).locator('.hf-attr')).toHaveCount(0);
     if (view === 'approach')
       await page.getByRole('button', { name: 'Approach actions', exact: true }).click();
-    await page.getByRole('button', { name: 'Record details', exact: true }).click();
+    await page.getByRole('button', { name: title + ' details', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: title, exact: true });
     await expect(dialog).toBeVisible();
     await expect(

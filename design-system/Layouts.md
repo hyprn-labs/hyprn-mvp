@@ -96,3 +96,7 @@ model versions open the canonical view from **View model details** at the bottom
 of the full expanded method, after its evidence and assumptions. Each case keeps all configuration and run
 links, with no implicit latest-run selection. Scientific interpretations require an
 explicit persisted basis. Execution and criteria stay in supporting details; exports preserve full numerical precision. Limits and assumption editing remain at their existing owners.
+
+## Contour workspace amendment
+
+The current shell has four independent regions: persistent NavigationRail, current central canvas, Scientific context and Assistant. Context and assistant dock beside the canvas where space permits and stack at narrow widths. Their headers, Close and source Back controls remain reachable. Overview follows question → generic exploration → interpretation/still-to-answer. Method content belongs to the canonical Model owner; the earlier Overview expandable-method arrangement is superseded.

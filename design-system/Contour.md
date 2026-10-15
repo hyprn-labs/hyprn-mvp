@@ -21,3 +21,7 @@ Panel's ordinary surface is raised; tone=sunken is an inset well. Existing scien
 C1 implements foundations, shared shell/navigation and Home → study navigation. C2 owns settings, cards, contextual statement/evidence readers and adjacent assistant slots. C3 owns the complete component matrix and final ownership/visual qualification. These future tasks are not claimed complete by this foundation.
 
 Automated browser fixtures establish UI behavior with public-API-shaped doubles. Served auth/CSP integration, full qualification, independent review and product-owner acceptance remain separate gates. No deployment is implied.
+
+## Workspace reading and local preferences
+
+Shared ResourceCard, SettingsSection, WorkflowNavigation, ContextualPanel, ClaimCard, ClaimButton and AssistantPane own their geometry in Foundry. Applications supply records and guarded callbacks. Statement sets count actual item identities under one owner/version. Answer-wide basis remains explicitly answer-wide. Context source reading reuses EvidenceRecordBody and restores selection, scroll and focus on Back. Study/version/session/access changes clear transient content. Profile appearance is browser-local; unavailable assistant state exposes no send. Engineering-pattern-map.md remains the full catalogue, with future capabilities excluded from production navigation.

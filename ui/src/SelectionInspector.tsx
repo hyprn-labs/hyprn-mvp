@@ -1,7 +1,7 @@
 import { unitLabel } from './unitLabels';
 import { Assumptions } from './Assumptions';
 import { EvidenceReferences } from './EvidenceView';
-import { ActionDialog, Button, Disclosure, Panel, SectionHeader } from './design';
+import { ActionDialog, Button, Disclosure, ContextualPanel, SectionHeader } from './design';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ApproachStep1, EvidenceSnapshot, PortRef, Source } from './contract';
 import { sourceText } from './api';
@@ -380,7 +380,7 @@ export function SelectionInspector({
     </>
   );
   return (
-    <Panel
+    <ContextualPanel
       label="Selection inspector"
       className="selection-inspector"
       title="Details"
@@ -481,6 +481,6 @@ export function SelectionInspector({
       ))}
       {!!related.length && <p>Related evidence</p>}
       <EvidenceReferences records={related} ids={related.map((e) => e.evidence_version_id)} />
-    </Panel>
+    </ContextualPanel>
   );
 }

@@ -64,4 +64,14 @@ export {
   ActionGroup,
 } from './compositions';
 
-export { WorkspaceShell, NavigationRail } from './workspace';
+export {
+  WorkspaceShell,
+  NavigationRail,
+  ResourceCard,
+  SettingsSection,
+  ContextualPanel,
+  WorkflowNavigation,
+  AssistantPane,
+  ClaimCard,
+  ClaimButton,
+} from './workspace';

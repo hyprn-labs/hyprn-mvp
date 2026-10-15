@@ -61,9 +61,15 @@ test('run criterion aligns with seven outcomes; rounded outputs retain exact val
  const tops=await ledger.locator('.hf-facet__v').evaluateAll(es=>es.map(e=>e.getBoundingClientRect().top)); expect(Math.max(...tops)-Math.min(...tops)).toBeLessThan(2);
  await expect(page.getByText('Run status and diagnostics',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('region',{name:'Output values',exact:true})).toContainText('8381.703'); await expect(page.getByRole('region',{name:'Output values',exact:true})).not.toContainText('8381.703411');
- await page.getByRole('button',{name:'Full-precision values',exact:true}).click(); await expect(page.getByRole('dialog',{name:'Full-precision values'})).toContainText('8381.7034110152'); await page.keyboard.press('Escape');
+ await expect(
+   page
+     .getByRole('region', { name: 'Output values', exact: true })
+     .locator('[title*="8381.7034110152"]'),
+ ).toBeVisible();
  await capture(page,'run');
- await page.getByRole('tab',{name:'Evidence',exact:true}).click(); await page.getByRole('button',{name:'Diagnostics',exact:true}).click(); await expect(page.getByLabel('Execution diagnostics',{exact:true})).toContainText('exit_code');
+ await page.locator('details.run-files > summary').click();
+ await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
+ await expect(page.getByLabel('Execution diagnostics', { exact: true })).toContainText('exit_code');
  expect(d.history.results.outputs[0].value).toBe(8381.7034110152);expect(state.writes).toEqual([]);
 });
 test(
@@ -87,9 +93,11 @@ test(
     state.studies[0].description,
   );
   await page.getByRole('button', { name: 'Close Edit study', exact: true }).click();
-  const summary = page.getByLabel('Run outcomes', { exact: true });
-  await expect(summary).toContainText('Execution Completed');
-  await expect(summary).toContainText('Criteria 1 of 1 not met');
+  await page.getByRole('button', { name: 'Runs', exact: true }).click();
+  await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+  const summary = page.getByRole('list', { name: 'Run status', exact: true });
+  await expect(summary).toContainText('ExecutionCompleted');
+  await expect(summary).toContainText('Criteria1 of 1 not met');
   await expect(summary).not.toContainText('recorded');
   await capture(page, 'overview');
   expect(state.writes).toEqual([]);
@@ -101,7 +109,12 @@ test('evidence has one details action, readable references and an exact download
  await login(page,`#v=1&study=${sid}&view=evidence`); const note=page.locator('.evidence-record');
  await expect(note.getByRole('button',{name:'View evidence',exact:true})).toBeVisible();await expect(note.getByText('Legacy scope: not inferred')).toHaveCount(0);await expect(note.getByRole('button',{name:/Source reference/})).toHaveCount(0);
  await note.getByRole('button',{name:'View evidence',exact:true}).click();const detail=page.getByRole('dialog',{name:'Evidence detail',exact:true});await expect(detail).toContainText('Report A, page 5');await expect(detail).not.toContainText('Study evidence');
- await detail.getByRole('button',{name:'Record details',exact:true}).click();await expect(page.getByRole('dialog',{name:'Evidence record',exact:true})).toContainText('No scope.');await page.getByRole('button',{name:'Close Evidence record',exact:true}).click(); await expect(note.locator('a')).toHaveCount(0);
+ await detail.getByRole('button', { name: 'Evidence record details', exact: true }).click();
+ await expect(page.getByRole('dialog', { name: 'Evidence record', exact: true })).toContainText(
+   'No scope.',
+ );
+ await page.getByRole('button', { name: 'Close Evidence record', exact: true }).click();
+ await expect(note.locator('a')).toHaveCount(0);
  const downloading=page.waitForEvent('download');await detail.getByRole('button',{name:'Download evidence record',exact:true}).click();expect(JSON.parse(await readFile((await (await downloading).path())!,'utf8'))).toEqual(record);
  await capture(page,'evidence');await page.getByRole('button',{name:'Close Evidence detail',exact:true}).click();await expect(note.getByText('Report A, page 5',{exact:true})).toBeHidden();expect(state.writes).toEqual([]);
 });
@@ -110,6 +123,225 @@ test('Overview does not infer outcomes when a recorded run detail is unavailable
  const state=await harness(page);runFixture(state);
  await page.route(`**/api/1/studies/${sid}/runs/run-fixture`,r=>r.fulfill({status:503,json:{error:{code:'unavailable',message:'Unavailable',fields:[],outcome:'unchanged'}}}));
  await login(page,`#v=1&study=${sid}&view=overview`);
- const summary=page.getByLabel('Run outcomes',{exact:true});await expect(summary).toContainText('Status unavailable');await expect(summary).toContainText('Criteria Not available');await expect(summary.locator('.hf-tag--ok')).toHaveCount(0);
+ await page.getByRole('button', { name: 'Runs', exact: true }).click();
+ await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+ await expect(page.getByRole('alert').filter({ hasText: 'Unavailable' })).toBeVisible();
+ await expect(page.getByRole('list', { name: 'Run status', exact: true })).toHaveCount(0);
+ await expect(page.locator('.hf-tag--ok')).toHaveCount(0);
  expect(state.writes).toEqual([]);
 });
+
+test('Statement sets preserve shared sources and reader focus', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  const run = runFixture(state);
+  const source = {
+    evidence_version_id: 'retained-note',
+    content: 'Exact retained note <script>inert</script>',
+    source_refs: ['Exact retained reference'],
+  };
+  run.history.configuration.schema_version = '3';
+  run.history.configuration.derivation = null;
+  run.history.configuration.general_context_evidence_version_ids = [];
+  run.history.configuration.assumptions = ['first', 'second'].map((assumption_id) => ({
+    assumption_id,
+    statement: 'Identical statement text under distinct identities.',
+    evidence_links: [{ evidence_version_id: source.evidence_version_id, relation: 'supports' }],
+  }));
+  run.history.configuration.evidence_snapshots = [source];
+  await login(page, `#v=1&study=${sid}&view=runs`);
+  await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+  await page.getByRole('tab', { name: 'Configuration', exact: true }).click();
+  const opener = page.getByRole('button', {
+    name: '2 statements · Configuration assumptions',
+    exact: true,
+  });
+  await opener.click();
+  const context = page.getByRole('region', { name: 'Scientific context', exact: true });
+  await expect(context).toContainText('Identical statement text under distinct identities.');
+  await expect(context.locator('.hf-claim__statement')).toHaveCount(2);
+  for (const card of await context.locator('.hf-claim').all()) {
+    await expect(card).toContainText('Identical statement text under distinct identities.');
+    await expect(card).toBeVisible();
+  }
+  const evidence = context
+    .locator('[data-statement="second"]')
+    .getByRole('button', { name: 'View evidence', exact: true });
+  await evidence.click();
+  await expect(context).toContainText(source.content);
+  await expect(context).toContainText('Exact retained reference');
+  await expect(context).toContainText('Source passage unavailable. Showing evidence content.');
+  await capture(page, 'contour-source');
+  await context.getByRole('button', { name: 'Back to statements', exact: true }).click();
+  await expect(context.locator('[data-statement="second"]')).toBeVisible();
+  await expect(evidence).toBeFocused();
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await capture(page, 'contour-context');
+  await page
+    .getByRole('region', { name: 'Assistant', exact: true })
+    .getByRole('button', { name: 'Close Assistant', exact: true })
+    .click();
+  await context.getByRole('button', { name: 'Close Scientific context', exact: true }).click();
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(context).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('Limit context preserves native modality and return focus', async ({
+  page,
+}) => {
+  await harness(page);
+  const evidence = {
+    evidence_version_id: 'limit-source',
+    content: 'Measured range only.',
+    source_refs: ['Laboratory notebook, range measurements'],
+  };
+  const content = {
+    schema_version: '2',
+    question: 'What is supported within the measured range?',
+    scope: 'Measured range',
+    limitations: '',
+    open_questions: '',
+    model_bindings: [],
+    steps: [],
+    assumptions: [],
+    cases: [],
+    basis_refs: [],
+    original_question: null,
+    elaboration: null,
+    limit_items: [
+      {
+        limit_id: 'limit-one',
+        statement: 'Do not extrapolate.',
+        evidence_links: [
+          { evidence_version_id: evidence.evidence_version_id, relation: 'supports' },
+        ],
+      },
+    ],
+  };
+  const saved = {
+    version: {
+      schema_version: '2',
+      approach_version_id: 'approach-v1',
+      version_number: 1,
+      content,
+      digest: 'fixture-approach',
+    },
+    closure: {
+      schema_version: '4',
+      models: [],
+      configurations: [],
+      approach_versions: [],
+      run_contexts: [],
+      evidence: [evidence],
+      root_approach_version_id: 'approach-v1',
+      root_approach_digest: 'fixture-approach',
+      digest: 'fixture-closure',
+    },
+  };
+  await page.route(
+    (url) => url.pathname === `/api/1/studies/${sid}/approach`,
+    (route) =>
+      route.fulfill({
+        json: { schema_version: '1', data: { draft: null, latest_version: saved.version } },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === `/api/1/studies/${sid}/approach/versions/approach-v1`,
+    (route) => route.fulfill({ json: { schema_version: '1', data: saved } }),
+  );
+  await page.route(
+    (url) => url.pathname.includes('/approach/versions/approach-v1/'),
+    (route) =>
+      route.fulfill({ json: { schema_version: '1', data: { items: [], next_cursor: null } } }),
+  );
+  await login(page, `#v=1&study=${sid}&view=overview`);
+  await page.getByRole('button', { name: 'See more details', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Study details', exact: true });
+  const opener = dialog.getByRole('button', { name: 'Inspect statement', exact: true });
+  await opener.click();
+  const context = dialog.getByRole('region', { name: 'Scientific context', exact: true });
+  await expect(context.locator('[data-statement="limit-one"]')).toBeFocused();
+  await context.getByRole('button', { name: 'View evidence', exact: true }).click();
+  await expect(
+    context.getByRole('heading', { name: 'Evidence content', exact: true }),
+  ).toBeFocused();
+  await expect(context).toContainText(evidence.content);
+  await capture(page, 'contour-modal-source');
+  await context.getByRole('button', { name: 'Back to statements', exact: true }).click();
+  await expect(context.getByRole('button', { name: 'View evidence', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(context).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(opener).toBeFocused();
+});
+
+for (const outcome of ['late', 'denied'] as const) {
+  test(`Context source ${outcome} responses cannot retain protected content`, async ({ page }) => {
+    const state = await harness(page);
+    const run = runFixture(state);
+    run.history.configuration.schema_version = '3';
+    run.history.configuration.derivation = null;
+    run.history.configuration.general_context_evidence_version_ids = [];
+    run.history.configuration.assumptions = [
+      {
+        assumption_id: 'source-bound',
+        statement: 'Protected statement',
+        evidence_links: [{ evidence_version_id: 'unloaded-source', relation: 'challenges' }],
+      },
+    ];
+    let requested!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      requested = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(
+      (url) => url.pathname === `/api/1/studies/${sid}/evidence/unloaded-source`,
+      async (route) => {
+        requested();
+        await held;
+        await route.fulfill(
+          outcome === 'denied'
+            ? {
+                status: 403,
+                json: {
+                  error: {
+                    code: 'forbidden',
+                    message: 'Access lost',
+                    fields: [],
+                    outcome: 'unchanged',
+                  },
+                },
+              }
+            : {
+                json: {
+                  schema_version: '1',
+                  data: {
+                    evidence_version_id: 'unloaded-source',
+                    content: 'Late protected source',
+                    source_refs: [],
+                  },
+                },
+              },
+        );
+      },
+    );
+    await login(page, `#v=1&study=${sid}&view=runs`);
+    await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+    await page.getByRole('tab', { name: 'Configuration', exact: true }).click();
+    await page.getByRole('button', { name: 'Inspect statement', exact: true }).click();
+    const context = page.getByRole('region', { name: 'Scientific context', exact: true });
+    await context.getByRole('button', { name: 'View evidence', exact: true }).click();
+    await started;
+    if (outcome === 'late') await page.getByRole('button', { name: 'Home', exact: true }).click();
+    release();
+    await expect(context).toHaveCount(0);
+    await expect(page.getByText('Late protected source', { exact: true })).toHaveCount(0);
+    expect(state.writes).toEqual([]);
+  });
+}

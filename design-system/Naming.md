@@ -96,3 +96,7 @@ Any change to a reader-facing name is made in this file together with the interf
 Study details uses "Current approach" for the approach scope and omits empty optional prose sections in read-only views. Assumption role fields, citation relationship codes and evidence version IDs stay out of this brief; proposed conditions remain labelled "Proposed condition", conflicting evidence stays visibly labelled "Conflicting evidence", and citation relationships and version IDs remain available when opening the evidence. Authorship claims are labelled as supplied and unverified.
 
 The model inspector labels a linked step's shared transformation "Method context" and its purpose/rationale "Why this method". Exact approach and model pins remain in "Method record"; a component-level computation description is never inferred from a shared step.
+
+## Contextual reading
+
+Use “Inspect statement” for an assumption or limit and “Inspect answer basis” for an answer. Keep Assumption, Limit, Observation and Interpretation as domain headings. A count says “N statements” only for explicit owner/version-scoped item identities; never count sources or prose fields. “Answer-wide basis” names the existing answer relationship. “Evidence content” is retained text, not a promised authenticated source passage.

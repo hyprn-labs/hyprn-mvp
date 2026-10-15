@@ -84,14 +84,33 @@ test('retained model and configuration stay exact during modeling outage, withou
  await login(page,`#v=1&study=${sid}&view=runs`);await page.getByRole('button',{name:'Inspect run run-fixture',exact:true}).click();await expect(page.getByRole('button',{name:'Refresh run status',exact:true})).toHaveCount(0);await expect(page.getByText('Criterion outcomes',{exact:true})).toHaveCount(0);
  await page.getByRole('tab',{name:'Configuration',exact:true}).click();const config=page.getByRole('tabpanel',{name:'Configuration',exact:true});await expect(config.locator('.configuration-criterion .hf-criterion__requirement span')).toHaveText(['at most','10','dimensionless']);await expect(config.getByText('Not met',{exact:true})).toBeVisible();await expect(config.getByRole('button',{name:'Run this configuration',exact:true})).toHaveCount(0);await expect(config.locator('.configuration-inputs .hf-field__ro')).toHaveText('0');
  await config.locator('.configuration-criterion').getByRole('button',{name:'View evidence',exact:true}).click();await expect(page.getByRole('dialog',{name:'Evidence detail',exact:true})).toContainText('Exact retained note <script>inert</script>');await page.keyboard.press('Escape');await capture(page,'retained-configuration');
- await page.getByRole('tab',{name:'Model',exact:true}).click();await page.locator('.connected-graph [data-instance="a"]').click();await expect(page.getByRole('region',{name:'Quantities table',exact:true}).getByRole('columnheader',{name:'Value',exact:true})).toBeVisible();await details(page).getByRole('button',{name:'View source',exact:true}).click();expect(await page.getByRole('dialog',{name:'Source · Linear response',exact:true}).getByLabel('Read-only authored source').textContent()).toBe(Buffer.from(d.history.model_snapshot.source_files[0].bytes,'base64').toString('utf8'));await expect(details(page).locator('.quantity-endpoints:visible')).toHaveCount(0);await capture(page,'retained-model');expect(state.writes).toEqual([]);expect(state.unknown).toEqual([]);
+ await page.getByRole('tab', { name: 'Model', exact: true }).click();
+ await page.locator('.connected-graph [data-instance="a"]').click();
+ await expect(
+   page
+     .getByRole('region', { name: 'Quantities table', exact: true })
+     .getByRole('columnheader', { name: 'Value', exact: true }),
+ ).toBeVisible();
+ await openSource(page);
+ expect(
+   await page
+     .getByRole('region', { name: 'Selection inspector', exact: true })
+     .getByLabel('Read-only authored source')
+     .textContent(),
+ ).toBe(Buffer.from(d.history.model_snapshot.source_files[0].bytes, 'base64').toString('utf8'));
+ await expect(details(page).locator('.quantity-endpoints:visible')).toHaveCount(0);
+ await capture(page, 'retained-model');
+ expect(state.writes).toEqual([]);
+ expect(state.unknown).toEqual([]);
 });
 test('retained file preview verifies hashes, preserves download bytes, and drops late responses',async({page})=>{
  const {createHash}=await import('node:crypto'); const {source,latch}=await import('./foundry-fixtures');
  const state=await harness(page); const d=runFixture(state),bytes=Buffer.from(source),sha256=createHash('sha256').update(bytes).digest('hex');state.outage=true;
  d.history.artifacts=[{artifact_id:'source',name:'sources/exact.py',role:'source',size:bytes.length,sha256}];
  await page.route(`**/api/1/studies/${sid}/runs/run-fixture/artifacts/source`,r=>r.fulfill({body:bytes,contentType:'application/octet-stream'}));
- await login(page,`#v=1&study=${sid}&view=runs`);await page.getByRole('button',{name:'Inspect run run-fixture',exact:true}).click();await page.getByRole('tab',{name:'Evidence',exact:true}).click();
+ await login(page, `#v=1&study=${sid}&view=runs`);
+ await page.getByRole('button', { name: 'Inspect run run-fixture', exact: true }).click();
+ await page.locator('details.run-files > summary').click();
  const row=page.getByRole('region',{name:'Run files table',exact:true}).locator('tbody tr');await row.getByRole('button',{name:'Preview',exact:true}).click();const preview=page.getByLabel('Read-only run file',{exact:true});await expect(preview).toBeFocused();expect(await preview.textContent()).toBe(source);
  await page.getByRole('button',{name:'Close preview',exact:true}).click();const download=page.waitForEvent('download');await row.getByRole('button',{name:'Download',exact:true}).click();expect(await readFile((await (await download).path())!)).toEqual(bytes);
  await page.route(`**/api/1/studies/${sid}/runs/run-fixture/artifacts/source`,r=>r.fulfill({body:Buffer.alloc(bytes.length,120),contentType:'application/octet-stream'}));await row.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.getByRole('alert')).toContainText('This file could not be verified. It was not downloaded.');await expect(preview).toHaveCount(0);

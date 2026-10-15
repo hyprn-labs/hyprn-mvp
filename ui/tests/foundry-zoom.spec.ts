@@ -125,21 +125,62 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
           observations.push({ name: 'local-table-scroll-' + theme, dimensions });
         }
       }
+      await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+      await page.locator('.connected-graph [data-instance="a"]').click();
       // Details stack What it computes · Why · Assumptions with Edit and Edit ports; no tabs, no ports table.
       await expect(details(page).getByRole('tab')).toHaveCount(0); await expect(details(page).locator('table')).toHaveCount(0);
-      for (const name of ['Edit ports', 'Add assumption']) {
-        const control = details(page).getByRole('button', { name, exact: true }); await control.scrollIntoViewIfNeeded();
+      for (const name of ['Edit quantities', 'Add assumption']) {
+        const control = details(page).getByRole('button', { name, exact: true });
+        await control.scrollIntoViewIfNeeded();
         await check('details-' + name.toLowerCase().replace(' ', '-') + '-' + theme, control);
-        if (name === 'Edit ports') {
+        if (name === 'Edit quantities') {
           // Quantities table at genuine 200%: Unit (column 5) stays on one readable line;
           // the definition (column 4) wraps inside its own cell.
           const ports = page.getByRole('table', { name: 'Quantities', exact: true });
-          await expect(ports.locator('thead th')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
-          const rows = await ports.evaluate(t => [...t.querySelectorAll('tbody tr')].map(tr => { const cell = (n: number) => { const e = tr.children[n] as HTMLElement, r = document.createRange(); r.selectNodeContents(e); return { text: e.textContent, lines: r.getClientRects().length, fits: e.scrollWidth <= e.clientWidth, textRight: r.getBoundingClientRect().right, cellRight: e.getBoundingClientRect().right }; }; return { definition: cell(3), units: cell(4) }; }));
+          await expect(ports.locator('thead th')).toHaveText([
+            'Quantity',
+            'Component',
+            'Direction',
+            'Definition',
+            'Unit',
+          ]);
+          const rows = await ports.evaluate((t) =>
+            [...t.querySelectorAll('tbody tr')].map((tr) => {
+              const cell = (n: number) => {
+                const e = tr.children[n] as HTMLElement,
+                  r = document.createRange();
+                r.selectNodeContents(e);
+                return {
+                  text: e.textContent,
+                  lines: r.getClientRects().length,
+                  fits: e.scrollWidth <= e.clientWidth,
+                  textRight: r.getBoundingClientRect().right,
+                  cellRight: e.getBoundingClientRect().right,
+                };
+              };
+              return { definition: cell(3), units: cell(4) };
+            }),
+          );
           expect(rows.length).toBeGreaterThan(0);
-          for (const row of rows) { expect(row.units.lines, JSON.stringify(row)).toBe(1); expect(row.units.fits, JSON.stringify(row)).toBe(true); expect(row.definition.fits, JSON.stringify(row)).toBe(true); expect(row.definition.textRight, JSON.stringify(row)).toBeLessThanOrEqual(row.definition.cellRight + 1); }
+          for (const row of rows) {
+            expect(row.units.lines, JSON.stringify(row)).toBe(1);
+            expect(row.units.fits, JSON.stringify(row)).toBe(true);
+            expect(row.definition.fits, JSON.stringify(row)).toBe(true);
+            expect(row.definition.textRight, JSON.stringify(row)).toBeLessThanOrEqual(
+              row.definition.cellRight + 1,
+            );
+          }
           observations.push({ name: 'port-table-' + theme, rows });
-          await ports.scrollIntoViewIfNeeded(); const shot = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }); await writeFile(join(evidence, 'details-port-table-' + theme + '-200.png'), Buffer.from(shot.data, 'base64'));
+          await ports.scrollIntoViewIfNeeded();
+          const shot = await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: false,
+          });
+          await writeFile(
+            join(evidence, 'details-port-table-' + theme + '-200.png'),
+            Buffer.from(shot.data, 'base64'),
+          );
         }
       }
       await button('Configurations').click(); await check('configurations-' + theme, button('New configuration'));
@@ -147,17 +188,21 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
       await check('configuration-saved-' + theme, button('Copy configuration to draft'));
       await button('Copy configuration to draft').click();
       await check('configuration-new-' + theme, page.getByLabel('Configuration name', { exact: true }));
+      await button('Input tools').click();
       await button('Add evidence').first().click(); await expect(page.getByRole('dialog').locator('.evidence-record')).toHaveCount(1); await check('evidence-picker-' + theme, page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }));
       await page.keyboard.press('Escape');
+      await button('Close Input tools and model binding').click();
       await button('Runs').click();
       if (await page.getByRole('dialog', { name: 'Unsaved changes' }).isVisible()) await button('Discard changes').click();
       await check('runs-' + theme, button('Inspect run run-fixture'));
       await button('Inspect run run-fixture').click();
-      for (const name of ['Results', 'Model', 'Configuration', 'Evidence']) {
-        const tab = page.getByRole('tab', { name, exact: true }); await tab.focus(); await page.keyboard.press('Enter');
+      for (const name of ['Results', 'Model', 'Configuration']) {
+        const tab = page.getByRole('tab', { name, exact: true });
+        await tab.focus();
+        await page.keyboard.press('Enter');
         await check('run-' + name.split(' ')[0].toLowerCase() + '-' + theme, tab);
       }
-      await button('Evidence').click();
+      await page.goto(origin + '/ui/#v=1&study=' + sid + '&view=evidence');
       await check('evidence-' + theme, page.getByLabel('Filter evidence', { exact: true }));
     }
     expect(state.unknown).toEqual([]);

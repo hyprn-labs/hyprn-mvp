@@ -39,6 +39,10 @@
   --label-gap: 6px;
   --appbar-brand-min: 90px;
   --navigation-width: 204px;
+  --workspace-canvas-min: 480px;
+  --context-panel-width: 280px;
+  --assistant-panel-width: 240px;
+  --context-reader-height: 75vh;
   --texture-pitch: 6px;
   --font-sans: "Manrope", -apple-system, "Segoe UI", system-ui, sans-serif;
   --font-condensed: "Manrope", -apple-system, "Segoe UI", system-ui, sans-serif;

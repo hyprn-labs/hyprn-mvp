@@ -21,6 +21,7 @@ export function EvidenceRecordBody({
   compact = false,
   relation,
   brief = compact,
+  contextual = false,
 }: {
   record: EvidenceSnapshot;
   action?: ReactNode;
@@ -28,6 +29,7 @@ export function EvidenceRecordBody({
   onSelectVersion?: (record: EvidenceRecord) => void;
   onUnavailable?: () => void;
   compact?: boolean;
+  contextual?: boolean;
   brief?: boolean;
   /** Relationship word shown before the title (assumption evidence rows). */ relation?: string;
 }) {
@@ -139,9 +141,11 @@ export function EvidenceRecordBody({
           </p>
         )}
       </div>
-      {!compact && <p className="evidence-content hf-evidence-excerpt">{record.content}</p>}
+      {!compact && !contextual && (
+        <p className="evidence-content hf-evidence-excerpt">{record.content}</p>
+      )}
       <ActionGroup className="section-actions">
-        <ActionDialog title="Evidence detail" label="View evidence" size="sm">
+        <EvidenceReaderFrame contextual={contextual}>
           <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3>
           <RecordAttribution kind="evidence_version" id={inspected.evidence_version_id} line />
           {brief && relation && (
@@ -267,7 +271,7 @@ export function EvidenceRecordBody({
               )}
             </section>
           )}
-        </ActionDialog>
+        </EvidenceReaderFrame>
         {action}
       </ActionGroup>
     </div>
@@ -315,5 +319,21 @@ export function EvidenceList({ records, ids = records.map(e => e.evidence_versio
         );
       })}
     </EvidenceStack>
+  );
+}
+
+function EvidenceReaderFrame({
+  contextual,
+  children,
+}: {
+  contextual: boolean;
+  children: ReactNode;
+}) {
+  return contextual ? (
+    <div className="hf-evidence-reader">{children}</div>
+  ) : (
+    <ActionDialog title="Evidence detail" label="View evidence" size="sm">
+      {children}
+    </ActionDialog>
   );
 }

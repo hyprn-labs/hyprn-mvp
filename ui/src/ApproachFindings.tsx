@@ -1,3 +1,4 @@
+import { StatementActions } from './ContextDetails';
 import { RecordAttribution } from './attribution';
 import { AnswerExplorer } from './AnswerExplorer';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -23,6 +24,7 @@ import type {
 } from './contract';
 import { EvidenceRecordBody } from './EvidenceView';
 import {
+  ResourceCard,
   ActionDialog,
   Button,
   DataTable,
@@ -68,6 +70,72 @@ function ScientificAnswer({
 }) {
   return (
     <div className="approach-answer-record">
+      <StatementActions
+        compact
+        actionLabel="Inspect answer basis"
+        group={{
+          owner: answer.answer_version_id,
+          version: answer.answer_version_id,
+          label: answer.case_id ? 'Case answer' : 'Study answer',
+          statements: [
+            { id: 'observations', kind: 'Observation', statement: answer.observations },
+            { id: 'interpretation', kind: 'Interpretation', statement: answer.interpretation },
+          ]
+            .filter((item) => item.statement.trim())
+            .map((item) => ({
+              ...item,
+              scope:
+                (answer.case_id ? 'Case answer' : 'Study answer') +
+                ' · Version ' +
+                answer.version_number,
+
+              limits: answer.qualifications.length ? (
+                <ul>
+                  {answer.qualifications.map((text, index) => (
+                    <li key={index}>{text}</li>
+                  ))}
+                </ul>
+              ) : undefined,
+              basisLabel: 'Basis for the whole answer',
+              sources: answer.basis.evidence_version_ids.map((id) => ({ id })),
+              actions: (
+                <>
+                  {answer.basis.run_ids.map((id) => (
+                    <Button
+                      key={id}
+                      size="sm"
+                      onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}
+                    >
+                      View basis run {id.slice(0, 8)}
+                    </Button>
+                  ))}
+                  {answer.basis.configuration_revision_ids.map((id) => (
+                    <Button
+                      key={id}
+                      size="sm"
+                      onClick={() =>
+                        onOpen({ study: studyId, view: 'configurations', configuration: id })
+                      }
+                    >
+                      View basis configuration {id.slice(0, 8)}
+                    </Button>
+                  ))}
+                  {answer.basis.case_answer_version_ids.map((id) => (
+                    <AnswerBasis
+                      key={id}
+                      kind="answer"
+                      id={id}
+                      api={api}
+                      studyId={studyId}
+                      onOpen={onOpen}
+                    />
+                  ))}
+                </>
+              ),
+            })),
+        }}
+      />
+
       {!recordOnly && (
         <AnswerExplorer api={api} studyId={studyId} answer={answer} onOpen={onOpen} />
       )}
@@ -100,7 +168,7 @@ function ScientificAnswer({
           {support}
           {!!answer.basis.evidence_version_ids.length && (
             <div className="answer-support">
-              <h4>Sources</h4>
+              <h4>Answer-wide sources</h4>
               <div className="answer-source-actions">
                 {answer.basis.evidence_version_ids.map((id) => (
                   <AnswerBasis
@@ -1644,9 +1712,8 @@ export function ApproachFindings({
           <div className="approach-case-cards">
             {!focusCase &&
               cardGroups.map((group) => (
-                <article className="case-list-row" key={group.id}>
+                <ResourceCard className="case-list-row" key={group.id} title={group.title}>
                   <div>
-                    <h3>{group.title}</h3>
                     <p className="context-copy">{group.item?.question}</p>
                   </div>
                   <Button
@@ -1657,7 +1724,7 @@ export function ApproachFindings({
                   >
                     Open case
                   </Button>
-                </article>
+                </ResourceCard>
               ))}
             {focusCase && (
               <Button

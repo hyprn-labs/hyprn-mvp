@@ -28,7 +28,7 @@ test('model quantities inspect their component; tables, XDSM and portability sta
   // Details explain the component (What it computes · Why · Assumptions); no ports table or tabs.
   await expect(
     details(page).getByRole('heading', { name: 'Method context', exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     details(page).getByRole('heading', { name: 'Why this method', exact: true }),
   ).toHaveCount(0);
@@ -130,8 +130,14 @@ test('configuration fields align; one criterion persists visibly; saved layout s
   const headings = await saved.getByRole('heading', { level: 3 }).allTextContents();
   // Current saved composition: context first (261010-kpx-03), approach (02-20), assumptions (02-13).
   // Model assumptions are one line with View model assumptions, not a repeated section.
-  expect(headings).toEqual(['Context', 'Modeling approach', 'Inputs and provenance', 'Criteria', 'Assumptions']);
-  await expect(saved.getByText(/^Model assumptions: /)).toBeVisible();
+  expect(headings).toEqual(['Inputs and provenance', 'Criteria']);
+  await saved.getByRole('button', { name: 'Configuration record details', exact: true }).click();
+  const record = page.getByLabel('Saved configuration JSON', { exact: true });
+  const content = JSON.parse((await record.textContent())!);
+  expect(content.context_snapshot).toEqual(state.configurations[0].configuration.context_snapshot);
+  expect(content.schema_version).toBe('3');
+  expect(content.assumptions).toEqual([]);
+  await page.getByRole('button', { name: 'Close Configuration record', exact: true }).click();
   await capture(page, 'configuration-saved');
   await page.getByRole('button', { name: 'Runs', exact: true }).click();
   await page.getByRole('button', { name: 'Configurations', exact: true }).click();
@@ -224,13 +230,13 @@ test('component and connection dialogs close only after successful atomic apply'
   await preview.getByRole('button', { name: 'Apply changes', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Add component', exact: true })).toBeHidden();
   await expect(page.locator('.connected-graph [data-instance="new-instance"]')).toBeVisible();
-  await page.getByRole('button', { name: 'Connect ports', exact: true }).click();
+  await page.getByRole('button', { name: 'Connect quantities', exact: true }).click();
   await page.getByLabel('Connection output', { exact: true }).selectOption('b/y');
   await page.getByLabel('Connection input', { exact: true }).selectOption('new-instance/v');
   await expect(page.getByRole('button', { name: 'Queue connection', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Review connection', exact: true }).click();
   await expect(preview).toContainText('Squared response · y → Independent component · v');
-  await preview.getByRole('button', { name: 'Connect ports', exact: true }).click();
+  await preview.getByRole('button', { name: 'Connect quantities', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Connections', exact: true })).toBeHidden();
   expect(commands).toHaveLength(2);
   expect(commands[0].edits.map((e: any) => e.kind)).toEqual(['create_definition', 'instantiate']);
@@ -335,13 +341,15 @@ test('run Model tab and saved configuration View model version reuse the canonic
   await s4Shot(page, 'run-model', view);
   await table.getByRole('button', { name: 'Inspect component Squared response', exact: true }).first().click();
   await expect(inspector.getByRole('heading', { name: 'Squared response', exact: true })).toBeVisible();
-  await expect(
-    inspector.getByRole('heading', { name: 'Method context', exact: true }),
-  ).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: 'Method context', exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     inspector.getByRole('heading', { name: 'Why this method', exact: true }),
   ).toHaveCount(0);
-  await expect(inspector).toContainText('No modeling approach step is linked to this component.');
+  await expect(inspector.locator('details.component-source > summary')).toHaveText(
+    'Python function',
+  );
   await expect(inspector.locator('table')).toHaveCount(0);
   await expect(table.locator('[data-variable]')).toHaveCount(2);
   await expect(view.getByRole('button', { name: 'Show all quantities', exact: true })).toBeVisible();

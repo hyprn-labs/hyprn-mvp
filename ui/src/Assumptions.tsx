@@ -1,3 +1,4 @@
+import { StatementActions, type ContextStatement } from './ContextDetails';
 import { ActionGroup } from './design';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, DialogFrame, SectionHeader, TextArea, StatusTag, Select, TextInput } from './design';
@@ -223,6 +224,24 @@ function OwnedAssumptions({
       Add assumption
     </Button>
   );
+  const statements: ContextStatement[] = items.map((item) => ({
+    id: item.assumption_id,
+    kind: 'Assumption',
+    statement: item.statement,
+    scope: ownerLabel,
+    sources: item.evidence_links.map((link) => ({
+      id: link.evidence_version_id,
+      relation: relationLabel(link.relation),
+      locator: 'locator' in link ? String(link.locator ?? '') : undefined,
+      record: records.find((record) => record.evidence_version_id === link.evidence_version_id),
+    })),
+  }));
+  const statementGroup = {
+    owner: ownerKey,
+    version: ownerKey,
+    label: ownerLabel + ' assumptions',
+    statements,
+  };
   const List = regionless ? 'div' : 'section';
   return (
     <List
@@ -234,6 +253,7 @@ function OwnedAssumptions({
       ) : (
         addButton
       )}
+      {!!items.length && <StatementActions group={statementGroup} />}
       {!items.length && !brief && !editable && <p className="context-line">No assumptions</p>}
       {items.map((item) => (
         <Assertion className="assumption-item" key={item.assumption_id} statement={item.statement}>
@@ -251,6 +271,7 @@ function OwnedAssumptions({
               </p>
             )}
           {evidenceRows(item)}
+          <StatementActions compact group={statementGroup} selected={item.assumption_id} />
           {editable && (
             <ActionGroup className="actions">
               <Button

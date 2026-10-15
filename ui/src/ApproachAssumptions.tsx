@@ -1,3 +1,4 @@
+import { StatementActions } from './ContextDetails';
 import { modelAssumptions, recordedModelAssumptions, configurationContext } from './recordViews';
 import { ActionGroup } from './design';
 import { ApproachController, useApproachController } from './ApproachController';
@@ -251,7 +252,10 @@ export function ApproachAssumptions({
         showHeading={showHeading}
         brief={brief}
         approach
-        ownerKey={studyId ?? 'retained'}
+        ownerKey={[
+          studyId ?? 'retained',
+          ctx.baseVersion ?? ctx.contextLabel ?? 'current draft',
+        ].join(':')}
         ownerLabel="Modeling approach"
         items={content.assumptions}
         records={records}
@@ -869,9 +873,33 @@ function Handoff({ proposal, onClose }: { proposal: ApproachAssumption1; onClose
 
 /** A supplied origin claim beside the agreed question; attribution is never authenticated. */
 function QuestionClaim({title,claim}:{title:string;claim:ApproachQuestionClaim1|null}){
+  const { baseVersion, contextLabel, content } = useAnnotations();
   if (!claim?.text.trim()) return null;
   return (
     <div className="study-details-claim">
+      <StatementActions
+        compact
+        group={{
+          owner: 'question/' + (baseVersion ?? contextLabel ?? 'current draft'),
+          version: baseVersion ?? 'current draft',
+          label: title,
+          statements: [
+            {
+              id: title,
+              kind: title,
+              statement: claim.text,
+              scope: contextLabel ?? 'Current approach draft',
+              sources: [],
+              attribution: (
+                <p>
+                  Supplied attribution · {claim.attribution.label || 'Unknown'}. Authorship has not
+                  been verified.
+                </p>
+              ),
+            },
+          ],
+        }}
+      />
       <h4>{title}</h4>
       <p className="context-copy">{claim.text}</p>
       <p className="context-line">
@@ -1103,7 +1131,7 @@ export function StudyDetailsDialog({
   );
 }
 function StudyDetails({ limitsHeading }: { limitsHeading: RefObject<HTMLHeadingElement | null> }) {
-  const { content, onChange, disabled, contextLabel } = useAnnotations();
+  const { content, onChange, disabled, contextLabel, records, baseVersion } = useAnnotations();
   const [editing, setEditing] = useState<{
     limit_id: string;
     statement: string;
@@ -1191,6 +1219,28 @@ function StudyDetails({ limitsHeading }: { limitsHeading: RefObject<HTMLHeadingE
           <AssertionList>
             {limits.map((item) => (
               <Assertion key={item.limit_id} statement={item.statement}>
+                <StatementActions
+                  compact
+                  group={{
+                    owner: 'limits/' + (baseVersion ?? contextLabel ?? 'current draft'),
+                    version: baseVersion ?? 'current draft',
+                    label: 'Study limits',
+                    statements: limits.map((limit) => ({
+                      id: limit.limit_id,
+                      kind: 'Limit',
+                      statement: limit.statement,
+                      scope: contextLabel ?? 'Current approach draft',
+                      sources: limit.evidence_links.map((link) => ({
+                        id: link.evidence_version_id,
+                        relation: link.relation,
+                        record: records.find(
+                          (record) => record.evidence_version_id === link.evidence_version_id,
+                        ),
+                      })),
+                    })),
+                  }}
+                  selected={item.limit_id}
+                />
                 <Citations
                   brief
                   links={item.evidence_links}
@@ -1414,6 +1464,7 @@ export function OverviewStudyQuestion({
       <ApproachAnnotations
         content={record.version.content}
         resolved={record.closure}
+        baseVersion={record.version.approach_version_id}
         contextLabel={'Current saved approach v' + record.version.version_number}
       >
         {children(
