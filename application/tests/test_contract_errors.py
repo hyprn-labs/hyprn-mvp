@@ -5,6 +5,7 @@ derived from the contract (never from the submitted value). The envelope, codes 
 statuses are unchanged: local input is ``invalid_request`` 400; a remote (modeling
 backend) payload stays ``backend_unavailable`` 503 with no diagnostics.
 """
+
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,42 @@ from hyprn_mvp_app.modeling import ModelingClient
 from hyprn_mvp_app.store import Store
 
 from conftest import LOOPBACK_ORIGIN as ORIGIN
+
 SECRET = 'SECRET-SUBMITTED-VALUE'
+
+
+def test_linear_unique_items_preserves_pinned_json_schema_equality_and_mutation_checks():
+    from jsonschema import Draft202012Validator
+    from itertools import product
+
+    values = [
+        None,
+        False,
+        True,
+        0,
+        -0.0,
+        1,
+        1.0,
+        2,
+        1e20,
+        10**20,
+        '',
+        '1',
+        [],
+        [1],
+        [True],
+        {},
+        {'a': 1, 'b': [0]},
+        {'b': [-0.0], 'a': 1.0},
+    ]
+    schema = dict(type='array', uniqueItems=True)
+    original, fast = Draft202012Validator(schema), contracts.JsonValidator(schema)
+    for left, right in product(values, repeat=2):
+        assert fast.is_valid([left, right]) == original.is_valid([left, right])
+    items = [{'path': str(i), 'sha256': str(i).zfill(64)} for i in range(1000)]
+    assert fast.is_valid(items)
+    items[-1] = dict(items[0])
+    assert not fast.is_valid(items)
 
 
 def rejected(name, value, **kw):
@@ -33,42 +69,66 @@ def test_missing_and_unknown_fields_are_reported_per_field_not_at_root():
     # A wire/schema failure is distinguishable from domain failures but keeps the envelope.
     assert isinstance(error, contracts.ContractError) and error.schema == 'Diagnostic'
     paths = {f['path']: f['message'] for f in error.fields}
-    assert paths == {'/code': 'Required field is missing.', '/message': 'Required field is missing.',
-                     '/element_ref': 'Required field is missing.', '/unexpected': 'Field is not allowed here.',
-                     '/a~1b~0c': 'Field is not allowed here.'}
+    assert paths == {
+        '/code': 'Required field is missing.',
+        '/message': 'Required field is missing.',
+        '/element_ref': 'Required field is missing.',
+        '/unexpected': 'Field is not allowed here.',
+        '/a~1b~0c': 'Field is not allowed here.',
+    }
     assert all(f['code'] == 'invalid' and f['element_ref'] is None for f in error.fields)
     assert 'Invalid typed value' not in str(error.fields)
 
 
 def test_nested_type_bound_and_format_failures_name_the_field_and_rule():
-    error = rejected('Diagnostic', dict(path=[SECRET], code='x' * 5000, message='m', element_ref='not-a-uuid'))
+    error = rejected(
+        'Diagnostic', dict(path=[SECRET], code='x' * 5000, message='m', element_ref='not-a-uuid')
+    )
     by_path = {f['path']: f['message'] for f in error.fields}
     assert by_path['/path'] == 'Expected string.'
     assert by_path['/code'] == 'Must be at most 4096 characters.'
-    assert by_path['/element_ref'].startswith(('Does not match any allowed form', 'Must ', 'Expected '))
+    assert by_path['/element_ref'].startswith(
+        ('Does not match any allowed form', 'Must ', 'Expected ')
+    )
     assert SECRET not in str(error.fields) and 'x' * 50 not in str(error.fields)
 
 
 def test_closest_allowed_form_is_reported_for_typed_unions():
     error = rejected('UnitDeclaration1', dict(kind='physical', expression=SECRET))
-    assert error.fields and all(f['path'] != '/' or f['message'] != 'Invalid typed value' for f in error.fields)
+    assert error.fields and all(
+        f['path'] != '/' or f['message'] != 'Invalid typed value' for f in error.fields
+    )
     assert SECRET not in str(error.fields)
     assert any(f['path'] in ('/', '/expression') for f in error.fields)
 
 
 def test_non_canonical_value_points_at_the_offending_field():
-    error = rejected('Diagnostic', dict(path='/x', code='c', message='m', element_ref=None, extra=[1, float('nan')]))
-    assert error.fields == [dict(path='/extra/1', code='invalid', message='Number must be finite.', element_ref=None)]
+    error = rejected(
+        'Diagnostic',
+        dict(path='/x', code='c', message='m', element_ref=None, extra=[1, float('nan')]),
+    )
+    assert error.fields == [
+        dict(path='/extra/1', code='invalid', message='Number must be finite.', element_ref=None)
+    ]
     error = rejected('Diagnostic', {'path': '\ud800'})
-    assert error.fields == [dict(path='/path', code='invalid', message='Text must be valid Unicode.', element_ref=None)]
+    assert error.fields == [
+        dict(path='/path', code='invalid', message='Text must be valid Unicode.', element_ref=None)
+    ]
     error = rejected('Diagnostic', {'n': 2**53 + 1})
     assert error.fields[0]['path'] == '/n' and 'Integer' in error.fields[0]['message']
 
 
 def test_remote_payload_failure_keeps_backend_unavailable_without_details():
     error = rejected('Diagnostic', dict(path=SECRET), remote=True)
-    assert (error.code, error.status, error.outcome, error.fields) == ('backend_unavailable', 503, 'unknown', [])
-    assert error.data() == dict(code='backend_unavailable', status=503, current_revision=None, fields=[], outcome='unknown')
+    assert (error.code, error.status, error.outcome, error.fields) == (
+        'backend_unavailable',
+        503,
+        'unknown',
+        [],
+    )
+    assert error.data() == dict(
+        code='backend_unavailable', status=503, current_revision=None, fields=[], outcome='unknown'
+    )
 
 
 def test_diagnostics_are_bounded_and_fit_the_public_diagnostic_schema():
@@ -88,19 +148,30 @@ def test_valid_value_is_returned_unchanged():
 @pytest.fixture
 def client(tmp_path):
     store = Store(tmp_path / 'app.sqlite')
-    auth = Auth(store, ORIGIN); auth.provision('owner', 'correct horse battery staple')
+    auth = Auth(store, ORIGIN)
+    auth.provision('owner', 'correct horse battery staple')
+
     def unavailable(*args):
         raise OSError('No modeling service in this test')
-    app = create_app(store, auth, ModelingClient('http://modeling.invalid', b'k' * 32, transport=unavailable))
+
+    app = create_app(
+        store, auth, ModelingClient('http://modeling.invalid', b'k' * 32, transport=unavailable)
+    )
     client = TestClient(app, base_url=ORIGIN)
-    session = client.post('/api/1/session', json={'username': 'owner', 'password': 'correct horse battery staple'}, headers={'Origin': ORIGIN})
+    session = client.post(
+        '/api/1/session',
+        json={'username': 'owner', 'password': 'correct horse battery staple'},
+        headers={'Origin': ORIGIN},
+    )
     assert session.status_code == 200, session.text
     client.headers.update({'Origin': ORIGIN, 'X-CSRF-Token': session.json()['data']['csrf_token']})
     return client
 
 
 def test_api_request_shape_errors_carry_field_level_detail(client):
-    response = client.post('/api/1/studies', json={'command_id': '00000000-0000-4000-8000-000000000001', 'nme': SECRET})
+    response = client.post(
+        '/api/1/studies', json={'command_id': '00000000-0000-4000-8000-000000000001', 'nme': SECRET}
+    )
     assert response.status_code == 400
     error = response.json()['error']
     assert error['code'] == 'invalid_request' and error['outcome'] == 'unchanged'
@@ -113,8 +184,11 @@ def test_api_request_shape_errors_carry_field_level_detail(client):
 
 
 def test_api_malformed_json_body_is_explained_without_echo(client):
-    response = client.post('/api/1/studies', content=b'{"name":"a","name":"' + SECRET.encode() + b'"}',
-                           headers={'Content-Type': 'application/json'})
+    response = client.post(
+        '/api/1/studies',
+        content=b'{"name":"a","name":"' + SECRET.encode() + b'"}',
+        headers={'Content-Type': 'application/json'},
+    )
     assert response.status_code == 400
     error = response.json()['error']
     validate('Error', response.json())
@@ -124,10 +198,25 @@ def test_api_malformed_json_body_is_explained_without_echo(client):
 
 
 def approach_request():
-    return dict(schema_version='2', expected_revision=None, content=dict(
-        schema_version='2', question='Compare designs', scope='', limitations='',
-        open_questions='', model_bindings=[], steps=[], assumptions=[], cases=[],
-        basis_refs=[], original_question=None, elaboration=None, limit_items=[]))
+    return dict(
+        schema_version='2',
+        expected_revision=None,
+        content=dict(
+            schema_version='2',
+            question='Compare designs',
+            scope='',
+            limitations='',
+            open_questions='',
+            model_bindings=[],
+            steps=[],
+            assumptions=[],
+            cases=[],
+            basis_refs=[],
+            original_question=None,
+            elaboration=None,
+            limit_items=[],
+        ),
+    )
 
 
 @pytest.mark.parametrize(

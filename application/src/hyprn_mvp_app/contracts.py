@@ -26,8 +26,8 @@ import re
 from uuid import uuid4
 
 import rfc8785
-from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import best_match
+from jsonschema import Draft202012Validator, FormatChecker, validators
+from jsonschema.exceptions import best_match, ValidationError
 
 
 # Execution budgets are operational bounds, never physical model defaults.
@@ -72,6 +72,29 @@ def digest(value):
 
 def raw_hash(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def unique_json_items(validator, required, instance, schema):
+    """Exact JSON equality without quadratic comparisons of retained file arrays.
+
+    Canonical bytes preserve object-key independence and numeric equality while
+    distinguishing booleans. Invalid/non-JSON values retain the library's behavior;
+    the ordinary encoding gate still rejects them before boundary validation.
+    """
+    if not required or not validator.is_type(instance, 'array'):
+        return
+    try:
+        encoded = [canonical(item) for item in instance]
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        yield from Draft202012Validator.VALIDATORS['uniqueItems'](
+            validator, required, instance, schema
+        )
+        return
+    if len(set(encoded)) != len(encoded):
+        yield ValidationError(f'{instance!r} has non-unique elements')
+
+
+JsonValidator = validators.extend(Draft202012Validator, {'uniqueItems': unique_json_items})
 
 
 def check_digest(value, key='digest'):
@@ -237,9 +260,7 @@ def validator(name):
     schema = authored_schema()
     if name not in schema['$defs']:
         raise KeyError(name)
-    return Draft202012Validator(
-        {**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker()
-    )
+    return JsonValidator({**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker())
 
 
 MAX_DIAGNOSTICS = 20
@@ -273,9 +294,7 @@ def _execution_validator(name):
     schema = _execution_schema()
     if name not in schema['$defs']:
         raise KeyError(name)
-    return Draft202012Validator(
-        {**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker()
-    )
+    return JsonValidator({**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker())
 
 
 def validate_execution(name, value):
