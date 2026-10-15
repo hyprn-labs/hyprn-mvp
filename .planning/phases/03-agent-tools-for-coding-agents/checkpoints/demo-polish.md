@@ -64,3 +64,14 @@ executable delta normalizes whitespace in those guards; label and binding
 requirements are retained. All six static stages then pass (3.49s), scope
 `a6a75f63-305a-4f1a-ba53-1d4695908102`. Final gate logs and build manifest live in
 `/private/tmp/hyprn-demo-polish`; no test runs against the user installation.
+
+Final `9ba9a58` checks: `combined-static` six stages pass, 4.33s, scope
+`f1eff2d5-6f23-44a2-8b46-47ca16b779d2`; `style-ratchet` 33 pass, 11.82s,
+scope `72c96d32-0c8e-4b4a-a4d1-2369bd72363c`. The application bytes are those
+covered by the committed browser pass above. Its built static files are live;
+`ui-manifest.json` records exact hashes and commit. Twenty identified completed test
+scopes were validated, their evidence archived under `hyprn-demo-polish`, and scratch
+stores removed; `cleanup.json` records each identity. The live demo scope remains.
+The first cleanup invocation lacked its scope environment and refused before any
+scope removal; the configured retry completed. This final checkpoint delta is
+verification documentation only.
