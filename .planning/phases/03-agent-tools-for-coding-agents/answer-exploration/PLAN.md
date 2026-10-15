@@ -9,6 +9,17 @@ requirements: [RUN-06, RUN-02, UI-01, UI-02, UI-03, OPS-02, SEC-01]
 
 # Interactive answer exploration — implementation plan
 
+## Scope amendment — 2026-10-15
+
+The user explicitly removed task **3.V6**, confirming that this means the final
+qualification/Guerric acceptance stage, not UI decision 6. Execute 3.V1–3.V5 only.
+Their focused checks, real public-API/browser journeys, scientific invariants and
+current runtime attestation remain required. Deliver the working local demo after
+those tasks; do not make the separate full qualification gate, independent final
+review stage or Guerric acceptance a prerequisite. The 3.V6 text below is retained
+as superseded context, not an active task or completion requirement. No general
+release or human acceptance claim follows from this amendment.
+
 Read CONTEXT.md and UI-SPEC.md in this directory first. They capture the user's latest scope and supersede the mockup. This named delivery plan follows the repository's plan-phase/execute-phase discipline, adapted to a scoped Phase 3 addition rather than replanning or dispatching the historical Phase 3 inventory. Planning was performed inline; no independent planner/checker result is claimed. The main agent owns execution, task checkpoints and qualification.
 
 ## Deliveries and stopping points
@@ -17,7 +28,11 @@ Read CONTEXT.md and UI-SPEC.md in this directory first. They capture the user's 
 
 **Usable customer journey (3.V1–3.V5):** all free inputs, arbitrary supported categorical combinations, bounded sampling, additional calculations only in Sample settings, validated estimates, minimal three-box answer page and exact model editing navigation.
 
-**Validation stop (3.V6):** automated integrated acceptance, a fresh fuel rehearsal and Guerric's human acceptance are recorded separately. No automatic claim of physical validation, full mission closure, cloud deployment or general release. Fuel is the only real scientific acceptance case; synthetic fixtures cover generic contracts without creating a second study deliverable.
+**Delivery stop (after 3.V5):** pass the required focused checks and demonstrate the
+fuel journey in the local app. Task 3.V6 is removed by the scope amendment above.
+No claim of human acceptance, physical validation, full mission closure, cloud
+deployment or general release. Fuel is the only real scientific validation case;
+synthetic fixtures cover generic contracts without a second study deliverable.
 
 ## Architecture and reuse decisions
 
@@ -107,7 +122,7 @@ One numbered task per fresh executor context. Main agent serializes shared files
 **Done:** UI-SPEC acceptance all passes; all inputs slidable, axes explicit by active input, no unsolicited controls/prose. Methods remain editable at the model owner and old answer/model references still resolve. Original model/configuration/run readers remain functional.
 **Verify:** `exploration-ui`, existing `approach-ui-reading`, `approach-ui-method`, `answers-api`, `style-ratchet`; design/token/ownership/smoke/build checks through registered groups (see validation matrix). Day/dark, keyboard, genuine 200% zoom and bounded rendering measured in the served app. Human acceptance not inferred from screenshots.
 
-### 3.V6 — Fuel rehearsal and delivery qualification
+### 3.V6 — Fuel rehearsal and delivery qualification — superseded, out of scope
 
 **Depends:** 3.V5. **Owner:** main integrator with fresh independent review context(s) under existing execution/review workflow.
 **Actions:** run integrated union acceptance on committed tree; independent numerical, security and UI review; qualify exact final runtime and source inventory; then update the existing demo through ordinary supported deployment with recovery instructions. Seed a reviewed fuel exploration design through the public API using the user-selected study and exact pins; no fixture writes to live stores. Exercise real sample preparation, sliders, category change, adding a point from settings, unmet accuracy and restart; inspect retained original-model checks. Ask Guerric to perform the intended decision journey and record his response. Update authoritative docs/requirements/state with actual evidence and limitations, superseding proposal text without deleting old evidence.
