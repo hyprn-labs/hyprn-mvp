@@ -11,7 +11,7 @@ The catalogue covers **58 families: 10 foundations, 27 controls/content componen
 - **Future**: requires a named scientific, identity, document or assistant capability outside this lane.
 - **Not applicable**: omit the domain meaning entirely; do not manufacture an engineering equivalent.
 
-Names in the tables are HYPRN pattern names. Component references identify reuse points, not permission to edit another task's files. Proposed component names are explicitly labelled. Future designs are absent from production navigation until their public capability is available.
+Names in the tables are HYPRN pattern names. Component references identify reuse points, not permission to edit another task's files. The reconciliation below names implemented shared components and remaining capability boundaries. Future designs are absent from production navigation until their public capability is available.
 
 ## Engineering lifecycle
 
@@ -50,9 +50,9 @@ Navigation names remain Overview, Models, Configurations, Runs and Cases. The cu
 |---|---|---|---|
 | 11 | Action hierarchy | Present | `Button`, `ActionGroup`. One primary per action scope; quiet, secondary and destructive actions retain meanings and full labels. |
 | 12 | Person and resource identity marks | Adapt now | Reuse `AttributionChip`; add only neutral resource marks backed by actual record kinds. Profile identity is available; team directory and organization membership are Future. No authority implied by an avatar. |
-| 13 | Action chips, labels and counts | Adapt now | `SourceChip`, `StatusTag`, `Button`. Keep read-only labels visually distinct from actions. Proposed `ClaimButton` counts statements as specified below. |
+| 13 | Action chips, labels and counts | Adapt now | `SourceChip`, `StatusTag`, `Button`. Keep read-only labels visually distinct from actions. `ClaimButton` counts statements as specified below. |
 | 14 | Outcome and attention markers | Present | `StatusTag`, `Ledger`, `RecordState`, `RunOutcomes`. Preserve HYPRN's actual facets; do not reduce them to three generic statuses or a severity ladder. |
-| 15 | Statement and evidence attachment | Adapt now | `Assertion`, `AssertionList`, `EvidenceStack`, `EvidenceRecordBody`. Proposed `ClaimCard` composes these; sources remain attached to the statement they qualify. |
+| 15 | Statement and evidence attachment | Adapt now | `Assertion`, `AssertionList`, `EvidenceStack`, `EvidenceRecordBody`. `ClaimCard` composes these; sources remain attached to the statement they qualify. |
 | 16 | Form fields and selectors | Present | `Field`, `TextInput`, `TextArea`, `Select`. Blank remains unassigned; preserve field errors, unit choices and exact entered values. |
 | 17 | View tabs and set navigation | Present | `Tabs`, `DetailTabs`, registry navigation. Distinguish views of one record, entity destinations, filters and pagination; don't re-route by visual labels. |
 | 18 | Short help and full-label reveal | Adapt now | Shared control help and accessible descriptions. Tooltip is supplementary; full statement/source content opens in a reader. Keep tooltips outside clipping surfaces and reachable on keyboard focus. |
@@ -83,8 +83,8 @@ Navigation names remain Overview, Models, Configurations, Runs and Cases. The cu
 | 38 | Location and resource action header | Adapt now | `SectionHeader`, `ActionGroup`, `Workspace`. Keep the real breadcrumb/current record legible; actions wrap at zoom. Avoid duplicate titles, navigation or record controls. |
 | 39 | Persistent application navigation | Present | `NavigationRail`, `WorkspaceShell`, `studyTabs`, existing guarded callbacks. Current study context, Home and Profile remain real destinations. Collapse/stack must preserve every destination and its accessible label. |
 | 40 | In-page contents navigation | Adapt now | Shared navigation for an actually long reader, using existing sections/anchors. This is optional within the central canvas; it must not duplicate the study navigation or invent a second Modeling approach map. |
-| 41 | Contextual assistant pane | Adapt now | Proposed shared slot adjacent to the work area. Show actual connection/capability state. Connected chat, tool dispatch, streaming and history are Future/separately owned; unconnected UI has no enabled send action. |
-| 42 | Contextual record panel | Adapt now | Compose shared `Panel`, reader content and navigation controls; proposed `ContextPanel`. Own presentation and an ephemeral back stack only. The screen owns guarded navigation and exact record reads. |
+| 41 | Contextual assistant pane | Adapt now | `AssistantPane` slot adjacent to the work area. Show actual connection/capability state. Connected chat, tool dispatch, streaming and history are Future/separately owned; unconnected UI has no enabled send action. |
+| 42 | Contextual record panel | Adapt now | Compose shared `Panel`, reader content and navigation controls; `ContextualPanel`. Own presentation and an ephemeral back stack only. The screen owns guarded navigation and exact record reads. |
 | 43 | Composite decision score panel | Not applicable | No overall scientific validity, authority, readiness-to-decide or engineering fit score. Show independent criteria, execution, limitations and explicitly supported numerical facets. |
 | 44 | Current study context panel | Adapt now | Existing Study details / Overview content. Question, rationale, scope and limits retain their owner; don't offer an action that silently duplicates the current study. |
 | 45 | Related resource panel | Adapt now | Canonical model/configuration/run readers and `WorkspaceLink`. Caption why this record was opened using the actual relationship; current names never overwrite historical content. |
@@ -96,7 +96,7 @@ Navigation names remain Overview, Models, Configurations, Runs and Cases. The cu
 | 51 | Method step / case reader | Adapt now | Existing method/case content, `ApproachCaseContext`, canonical model view. Methods stay with the Model owner, not a new Overview method layout. Preserve purpose, basis, calculation logic and source; scope any statement count to the displayed step/case and its version. |
 | 52 | Conflicting evidence / uncertainty reader | Future | Requires comparable evidence conditions and supported uncertainty outputs. Current sources may be inspected side by side without statistical pooling; a disagreement range is not a confidence interval. |
 | 53 | Question and criteria context | Adapt now | Study question plus configuration-owned `CriterionRecord`. Keep original intent and its formal interpretation distinct. Missing criteria offer the existing authoring route; no automatic criterion derivation. |
-| 54 | Claims and evidence reader | Adapt now | Proposed `ClaimButton` / `ClaimCard` / contextual reader over existing assumptions and answer records. Exact scope, count semantics and source/back behavior are specified below. |
+| 54 | Claims and evidence reader | Adapt now | `ClaimButton` / `ClaimCard` / contextual reader over existing assumptions and answer records. Exact scope, count semantics and source/back behavior are specified below. |
 
 ### Communication — 4 families
 
@@ -113,7 +113,7 @@ Navigation names remain Overview, Models, Configurations, Runs and Cases. The cu
 
 ### Compact ClaimButton
 
-`ClaimButton` is a proposed shared presentation control, composed from `Button` with a count. It is not an evidence badge or a source-authority indicator.
+`ClaimButton` is a shared presentation control, composed from `Button` with a count. It is not an evidence badge or a source-authority indicator.
 
 | Situation | Required behavior |
 |---|---|
@@ -130,7 +130,7 @@ A compact count supplements the existing direct evidence action beside every ass
 
 ### ClaimCard
 
-The proposed `ClaimCard` composes `Assertion`, `EvidenceStack`, reading sections and existing record actions. It is a full reader, not a selectable truth rating. Keep these parts together:
+The shared `ClaimCard` composes `Assertion`, `EvidenceStack`, reading sections and existing record actions. It is a full reader, not a selectable truth rating. Keep these parts together:
 
 1. **Statement and meaning.** Full text with line breaks, domain kind and actual authored/agent attribution where available. No truncation in the contextual reader. A compact card may summarize only when opening it reveals the complete saved text.
 2. **Scope and limits.** The owning study, approach/model/configuration/answer version, case or component, and the conditions or qualifications actually recorded. Show a missing scope explicitly; never infer one from the current page.
@@ -195,3 +195,72 @@ These are acceptance requirements for implementation, not a report of checks alr
 | Saved-run navigation from an edited draft | The established guard resolves unsaved work before navigation; a new shell cannot bypass it. |
 
 Run project checks through the local entry point. The existing `combined-static`, `ui-navigation`, `ui-reading`, `foundry-nav` and `ported-isolated` groups are relevant to shared UI changes; public-API served journeys and full qualification remain separate required evidence under the plan. Browser doubles do not establish live authorization, contained execution, scientific correctness or genuine human design acceptance. Record the tested commit, exact outcomes and remaining limitations in the owning task checkpoint.
+
+## Final shared-owner reconciliation
+
+The original 58 dispositions remain **19 Present, 28 Adapt now, 7 Future, 4 Not applicable**. “Adapt now” is the original scope classification, not a claim that a backend capability was added. The rows below identify the actual presentation implementation and its boundary. Compatibility-only SourceChip, Readout, InferenceBlock and DetailTabs are fully inventoried in [Contour](Contour.md); they are not falsely cited as production consumers. Current quantities/evidence instead use their real QuantityResult, Field, table and EvidenceRecordBody owners.
+
+Evidence entries name registered groups and assertions to consult; actual commands, tested commits, failures and remaining gates live in [C3 checkpoint](../.planning/phases/03-agent-tools-for-coding-agents/contour-design-system/checkpoints/3.C3.md). The complete export specimen complements actual record journeys and is not scientific validation. Existing comparison-specific acceptance and main-owned exploration/served gates are not newly claimed by this lane.
+
+| Family | Working shared owner | Actual consumer / capability owner | Supported states and scope | Evidence / remaining obligation |
+|---|---|---|---|---|
+| 01 | tokens / Foundry | All screens | both themes; fresh generated CSS | combined-static |
+| 02 | StatusTag / Ledger | RunPanel | shape+word; criteria separate from execution | ui-reading; design-colors |
+| 03 | Manrope / monospace | Workspace; SourceEditor; VariablesTable | loaded local font; exact source; small nonzero | ui-reading; combined-static |
+| 04 | Button / Field / DataTable | ConfigurationPanel | compact/default/touch; full labels | ui-reading; foundry-nav |
+| 05 | radius tokens / Panel | Workspace; ModelView | shell/panel/control/chip hierarchy | ui-navigation; ui-reading |
+| 06 | Panel raised/sunken | Workspace; configuration readers | passive surfaces; no false click state | ui-navigation; ui-reading |
+| 07 | WorkspaceShell / NavigationRail | Workspace | static shell-only texture; gradient; both themes | ui-reading rendered contrast |
+| 08 | Foundry motion | Buttons; running markers | reduced motion; no necessary animation | ui-reading; foundry-nav |
+| 09 | ActionIcon / StatusTag | Workspace; ActionDialog | decorative glyph; accessible names; unchanged status shapes | combined-static; ui-reading |
+| 10 | BrandLogo | Workspace; NavigationRail | original bytes; same-origin asset; light plate | combined-static; ui-navigation |
+| 11 | Button / ActionGroup | All actions | same size across contexts; disabled; keyboard | ui-reading |
+| 12 | AttributionChip / RecordState | Workspace attribution; resource metadata | actual agent/user; neutral saved-resource state; full names | agent-ui; ui-reading |
+| 13 | ClaimButton / StatusTag | StatementActions; RunPanel | ID-scoped count; partial singular; unknown has no zero | ui-reading; evidence-workspace |
+| 14 | Ledger / StatusTag / RecordState | runStatus; configuration/model headings | independent facets; storage is neutral | ui-reading; foundry-nav |
+| 15 | ClaimCard / Assertion / EvidenceStack | ContextDetails; Assumptions | full statement, conditions, actual relationships | ui-reading |
+| 16 | Field / native wrappers | ConfigurationPanel; UnitEditor | unassigned/zero/invalid/readonly; compatible units | ui-reading; foundry-nav |
+| 17 | Tabs / WorkflowNavigation | ModelView; RunPanel; NavigationRail | roving views; current destinations; no label routing | ui-reading; ui-navigation |
+| 18 | Field message / named controls / exact readers | configuration errors; EvidenceRecordBody; source editor | visible help; full labels wrap; native title supplements exact values | ui-reading; foundry-nav |
+| 19 | ResourceCard / Panel / list actions | Home; Cases; canonical model/config/run lists | separate resource actions; filter empty; no nested whole-row button | ui-navigation; foundry-nav |
+| 20 | Progress / explicit section status | RunPanel; ComputationalExportDialog; ContextDetails | indeterminate stage; partial source content; no plausible placeholders | ui-reading; ported-isolated |
+| 21 | Future | Assistant integration owner | requires real connection, context binding and send lifecycle; absent from navigation | capability boundary |
+| 22 | ActionDialog / DialogFrame / Button | Model actions | real actions only; Escape; return focus; explicit destructive confirmation | foundry-nav; ported-isolated |
+| 23 | DialogFrame / ActionDialog | Workspace; record readers; ModelEditor | native modality; dirty guard; return focus | foundry-nav; ui-reading; ported-isolated |
+| 24 | ResourceCard / Panel | Home; Cases; canonical records | passive body and separate actions; full text; long labels | ui-navigation; ui-reading |
+| 25 | QuantityResult / Field / DataTable | AnswerExplorer; full RunPanel output table | calculated/estimated/unavailable; units; no arbitrary promoted subset | ui-reading specimen; exploration-ui remains main-owned |
+| 26 | Panel / DataTable / Disclosure | ComparisonView | actual identities; changed inputs/source; no ranking | foundry-nav model/config paths; comparison-specific acceptance remains existing comparison owner |
+| 27 | Future | Identity/membership owner | requires membership, invitation, reviewer permission and attributed review API | capability boundary |
+| 28 | ModelNode / ContextualPanel | GraphCanvas; SelectionInspector | instance vs definition identity; selected/incomplete; exact method/source | ui-reading; foundry-nav |
+| 29 | EvidenceStack / ActionDialog / Panel | EvidenceIndex; EvidenceRecordBody; EvidencePicker | exact content/version; unavailable; no invented document preview | ui-reading; foundry-nav |
+| 30 | ClaimCard / Assertion | ApproachAssumptions; ContextDetails; answer qualifications | full condition/limit; neutral assumption; retained basis | ui-reading modal limits |
+| 31 | Not applicable | No financial exchange entity | omit business transaction metaphor | scope exclusion |
+| 32 | Future | Scientific comparison owner | requires same quantity/units/conditions/date/method and retained versions | capability boundary |
+| 33 | QuantityResult / Field provenance / evidence reader | AnswerExplorer; ConfigurationPanel | basis and units explicit; entered vs calculated; no source averaging | ui-reading; exploration-ui remains main-owned |
+| 34 | ResponseCurve / GraphCanvas | AnswerExplorer; ModelView | gaps; real coordinates; unchanged graph/export palette | ui-reading; foundry-nav; exploration-ui main-owned |
+| 35 | Future | Numerical method owner | requires declared method/applicability/effects and validation | capability boundary |
+| 36 | Checkbox / Select / SettingsSection | ApproachReferences; Profile appearance | independent vs exclusive; theme-only local preference | ui-navigation; ui-reading |
+| 37 | FilePicker / ActionDialog | ModelEditor import; ComparisonView | visible file name; empty/selected/disabled; guarded validation | ui-reading; ported-isolated |
+| 38 | SectionHeader / ActionGroup | Workspace; canonical model/run headings | real location; wrapping actions; one resource owner | ui-navigation; foundry-nav |
+| 39 | NavigationRail / WorkspaceShell | Workspace | all five study destinations; guards; narrow stack | ui-navigation; foundry-nav |
+| 40 | ReadingContents | SelectionInspector.MethodExplanation | only existing reader sections; opens source disclosure before focus; local scroll | ui-reading method reader |
+| 41 | AssistantPane | ContextDetails | truthfully disconnected; no send/history; independent close | ui-reading; ui-navigation |
+| 42 | ContextualPanel / application ContextDetails | scientific context; SelectionInspector | exact source push/back; focus restoration; stale/access clearing | ui-reading |
+| 43 | Not applicable | No composite validity/authority score | independent facets only | scope exclusion |
+| 44 | Panel / Assertion / ClaimCard | Study details; Overview; ContextDetails | full question/scope/limits; unchanged authoring owner | ui-reading; ui-navigation |
+| 45 | Button / ActionDialog / shared record readers | WorkspaceLink; ApproachFindings; run/configuration readers | actual relation and exact historical target; guards | ui-reading; foundry-nav; ported-isolated |
+| 46 | Future | Identity/review owner | requires membership and attributed scientific review records | capability boundary |
+| 47 | Future | Authored assessment owner | requires scoped comparative argument over same question and assumptions/evidence | capability boundary |
+| 48 | ClaimCard / Assertion / ContextualPanel | Assumptions; answer qualification and limit readers | complete objection; challenging/missing evidence; no risk score | ui-reading; evidence-workspace |
+| 49 | Not applicable | No deal-event entity | saved-run reader keeps its computational meaning | scope exclusion |
+| 50 | Not applicable | No equity ownership entity | authorship/access/dependencies remain distinct | scope exclusion |
+| 51 | ReadingContents / ContextualPanel / ResourceCard | SelectionInspector method; ApproachFindings Cases | purpose/basis/calculation/source; exact case/version; no second Overview map | ui-reading; foundry-nav |
+| 52 | Future | Uncertainty/comparison owner | requires comparable evidence conditions and supported numerical uncertainty | capability boundary |
+| 53 | CriterionRecord / Panel | Study question; ConfigurationRecord; answer reader | intent separate from explicit criterion; missing values actionable | ui-reading; foundry-nav |
+| 54 | ClaimButton / ClaimCard / ContextDetails | assumptions, limits and answer-wide basis | distinct statement IDs; full set; direct evidence; back; unavailable passage honest | ui-reading; evidence-workspace |
+| 55 | Disclosure | RunPanel; SelectionInspector; ComparisonView | optional prose only; blocking failure stays visible | foundry-nav; ui-reading |
+| 56 | Field message / StatusTag / ActionDialog | configuration editors; run errors; existing controllers | safe action; preserve draft; reconcile uncertain command without replay | ported-isolated; ui-reading |
+| 57 | Progress / Ledger | RunPanel; ComputationalExportDialog | named stage; actual outcome; cancellation not fabricated | ui-reading; ported-isolated |
+| 58 | ClaimButton / EvidenceStack / Field / QuantityResult | ContextDetails; evidence index; configuration/run readers | empty/unknown/partial/access-loss/not-computed distinct; complete set needed for zero | ui-reading; ui-navigation |
+
+No family is reclassified to conceal unfinished work. Future families remain absent from production navigation. Parent/main owns the Overview generic exploration integration and served API verification; release owner retains full qualification and product owner retains design acceptance. The connected assistant, document snippets, comparative review and uncertainty services remain separate capabilities, not catalogue decorations.

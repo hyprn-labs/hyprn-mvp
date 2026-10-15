@@ -37,3 +37,5 @@ to its trigger; dialog completion and close controls use desk.
 The source toolbar uses compact controls. Model header order remains version
 select, Save model version, Create configuration, Model actions. Candidate source
 import and destructive confirmations retain their existing safeguards.
+
+Contour uses radius-sm (12px). Shell, card, settings, inspector, evidence and dialog contexts do not alter a size recipe. Full labels and semantic names survive wrapping, both themes and 200% zoom. Reduced motion removes transition animation.

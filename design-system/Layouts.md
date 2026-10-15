@@ -4,11 +4,11 @@ Page compositions for HYPRN MVP at the 1440 × 1000 reference viewport. Build th
 
 ## The shell
 
-- **App bar**: `appbar-height` (66px) tall, `surface`, `line` bottom edge, `page-gutter` (28px) side padding. Left: the supplied HYPRN logo on its small `brand-ground` light plate in both themes, with no duplicate text wordmark, then the main navigation: a "Home" link and, inside a study, the breadcrumb `/ <Study> / <Section>` (study name in `ink-muted`, truncated with an ellipsis; current section in `ink`). Right: the "Profile" button. Nothing else lives here.
-- **Study header**: one `title` with the study name. The current section is named once, by the selected study tab; there is no subtitle repeating it. At the right end of the same row, a `quiet` "Agent activity" button, always shown inside a study and without a count, opens the study's Agent activity page. The header is omitted inside an open model and an open run, which carry their own headings.
-- **Study tabs** (`Tabs`, underline variant): Overview, Models, Configurations, Runs, Cases. They sit under the header, full width, with a `line` rule beneath and `space-6` below.
-- **Content** on `canvas`, maximum width `page-max` (1600px), `page-gutter` side padding.
-- **Footer**: a "Third-party software notices" link in `small`, `ink-muted`.
+WorkspaceShell composes persistent NavigationRail, central current canvas, Scientific context and independent Assistant slots. Home, Profile, current study identity and the five registry destinations remain real guarded actions. The supplied unchanged logo sits on its brand-ground plate. There is no second application bar duplicating navigation.
+
+Study destinations are Overview, Models, Configurations, Runs and Cases. Navigation buttons use aria-current; tabs within one record use roving tab semantics. The current study/record heading belongs to its central owner. Agent activity remains a future page pending its actual route and API; no dormant destination is exposed.
+
+The canvas uses radius-shell, canvas ground and shadow-shell. Raised panels use surface-raised/shadow-panel; sunken wells have no shadow. Context and assistant dock beside it where space permits and stack below at narrow widths/zoom. Each retains a visible title, Close and applicable Back control. Footer notices remain accessible. Only chrome carries the neutral gradient and static texture.
 
 ## Home
 
@@ -16,12 +16,13 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 
 ## Overview
 
-1. **About this study** contains the saved study question and **See more details**. Its Study details dialog has one **Edit study** action for the name, list description, question, approach, assumptions, limits and open questions. Fields and assertion editors have distinct spacing.
-2. **Answer to the study question** follows immediately, then **Reasoning and methods**. The answer's supporting results lead with each case answer title and an aligned row of **View configuration**, **View run**, **View case answer** actions; identities remain in record details.
-3. **Cases** is a study tab. Its list has a case filter and an Open case action per row; selecting a case opens its detail with an All cases back action. Exact approach-version and case identities remain in the URL; configurations own their associated runs. Each answer separates its scientific explanation from supporting results and sources. A referenced case answer opens in a dialog.
-4. Expanded methods give the purpose a full-width lead, with separate shaded sections for basis/reasoning and calculation logic, followed by Python source. The sections stack on narrow screens. **View model details** stays at the bottom-right of the full method.
+1. The full saved question leads, with Study details and its existing Edit study action.
+2. Generic answer exploration occupies the central working area; the integration owner supplies supported numerical behavior.
+3. Interpretation and still-to-answer content follow, retaining the whole answer's basis and exact related run/configuration/case-answer links. A displayed estimate is not a calculation or a finding of validity.
 
-Study details keeps the question separate from the current approach and limits. Empty optional prose, assumptions and limits are omitted in read-only views; editing retains the controls needed to add them. Every assertion has its own compact evidence title and **View evidence** action; shared sources are not grouped away from the assertions. Version and relationship details belong inside the evidence view.
+Methods remain at their canonical Model owner. Cases have their own tab and exact approach-version/case identities; a case answer is a distinct saved record. There is no competing method map in Overview. This is the current target composition; the main integration owner records the explorer/served acceptance separately.
+
+Study details separates question, approach, assumptions, limits and open questions. Empty optional read-only prose is omitted; editing retains its controls. Statements have direct View evidence actions and may additionally offer an explicitly scoped ClaimButton. Answer-wide basis never implies per-passage support.
 
 ## Models
 
@@ -32,7 +33,7 @@ The Models tab lists models ("New model" as the primary action, one row per mode
 3. A toolbar row: the view switch (`Tabs`, segmented: **Graph | XDSM**) on the left; on the right "Clear selection" (when something is selected) and the "Show/Hide Details" toggle.
 4. The workbench: `[canvas, fluid] [details panel-inspector (350px)]`, `space-3` gaps, every panel `radius-md`. Its height is fixed on desktop so the details never move off-screen.
 5. The canvas panel has its own toolbar (search "Search this model…" on the left; component and connection authoring actions on the right for a draft), a dotted `canvas` ground with `ModelNode`s, and a footer line: "N components · M connections" (singular for one) on the left, "Select a component to inspect its source and method" on the right.
-6. Component details and the Overview method use the same **Purpose**, **Basis and reasoning**, **Calculation logic**, and **Python function** presentation. Empty prose is omitted; a method shared by several components is labelled as shared. Python source is checked against the exact model's hashes and shown as text. Only the current model panel offers explanation/source editing and assumption authoring. Explanation edits use the existing approach draft, with an explicit save; saved overview versions stay unchanged until a new approach version is published. **Method record**, after the Python function, keeps exact pins. There is no return-to-method link in the model inspector. Draft actions **Edit component** and **Edit quantities** sit above the component title; **Edit explanation** precedes the narrative with its own spacing; additional shared-code recipients appear only when sharing exists. There is no port-metadata paste control, ports table, incoming/outgoing list or notes section.
+6. Component details use the canonical **Purpose**, **Basis and reasoning**, **Calculation logic**, and **Python function** presentation. Empty prose is omitted; a method shared by several components is labelled as shared. Python source is checked against the exact model's hashes and shown as text. Only the current model panel offers explanation/source editing and assumption authoring. Explanation edits use the existing approach draft, with an explicit save; saved approach versions stay unchanged until a new approach version is published. **Method record**, after the Python function, keeps exact pins. There is no return-to-method link in the model inspector. Draft actions **Edit component** and **Edit quantities** sit above the component title; **Edit explanation** precedes the narrative with its own spacing; additional shared-code recipients appear only when sharing exists. There is no port-metadata paste control, ports table, incoming/outgoing list or notes section.
 7. Below the workbench, full width: the **quantities table** (each quantity's symbol, meaning, units and, in a configuration or run context, its value), linked to the selection. Filters cover search, component and direction; unavailable values keep their reasons in the table.
 
 ## Configurations
@@ -64,7 +65,9 @@ Run content stays readable from stored records even when the modeling service is
 
 Evidence titles and **View evidence** actions use the same compact presentation beside each assertion. The source library remains available to authoring and existing direct links, but is not a study tab.
 
-## Agent activity
+## Agent activity — future capability
+
+The following layout is a retained target, not a delivered navigation destination. It requires the attributed activity/access API and page owner; the Contour lane does not expose it.
 
 A study page, read-only apart from "Revoke access", reached from the "Agent activity" button in the study header. It is not a sixth study tab: the five study tabs stay, none is current on this page, and the breadcrumb reads `/ <Study> / Agent activity`. Leaving an editor for it goes through the editor guard. Top to bottom, inside the content column:
 
@@ -85,17 +88,9 @@ Opening a saved model version, or the model or configuration used by a run, show
 Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the unchanged logo retains its shared component size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.
 
 
-## Continuous modeling approach
+## Continuous method reading
 
-Preserve the entire saved question and its line breaks. Follow it with the study answer and expandable method rows. Cases have their own study tab. Hairlines and token spacing
-separate rows; avoid a second method map, chapter tabs or an assumptions tab.
-
-Each method shows its purpose and implementation state before expansion. Expanded
-content explains the calculation and basis, dependencies and remaining work; linked
-model versions open the canonical view from **View model details** at the bottom-right
-of the full expanded method, after its evidence and assumptions. Each case keeps all configuration and run
-links, with no implicit latest-run selection. Scientific interpretations require an
-explicit persisted basis. Execution and criteria stay in supporting details; exports preserve full numerical precision. Limits and assumption editing remain at their existing owners.
+The Model inspector preserves Purpose, Basis and reasoning, Calculation logic and Python function. ReadingContents appears only when multiple existing sections can be visited. Its buttons focus the actual heading; Python function opens the existing disclosure before moving focus. It never changes a route, graph or scientific record. Shared method references remain explicit and methods never collapse distinct component instances.
 
 ## Contour workspace amendment
 

@@ -79,8 +79,23 @@ def run(*, group):
     guard.scoped_path(scope, EVIDENCE).mkdir()
     stage = guard.scoped_path(scope, 'artifacts/nav-config')
     stage.mkdir()
+    vite_config = REPO / 'ui/vite.config.ts'
+    if group in {'ui-reading', 'foundry-nav'}:
+        # Only this scoped build exposes the specimen. The product entry stays unchanged.
+        vite_config = stage / 'specimen.config.mjs'
+        entry = str(REPO / 'ui/src/main.tsx')
+        specimen = str(REPO / 'ui/tests/DesignSpecimen.tsx')
+        replacement = ("import {DesignSpecimen} from " + json.dumps(specimen) + ";\n"
+                       + (REPO / 'ui/src/main.tsx').read_text().replace(
+                           '<Workspace />',
+                           "location.search === '?specimen' ? <DesignSpecimen /> : <Workspace />"))
+        vite_config.write_text(
+            'import base from ' + json.dumps(str(REPO / 'ui/vite.config.ts')) + ';\n'
+            'export default {...base, plugins:[{name:"isolated-specimen", enforce:"pre",'
+            'transform(code,id){if(id===' + json.dumps(entry) + ') return '
+            + json.dumps(replacement) + ';}}]};\n')
     build = ['node', str(REPO / 'ui/node_modules/vite/bin/vite.js'), 'build', str(REPO / 'ui'),
-             '--config', str(REPO / 'ui/vite.config.ts'), '--configLoader', 'runner',
+             '--config', str(vite_config), '--configLoader', 'runner',
              '--outDir', env['HYPRN_MVP_NAV_BUILD']]
     built = subprocess.run(build, cwd=REPO, env=env, capture_output=True, text=True, timeout=300)
     (evidence / 'fixture-build.log').write_text(built.stdout + built.stderr)

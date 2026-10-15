@@ -74,4 +74,5 @@ export {
   AssistantPane,
   ClaimCard,
   ClaimButton,
+  ReadingContents,
 } from './workspace';

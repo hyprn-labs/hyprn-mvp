@@ -1,8 +1,6 @@
 # Shared composition consistency
 
-Observed in the live Study details dialog and current component consumers on
-2026-10-15. This is the scoped discrepancy inventory, implementation ownership and
-acceptance reference for the consistency pass; scientific meanings are unchanged.
+Current shared invariants, reconciled with the complete Contour layer. The table retains the original discrepancies and their single shared owner; scientific meanings are unchanged.
 
 | Topic and observed discrepancy | Shared owner and correction | Acceptance |
 |---|---|---|
@@ -20,19 +18,18 @@ acceptance reference for the consistency pass; scientific meanings are unchanged
 ## Authority and prevention
 
 Screen CSS may position controls and choose column/scroll layouts. It must not
-resize/restyle buttons, evidence/assertion internals or logo, or override table-cell
+resize/restyle buttons, workspace/navigation/card/settings/claim/context/inspector/workflow internals or logo, or override table-cell
 and panel-body padding. Use Button props and
 shared compositions. No raw button/input/select/textarea outside `ui/src/design`.
 `check_component_ownership.py` enforces these prohibitions without a baseline;
 `test_design_tooling.py` tests the guard. Existing token and contract checks remain.
 
 `ui/tests/DesignSpecimen.tsx` is the compact reference surface made from the actual
-components, available only in the scoped browser fixture (`?specimen`). It covers
-sizes/variants, icons, wrapping, empty/long/multiple-source assertions, fields,
-status and table density. This complements real product/API journeys; it does not
+components, available only in the scoped browser fixture (`?specimen`). It covers every component export, with a separately tested number utility. The full state/consumer matrix lives in Contour.md. This complements real product/API journeys; it does not
 replace them or constitute human acceptance.
 
 No new feature, scientific state, data format or numerical capability is introduced.
-Whole-release qualification, cross-platform visual qualification and reconciliation
-of older reading-suite expectations remain separate existing obligations. This pass
+Whole-release qualification, cross-platform visual qualification, independent review and product-owner acceptance remain separately recorded obligations. This pass
 must report any discovered product-level regression before calling delivery complete.
+
+Shared ClaimCard uses a 12px grid gap, zero external paragraph/heading margins and an 8px internal source gap; it does not stack inherited margins onto the grid. ReadingContents owns local method-section wayfinding. Inspector and detail-tab recipes live in Foundry; screen CSS retains workbench placement only. Tests reject descendants, BEM interiors and variant overrides without exemptions.

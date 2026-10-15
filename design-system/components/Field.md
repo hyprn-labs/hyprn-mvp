@@ -8,3 +8,5 @@ An explicit scalar input with its unit, state and provenance: the building block
 - **Units.** Offer only compatible units. When a conversion happens, the message shows it: `150 % → 1.5 (1) · factor 0.01`. An incompatible unit is `invalid` and the message names the declared unit and the compatible ones.
 - **Compact.** Inside a labelled table, `compact` keeps the input's accessible label, the unassigned placeholder and the invalid state and message, but drops the repeated label and tag above the input. Zero is then explained once beneath the table, so rows keep an even height.
 - Read-only fields keep exact values. The Configurations layout puts all inputs above the fold.
+
+The shared label/input gap and field spacing come from Foundry. Errors are associated with aria-describedby and aria-invalid; disabled controls preserve visible reason text. Local appearance choices use SettingsSection/Select and never mutate scientific values. Wrapped labels and coarse-pointer control targets remain readable in both themes.

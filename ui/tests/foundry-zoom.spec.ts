@@ -67,6 +67,9 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
     expect(page.viewportSize()).toBeNull();
 
     async function check(name: string, target: Locator) {
+      expect(
+        await worker.evaluate(id => (globalThis as any).chrome.tabs.getZoom(id), tabId),
+      ).toBe(2);
       await expect(target).toBeVisible();
       await target.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
       await expect(target).toBeFocused();
@@ -204,6 +207,36 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
       }
       await page.goto(origin + '/ui/#v=1&study=' + sid + '&view=evidence');
       await check('evidence-' + theme, page.getByLabel('Filter evidence', { exact: true }));
+      await page.goto(origin + '/ui/?specimen');
+      await worker.evaluate(id => (globalThis as any).chrome.tabs.setZoom(id, 2), tabId);
+      await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
+      expect(
+        await worker.evaluate((id) => (globalThis as any).chrome.tabs.getZoom(id), tabId),
+      ).toBe(2);
+      await check(
+        'specimen-claims-' + theme,
+        page.getByRole('button', { name: '2 statements · Complete set', exact: true }),
+      );
+      await check(
+        'specimen-context-' + theme,
+        page.getByRole('button', { name: 'Close Specimen context', exact: true }),
+      );
+      await check(
+        'specimen-assistant-' + theme,
+        page.getByRole('button', { name: 'Close Assistant', exact: true }),
+      );
+      await page.getByRole('button', { name: 'Open recipe dialog', exact: true }).click();
+      await check(
+        'specimen-dialog-' + theme,
+        page
+          .getByRole('dialog', { name: 'Recipe dialog', exact: true })
+          .getByRole('button', { name: 'Done', exact: true }),
+      );
+      await page.keyboard.press('Escape');
+      await login(page);
+      await worker.evaluate(id => (globalThis as any).chrome.tabs.setZoom(id, 2), tabId);
+      await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
+
     }
     expect(state.unknown).toEqual([]);
     expect(state.writes).toEqual([]);

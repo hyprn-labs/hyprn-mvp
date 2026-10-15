@@ -20,3 +20,5 @@ and own editing/versioning. These primitives do not fetch or interpret evidence.
 `ReadingStack` and `ReadingSection` provide 24px section separator spacing and a
 16px heading-to-content gap. Empty optional sections are omitted by the caller.
 No descendant page selector may change these component interiors.
+
+ClaimCard adds domain kind, explicit scope, limits and actual attribution over Assertion; it is not a persisted Claim entity. Its direct children keep zero outer margins so the shared 12px interval remains exact; source rows use 8px. ClaimButton counts distinct stable IDs within one explicit owner/version. Complete-empty, partial-empty and unknown sets are words, never a dead zero-count button. A one-item partial set says “1 loaded statement”. Answer-wide basis is uncounted prose with its own honest label. Direct View evidence stays direct; the context source reader preserves complete content, selected card, scroll and return focus.

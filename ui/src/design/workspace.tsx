@@ -161,7 +161,7 @@ export function ClaimButton({ set, onClick }: { set: StatementSet; onClick: () =
     );
   const label =
     set.state === 'partial'
-      ? count + ' loaded statements · partial set'
+      ? count + (count === 1 ? ' loaded statement' : ' loaded statements') + ' · partial set'
       : count + (count === 1 ? ' statement' : ' statements');
   return (
     <Button
@@ -260,5 +260,25 @@ export function AssistantPane({
       )}
       {state === 'connected' && actions}
     </ContextualPanel>
+  );
+}
+
+/** Local reader destinations only; callers own focus and disclosure state. */
+export function ReadingContents({
+  items,
+}: {
+  items: { id: string; label: string; onSelect: () => void }[];
+}) {
+  if (items.length < 2) return null;
+  return (
+    <nav className="hf-reading-contents" aria-label="In this explanation">
+      <ActionGroup>
+        {items.map((item) => (
+          <Button key={item.id} size="sm" variant="quiet" onClick={item.onSelect}>
+            {item.label}
+          </Button>
+        ))}
+      </ActionGroup>
+    </nav>
   );
 }

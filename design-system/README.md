@@ -33,7 +33,7 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 **Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-4`; workbench panels sit `space-3` apart; sections separate by `space-6`. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. Button sizes are complete recipes in [Button](components/Button.md); their height grows for wrapped labels. The XDSM view uses a `space-12` matrix pitch.
 
-**Shape.** Contour uses radius-xs for chips, radius-sm for proportional controls, radius-md for working panels and radius-shell for the central canvas. Shared shadows distinguish floating, raised and sunken surfaces. Status shapes remain unchanged.
+**Shape.** Contour uses radius-xs for chips, radius-sm for proportional controls, radius-md for working panels and radius-shell for the central canvas. Shared shadows distinguish floating and raised surfaces; sunken wells remain shadowless. Status shapes remain unchanged.
 
 **Surfaces.** Neutral shell-ground frames the canvas; raised panels use surface-raised and shadow-panel. Sunken values/code wells use surface-sunken without elevation. Static texture and restrained neutral gradients belong only to shell chrome, never over scientific text or data.
 
@@ -57,7 +57,7 @@ The approved stacked HYPRN logo is `ui/src/design/assets/brand/hyprn-stacked-col
 
 ## Implementation
 
-The implementation is the typed React port in `ui/src/design`: `components.tsx` (AttributionChip, Panel, Tabs, Button, Field, DataTable, ModelNode, StatusTag, Ledger, Readout, SourceChip, InferenceBlock, RecordBar), `primitives.tsx` (ActionIcon, CriterionRecord, TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress), `graph.tsx` (GraphCanvas), `source.tsx` (SourceSurface), `numbers.ts` (`formatNumber`), `foundry.css` and the generated `tokens.css`. `ui/src/main.tsx` imports `tokens.css`, then `foundry.css`, then the screen styles once. Compose screens only from these exports; never introduce a colour, size or radius that is not a token.
+The complete export, consumer, recipe and state inventory is maintained in [Contour](Contour.md). Workspace composites live in workspace.tsx; reading compositions in compositions.tsx; numerical presentation in exploration.tsx. The implementation is the typed React port in `ui/src/design`: `components.tsx` (AttributionChip, Panel, Tabs, Button, Field, DataTable, ModelNode, StatusTag, Ledger, Readout, SourceChip, InferenceBlock, RecordBar), `primitives.tsx` (ActionIcon, CriterionRecord, TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress), `graph.tsx` (GraphCanvas), `source.tsx` (SourceSurface), `numbers.ts` (`formatNumber`), `foundry.css` and the generated `tokens.css`. `ui/src/main.tsx` imports `tokens.css`, then `foundry.css`, then the screen styles once. Compose screens only from these exports; never introduce a colour, size or radius that is not a token.
 
 Implementation rules:
 

@@ -228,7 +228,12 @@ class ComponentOwnership(unittest.TestCase):
                     selector = ".screen .hf-" + family + suffix
                     self.assertTrue(css_violations(selector + "{padding:var(--space-6)}"))
                     self.assertTrue(css_violations(selector + "{border-radius:var(--radius-xs)}"))
-        self.assertFalse(css_violations(".profile-placement {max-width:var(--form-max);margin:auto}"))
+        self.assertFalse(css_violations(
+            ".profile-placement {max-width:var(--form-max);margin:auto}"))
+        for selector in (".inspector-section", ".inspector .section-header", ".detail-tabs"):
+            self.assertTrue(css_violations(selector + "{padding:var(--space-4)}"))
+        self.assertFalse(css_violations(".model-region:not(.inspector-collapsed) {grid-row:2}"))
+        self.assertFalse(css_violations(".connected-inspector {grid-row:2;max-height:80vh}"))
         self.assertFalse(css_violations(".case-grid {display:grid;gap:var(--space-4)}"))
 
     def test_raw_controls_and_class_aliases_are_rejected(self):

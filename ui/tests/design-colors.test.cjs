@@ -23,7 +23,13 @@ function contrast(a, b) {
 for (const theme of ['light', 'dark']) {
   test(`${theme}: text, controls and keyboard focus remain legible across semantic grounds`, () => {
     const pairs = [];
-    for (const ground of ['canvas', 'surface', 'surface-sunken']) {
+    for (const ground of [
+      'canvas',
+      'surface',
+      'surface-sunken',
+      'surface-raised',
+      'shell-ground',
+    ]) {
       for (const text of [
         'ink',
         'ink-2',

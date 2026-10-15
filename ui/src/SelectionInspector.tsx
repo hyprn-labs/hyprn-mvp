@@ -1,8 +1,15 @@
 import { unitLabel } from './unitLabels';
 import { Assumptions } from './Assumptions';
 import { EvidenceReferences } from './EvidenceView';
-import { ActionDialog, Button, Disclosure, ContextualPanel, SectionHeader } from './design';
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  ActionDialog,
+  Button,
+  Disclosure,
+  ContextualPanel,
+  SectionHeader,
+  ReadingContents,
+} from './design';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { ApproachStep1, EvidenceSnapshot, PortRef, Source } from './contract';
 import { sourceText } from './api';
 import { groupSelected, type Projection, type Snapshot } from './GraphView';
@@ -180,24 +187,55 @@ export function ComponentSource({
 }
 
 /** One presentation for the authored method, in Overview and Models. */
-export function MethodExplanation({ step, source }: { step: ApproachStep1; source?: ReactNode }) {
+export function MethodExplanation({
+  step,
+  source,
+  sourceTarget,
+}: {
+  step: ApproachStep1;
+  source?: ReactNode;
+  sourceTarget?: RefObject<HTMLDetailsElement | null>;
+}) {
+  const reader = useRef<HTMLDivElement>(null);
+  const sections = [
+    { id: 'method-purpose', label: 'Purpose', present: !!step.purpose },
+    { id: 'method-basis', label: 'Basis and reasoning', present: !!step.rationale },
+    { id: 'method-calculation', label: 'Calculation logic', present: !!step.intent.transformation },
+    { id: 'component-source', label: 'Python function', present: !!source || !!sourceTarget },
+  ].filter((item) => item.present);
   return (
-    <div className="method-narrative">
+    <div className="method-narrative" ref={reader}>
+      <ReadingContents
+        items={sections.map((item) => ({
+          ...item,
+          onSelect: () => {
+            const section =
+              item.id === 'component-source' && sourceTarget
+                ? sourceTarget.current
+                : reader.current?.querySelector<HTMLElement>('.' + item.id);
+            if (!section) return;
+            if (section instanceof HTMLDetailsElement) section.open = true;
+            const target = section.querySelector<HTMLElement>('summary, h4');
+            target?.focus();
+            target?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+          },
+        }))}
+      />
       {step.purpose && (
         <section className="inspector-section method-purpose">
-          <h4>Purpose</h4>
+          <h4 tabIndex={-1}>Purpose</h4>
           <p className="context-copy">{step.purpose}</p>
         </section>
       )}
       {step.rationale && (
         <section className="inspector-section method-basis">
-          <h4>Basis and reasoning</h4>
+          <h4 tabIndex={-1}>Basis and reasoning</h4>
           <p className="context-copy">{step.rationale}</p>
         </section>
       )}
       {step.intent.transformation && (
         <section className="inspector-section method-calculation">
-          <h4>Calculation logic</h4>
+          <h4 tabIndex={-1}>Calculation logic</h4>
           <p className="context-copy">{step.intent.transformation}</p>
         </section>
       )}
@@ -226,6 +264,7 @@ export function ComponentWhatWhy({
   onEditStep?: (link: MethodLink) => void;
   source: ReactNode;
 }) {
+  const sourceTarget = useRef<HTMLDetailsElement>(null);
   const links =
     methods.kind === 'loaded'
       ? methods.links.filter((link) => link.instanceIds.includes(instanceId))
@@ -247,10 +286,10 @@ export function ComponentWhatWhy({
               </Button>
             </div>
           )}
-          <MethodExplanation step={link.step} />
+          <MethodExplanation step={link.step} sourceTarget={sourceTarget} />
         </section>
       ))}
-      <Disclosure className="component-source">
+      <Disclosure ref={sourceTarget} className="component-source">
         <summary>Python function</summary>
         {source}
       </Disclosure>

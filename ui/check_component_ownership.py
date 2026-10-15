@@ -15,8 +15,11 @@ INTERNAL = re.compile(
     r'letter-spacing|gap|align-items|justify-content|flex-direction|--button-.+)$'
 )
 COMPOSITION = re.compile(
-    r'\.(?:hf-(?:assertion|assertions|evidence|reading|brand-logo)|'
-    r'assumption-evidence|study-limit-item)\b'
+    r'\.(?:hf-(?:assertion|assertions|evidence|reading|brand-logo|workspace|navigation|'
+    r'resource-card|settings|context-panel|context-reader|context-source|context-overlay|'
+    r'claim|claim-button)(?=\b|__)|'
+    r'(?:assumption-evidence|study-limit-item|inspector(?:-(?:section|step|model))?|'
+    r'selection-inspector|panel-head|panel-body|detail-tabs)(?![\w-]))'
 )
 RAW = re.compile(r'<(?:button|input|select|textarea)\b')
 
