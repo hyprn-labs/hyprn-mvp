@@ -219,6 +219,18 @@ class ComponentOwnership(unittest.TestCase):
         self.assertFalse(css_violations('.toolbar {display:flex;gap:var(--space-2)}'))
         self.assertFalse(css_violations('.toolbar>.hf-btn {margin-left:auto}'))
 
+    def test_workspace_recipes_have_no_screen_override_escape(self):
+        from check_component_ownership import css_violations
+        for family in ("workspace", "navigation", "resource-card", "settings",
+                       "context-panel", "claim", "claim-button"):
+            for suffix in ("", "__body", "--selected"):
+                with self.subTest(family=family, suffix=suffix):
+                    selector = ".screen .hf-" + family + suffix
+                    self.assertTrue(css_violations(selector + "{padding:var(--space-6)}"))
+                    self.assertTrue(css_violations(selector + "{border-radius:var(--radius-xs)}"))
+        self.assertFalse(css_violations(".profile-placement {max-width:var(--form-max);margin:auto}"))
+        self.assertFalse(css_violations(".case-grid {display:grid;gap:var(--space-4)}"))
+
     def test_raw_controls_and_class_aliases_are_rejected(self):
         from check_component_ownership import check
         with tempfile.TemporaryDirectory() as folder:
