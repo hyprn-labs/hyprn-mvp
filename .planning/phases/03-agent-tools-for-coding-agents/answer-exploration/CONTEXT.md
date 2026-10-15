@@ -20,6 +20,11 @@ The user explicitly requested building this implementation plan and sending it t
 
 ## Scientific and numerical intent
 
+- The user explicitly reaffirmed that the entire answer visualization is generic;
+  fuel is only the real evaluation study. Product controls, categories, labels,
+  units, curves and bindings derive from public model metadata and declared
+  exploration settings. Fuel-specific assignments, ranges and co-varying input
+  pairs are study data, never application branches, constants or inferred names.
 - Use bounded space-filling sampling and validated surrogates instead of exhaustive grids by default. Reuse OpenMDAO, SciPy/NumPy and AiiDA. Do not rewrite physics in JavaScript or copy prototype arithmetic.
 - Categories may select different exact model versions, or different complete value assignments on the same model. No interpolation across qualitative categories; unsupported combinations are explicit.
 - Initial ranges, categorical choices and tolerances are a study-design proposal with provenance/rationale, not hidden defaults. Populate them through the public API. Ordinary slide movement never saves a model/configuration/answer or launches a run.
