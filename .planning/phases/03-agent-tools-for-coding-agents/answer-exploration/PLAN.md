@@ -65,6 +65,29 @@ Application is the sole writer of exploration metadata; AiiDA retains processes/
 
 ### Numerical behavior
 
+Approved clarification: retain three distinct operations: **sample** original-model
+evaluations, **build/refine and independently assess** an immutable surrogate version,
+and **predict** from that existing version using a complete input vector plus an
+optional bounded curve slice. Sample settings owns sampling and rebuilding; slider
+changes only query a ready surrogate. A combined fit/predict call is permitted only
+for the explicitly partial V1 tracer, not the delivered interaction architecture.
+
+Use the pinned OpenMDAO `MetaModelUnStructuredComp`, `KrigingSurrogate` and
+`ResponseSurface` public interfaces for numerical fitting/prediction. Do not introduce
+custom surrogate kernels, interpolation or optimization machinery where those
+primitives suffice. Verify supported trained-state reuse/loading or a bounded warm
+instance lifecycle in the pinned version; retain safe data-only artifacts and exact
+model/runtime/training/surrogate identities. Any adapter fills a documented storage
+or lifecycle gap, not a new numerical framework. No separate prediction microservice,
+second scheduler, untrusted pickle loading or refitting on slider requests.
+
+The final design declares a list of input dimensions/ranges and joint full-vector
+training/query support. The active curve axis is a presentation slice through that
+joint surrogate, not a collection of independent one-variable fits. Generic synthetic
+acceptance must include interacting inputs (for example `x*y`, with both inputs
+changed before prediction) and two categorical dimensions. This clarification does
+not invalidate completed V1 checks; V2–V4 implement the generalization.
+
 1. Measure original-model execution, launch overhead, training and prediction separately. If exact evaluation is fast enough, use it through the same bounded path; still deliver the requested estimated/calculated interface and surrogate fallback for costly models. Never optimize away containment.
 2. Sample joint input space under an explicit total budget, not a Cartesian product. Allocate across chosen categories, training/refinement and independent checks before launching. The preview refuses an underfunded minimum design with an actionable choice; it does not silently exceed the cap. Failed attempted evaluations consume budget. Training/prediction also have memory/CPU/time limits.
 3. Every original-model point has fresh case state. Initially use the existing isolated scalar execution path. Reuse prepared immutable source bytes and orchestration machinery; any in-process/batched optimization must first pass order/permutation/repeated-case and malicious-state-contamination tests. Recreating OpenMDAO Problem alone is not proof that Python module/global state was reset.
