@@ -137,7 +137,9 @@ def test_dispatcher_publishes_on_idle_and_stops_without_launch(tmp_path,monkeypa
     store=Store(tmp_path/'dispatcher.sqlite');native=Native();states=[];ticks=[0]
     monkeypatch.setenv('HYPRN_MVP_APP_STORE',str(store.path)); key=tmp_path/'key';key.write_bytes(b'synthetic-key')
     monkeypatch.setenv('HYPRN_MVP_MODEL_KEY_FILE',str(key));monkeypatch.setenv('HYPRN_MVP_MODEL_URL','http://unused')
-    monkeypatch.setattr(dispatcher,'NativeBridge',lambda:native);monkeypatch.setattr(dispatcher,'ModelingClient',lambda *a:None)
+    native.concurrent = False
+    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda **kwargs: native)
+    monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
     monkeypatch.setattr(dispatcher,'ObservationPublisher',lambda s,n:ObservationPublisher(s,n,monotonic=lambda:ticks[0]))
     def idle(*args):
         states.append(store.execution_observation());ticks[0]+=10
@@ -225,7 +227,9 @@ def dispatcher_for(monkeypatch, tmp_path, store, service, native, argv=('dispatc
     from hyprn_mvp_app import dispatcher
     monkeypatch.setenv('HYPRN_MVP_APP_STORE', str(store.path)); key = tmp_path/'key'; key.write_bytes(b'synthetic-key')
     monkeypatch.setenv('HYPRN_MVP_MODEL_KEY_FILE', str(key)); monkeypatch.setenv('HYPRN_MVP_MODEL_URL', 'http://unused')
-    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda: native); monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
+    native.concurrent = False
+    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda **kwargs: native)
+    monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
     monkeypatch.setattr(dispatcher, 'Submissions', lambda *a: service)
     monkeypatch.setattr('sys.argv', list(argv))
     return dispatcher

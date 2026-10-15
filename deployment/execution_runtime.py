@@ -198,6 +198,7 @@ def build_worker(*, root=None, engine=None, no_cache=False):
         worker=sha(worker),
         results=sha(worker.with_name('results.py')),
         exploration=sha(worker.with_name('exploration.py')),
+        surrogate=sha(worker.with_name('surrogate.py')),
         package=sha(worker.with_name('__init__.py')),
         labels=labels,
     )
@@ -212,6 +213,7 @@ def build_worker(*, root=None, engine=None, no_cache=False):
             (worker, 'worker.py'),
             (worker.with_name('results.py'), 'results.py'),
             (worker.with_name('exploration.py'), 'exploration.py'),
+            (worker.with_name('surrogate.py'), 'surrogate.py'),
             (worker.with_name('__init__.py'), '__init__.py'),
             (REPO / 'deployment/worker.Dockerfile', 'Dockerfile'),
         ]:

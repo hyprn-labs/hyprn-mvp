@@ -6,6 +6,7 @@ Scientific bodies use the public operation schemas returned by describe_tool.
 
 from pathlib import Path
 import json
+from urllib.parse import urlencode
 
 from .local_api import ClientError, record_id
 
@@ -47,6 +48,23 @@ OPERATIONS = {
     'save_exploration_design': ('POST', S + '/exploration-designs', None),
     'get_exploration_design': ('GET', S + '/exploration-designs/{design_id}', None),
     'list_exploration_samples': ('GET', S + '/exploration-samples', None),
+    'adopt_exploration_point': ('POST', S + '/exploration-samples/{operation_id}/points', None),
+    'list_exploration_surrogates': ('GET', S + '/exploration-surrogates', None),
+    'build_exploration_surrogate': ('POST', S + '/exploration-surrogates', None),
+    'get_exploration_surrogate': ('GET', S + '/exploration-surrogates/{version_id}', None),
+    'get_exploration_surrogate_artifact': (
+        'GET',
+        S + '/exploration-surrogates/{version_id}/artifacts/{combination}',
+        None,
+    ),
+    'warm_exploration_surrogate': ('POST', S + '/exploration-surrogates/{version_id}/warm', None),
+    'get_exploration_warm': ('GET', S + '/exploration-warm/{command_id}', None),
+    'cancel_exploration_surrogate': (
+        'POST',
+        S + '/exploration-surrogates/{version_id}/cancel',
+        None,
+    ),
+    'predict_exploration': ('POST', S + '/exploration-surrogates/{version_id}/predictions', None),
     'list_prepared_explorations': ('GET', S + '/exploration-requests', None),
     'submit_exploration': ('POST', S + '/exploration-requests', None),
     'get_exploration': ('GET', S + '/exploration-requests/{request_id}', None),
@@ -64,6 +82,14 @@ OPERATIONS = {
         None,
     ),
     'list_answers': ('GET', S + '/approach/versions/{version_id}/answers', None),
+}
+
+
+QUERY_ARGUMENTS = {
+    'list_exploration_designs': ('answer_version_id',),
+    'list_exploration_samples': ('answer_version_id',),
+    'list_exploration_surrogates': ('answer_version_id',),
+    'list_prepared_explorations': ('answer_version_id', 'configuration_revision_id'),
 }
 
 
@@ -123,7 +149,9 @@ def describe_tool(name):
     return dict(
         name=name,
         identifiers=parameters(path),
-        query_arguments=['category'] if name == 'get_command' else [],
+        query_arguments=['category']
+        if name == 'get_command'
+        else list(QUERY_ARGUMENTS.get(name, ())),
         body_schema=body,
         definitions=definitions,
         request_format=version,
@@ -190,11 +218,22 @@ def invoke(client, name, arguments):
     method, path, version = OPERATIONS[name]
     ids = parameters(path)
     allowed = set(ids) | ({'body'} if method != 'GET' else set())
+    allowed.update(QUERY_ARGUMENTS.get(name, ()))
     if name == 'get_command':
         allowed.add('category')
     if set(arguments) != allowed:
         raise ClientError('Expected tool arguments: ' + ', '.join(sorted(allowed)))
-    path = path.format(**{k: record_id(arguments[k]) for k in ids})
+    path_ids = {}
+    for k in ids:
+        if k == 'combination':
+            if type(arguments[k]) is not int or not 0 <= arguments[k] <= 7:
+                raise ClientError('combination must be an integer from 0 through 7.')
+            path_ids[k] = str(arguments[k])
+        else:
+            path_ids[k] = record_id(arguments[k])
+    path = path.format(**path_ids)
+    if name in QUERY_ARGUMENTS:
+        path += '?' + urlencode({k: record_id(arguments[k]) for k in QUERY_ARGUMENTS[name]})
     if name == 'get_command':
         category = arguments['category']
         if (

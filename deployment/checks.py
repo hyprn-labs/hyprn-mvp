@@ -138,10 +138,14 @@ GROUPS = {
     'answers-api': ('application/tests/test_answers_api.py',),
     'exploration-contracts': ('application/tests/test_exploration_api.py',),
     'exploration-api': (
+        'application/tests/test_surrogates_api.py',
         'application/tests/test_sampling_api.py',
         'application/tests/test_exploration_design_api.py',
     ),
     'exploration-native': ('deployment/tests/test_exploration_native.py',),
+    'exploration-numerics': ('deployment/tests/test_exploration_numerics.py',),
+    'exploration-surrogates-native': ('deployment/tests/test_exploration_surrogates_native.py',),
+    'exploration-fuel-surrogate': ('deployment/tests/test_exploration_fuel_surrogate.py',),
     'exploration-ui': ('deployment/tests/test_exploration_ui.py',),
     'approach-configuration': (
         'application/tests/test_approach_configuration.py',
@@ -175,6 +179,9 @@ GROUPS = {
     ),
     'approach-ui-reading': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'approach-ui-method': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
+    'exploration-answer-ui': (
+        'deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'
+    ),
     'approach-ui-demo': (
         'deployment/tests/approach_ui_fixture.py',
         'ui/tests/approach.spec.ts',
@@ -973,6 +980,7 @@ APPROACH_BROWSER_GROUPS = {
     'approach-ui-controller': '@approach-controller',
     'approach-ui-reading': '@approach-reading',
     'approach-ui-method': '@approach-method',
+    'exploration-answer-ui': '@exploration-answer-basis',
     'approach-ui-demo': '@approach-demo',
     'approach-ui-assumptions': '@approach-assumptions',
     'approach-ui-configuration': '@approach-configuration',
@@ -989,6 +997,9 @@ APPROACH_NATIVE_GROUPS = frozenset(
         'investigation-worker',
         'fuel-native-provenance',
         'exploration-native',
+        'exploration-numerics',
+        'exploration-surrogates-native',
+        'exploration-fuel-surrogate',
         'exploration-ui',
     }
 )
@@ -1765,7 +1776,12 @@ def contracts_child(group='contracts', *, units_mixed_repair=False, exploration_
     if group in NATIVE_BACKEND_GROUPS:
         global NATIVE_BACKEND
         if exploration_ui_resume:
-            assert group in ('exploration-ui', 'exploration-native')
+            assert group in (
+                'exploration-ui',
+                'exploration-native',
+                'exploration-surrogates-native',
+                'exploration-fuel-surrogate',
+            )
             assert scope.root == Path(exploration_ui_resume)
             from aiida import load_profile
             from aiida.manage import get_manager
@@ -2168,9 +2184,17 @@ def main():
     args = parser.parse_args()
     try:
         if args.exploration_ui_resume and not (
-            args.group in ('exploration-ui', 'exploration-native')
+            args.group
+            in (
+                'exploration-ui',
+                'exploration-native',
+                'exploration-surrogates-native',
+                'exploration-fuel-surrogate',
+            )
             or args.exploration_ui_child
             or args.exploration_native_child
+            or args.exploration_surrogates_native_child
+            or args.exploration_fuel_surrogate_child
         ):
             raise ValueError('Exploration resume requires an exploration native or UI group')
         if args.group_class is not None and not args.list:

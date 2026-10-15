@@ -11,6 +11,7 @@ from hyprn_mvp_app.answers import DEFINITIONS as ANSWER_DEFINITIONS
 from hyprn_mvp_app.exploration import DEFINITIONS as EXPLORATION_DEFINITIONS
 from hyprn_mvp_app.sampling import DEFINITIONS as SAMPLE_DEFINITIONS
 from hyprn_mvp_app.exploration_design import DEFINITIONS as DESIGN_DEFINITIONS
+from hyprn_mvp_app.surrogates import DEFINITIONS as SURROGATE_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -28,6 +29,7 @@ schemas.update(rewrite(ANSWER_DEFINITIONS))
 schemas.update(rewrite(EXPLORATION_DEFINITIONS))
 schemas.update(rewrite(SAMPLE_DEFINITIONS))
 schemas.update(rewrite(DESIGN_DEFINITIONS))
+schemas.update(rewrite(SURROGATE_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
     'ApproachClosureRead3': 'ApproachClosureRead4',
@@ -321,6 +323,23 @@ for path,methods in spec["paths"].items():
             op['description']=(
                 'Explicit answer heads for this exact saved approach version. Empty means '
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif '/exploration-surrogates' in path or '/exploration-warm/' in path:
+            schema=ref('ExplorationSurrogate1')
+            if '/artifacts/' in path:
+                schema=ref('ExplorationSurrogateArtifact1')
+            if '/exploration-warm/' in path or path.endswith('/warm'):
+                schema=ref('ExplorationWarmOperation1')
+            if path.endswith('/predictions'):
+                schema=ref('ExplorationQueryResult1')
+            if method == 'get' and path.endswith('/exploration-surrogates'):
+                schema={'type':'array', 'maxItems':20, 'items':schema}
+            if method == 'post':
+                name=('ExplorationQuery1' if path.endswith('/predictions') else
+                      'ExplorationBuildRequest1' if path.endswith('/exploration-surrogates') else
+                      'ExplorationWarmRequest1')
+                op['requestBody']['content']['application/json']['schema']=ref(name)
+                if path.endswith(('/exploration-surrogates', '/warm')):
+                    status='202'
         elif '/exploration-designs' in path:
             schema=ref('ExplorationDesign1')
             if method == 'get' and path.endswith('/exploration-designs'):
@@ -337,13 +356,16 @@ for path,methods in spec["paths"].items():
                 schema={'type':'array', 'maxItems':20, 'items':schema}
             if method == 'post':
                 op['requestBody']['content']['application/json']['schema']=ref(
+                    'ExplorationSelectedPoint1' if path.endswith('/points') else
                     'ExplorationSampleControl1' if path.endswith('/controls')
                     else 'ExplorationSampleRequest1')
-                if not path.endswith('/controls'):
+                if not path.endswith(('/controls', '/points')):
                     op['requestBody']['content']['application/json']['schema']={
                         'anyOf':[ref('ExplorationSampleRequest1'),ref('ExplorationSampleRequest2')]}
                 if path.endswith('/exploration-samples'):
                     status='202'
+                elif path.endswith('/points'):
+                    status='201'
             op['description']=(
                 'Bounded incremental original-model samples. Exact vectors and independent '
                 'partitions are retained. Cancellation stops future evaluations; an in-flight '
@@ -501,7 +523,7 @@ for path,methods in spec["paths"].items():
         else:raise ValueError(path)
         response=envelope(schema) if schema else None
         if response and method == 'get' and path.endswith(
-            ('/exploration-requests','/exploration-designs','/exploration-samples')):
+            ('/exploration-requests','/exploration-designs','/exploration-samples','/exploration-surrogates')):
             response['properties']['next_cursor'] = nullable(uuid)
             response['required'].append('next_cursor')
         if path.endswith(("/edits","/preview")) and "/models/" in path:response=ref("ModelDraftEditResponse4")

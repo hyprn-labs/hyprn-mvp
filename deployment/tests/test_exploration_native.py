@@ -24,7 +24,7 @@ from hyprn_mvp_app.exploration import validate_public
 REPO = Path(__file__).resolve().parents[2]
 
 
-def author(j):
+def author(j, *, full=False):
     fixture = json.loads((REPO / 'integration/tests/fixtures/exploration-fuel.json').read_text())
     model = fixture['model']
     sources = {s['sha256']: s for s in model['source_files']}
@@ -121,7 +121,9 @@ def author(j):
         dict(
             schema_version='1',
             question='How does the recorded screening model respond?',
-            scope='One explicit Mach slice; not physical validation',
+            scope='Explicit local joint input domain; not physical validation'
+            if full
+            else 'One explicit Mach slice; not physical validation',
             limitations='Original cruise-only assumptions remain',
             open_questions='Full mission and physical validation',
             model_bindings=[binding],
@@ -151,7 +153,9 @@ def author(j):
             case_id=None,
             observations='A recorded screening configuration provides the explicit baseline.',
             interpretation='No physical feasibility conclusion is implied by a computed response.',
-            qualifications=['One-dimensional tracer only.'],
+            qualifications=[
+                'Local screening metamodel only.' if full else 'One-dimensional tracer only.'
+            ],
             open_deliverables=['Full mission closure.'],
             basis=dict(
                 configuration_revision_ids=[frozen['configuration']['configuration_revision_id']],
@@ -224,7 +228,7 @@ def advance_samples(j):
     )
 
 
-def joint_fixture(j, *, all_combinations=False):
+def joint_fixture(j, *, all_combinations=False, product_only=False):
     """Nonfuel interaction with two independently named categorical dimensions."""
     from approach_native_fixture import source
 
@@ -233,6 +237,9 @@ def joint_fixture(j, *, all_combinations=False):
         b"outputs['product'] = inputs['x'] * inputs['y'] * "
         b"inputs['material_factor'] * inputs['regime_factor']\n"
     )
+    if product_only:
+        names = ['x', 'y', 'product']
+        raw = b"outputs['product'] = inputs['x'] * inputs['y']\n"
     edits = [
         dict(
             kind='create_definition',
@@ -306,7 +313,9 @@ def joint_fixture(j, *, all_combinations=False):
             'Explicit joint category tuple',
             [
                 literal(ports[n], v, '', evidence['evidence_version_id'])
-                for n, v in zip(names[:4], [1, 1, material, regime], strict=True)
+                for n, v in zip(
+                    names[:-1], [1, 1] if product_only else [1, 1, material, regime], strict=True
+                )
             ],
             [],
             dict(approach_version_id=approach['version']['approach_version_id'], case_id=None),
@@ -512,8 +521,10 @@ def replay_retained():
     )
     j = UnitsJourney(SCOPE, BACKEND)
     replay = dict(passed=False, new_evaluations=0, original_proof='exploration-native-proof.json')
+    attestation_path = SCOPE.root / 'evidence/containment.json'
+    original_attestation = attestation_path.read_bytes()
     try:
-        j.start(resume=True)
+        j.start(resume=True, historical=True)
         count = j.process_count()
 
         def prohibited(*args, **kwargs):
@@ -540,20 +551,21 @@ def replay_retained():
                 assert (
                     config['configuration']['inputs'] == run['history']['configuration']['inputs']
                 )
-        advance_samples(j)
         assert j.process_count() == count == proof['sampling']['final_process_count'] + 7
         replay.update(
             passed=True,
             study_id=study,
             process_count=count,
             lifecycle_events=j.events,
-            runtime=j.native.bundle_runtime()['runtime'],
+            original_runtime=proof['sampling']['extended']['runtime'],
+            current_execution='unavailable',
         )
     finally:
         (SCOPE.root / 'evidence/exploration-native-replay-proof.json').write_text(
             json.dumps(replay, indent=2)
         )
         j.close()
+        assert attestation_path.read_bytes() == original_attestation
 
 
 def test_real_scalar_samples_assessed_predictions_and_retained_identity():

@@ -19,6 +19,8 @@ import sys
 import signal
 import time
 import uuid
+import queue
+import threading
 import application_runtime
 import release as release_binding
 import local_paths
@@ -44,6 +46,8 @@ def native_call(native, method, values, *, read_only=False, exports_only=False, 
         return native.resolve_results(values[0])
     if method == 'explore':
         return native.explore(values[0])
+    if method == 'surrogate':
+        return native.surrogate(values[0], values[1])
     if method == 'read_record':
         return encode_record(native.read_record(*values))
     if method == 'require_attestation':
@@ -86,12 +90,56 @@ def bridge_child(
     child = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, env=env, cwd=cwd
     )
+    # Exactly two fixed lanes in the existing private stdio channel. The main
+    # thread alone touches AiiDA and candidate execution; the reader may only
+    # warm/query immutable numerical state. There is no dispatch queue for runs.
+    primary_requests = queue.Queue(maxsize=1)
+    write_lock = threading.Lock()
+    stopped = threading.Event()
+
+    def reply(response):
+        with write_lock:
+            child.stdin.write(bridge_encode(response))
+            child.stdin.flush()
+
+    def receive():
+        try:
+            while not stopped.is_set():
+                raw = child.stdout.readline(MAX_MESSAGE + 1)
+                if not raw:
+                    break
+                if len(raw) > MAX_MESSAGE:
+                    raise ValueError('App bridge bound')
+                method, values = bridge_operation(
+                    raw,
+                    read_only=read_only,
+                    exports_only=exports_only
+                    or (allow_exports and bridge_decode(raw).get('method') == 'archive_record'),
+                )
+                if method == 'surrogate':
+                    try:
+                        response = dict(data=native_call(native, method, values))
+                    except (OSError, RuntimeError, ValueError, TimeoutError):
+                        response = dict(error='native_unavailable')
+                    reply(dict(response, channel='surrogate'))
+                else:
+                    primary_requests.put_nowait(raw)
+        except (OSError, ValueError, queue.Full):
+            stopped.set()
+        finally:
+            stopped.set()
+
+    reader = threading.Thread(target=receive, name='surrogate-bridge', daemon=True)
+    reader.start()
     try:
         on_ready()
         while True:
-            raw = child.stdout.readline(MAX_MESSAGE + 1)
-            if not raw:
-                break
+            try:
+                raw = primary_requests.get(timeout=0.1)
+            except queue.Empty:
+                if stopped.is_set():
+                    break
+                continue
             if len(raw) > MAX_MESSAGE:
                 raise RuntimeError('App bridge bound')
             archive_mode = exports_only or (
@@ -111,15 +159,22 @@ def bridge_child(
                 response = dict(data=result)
             except (OSError, RuntimeError, ValueError, TimeoutError):
                 response = dict(error='native_unavailable')
-            child.stdin.write(bridge_encode(response))
-            child.stdin.flush()
-        return child.wait()
+            reply(response)
+        try:
+            return child.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            child.terminate()
+            return child.wait(timeout=10)
     finally:
-        child.stdin.close()
-        child.stdout.close()
+        stopped.set()
         if child.poll() is None:
             child.terminate()
             child.wait(timeout=10)
+        reader.join(timeout=35)
+        if hasattr(native, 'close_surrogate'):
+            native.close_surrogate()
+        child.stdin.close()
+        child.stdout.close()
 
 
 def process_identity(pid):

@@ -225,6 +225,7 @@ def execution_source_hashes():
         'integration/src/hyprn_mvp_integration/launcher.py',
         'integration/src/hyprn_mvp_integration/worker.py',
         'integration/src/hyprn_mvp_integration/exploration.py',
+        'integration/src/hyprn_mvp_integration/surrogate.py',
         'integration/src/hyprn_mvp_integration/results.py',
         'integration/src/hyprn_mvp_integration/calculation.py',
         'integration/src/hyprn_mvp_integration/computational_export.py',
@@ -561,6 +562,7 @@ def isolated(
     selector = selectors.DefaultSelector()
     selector.register(proc.stdout, selectors.EVENT_READ)
     collected = bytearray()
+    output_limit = 1048576 if exploration_digest is not None else POLICY['output_bytes']
     reason = 'exited'
     try:
         while selector.get_map():
@@ -573,7 +575,7 @@ def isolated(
                     selector.unregister(key.fileobj)
                     break
                 collected.extend(chunk)
-                if len(collected) > POLICY['output_bytes']:
+                if len(collected) > output_limit:
                     reason = 'output_limit'
                     break
             if reason != 'exited':
@@ -594,7 +596,7 @@ def isolated(
             seconds=time.monotonic() - start,
             wall_seconds=wall,
             state=state,
-            output=bytes(collected[: POLICY['output_bytes']]).decode(errors='replace'),
+            output=bytes(collected[:output_limit]).decode(errors='replace'),
         )
         (root / 'evidence' / f'{name}.json').write_text(json.dumps(result, indent=2) + '\n')
         return result
@@ -644,6 +646,157 @@ def explore(request, *, root=None):
         result_sha256=digest(result),
         elapsed_seconds=report['seconds'],
     )
+
+
+class WarmExploration:
+    """One bounded numerical child of the existing executor, private stdio only.
+
+    The immutable image and policy are attested before startup. Every request
+    rechecks source/configuration/attestation bytes; no Docker CLI cold call is
+    needed to re-identify the same running immutable container on every drag.
+    """
+
+    def __init__(self, root):
+        self.root = runtime_root(root)
+        self.proc = None
+        self.name = None
+        self.started = None
+        self.binding = None
+        self.buffer = bytearray()
+
+    def current_binding(self):
+        return dict(
+            runtime=identity(root=self.root),
+            policy=POLICY,
+            sources=execution_source_hashes(),
+            attestation=hashlib.sha256(
+                (self.root / 'evidence/containment.json').read_bytes()
+            ).hexdigest(),
+        )
+
+    def start(self):
+        require_attestation(root=self.root)
+        self.binding = self.current_binding()
+        owner = OWNER if self.root == ROOT else self.root.name
+        self.name = owner + '-surrogate-' + uuid4().hex
+        args = [
+            'docker',
+            'run',
+            '--rm',
+            '-i',
+            '--name',
+            self.name,
+            '--label',
+            'org.hyprn-mvp.owner=' + owner,
+            '--network',
+            'none',
+            '--user',
+            POLICY['user'],
+            '--read-only',
+            '--cap-drop',
+            'ALL',
+            '--security-opt',
+            'no-new-privileges',
+            '--memory',
+            POLICY['memory'],
+            '--memory-swap',
+            POLICY['memory'],
+            '--cpus',
+            POLICY['cpus'],
+            '--pids-limit',
+            POLICY['pids'],
+            '--ulimit',
+            f'fsize={POLICY["file_bytes"]}:{POLICY["file_bytes"]}',
+            '--log-driver',
+            'none',
+            '--tmpfs',
+            '/tmp:rw,noexec,nosuid,size=16m,mode=1777',
+            '--tmpfs',
+            '/output:rw,noexec,nosuid,size=16m,mode=1777',
+            '--workdir',
+            '/output',
+            '--env',
+            'HOME=/tmp',
+            '--env',
+            'OPENMDAO_REPORTS=0',
+            '--env',
+            'OPENBLAS_NUM_THREADS=1',
+            '--env',
+            'PYTHONDONTWRITEBYTECODE=1',
+            self.binding['runtime']['worker_image'],
+            'python',
+            '-B',
+            '-m',
+            'hyprn_mvp_integration.surrogate',
+        ]
+        self.proc = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=docker_environment(),
+        )
+        self.started = time.monotonic()
+
+    def call(self, request):
+        exploration.admit_request(request)
+        if request['operation'] not in ('warm', 'predict'):
+            raise ValueError('Explicit warm or existing-version prediction required')
+        if self.proc is None:
+            if request['operation'] != 'warm':
+                raise RuntimeError('Warm session absent; prepare in Sample settings')
+            self.start()
+        if (
+            self.proc.poll() is not None
+            or time.monotonic() - self.started > 900
+            or (self.binding != self.current_binding())
+        ):
+            self.close()
+            raise RuntimeError('Warm session expired or runtime changed; explicit warm required')
+        raw = canonical(request) + b'\n'
+        if len(raw) > 1048576:
+            raise ValueError('Warm request byte bound')
+        deadline = time.monotonic() + (30 if request['operation'] == 'warm' else 2)
+        selector = selectors.DefaultSelector()
+        selector.register(self.proc.stdout, selectors.EVENT_READ)
+        try:
+            self.proc.stdin.write(raw)
+            self.proc.stdin.flush()
+            while b'\n' not in self.buffer:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not selector.select(remaining):
+                    raise RuntimeError('Warm prediction wall limit')
+                chunk = os.read(self.proc.stdout.fileno(), 65536)
+                if not chunk:
+                    raise RuntimeError('Warm worker stopped')
+                self.buffer.extend(chunk)
+                if len(self.buffer) > 1048576:
+                    raise RuntimeError('Warm output bound')
+            line, _, rest = self.buffer.partition(b'\n')
+            self.buffer = bytearray(rest)
+            response = data_json(line)
+            if set(response) != {'data'} or response['data'].get('identity') != request['identity']:
+                raise RuntimeError('Warm result unavailable or mismatched')
+            return response['data']
+        except (OSError, RuntimeError, ValueError):
+            self.close()
+            raise
+        finally:
+            selector.close()
+
+    def close(self):
+        if self.proc is not None:
+            self.proc.stdin.close()
+            self.proc.stdout.close()
+            subprocess.run(
+                ['docker', 'rm', '-f', self.name],
+                capture_output=True,
+                timeout=20,
+                env=docker_environment(),
+            )
+            self.proc.wait(timeout=10)
+            self.proc = None
+            self.buffer.clear()
 
 
 def host_home():
@@ -734,9 +887,10 @@ def attest(root=None):
             'import hashlib,json\nimport hyprn_mvp_integration as p,h'
             'yprn_mvp_integration.worker as w,hyprn_mvp_integration.'
             'results as r,hyprn_mvp_integration.exploration as e\n'
+            'import hyprn_mvp_integration.surrogate as s\n'
             'print(json.dumps({n:hashlib.sha256(open(m.'
             "__file__,'rb').read()).hexdigest() for n,m in (('packag"
-            "e',p),('worker',w),('results',r),('exploration',e))}))"
+            "e',p),('worker',w),('results',r),('exploration',e),('surrogate',s))}))"
         )
     )
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -772,6 +926,7 @@ def attest(root=None):
         exploration=hashlib.sha256(
             Path(__file__).with_name('exploration.py').read_bytes()
         ).hexdigest(),
+        surrogate=hashlib.sha256(Path(__file__).with_name('surrogate.py').read_bytes()).hexdigest(),
     )
     passed = (
         cases['memory']['state']['OOMKilled']

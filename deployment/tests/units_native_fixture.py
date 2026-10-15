@@ -20,7 +20,7 @@ REPO=Path(__file__).resolve().parents[2]
 
 
 class UnitsJourney(ApproachJourney):
-    def start(self, *, resume=False):
+    def start(self, *, resume=False, historical=False):
         import secrets,time
         from hyprn_mvp_app.store import Store,uid
         from hyprn_mvp_integration.calculation import NativeExecution
@@ -114,7 +114,17 @@ class UnitsJourney(ApproachJourney):
         if not resume:
             guard.prepare_worker_fixture(self.scope, self.backend)
         self.native=NativeExecution(backend=self.backend,root=self.scope.root)
-        assert self.native.require_attestation()['passed']
+        if historical:
+            assert resume, 'Historical reads require an existing scoped store'
+            def prohibited(*args, **kwargs):
+                raise AssertionError('Historical replay cannot execute numerical or candidate code')
+            for method in ('explore', 'surrogate', 'launch', 'launch_budgeted'):
+                setattr(self.native, method, prohibited)
+            self.store.publish_execution_observation(
+                'unavailable', 'executor_unavailable', time.time()
+            )
+        else:
+            assert self.native.require_attestation()['passed']
         self.identity=dict(image=image,network=self.network,container=self.name,transport='production ModelingClient HTTP/JWT',
             internal_network=json.loads(self.docker('network','inspect',self.network).stdout)[0]['Internal'],
             source_hashes={str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in stage.rglob('*') if p.is_file()},

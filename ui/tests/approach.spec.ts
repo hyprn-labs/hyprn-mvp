@@ -474,6 +474,132 @@ test('@approach-method continuous sections preserve question and route', async (
   await readingShot(page, 'continuous-overview');
 });
 
+test('@exploration-answer-basis hydrates exact cited records and keeps full case review', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const data = await seededConditions(page, browser, baseURL, { cases: true, failure: true });
+  const context = await browser.newContext({ baseURL }),
+    helper = await context.newPage();
+  await helper.goto('/ui/');
+  const pins = await helper.evaluate(async (d) => {
+    const api = (window as any).approachHarness.api;
+    await api.login('owner', 'correct horse battery staple');
+    const configurations = [],
+      runs = [];
+    for (let index = 0; index < 2; index++) {
+      const original = d.fixture.configuration;
+      const configuration = {
+        schema_version: '4',
+        study_id: d.sid,
+        model_id: d.model.model_id,
+        model_revision_id: d.model.model_revision_id,
+        name: 'Basis record ' + index,
+        inputs: original.inputs.map((v: any) => ({
+          kind: 'literal',
+          target: v.target,
+          value: v.value,
+          units: v.units,
+          provenance: v.provenance,
+        })),
+        criteria: [],
+        numerical: original.numerical,
+        context_source: {
+          kind: 'current_study',
+          expected_study_revision: (await api.study(d.sid)).revision,
+        },
+        notes: [],
+        derivation: null,
+        assumptions: [],
+        general_context_evidence_version_ids: [],
+        approach_selection: {
+          approach_version_id: d.saved.version.approach_version_id,
+          case_id: d.saved.version.content.cases[index].case_id,
+        },
+      };
+      const preview = await api.previewConfiguration4(configuration);
+      const saved = await api.commitConfiguration4({
+        command_id: crypto.randomUUID(),
+        expected_revision: null,
+        configuration_id: null,
+        configuration,
+        expected_preview_digest: preview.candidate_digest,
+      });
+      configurations.push(saved.configuration.configuration_revision_id);
+      runs.push((await api.submitRun(d.sid, configurations[index])).run_id);
+    }
+    const body = {
+      schema_version: '1',
+      command_id: crypto.randomUUID(),
+      expected_revision: null,
+      approach_version_id: d.saved.version.approach_version_id,
+      case_id: d.saved.version.content.cases[0].case_id,
+      observations: 'Original calculations are pending.',
+      interpretation: 'Earlier cited assessment.',
+      qualifications: ['No numerical claim.'],
+      open_deliverables: [],
+      basis: {
+        configuration_revision_ids: [configurations[0]],
+        run_ids: [runs[0]],
+        evidence_version_ids: [],
+        case_answer_version_ids: [],
+      },
+    };
+    const first = await api.saveAnswer(d.sid, body);
+    await api.saveAnswer(d.sid, {
+      ...body,
+      command_id: crypto.randomUUID(),
+      case_id: null,
+      interpretation: 'Exact earlier basis remains cited.',
+      basis: {
+        configuration_revision_ids: [],
+        run_ids: [],
+        evidence_version_ids: [],
+        case_answer_version_ids: [first.answer_version_id],
+      },
+    });
+    await api.saveAnswer(d.sid, {
+      ...body,
+      command_id: crypto.randomUUID(),
+      expected_revision: first.answer_version_id,
+      interpretation: 'Later assessment.',
+      basis: { ...body.basis, configuration_revision_ids: [configurations[1]], run_ids: [runs[1]] },
+    });
+    return { configurations, runs, first: first.answer_version_id };
+  }, data);
+  await context.close();
+  const reads: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'GET') reads.push(new URL(r.url()).pathname);
+  });
+  await page.goto(
+    '/ui/?workspace#' + new URLSearchParams({ v: '1', study: data.sid, view: 'overview' }),
+  );
+  await expect(page.getByText('Exact earlier basis remains cited.', { exact: true })).toBeVisible();
+  const prefix = '/api/1/studies/' + data.sid;
+  await expect.poll(() => reads.includes(prefix + '/answers/' + pins.first)).toBe(true);
+  await expect
+    .poll(() => reads.includes(prefix + '/configurations/' + pins.configurations[0]))
+    .toBe(true);
+  await expect.poll(() => reads.includes(prefix + '/runs/' + pins.runs[0])).toBe(true);
+  expect(reads).not.toContain(prefix + '/configurations/' + pins.configurations[1]);
+  expect(reads).not.toContain(prefix + '/runs/' + pins.runs[1]);
+  await page.goto(
+    '/ui/?workspace#' +
+      new URLSearchParams({
+        v: '1',
+        study: data.sid,
+        view: 'cases',
+        approach: data.saved.version.approach_version_id,
+      }),
+  );
+  await expect
+    .poll(() => reads.includes(prefix + '/configurations/' + pins.configurations[1]))
+    .toBe(true);
+  await expect.poll(() => reads.includes(prefix + '/runs/' + pins.runs[1])).toBe(true);
+});
+
 test('@approach-method synthesis pins its earlier case-answer basis', async ({
   page,
   browser,

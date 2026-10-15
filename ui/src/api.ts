@@ -406,6 +406,74 @@ export class HyprnMvpApi {
       import('./contract').ExplorationSampleOperation2>(
       `/studies/${sid}/exploration-samples?` +
       new URLSearchParams({answer_version_id: answer}), signal);
+  explorationSurrogates = (sid: string, answer: string, signal?: AbortSignal) =>
+    this.list<import('./contract').ExplorationSurrogate1>(
+      `/studies/${sid}/exploration-surrogates?` +
+        new URLSearchParams({ answer_version_id: answer }),
+      signal,
+    );
+  buildExplorationSurrogate = async (
+    sid: string,
+    body: import('./contract').ExplorationBuildRequest1,
+  ) =>
+    (
+      await this.mutate<import('./contract').ExplorationSurrogate1>(
+        `/studies/${sid}/exploration-surrogates`,
+        body,
+        'exploration_surrogate',
+        sid,
+      )
+    ).data;
+  readExplorationSurrogate = async (sid: string, id: string, signal?: AbortSignal) =>
+    (
+      await this.request<import('./contract').ExplorationSurrogate1>(
+        `/studies/${sid}/exploration-surrogates/${id}`,
+        undefined,
+        'GET',
+        signal,
+      )
+    ).data;
+  warmExplorationSurrogate = async (sid: string, id: string) =>
+    (
+      await this.mutate<import('./contract').ExplorationWarmOperation1>(
+        `/studies/${sid}/exploration-surrogates/${id}/warm`,
+        { command_id: crypto.randomUUID() },
+        'exploration_warm',
+        sid,
+      )
+    ).data;
+  cancelExplorationSurrogate = async (sid: string, id: string) =>
+    (
+      await this.mutate<import('./contract').ExplorationSurrogate1>(
+        `/studies/${sid}/exploration-surrogates/${id}/cancel`,
+        { command_id: crypto.randomUUID() },
+        'exploration_cancel',
+        sid,
+      )
+    ).data;
+  readExplorationWarm = async (sid: string, id: string, signal?: AbortSignal) =>
+    (
+      await this.request<import('./contract').ExplorationWarmOperation1>(
+        `/studies/${sid}/exploration-warm/${id}`,
+        undefined,
+        'GET',
+        signal,
+      )
+    ).data;
+  predictExploration = async (
+    sid: string,
+    id: string,
+    body: import('./contract').ExplorationQuery1,
+    signal?: AbortSignal,
+  ) =>
+    (
+      await this.request<import('./contract').ExplorationQueryResult1>(
+        `/studies/${sid}/exploration-surrogates/${id}/predictions`,
+        body,
+        'POST',
+        signal,
+      )
+    ).data;
   previewExplorationSamples = async (
     sid: string, body: import('./contract').ExplorationSampleRequest2, signal?: AbortSignal,
   ) => (await this.request<import('./contract').ExplorationSamplePreview1>(
@@ -418,6 +486,16 @@ export class HyprnMvpApi {
     (await this.request<import('./contract').ExplorationSampleOperation1 |
       import('./contract').ExplorationSampleOperation2>(
       `/studies/${sid}/exploration-samples/${id}`, undefined, 'GET', signal)).data;
+  adoptExplorationPoint = async (sid: string, id: string, run: string, combination: number) =>
+    (
+      await this.mutate<import('./contract').ExplorationSampleOperation2>(
+        `/studies/${sid}/exploration-samples/${id}/points`,
+        { command_id: crypto.randomUUID(), run_id: run, combination } as
+          import('./contract').ExplorationSelectedPoint1,
+        'exploration_sample',
+        sid,
+      )
+    ).data;
   controlExplorationSamples = async (
     sid: string, id: string, action: 'cancel' | 'reconcile' | 'resume',
   ) => (await this.mutate<import('./contract').ExplorationSampleOperation1 |

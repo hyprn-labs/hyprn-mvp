@@ -333,6 +333,18 @@ Commit gets a pure compatibility result for the exact candidate, then allocates 
 
 Historical reads use application authorization and retained application and AiiDA records only, and work with the modeling service offline or replaced. Re-execution also needs the recorded runtime. Computational record exports carry the full ancestor closure of selected runs within a bounded size and expose only curated diagnostics.
 
+### Assessed answer surrogates
+
+Original sampling, surrogate construction and prediction are separate operations. An immutable exploration design maps each valid category tuple to exact model/configuration revisions and complete input vectors. The sampling owner retains original runs and their training/check partitions. An explicitly calculated selected point may enrich the retained training partition; an existing check is never silently reassigned. Refinement spends only its declared additional original-evaluation budget. A ready version remains addressable while a later sample or construction operation runs, and cancellation or failure cannot publish a partial ready version.
+
+The surrogate owner reads retained original records, checks their model/source, configuration, numerical and original-runtime identities, and submits a data-only construction request through the existing execution bridge. OpenMDAO 3.45.1 `MetaModelUnStructuredComp`, `ResponseSurface` and `KrigingSurrogate` own fitting and prediction. Inputs are explicitly normalized. The first reserved check compares eligible methods; the remaining checks independently assess the selected method against each output's `absolute + relative * abs(reference)` target, including zero references. Counts, RMSE, maximum observed error, method comparisons and reasons are retained. These metamodel checks do not establish physical applicability, feasibility, or a universal error bound. Scientific assessment remains a separate owner and evidence requirement.
+
+Every group records the original-sample runtime separately from the surrogate-computation runtime. A new computation runtime does not rewrite the runtime of historical original runs. The trusted executor may select a separately attested numerical runtime root through the existing location guards; public callers cannot supply one, and original launches remain bound to their original execution root. An authorized public artifact reader returns canonical JSON bytes, length and SHA-256. The trusted adapter addresses OpenMDAO's lack of a common serialization API by copying a closed, version-pinned set of finite numeric state fields with fixed shape checks; it never loads pickle, executable code, arbitrary classes, paths or callbacks. Public OpenMDAO `predict` performs every prediction. A changed OpenMDAO version requires a new qualified adapter and execution attestation.
+
+Prediction accepts an existing version, full mapped vector and optional batched active-axis curve. It neither trains nor launches candidate code. The execution bridge owns one bounded private stdio query lane alongside its single original-execution lane; there is no new network listener or scheduler. Explicit Settings preparation warms at most eight immutable groups in one restricted child, bounded to 4,096 requests and 900 seconds. Restart or expiry requires another explicit warm action. Permissions and exact group identities are checked for every request; caches are owned by the local execution bridge, never supplied by a client. Pending interaction requests coalesce by actor and study, have a two-second deadline and cannot publish a stale selection token.
+
+Prediction eligibility includes declared bounds, stepped/covary mapping, the convex support of actual training vectors, and per-output completeness and observed target outcomes. A failed or missing original output makes that output ineligible throughout its group; no curve fills the failed gap. At the exact same full vector, retained original results take precedence, including an unavailable original result. Numeric estimates are never relabeled as original calculations.
+
 ## 7. Module ownership and the acyclic import rule
 
 The application import graph is acyclic, function-local imports included:
@@ -393,14 +405,15 @@ transaction. These records do not enter modeling or execution bundles.
 | `exploration` | `answers`, `contracts`, `execution_bundle`, `history`, `units` |
 | `exploration_design` | `contracts`, `exploration` |
 | `sampling` | `contracts`, `exploration`, `exploration_design`, `history`, `readiness` |
+| `surrogates` | `contracts`, `exploration`, `exploration_design`, `history`, `sampling` |
 | `configuration` | `approach`, `contracts`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
 | `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
 | `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
-| `dispatcher` | `computational_export`, `configuration`, `contracts`, `execution`, `execution_bundle`, `exploration`, `modeling`, `readiness`, `sampling`, `store` |
+| `dispatcher` | `computational_export`, `configuration`, `contracts`, `execution`, `execution_bundle`, `exploration`, `modeling`, `readiness`, `sampling`, `store`, `surrogates` |
 | `auth` | `contracts`, `store` |
 | `ui` | — |
 | `edge` | `contracts` |
-| `routes` (package) | `answers`, `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `exploration`, `exploration_design`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `sampling`, `store` |
+| `routes` (package) | `answers`, `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `exploration`, `exploration_design`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `sampling`, `store`, `surrogates` |
 | `agent_tools` (package) | `contracts` |
 | `agent_policy` | `agent_tools`, `contracts` |
 | `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `edge`, `store` |

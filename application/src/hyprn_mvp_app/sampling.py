@@ -57,6 +57,9 @@ ACTIVE = (
     "WHERE json_extract(value,'$.state') IN ('submitted','uncertain')))"
 )
 DEFINITIONS = {
+    'ExplorationSelectedPoint1': _object(
+        dict(command_id=_ID, run_id=_ID, combination=dict(type='integer', minimum=0, maximum=7))
+    ),
     'ExplorationSampleRequest1': _object(
         dict(
             schema_version=dict(const='1'),
@@ -249,6 +252,127 @@ class Samples:
 
     def page(self, actor, sid, answer, cursor=None):
         return receipt_page(self.store, actor, sid, 'exploration_sample', answer, cursor)
+
+    def adopt(self, actor, sid, operation, body):
+        """Explicitly enrich a retained partition with a separately calculated point.
+
+        It never reassigns an independent check or launches another computation.
+        Original runtime/model/units must match; build versions remain immutable.
+        """
+        validate('ExplorationSelectedPoint1', body)
+        if type(body['combination']) is not int:
+            raise DomainError('invalid_request', 400)
+        previous = self.status(actor, sid, operation)
+        if previous['state'] not in ('complete', 'limited', 'cancelled'):
+            raise DomainError('reference_conflict', 409)
+        index = body['combination']
+        if index >= len(previous['request']['combinations']):
+            raise DomainError('invalid_request', 400)
+        combo = previous['request']['combinations'][index]
+        retained = History(self.store).retained(actor, sid, body['run_id'])
+        h, manifest = retained.history, retained.payload['bundle']['manifest']
+        basis = self.explorations.basis(
+            actor, sid, combo['answer_version_id'], combo['configuration_revision_id']
+        )
+        frozen = self.configurations.read(actor, sid, combo['configuration_revision_id'])
+        if (
+            manifest['runtime'] != previous['runtime']
+            or h['model_snapshot']['digest'] != basis['model_digest']
+            or h['configuration']['numerical'] != frozen['configuration']['numerical']
+        ):
+            raise DomainError('reference_conflict', 409)
+        inputs = [
+            dict(target=v['target'], value=v['value'], units=v['units'])
+            for v in h['configuration']['inputs']
+        ]
+        values = {_key(v['target']): v for v in inputs}
+        free = {_key(p['target']): p for p in basis['inputs'] if p['binding']['kind'] == 'free'}
+        if set(values) != set(free) or any(
+            values[k]['units'] != p['binding']['assignment']['units'] for k, p in free.items()
+        ):
+            raise DomainError('invalid_request', 400)
+        for d in combo['dimensions']:
+            v = values[_key(d['target'])]['value']
+            if not d['lower'] <= v <= d['upper'] or (
+                previous['schema_version'] == '2' and not on_step(v, d)
+            ):
+                raise DomainError('invalid_request', 400)
+        declared = {_key(d['target']) for d in combo['dimensions']}
+        if any(
+            values[k]['value'] != p['binding']['assignment']['value']
+            for k, p in free.items()
+            if k not in declared
+        ):
+            raise DomainError('reference_conflict', 409)
+        if previous['schema_version'] == '2':
+            for axis in independent_dimensions(combo['dimensions']):
+                if axis['covary_group'] and any(
+                    values[_key(d['target'])]['value'] != values[_key(axis['target'])]['value']
+                    for d in combo['dimensions']
+                    if d['covary_group'] == axis['covary_group']
+                ):
+                    raise DomainError('invalid_request', 400)
+        identity = point_identity(basis, frozen, previous['runtime'], combo['categories'], inputs)
+        if any(p['identity'] == identity for p in previous['points']):
+            return previous
+        result = deepcopy(previous)
+        if len(result['points']) >= 128 or combo['training_count'] >= 64:
+            raise DomainError('limit_exceeded', 429)
+        result.update(
+            operation_id=body['command_id'],
+            state=previous['state'],
+            reason=previous['reason'],
+            attempted_count=0,
+            elapsed_seconds=0,
+            started_at=time.time(),
+            cancel_requested=False,
+        )
+        result['request'].update(command_id=body['command_id'], previous_operation_id=operation)
+        result['request']['combinations'][index]['training_count'] += 1
+        result['request']['budget']['additional_evaluations'] = 0
+        result['points'].append(
+            dict(
+                identity=identity,
+                combination=index,
+                partition='training',
+                inputs=inputs,
+                state='recorded',
+                run_id=body['run_id'],
+                configuration_revision_id=h['configuration']['configuration_revision_id'],
+                reused=True,
+                reason=None,
+                results_digest=digest(h['results']),
+            )
+        )
+        result['completed_count'] += 1
+        result['allocation'].update(
+            retained_count=len(result['points']),
+            new_count=0,
+            total_count=len(result['points']),
+            maximum_execution_seconds=0,
+        )
+        for allocation in result['allocation']['allocation']:
+            count = sum(p['combination'] == allocation['combination'] for p in result['points'])
+            allocation.update(retained_count=count, new_count=0)
+            if allocation['combination'] == index:
+                allocation['training_count'] += 1
+        result['design_digest'] = digest(
+            dict(previous=previous['design_digest'], added_identity=identity, run_id=body['run_id'])
+        )
+        validate('ExplorationSampleOperation' + result['schema_version'], result)
+
+        def accept(db):
+            History(self.store).recheck(db, actor, sid, [retained.token])
+            return result
+
+        return self.store.command(
+            actor,
+            sid,
+            'exploration_sample',
+            body['command_id'],
+            dict(operation=operation, **body),
+            accept,
+        )
 
     def resolve(self, actor, sid, request):
         validate(

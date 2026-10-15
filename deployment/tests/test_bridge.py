@@ -265,7 +265,9 @@ def test_serving_drains_one_export_before_observation_and_skips_unready_science(
             events.append('observation');store.publish_execution_observation('unavailable','attestation_invalid',1000.)
         def stopped(self):events.append('stopped')
     monkeypatch.setattr(dispatcher,'Submissions',Service);monkeypatch.setattr(dispatcher,'ObservationPublisher',Observation)
-    monkeypatch.setattr(dispatcher,'export_once',lambda *a:events.append('one-export'))
+    from types import SimpleNamespace
+    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda **kw: SimpleNamespace(concurrent=False))
+    monkeypatch.setattr(dispatcher, 'export_once', lambda *a, **kw: events.append('one-export'))
     monkeypatch.setattr(dispatcher.select,'select',lambda *a:([True],[],[]))
     monkeypatch.setattr(sys,'argv',['dispatcher','--with-exports'])
     dispatcher.main()

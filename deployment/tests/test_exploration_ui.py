@@ -27,6 +27,8 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
     current_native = (
         EXPLORATION_UI_RESUME and (SCOPE.root / 'evidence/exploration-native-proof.json').exists()
     )
+    attestation_path = SCOPE.root / 'evidence/containment.json'
+    original_attestation = attestation_path.read_bytes() if current_native else None
     try:
         if EXPLORATION_UI_RESUME:
             # Replay validates today's product source, while retaining scientific records.
@@ -34,7 +36,7 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
             product = guard.scoped_path(SCOPE, 'artifacts/units-product-ui')
             if product.exists():
                 shutil.rmtree(product)
-        j.start(resume=EXPLORATION_UI_RESUME)
+        j.start(resume=EXPLORATION_UI_RESUME, historical=bool(current_native))
         if current_native:
             original = json.loads(
                 (SCOPE.root / 'evidence/exploration-native-proof.json').read_text()
@@ -172,13 +174,19 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
 
         controls = prepare(j, manifest, SCOPE.root)
         manifest['controls'] = controls
+        manifest['historical_executor_unavailable'] = bool(current_native)
         (SCOPE.root / 'artifacts/exploration-browser-input.json').write_text(json.dumps(manifest))
         # This host owns the attested executor; retained reads must not imply
         # current readiness. Refresh its real identity before inert admission.
-        assert j.native.require_attestation()['passed']
-        j.store.publish_execution_observation(
-            'ready', None, time.time(), j.native.bundle_runtime()['runtime']
-        )
+        if current_native:
+            j.store.publish_execution_observation(
+                'unavailable', 'executor_unavailable', time.time()
+            )
+        else:
+            assert j.native.require_attestation()['passed']
+            j.store.publish_execution_observation(
+                'ready', None, time.time(), j.native.bundle_runtime()['runtime']
+            )
         env = guard.clean_environment(j.scope)
         env['HYPRN_MVP_UI_BASE_URL'] = j.url
         env['HYPRN_MVP_UI_EVIDENCE_ROOT'] = str(SCOPE.root / 'evidence/browser')
@@ -246,3 +254,5 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
                 json.dumps(proof, indent=2)
             )
         j.close()
+        if current_native:
+            assert attestation_path.read_bytes() == original_attestation

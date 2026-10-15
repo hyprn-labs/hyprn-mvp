@@ -32,6 +32,9 @@ def run(*, group):
     from checks import APPROACH_BROWSER_GROUPS
     if group not in APPROACH_BROWSER_GROUPS:
         raise ValueError('Unknown approach browser group')
+    requested_group = group
+    if group == 'exploration-answer-ui':
+        group = 'approach-ui-method'
     for relative in ('application/src','application/tests','contracts/tests','integration/tests'):
         sys.path.insert(0, str(REPO / relative))
     from hyprn_mvp_app.api import create_app
@@ -443,7 +446,7 @@ createRoot(document.getElementById('root')).render(surface);
         browser_config=stage/'playwright.config.ts'
         browser_config.write_text('import base from '+json.dumps(str(REPO/'ui/playwright.isolated.config.ts'))+';\nexport default {...base,testDir:'+json.dumps(str(REPO/'ui/tests'))+',testMatch:["approach.spec.ts"]};\n')
         thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
-        command=['node',str(REPO/'ui/node_modules/playwright/cli.js'),'test','--config',str(browser_config),'--grep',APPROACH_BROWSER_GROUPS[group],'--reporter=json']
+        command=['node',str(REPO/'ui/node_modules/playwright/cli.js'),'test','--config',str(browser_config),'--grep',APPROACH_BROWSER_GROUPS[requested_group],'--reporter=json']
         # Every named check gets its own retained report. No empty selection,
         # skip or failed batch can disappear into an aggregate pass.
         listed=subprocess.run(command+['--list'],cwd=REPO,env=env,capture_output=True,text=True,timeout=30)
@@ -475,7 +478,7 @@ createRoot(document.getElementById('root')).render(surface);
         native=[n for n in sys.modules if n.split('.')[0] in {'aiida','openmdao','openturns'}]
         passed=returncode==0 and stats.get('expected',0)>0 and not native and not any(stats.get(k,0) for k in ('unexpected','skipped','flaky'))
         record = dict(
-            group=group,
+            group=requested_group,
             passed=passed,
             tests=stats.get('expected', 0) + stats.get('unexpected', 0),
             failures=stats.get('unexpected', 0),

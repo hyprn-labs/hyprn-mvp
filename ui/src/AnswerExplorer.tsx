@@ -9,6 +9,8 @@ import type {
   PublicRunDetail,
   ScientificAnswer1,
   ExplorationDesign1,
+  ExplorationSurrogate1,
+  ExplorationQueryResult1,
 } from './contract';
 import { GraphView, project, type Snapshot } from './GraphView';
 import {
@@ -69,6 +71,9 @@ export function AnswerExplorer({
   const [categories, setCategories] = useState<string[]>([]);
   const [selected, setSelected] = useState<SelectedInput[]>([]);
   const [activeAxis, setActiveAxis] = useState<PortRef | null>(null);
+  const [surrogates, setSurrogates] = useState<ExplorationSurrogate1[]>([]);
+  const [prediction, setPrediction] = useState<ExplorationQueryResult1 | null>(null);
+  const [predictionError, setPredictionError] = useState('');
   const carry = useRef<{ vector: SelectedInput[]; dimensions: Dimension[] } | null>(null);
   const combo = design && supportedCombination(design.request.combinations, categories);
   const dimensions = combo?.dimensions ?? [];
@@ -147,6 +152,69 @@ export function AnswerExplorer({
 
   const compatibleUnits = loaded && preparedInputUnitsMatch(loaded.basis.inputs);
   const vector = completeVector(selected, dimensions);
+  const surrogate = surrogates.find(
+    (s) => s.design_id === design?.design_id && (s.state === 'ready' || s.state === 'assessed'),
+  );
+  const combinationIndex = design?.request.combinations.findIndex((c) => c === combo) ?? -1;
+  const vectorSignature = JSON.stringify(vector);
+  useEffect(() => {
+    const fence = api.fence({ studyId });
+    void api
+      .explorationSurrogates(studyId, answer.answer_version_id, fence.signal)
+      .then((items) => {
+        if (fence.valid()) setSurrogates(items);
+      })
+      .catch(async (e) => {
+        await api.readFailed(e, fence);
+      })
+      .finally(fence.done);
+    return () => fence.abort();
+  }, [api, studyId, answer.answer_version_id, refresh]);
+  useEffect(() => {
+    setPrediction(null);
+    setPredictionError('');
+    if (!surrogate || !vector || combinationIndex < 0) return;
+    const fence = api.fence({ studyId });
+    const token = crypto.randomUUID();
+    // Immediate local control update; only the last settled selection is sent.
+    const timer = window.setTimeout(() => {
+      void api
+        .predictExploration(
+          studyId,
+          surrogate.surrogate_version_id,
+          {
+            schema_version: '1',
+            selection_token: token,
+            combination: combinationIndex,
+            inputs: vector,
+            axis: activeAxis,
+            curve_points: 17,
+          },
+          fence.signal,
+        )
+        .then((result) => {
+          if (fence.valid() && result.selection_token === token) setPrediction(result);
+        })
+        .catch(async (e) => {
+          await api.readFailed(e, fence);
+          if (fence.valid())
+            setPredictionError('Estimates unavailable. Prepare them in Sample settings.');
+        })
+        .finally(fence.done);
+    }, 20);
+    return () => {
+      window.clearTimeout(timer);
+      fence.abort();
+    };
+  }, [
+    api,
+    studyId,
+    surrogate?.surrogate_version_id,
+    combinationIndex,
+    vectorSignature,
+    activeAxis,
+    refresh,
+  ]);
   const candidateFit = compatibleUnits
     ? [loaded?.fits[fitIndex], ...(loaded?.fits ?? [])].find(
         (f) => f && activeAxis && key(f.request.axis) === key(activeAxis),
@@ -283,6 +351,22 @@ export function AnswerExplorer({
       fence = api.fence({ studyId });
     try {
       const run = await api.run(studyId, runId);
+      if (run.state === 'recorded' && design && combo) {
+        const operations = await api.explorationSamples(
+          studyId,
+          answer.answer_version_id,
+          fence.signal,
+        );
+        const previous = operations.find((op) =>
+          op.request.combinations.some((c) => c.configuration_revision_id === configuration),
+        );
+        const index =
+          previous?.request.combinations.findIndex(
+            (c) => c.configuration_revision_id === configuration,
+          ) ?? -1;
+        if (previous && index >= 0)
+          await api.adoptExplorationPoint(studyId, previous.operation_id, runId, index);
+      }
       if (fence.valid() && token === generation.current)
         setLoaded(
           (old) =>
@@ -326,6 +410,7 @@ export function AnswerExplorer({
                 basis={loaded.basis}
                 design={design}
                 categories={categories}
+                onPrepared={() => setRefresh((v) => v + 1)}
                 onSaved={(d) => {
                   const selectedCombo =
                     supportedCombination(d.request.combinations, categories) ??
@@ -434,7 +519,7 @@ export function AnswerExplorer({
         <p role="status">Loading answer basis…</p>
       ) : (
         <>
-          {!fit && (
+          {!fit && !surrogate && (
             <p>
               {compatibleUnits
                 ? 'No prepared estimates. Calculated results remain available.'
@@ -516,20 +601,33 @@ export function AnswerExplorer({
                           ? [{ x, y: output.value }]
                           : [];
                       });
-                const result = calculated
-                  ? exact?.availability === 'available'
-                    ? exact.value
-                    : null
-                  : query >= 0
-                    ? (estimated?.values[query] ?? null)
-                    : null;
+                const joint = prediction?.outputs.find((o) => key(o.target) === ref);
+                const jointValue = joint?.values[0];
+                const jointGroup = surrogate?.groups[combinationIndex];
+                const jointAssessment = jointGroup?.outputs.find((o) => key(o.target) === ref);
+                const originalRun = jointValue?.run_id ?? calculated?.run_id;
+                const result = jointValue
+                  ? jointValue.value
+                  : calculated
+                    ? exact?.availability === 'available'
+                      ? exact.value
+                      : null
+                    : query >= 0
+                      ? (estimated?.values[query] ?? null)
+                      : null;
                 return (
                   <>
                     <QuantityResult
                       units={output.units}
                       value={result}
-                      state={calculated ? 'calculated' : 'estimated'}
-                      reason={calculated ? exact?.reason : estimated?.reason}
+                      state={
+                        jointValue?.kind === 'calculated' || calculated ? 'calculated' : 'estimated'
+                      }
+                      reason={
+                        jointValue
+                          ? jointValue.reason
+                          : predictionError || (calculated ? exact?.reason : estimated?.reason)
+                      }
                     />
                     {axis && current !== null && (
                       <ResponseCurve
@@ -538,14 +636,33 @@ export function AnswerExplorer({
                         axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
                         selected={current}
                         points={
-                          fit
-                            ? fit.request.query_values.map((x, i) => ({
-                                x,
-                                y: estimated?.values[i] ?? null,
+                          joint && prediction
+                            ? prediction.vectors.slice(1).map((v, i) => ({
+                                x: v.find((p) => key(p.target) === key(axis.target))!.value,
+                                y: joint.values[i + 1]?.value ?? null,
                               }))
-                            : []
+                            : fit
+                              ? fit.request.query_values.map((x, i) => ({
+                                  x,
+                                  y: estimated?.values[i] ?? null,
+                                }))
+                              : []
                         }
-                        calculated={calculatedPoints}
+                        calculated={
+                          joint && prediction
+                            ? prediction.vectors.slice(1).flatMap((v, i) => {
+                                const value = joint.values[i + 1];
+                                return value?.kind === 'calculated' && value.value !== null
+                                  ? [
+                                      {
+                                        x: v.find((p) => key(p.target) === key(axis.target))!.value,
+                                        y: value.value,
+                                      },
+                                    ]
+                                  : [];
+                              })
+                            : calculatedPoints
+                        }
                       />
                     )}
                     <ActionDialog
@@ -553,14 +670,39 @@ export function AnswerExplorer({
                       label="Result basis"
                       size="sm"
                     >
-                      {calculated ? (
+                      {originalRun ? (
                         <Button
-                          onClick={() =>
-                            onOpen({ study: studyId, view: 'runs', run: calculated.run_id })
-                          }
+                          onClick={() => onOpen({ study: studyId, view: 'runs', run: originalRun })}
                         >
                           Open calculated run
                         </Button>
+                      ) : jointGroup && jointAssessment ? (
+                        <>
+                          <p>
+                            {jointAssessment.method ?? 'No eligible method'};{' '}
+                            {jointAssessment.metrics?.evaluable_count ?? 0} of{' '}
+                            {jointAssessment.metrics?.assessed_count ?? 0} independent checks
+                            evaluated.
+                          </p>
+                          <p>
+                            Maximum observed absolute error:{' '}
+                            {jointAssessment.metrics?.max_absolute_error == null
+                              ? 'not computed'
+                              : formatNumber(jointAssessment.metrics.max_absolute_error)}{' '}
+                            {unitLabel(output.units)}. These checks do not establish a universal
+                            error bound or physical validity.
+                          </p>
+                          <p>
+                            {jointAssessment.reason ??
+                              'Observed targets met within the prepared domain.'}
+                          </p>
+                          <p>
+                            Surrogate version: <code>{surrogate?.surrogate_version_id}</code>
+                          </p>
+                          <p>
+                            Data artifact SHA-256: <code>{jointGroup.artifact_sha256}</code>
+                          </p>
+                        </>
                       ) : fit ? (
                         <>
                           <p>

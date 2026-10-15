@@ -17,6 +17,10 @@ def finite(value):
 
 
 def admit_request(request):
+    if isinstance(request, dict) and request.get('schema_version') == '3':
+        from .surrogate import admit
+
+        return admit(request)
     if isinstance(request, dict) and request.get('schema_version') == '2':
         return admit_extension(request)
     if not isinstance(request, dict) or set(request) != {
@@ -104,6 +108,12 @@ def admit_request(request):
 
 def calculate(request):
     admit_request(request)
+    if request['schema_version'] == '3':
+        from .surrogate import build
+
+        if request['operation'] != 'build':
+            raise ValueError('Warm operations require an existing bounded session')
+        return dict(identity=request['identity'], artifact=build(request['payload']))
     if request['schema_version'] == '2':
         return extend_design(request)
     import numpy as np

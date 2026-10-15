@@ -23,6 +23,9 @@ def write_http_response(handler,response):
     """A browser may disconnect after the application has returned its response."""
     try:
         handler.send_response(response.status_code)
+        if hasattr(response, 'elapsed'):
+            duration = response.elapsed.total_seconds() * 1000
+            handler.send_header('Server-Timing', 'app;dur=' + str(duration))
         for key,value in response.headers.multi_items():
             if key.lower() not in {'content-length','connection','transfer-encoding'}:handler.send_header(key,value)
         handler.send_header('Content-Length',str(len(response.content)))

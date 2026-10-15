@@ -30,6 +30,7 @@ EXECUTION_SOURCES = (
     'integration/src/hyprn_mvp_integration/launcher.py',
     'integration/src/hyprn_mvp_integration/worker.py',
     'integration/src/hyprn_mvp_integration/exploration.py',
+    'integration/src/hyprn_mvp_integration/surrogate.py',
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/calculation.py',
     # Exactly the modules reachable from a launch; modules unreachable from every launch
@@ -78,7 +79,7 @@ def test_units_attestation_current_worker_bytes_and_inventory(attested):
     script = (
         "import hashlib,json;from pathlib import Path;print(json.dumps({n:hashlib.sha256("
         "Path('/opt/hyprn_mvp_integration',n).read_bytes()).hexdigest() for n in "
-        "('worker.py','results.py','exploration.py','__init__.py')}))"
+        "('worker.py','results.py','exploration.py','surrogate.py','__init__.py')}))"
     )
     output = launcher.command(['docker','run','--rm','--pull=never','--network=none',
         '--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user=65534:65534',
@@ -294,7 +295,7 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     assert inventories[2]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch']
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 50
+    assert len(inventories[2]) == 51
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
 
@@ -308,6 +309,7 @@ def test_units_attestation_imports_the_worker_package_as_the_worker_user(atteste
         'worker': runtime['worker_sha256'],
         'results': runtime['results_sha256'],
         'exploration': hashlib.sha256(package.with_name('exploration.py').read_bytes()).hexdigest(),
+        'surrogate': hashlib.sha256(package.with_name('surrogate.py').read_bytes()).hexdigest(),
     }
 
 

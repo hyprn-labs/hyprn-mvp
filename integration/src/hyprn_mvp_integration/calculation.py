@@ -221,7 +221,7 @@ def exploration_calculation(request, root):
 class NativeExecution:
     """Explicit fresh profile only. An uncertain stored node is never relaunched."""
 
-    def __init__(self, *, backend=None, root=None):
+    def __init__(self, *, backend=None, root=None, numerical_root=None):
         if (backend is None) != (root is None):
             raise ValueError('Explicit backend and root must be injected together')
         self.backend = backend
@@ -232,19 +232,36 @@ class NativeExecution:
                 raise ValueError('Injected backend must belong to explicit fixture root')
             self.store_uuid = str(UUID(backend.get_repository().uuid))
         self.fault = lambda point: None
+        # A trusted executor may compute new data-only artifacts against retained
+        # originals whose execution runtime remains immutable and unavailable.
+        self.numerical_root = (
+            self.root if numerical_root is None else launcher.runtime_root(numerical_root)
+        )
+        self.surrogate_session = launcher.WarmExploration(self.numerical_root)
+
+    def surrogate(self, request, runtime):
+        if launcher.selected_runtime(root=self.numerical_root) != runtime:
+            raise ValueError('Surrogate computation runtime changed; rebuild explicitly')
+        return self.surrogate_session.call(request)
+
+    def close_surrogate(self):
+        self.surrogate_session.close()
 
     def explore(self, request):
         from aiida.engine import calcfunction
 
-        self.require_attestation()
+        launcher.require_attestation(root=self.numerical_root)
         result, node = calcfunction(exploration_calculation).run_get_node(
             orm.SinglefileData(
                 file=io.BytesIO(canonical(request)), filename='exploration-request.json'
             ),
-            orm.Str(str(self.root)),
+            orm.Str(str(self.numerical_root)),
         )
         with result.open(mode='rb') as stream:
-            value = data_json(stream.read(131073))
+            raw = stream.read(1048577)
+            if len(raw) > 1048576:
+                raise ValueError('Numerical artifact byte bound')
+            value = data_json(raw)
         return dict(
             value,
             process_uuid=node.uuid,

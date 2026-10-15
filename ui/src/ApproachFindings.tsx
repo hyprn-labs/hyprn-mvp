@@ -1122,7 +1122,7 @@ export function ApproachFindings({
     setAnswerRead({ key: answerKey, state: 'loading', items: [] });
     void api
       .answers(studyId, version, read.signal)
-      .then((result) => {
+      .then(async (result) => {
         if (!read.valid()) return;
         const cases = new Set<string | null>();
         if (
@@ -1140,7 +1140,22 @@ export function ApproachFindings({
           })
         )
           throw new Error('Answer association mismatch');
-        setAnswerRead({ key: answerKey, state: 'ready', items: result.items });
+        const study = result.items.find((item) => item.case_id === null);
+        const missing =
+          section === 'answer'
+            ? (study?.basis.case_answer_version_ids ?? []).filter(
+                (id) => !result.items.some((item) => item.answer_version_id === id),
+              )
+            : [];
+        const cited = await Promise.all(missing.map((id) => api.answer(studyId, id, read.signal)));
+        if (!read.valid()) return;
+        if (
+          cited.some(
+            (item, index) => item.study_id !== studyId || item.answer_version_id !== missing[index],
+          )
+        )
+          throw new Error('Cited answer association mismatch');
+        setAnswerRead({ key: answerKey, state: 'ready', items: [...result.items, ...cited] });
       })
       .catch(async (error) => {
         const result = await api.readFailed(error, read);
@@ -1149,9 +1164,22 @@ export function ApproachFindings({
       })
       .finally(read.done);
     return () => read.abort();
-  }, [api, answerKey, answerReview]);
+  }, [api, answerKey, answerReview, section]);
   const answerState = answerRead.key === answerKey ? answerRead.state : 'loading';
   const answers = answerRead.key === answerKey ? answerRead.items : [];
+  // The overview reads only the displayed answer's exact retained basis. Sampling
+  // can add many unrelated runs; opening an answer must not hydrate every one.
+  const usageBasis = section === 'answer' ? answerRead : null;
+  const studyAnswer = answers.find((item) => item.case_id === null);
+  const citedAnswers = answers.filter(
+    (item) =>
+      item === studyAnswer ||
+      studyAnswer?.basis.case_answer_version_ids.includes(item.answer_version_id),
+  );
+  const citedRuns = new Set(citedAnswers.flatMap((item) => item.basis.run_ids));
+  const citedConfigurations = new Set(
+    citedAnswers.flatMap((item) => item.basis.configuration_revision_ids),
+  );
   const answerFor = (caseId: string | null) => {
     if (answerState === 'loading') return <p role="status">Loading scientific answer…</p>;
     if (answerState === 'error')
@@ -1281,14 +1309,22 @@ export function ApproachFindings({
         )
       )
         throw new Error('binding');
+      const visible =
+        section === 'answer'
+          ? result.items.filter((item) =>
+              item.kind === 'run'
+                ? citedRuns.has(item.run_id)
+                : citedConfigurations.has(item.configuration_revision_id),
+            )
+          : result.items;
       setRows((old) => {
         const map = new Map(old.map((row) => [identity(row.usage), row]));
-        for (const usage of result.items)
+        for (const usage of visible)
           if (!map.has(identity(usage))) map.set(identity(usage), { usage, loading: true });
         return [...map.values()];
       });
       setCursor(result.next_cursor);
-      for (const usage of result.items) void detail(usage, token);
+      for (const usage of visible) void detail(usage, token);
       if (result.next_cursor) await page(result.next_cursor, token);
     } catch (e) {
       const outcome = await failed(e, token, read);
@@ -1328,6 +1364,7 @@ export function ApproachFindings({
         });
   }
   useLayoutEffect(() => {
+    if (section === 'answer' && answerState !== 'ready') return;
     const token = ++generation.current,
       read = api.fence({ studyId });
     scope.current = read;
@@ -1344,7 +1381,7 @@ export function ApproachFindings({
       cache.current.clear();
       read.done();
     };
-  }, [api, actor, studyId, version]);
+  }, [api, actor, studyId, version, section, usageBasis]);
   const domId = (kind: string, id: string) => base + '-' + kind + '-' + id;
   // Exact version-qualified case navigation: focus that case's result, never a
   // similarly named case or the first case. Unknown identities are reported.
@@ -1624,7 +1661,8 @@ export function ApproachFindings({
               ))}
             {focusCase && (
               <Button
-                variant="link" className="back-link"
+                variant="link"
+                className="back-link"
                 onClick={() => onOpen({ study: studyId, view: 'cases', approach: version })}
               >
                 ← All cases

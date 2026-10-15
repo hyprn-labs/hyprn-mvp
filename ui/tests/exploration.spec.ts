@@ -241,19 +241,27 @@ test('independent categories preserve common values and fence late loads', async
   );
   await settings.getByRole('button', { name: 'Preview samples', exact: true }).click();
   const previewResult = await previewResponse;
-  expect(previewResult.status(), await previewResult.text()).toBe(200);
-  await expect(settings).toContainText('5 new calculations', { timeout: 60000 });
-  await settings.getByRole('button', { name: 'Prepare samples', exact: true }).click();
-  await expect(settings).toContainText('Samples: pending');
-  await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
-  await expect(settings).toContainText('Samples: cancelled');
-  await settings.getByRole('button', { name: 'Read sampling progress', exact: true }).click();
-  await settings.getByRole('button', { name: 'Resume sampling', exact: true }).click();
-  await expect(settings).toContainText('Samples: pending');
-  await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
-  await expect(settings).toContainText('Samples: cancelled');
-  await settings.getByRole('button', { name: 'Reconcile sampling', exact: true }).click();
-  await expect(settings).toContainText('0 attempted of 5');
+  if (f.historical_executor_unavailable) {
+    expect(previewResult.status(), await previewResult.text()).toBe(503);
+    await expect(settings.getByRole('alert')).toContainText('unavailable');
+    await expect(
+      settings.getByRole('button', { name: 'Prepare samples', exact: true }),
+    ).toHaveCount(0);
+  } else {
+    expect(previewResult.status(), await previewResult.text()).toBe(200);
+    await expect(settings).toContainText('5 new calculations', { timeout: 60000 });
+    await settings.getByRole('button', { name: 'Prepare samples', exact: true }).click();
+    await expect(settings).toContainText('Samples: pending');
+    await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
+    await expect(settings).toContainText('Samples: cancelled');
+    await settings.getByRole('button', { name: 'Read sampling progress', exact: true }).click();
+    await settings.getByRole('button', { name: 'Resume sampling', exact: true }).click();
+    await expect(settings).toContainText('Samples: pending');
+    await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
+    await expect(settings).toContainText('Samples: cancelled');
+    await settings.getByRole('button', { name: 'Reconcile sampling', exact: true }).click();
+    await expect(settings).toContainText('0 attempted of 5');
+  }
   await page.keyboard.press('Escape');
   await writeFile(
     join(root, 'evidence/exploration-controls-proof.json'),
@@ -266,6 +274,7 @@ test('independent categories preserve common values and fence late loads', async
       supported_tuples: 4,
       slider_writes: 0,
       late_response_fenced: true,
+      historical_executor_unavailable: !!f.historical_executor_unavailable,
       human_acceptance: false,
     }),
   );

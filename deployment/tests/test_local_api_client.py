@@ -120,6 +120,36 @@ class LocalApiTests(unittest.TestCase):
         )
         self.assertTrue(self.requests[-1][1].endswith('?category=run'))
 
+    def test_exploration_tools_preserve_full_vectors_and_exact_list_filters(self):
+        sid, answer, version = (str(uuid4()) for _ in range(3))
+        self.client.request(
+            dict(
+                tool='list_exploration_surrogates',
+                arguments=dict(study_id=sid, answer_version_id=answer),
+            )
+        )
+        self.assertTrue(self.requests[-1][1].endswith('?answer_version_id=' + answer))
+        body = dict(
+            schema_version='1',
+            selection_token=str(uuid4()),
+            combination=2,
+            inputs=[
+                dict(
+                    target=dict(instance_id=str(uuid4()), port_id=str(uuid4())), value=0, units='m'
+                )
+            ],
+            axis=None,
+            curve_points=0,
+        )
+        self.client.request(
+            dict(
+                tool='predict_exploration',
+                arguments=dict(study_id=sid, version_id=version, body=body),
+            )
+        )
+        self.assertEqual(self.requests[-1][3], body)
+        self.assertTrue(self.requests[-1][1].endswith('/' + version + '/predictions'))
+
     def test_named_model_tool_owns_format_and_keeps_response_data(self):
         sid = str(uuid4())
         reply = self.client.request(

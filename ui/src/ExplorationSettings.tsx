@@ -9,6 +9,8 @@ import type {
   ExplorationSampleRequest2,
   ExplorationSamplePreview1,
   ScientificAnswer1,
+  ExplorationSurrogate1,
+  ExplorationWarmOperation1,
 } from './contract';
 import { Button, Disclosure, TextInput } from './design';
 import { unitLabel } from './unitLabels';
@@ -25,6 +27,7 @@ export function ExplorationSettings({
   design,
   categories,
   onSaved,
+  onPrepared,
 }: {
   api: HyprnMvpApi;
   studyId: string;
@@ -33,6 +36,7 @@ export function ExplorationSettings({
   design: ExplorationDesign1 | null;
   categories: string[];
   onSaved: (d: ExplorationDesign1) => void;
+  onPrepared: () => void;
 }) {
   const [draft, setDraft] = useState<ExplorationDesignRequest1>(
     () =>
@@ -70,6 +74,8 @@ export function ExplorationSettings({
   );
   const [operations, setOperations] = useState<Operation[]>([]);
   const [preview, setPreview] = useState<ExplorationSamplePreview1 | null>(null);
+  const [surrogate, setSurrogate] = useState<ExplorationSurrogate1 | null>(null);
+  const [warm, setWarm] = useState<ExplorationWarmOperation1 | null>(null);
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [seed, setSeed] = useState('17'),
@@ -104,6 +110,58 @@ export function ExplorationSettings({
       fence.abort();
     };
   }, [api, studyId, answer.answer_version_id]);
+  useEffect(() => {
+    const fence = api.fence({ studyId });
+    void api
+      .explorationSurrogates(studyId, answer.answer_version_id, fence.signal)
+      .then((items) => {
+        if (fence.valid())
+          setSurrogate(items.find((s) => s.design_id === design?.design_id) ?? null);
+      })
+      .catch(async (e) => {
+        await api.readFailed(e, fence);
+      })
+      .finally(fence.done);
+    return () => fence.abort();
+  }, [api, studyId, answer.answer_version_id, design?.design_id]);
+  useEffect(() => {
+    if (!surrogate || !['pending', 'building'].includes(surrogate.state)) return;
+    const fence = api.fence({ studyId });
+    const timer = window.setInterval(() => {
+      void api
+        .readExplorationSurrogate(studyId, surrogate.surrogate_version_id, fence.signal)
+        .then((value) => {
+          if (fence.valid()) setSurrogate(value);
+        })
+        .catch(async (e) => {
+          await api.readFailed(e, fence);
+        });
+    }, 1000);
+    return () => {
+      window.clearInterval(timer);
+      fence.abort();
+    };
+  }, [api, studyId, surrogate?.surrogate_version_id, surrogate?.state]);
+  useEffect(() => {
+    if (!warm || warm.state !== 'pending') return;
+    const fence = api.fence({ studyId });
+    const timer = window.setInterval(() => {
+      void api
+        .readExplorationWarm(studyId, warm.command_id, fence.signal)
+        .then((value) => {
+          if (!fence.valid()) return;
+          setWarm(value);
+          if (value.state === 'ready') onPrepared();
+        })
+        .catch(async (e) => {
+          await api.readFailed(e, fence);
+        });
+    }, 500);
+    return () => {
+      window.clearInterval(timer);
+      fence.abort();
+    };
+  }, [api, studyId, warm?.command_id, warm?.state, onPrepared]);
   function invalidate() {
     generation.current++;
     setPreview(null);
@@ -331,6 +389,26 @@ export function ExplorationSettings({
       </Disclosure>
       {operation && (
         <>
+          <Button
+            disabled={
+              busy || !design || !['complete', 'limited', 'cancelled'].includes(operation.state)
+            }
+            onClick={() =>
+              void action(async () => {
+                if (!design) return;
+                setSurrogate(
+                  await api.buildExplorationSurrogate(studyId, {
+                    schema_version: '1',
+                    command_id: crypto.randomUUID(),
+                    design_id: design.design_id,
+                    sample_operation_id: operation.operation_id,
+                  }),
+                );
+              })
+            }
+          >
+            Build and assess estimates
+          </Button>
           <p role="status">
             Samples: {operation.state} · {operation.completed_count} completed ·{' '}
             {operation.failed_count} failed · {operation.attempted_count} attempted of{' '}
@@ -369,6 +447,80 @@ export function ExplorationSettings({
                   : 'Reconcile sampling'}
             </Button>
           ))}
+        </>
+      )}
+      {surrogate && (
+        <>
+          <p role="status">
+            Estimates: {surrogate.state} · {surrogate.completed_groups}
+            {' of '}
+            {surrogate.total_groups} groups assessed. {surrogate.reason}
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                setSurrogate(
+                  await api.readExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                );
+              })
+            }
+          >
+            Refresh assessment
+          </Button>
+          {['pending', 'building'].includes(surrogate.state) && (
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  setSurrogate(
+                    await api.cancelExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                  );
+                })
+              }
+            >
+              Cancel assessment
+            </Button>
+          )}
+          <Button
+            disabled={busy || !['ready', 'assessed'].includes(surrogate.state)}
+            onClick={() =>
+              void action(async () => {
+                setWarm(
+                  await api.warmExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                );
+              })
+            }
+          >
+            Prepare fast predictions
+          </Button>
+          {surrogate.groups.flatMap((g) =>
+            g.outputs
+              .filter((o) => o.reason)
+              .map((o) => (
+                <p key={g.identity + key(o.target)} role="status">
+                  Not computed: {o.reason}. {o.metrics?.assessed_count ?? 0} independent checks
+                  assessed.
+                </p>
+              )),
+          )}
+        </>
+      )}
+      {warm && (
+        <>
+          <p role="status">
+            Fast predictions: {warm.state}. {warm.reason}
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                setWarm(await api.readExplorationWarm(studyId, warm.command_id));
+              })
+            }
+          >
+            Refresh prediction readiness
+          </Button>
         </>
       )}
       {error && <p role="alert">{error}</p>}

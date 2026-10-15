@@ -57,6 +57,30 @@ Scale this loop to the requested decision. Continue an existing study from its a
 state rather than restarting all steps. Use detailed references when their subject
 is relevant. Do not create a second plan schema or a completion score.
 
+When comparing alternatives or exploring sensitivity helps answer the question,
+prepare the saved answer's exploration before presenting it. Declare justified
+ranges and exact category-to-configuration mappings for all free inputs, including
+units, discrete steps and genuinely equal covary controls. Keep source constraints
+and limitations explicit. Preview the original-evaluation and wall budgets; reserve
+independent check points before fitting. Use the public sampling tools to retain
+original calculations, then build and assess an immutable surrogate version and
+explicitly warm it. Query that existing version with the complete selected vector
+and optional active-axis curve; dragging a control must never launch originals or
+refit. Read back its per-output reasons, observed errors, coverage and artifact
+identities. Show unavailable regions honestly and preserve exact original values.
+For a useful high-dimensional baseline slice, budget baseline/axis support points
+as well as joint training and independent checks; a sparse enclosing box alone
+does not establish coverage. Use selected-point adoption to enrich the retained
+sampling basis before an explicit rebuild. Refinement adds only missing originals;
+the prior immutable version remains the reference until a new version is ready.
+
+These metamodel checks assess agreement with the original calculation on retained
+check points. They do not validate physics, source applicability, convergence,
+feasibility or the scientific answer. Keep original execution and surrogate
+computation runtime identities separate. After an executor restart, explicitly
+prepare fast predictions again; never imply that a cold interaction is ready.
+An exploration is unnecessary when it adds no decision value to the requested study.
+
 ## Start with the decision and available means
 
 1. Read the existing study, its saved approach, relevant models, configurations,
