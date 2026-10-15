@@ -331,6 +331,7 @@ GROUPS = {
         'ui/tests/foundry-fixtures.ts',
         'ui/tests/model-configuration-run.spec.ts',
         'ui/tests/foundry-zoom.spec.ts',
+        'ui/tests/DesignSpecimen.tsx',
     ),
     'ported-isolated': (
         'deployment/tests/foundry_ui_fixture.py',
@@ -349,6 +350,7 @@ GROUPS = {
         'ui/tests/screen-readability.spec.ts',
         'ui/tests/evidence-workspace.spec.ts',
         'ui/tests/record-labels.spec.ts',
+        'ui/tests/DesignSpecimen.tsx',
     ),
     # Opt-in: visual comparison with the design-system reference images; refused while
     # design-system/reference/ is absent.
@@ -1275,7 +1277,7 @@ BROWSER_GROUPS = (
     | set(AE_BROWSER_GROUPS)
     | set(APPROACH_BROWSER_GROUPS)
     | set(UNITS_BROWSER_GROUPS)
-    | {'combined-static', 'findings-native', 'findings-native-read'}
+    | {'combined-static', 'findings-native', 'findings-native-read', 'exploration-ui'}
     | {g for g, route in DOCUMENTS_ROUTES.items() if route['mode'] == 'browser'}
 )
 BROWSER_GROUPS = BROWSER_GROUPS | AGENT_BROWSER_GROUPS
@@ -1284,7 +1286,10 @@ FIXTURE_GROUPS = frozenset(
     {'findings-native-preflight', 'findings-native', 'findings-native-read', 'approach-ui-history'}
 )
 # Browser specs a group's fixture runs without listing them as targets.
-FIXTURE_BROWSER_SPECS = {'units-native': ('ui/tests/unit-native-journey.spec.ts',)}
+FIXTURE_BROWSER_SPECS = {
+    'units-native': ('ui/tests/unit-native-journey.spec.ts',),
+    'exploration-ui': ('ui/tests/exploration.spec.ts',),
+}
 
 
 def browser_specs():

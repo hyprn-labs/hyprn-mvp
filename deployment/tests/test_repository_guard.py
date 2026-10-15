@@ -7,6 +7,7 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
 import live_fence  # noqa: E402
 setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
 from dataclasses import replace
+import ast
 import hashlib
 import importlib
 import json
@@ -61,6 +62,10 @@ class GuardTests(unittest.TestCase):
                 'investigation-evidence',
                 'investigation-diagnostics',
                 'findings-history',
+                'exploration-contracts',
+                'exploration-api',
+                'exploration-native',
+                'exploration-ui',
             },
         )
         for group in groups:
@@ -1117,7 +1122,8 @@ class FoundryNavGuardTests(unittest.TestCase):
     def test_foundry_nav_group_is_closed_with_fixed_targets_and_application_interpreter(self):
         self.assertEqual(runner.GROUPS['foundry-nav'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
-            'ui/tests/model-configuration-run.spec.ts', 'ui/tests/foundry-zoom.spec.ts'))
+            'ui/tests/model-configuration-run.spec.ts', 'ui/tests/foundry-zoom.spec.ts',
+            'ui/tests/DesignSpecimen.tsx'))
         self.assertEqual(runner.GROUPS['ported-isolated'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/command-recovery.spec.ts', 'ui/tests/history-races-isolated.spec.ts'))
@@ -1127,7 +1133,7 @@ class FoundryNavGuardTests(unittest.TestCase):
         self.assertEqual(runner.GROUPS['ui-reading'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/screen-readability.spec.ts', 'ui/tests/evidence-workspace.spec.ts',
-            'ui/tests/record-labels.spec.ts'))
+            'ui/tests/record-labels.spec.ts', 'ui/tests/DesignSpecimen.tsx'))
         self.assertEqual(runner.GROUPS['ui-fidelity'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/prototype-fidelity.spec.ts'))
@@ -1147,7 +1153,10 @@ class FoundryNavGuardTests(unittest.TestCase):
             'ui-reading': ('screen-readability.spec.ts', 'evidence-workspace.spec.ts', 'record-labels.spec.ts'),
             'ui-fidelity': ('prototype-fidelity.spec.ts',)})
         for group, specs in foundry.GROUP_SPECS.items():
-            self.assertEqual(tuple('ui/tests/' + spec for spec in specs), runner.GROUPS[group][2:])
+            specimen = (('ui/tests/DesignSpecimen.tsx',)
+                        if group in {'ui-reading', 'foundry-nav'} else ())
+            self.assertEqual(tuple('ui/tests/' + spec for spec in specs) + specimen,
+                             runner.GROUPS[group][2:])
         # Isolated specs never name another installation's ports or names, the development
         # application port, an installation's credentials or a default base URL. Ports and names
         # come from the environment the test-safety fence reads; none is written in source.
@@ -1250,6 +1259,8 @@ class BrowserSpecRegistryTests(unittest.TestCase):
         present = {str(p.relative_to(runner.REPO)) for p in (runner.REPO / 'ui/tests').rglob('*.spec.ts')}
         registered = runner.browser_specs()
         self.assertTrue(present)
+        self.assertIn('exploration-ui', registered['ui/tests/exploration.spec.ts'])
+        self.assertIn('browser', runner.group_needs('exploration-ui'))
         self.assertEqual(sorted(present - set(registered)), [], 'browser specs selected by no group')
         self.assertEqual(sorted(set(registered) - present), [], 'registered browser specs that do not exist')
 
@@ -1702,16 +1713,31 @@ class LiveFenceTests(unittest.TestCase):
                              *((name, "pytest_fixture('baseline')") for name in (
                                  'test_native_journey.py', 'test_units_native.py', 'test_approach_native.py',
                                  'test_assumptions_evidence_journey.py', 'test_investigation_native.py',
-                                 'test_findings_native.py', 'test_attestation.py', 'test_modeling_isolation.py'))):
+                                 'test_findings_native.py', 'test_attestation.py',
+                                 'test_modeling_isolation.py',
+                                 'test_exploration_native.py', 'test_exploration_ui.py'))):
             with self.subTest(module=name):
                 text = (runner.REPO / 'deployment/tests' / name).read_text()
-                self.assertIn('\nimport live_fence  # noqa: E402\n', text)
                 self.assertIn('live_fence.' + policy, text)
         # Every deployment test module declares a fence policy.
         modules = {p.name for p in (runner.REPO / 'deployment/tests').glob('test_*.py')}
         for name in modules:
             with self.subTest(unfenced=name):
-                self.assertIn('\nimport live_fence  # noqa: E402\n', (runner.REPO / 'deployment/tests' / name).read_text())
+                tree = ast.parse((runner.REPO / 'deployment/tests' / name).read_text())
+                self.assertTrue(any(
+                    isinstance(node, ast.Import) and any(
+                        alias.name == 'live_fence' and alias.asname in (None, 'live_fence')
+                        for alias in node.names) for node in tree.body), 'fence import absent')
+                declarations = [
+                    node for statement in tree.body
+                    if isinstance(statement, (ast.Assign, ast.AnnAssign, ast.Expr))
+                    for node in ast.walk(statement) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == 'live_fence'
+                    and node.func.attr in ('pytest_fixture', 'unittest_module_hooks')
+                ]
+                self.assertTrue(declarations, 'fence policy declaration absent')
 
 
 class DurableFixtureGuardTests(unittest.TestCase):
