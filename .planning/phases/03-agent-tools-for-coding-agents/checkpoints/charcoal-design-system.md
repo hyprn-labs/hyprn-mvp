@@ -50,3 +50,24 @@ Unrelated ROADMAP changes are preserved. No push or publication.
 
 Next stopping point: checked static build served by the existing demo, evidence
 archived and completed test scopes released; then user visual review.
+
+## Committed delivery
+
+Implementation `0f6328f` passed the focused committed-tree checks:
+
+- `./hyprn-mvp dev check combined-static`: eight stages pass, 4.36s,
+  scope `6470b3c8-cae6-499d-81ca-eec598415877`.
+- `./hyprn-mvp dev check style-ratchet`: 33 passed, 0 failures, 9.29s,
+  scope `3f4fc0a3-ce65-4451-b7c8-b78c4adec05e`.
+- `./hyprn-mvp dev check approach-ui-demo`: 3 passed, 0 failures/skipped, 34.65s,
+  scope `cdcdce67-5d55-41fd-8eab-bdd17bc56aa5`. This includes actual editor
+  keyword weight/colour, string/number colours and primary-hover transition in
+  both themes, plus genuine browser zoom across all five study views.
+
+The checked static build is served by the existing demo. Live browser sign-in and
+study display verified the hashed same-origin logo, loaded image, fixed light ground
+and Charcoal token; screenshots are saved externally. No service restart or study
+mutation. `ui-manifest.json` in the external hyprn-charcoal folder identifies build
+files and commit. All twelve identified completed scopes were identity-checked,
+evidence archived and scratch stores removed; `cleanup.json` records the results.
+The live demo remains available. This last checkpoint delta is documentation only.
