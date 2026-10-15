@@ -56,7 +56,14 @@ retained_index = (ROOT/'src/EvidenceIndex.tsx').read_text().split('export functi
 for forbidden in ('api.', 'evidenceFamily(', 'assumptionEvidence(', 'useEffect(', 'fetch(', 'HyprnMvpApi'):
     assert forbidden not in retained_index, ('Retained run assumptions must not resolve live content', forbidden)
 
-missing = [f'{path}: {text}' for path, texts in checks.items() for text in texts if not (ROOT / path).is_file() or text not in (ROOT / path).read_text()]
+# JSX line wrapping does not change the required source-result binding.
+missing = [
+    f'{path}: {text}'
+    for path, texts in checks.items()
+    for text in texts
+    if not (ROOT / path).is_file()
+    or ' '.join(text.split()) not in ' '.join((ROOT / path).read_text().split())
+]
 if missing:
     raise SystemExit('Missing result-binding, modified-run, record-export and evidence wiring:\n' + '\n'.join(missing))
 spec=json.loads((ROOT.parent/'contracts/hyprn-mvp.openapi.yaml').read_text())
@@ -512,7 +519,9 @@ for term in ('Promise.all([api.studies(), api.archivedStudies()])','label="Study
  'aria-label={`Archive study ${s.name}`}','aria-label={`Restore study ${s.name}`}','It disappears from Home for everyone. Nothing is deleted; restore it from Archived.',
  '<Button data-safe-choice',"pending?.category === 'study_archive'",'.catch(archiveRefusal)',
  '<footer><a href="/ui/THIRD_PARTY_NOTICES.txt">Third-party software notices</a></footer>'):
- assert term in workspace_s6b,('src/Workspace.tsx','Home archive, study header and footer',term)
+ assert re.sub(r'\s+', '', term) in re.sub(r'\s+', '', workspace_s6b), (
+  'src/Workspace.tsx', 'Home archive, study header and footer', term
+ )
 assert re.search(
  r'<div className="study-heading actions">\s*<h1>\{study.name\}</h1>\s*'
  r'\{studyCreator && <AttributionChip \{\.\.\.studyCreator\} />\}\s*</div>',
@@ -558,7 +567,10 @@ for file,terms in {
    '>Version {c.configuration_revision_id.slice(0, 8)} · read-only</StatusTag>',
  )}.items():
  text=(ROOT/file).read_text()
- for term in terms:assert term in text,(file,'Plain-language name (design-system/Naming.md)',term)
+ for term in terms:
+  assert re.sub(r'\s+', '', term) in re.sub(r'\s+', '', text), (
+   file, 'Plain-language name (design-system/Naming.md)', term
+  )
 assert 'evaluation?: {' in (ROOT/'src/design/primitives.tsx').read_text() and 'assessment' not in (ROOT/'src/design/primitives.tsx').read_text(),('src/design/primitives.tsx','CriterionRecord takes a criterion evaluation, not an assessment')
 print(f'Plain-language names: {len(retired)} retired reader-facing phrases absent from ui/src; run, export, portable model record, earlier work and configuration version names present (design-system/Naming.md); browser gates remain separate.')
 

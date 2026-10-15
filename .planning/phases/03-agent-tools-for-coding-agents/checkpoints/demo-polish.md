@@ -53,3 +53,14 @@ review remain open. No unnecessary supplier branding was added.
 Automated browser checks are not human acceptance. The unrelated ROADMAP edits are
 preserved. No push or external publication. Next: user demo review; maintainer owns
 reconciling the older reading suite before release qualification.
+
+## Committed verification
+
+Implementation `d4a8c1c`: `approach-ui-demo` passes 2/2 (20.03s), scope
+`3efe8550-c154-435c-99d8-b43e62dfe6a3`; `style-ratchet` passes 33/33 (14.38s),
+scope `a118b08a-d7ec-466d-8936-4d66a58476fc`. The first committed static attempt
+found formatting-sensitive source guards, not missing wiring. The only subsequent
+executable delta normalizes whitespace in those guards; label and binding
+requirements are retained. All six static stages then pass (3.49s), scope
+`a6a75f63-305a-4f1a-ba53-1d4695908102`. Final gate logs and build manifest live in
+`/private/tmp/hyprn-demo-polish`; no test runs against the user installation.
