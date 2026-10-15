@@ -25,6 +25,19 @@ Implement in `ui/src/design/components.tsx`, `primitives.tsx`, `graph.tsx`, `fou
 
 ## Axis and graph behavior
 
+Prepare expensive work while building the answer. Show a progress bar for known
+completed/total work and the actual current stage; unknown-duration stages remain
+indeterminate. Scalar-run count is not an overall elapsed-time percentage. Publish
+a ready version atomically after fitting and independent assessment. Keep a prior
+ready version available only under its explicit prior settings/domain while refining.
+Cancellation/failure must not publish a partial fit as ready.
+
+Sample settings previews reusable points, new calculations, additional budget and
+preparation state. Range/density changes extend the design and reuse compatible
+original-model results. Slider changes consume prepared data or cheap queries of
+the existing surrogate, never original runs, retraining or heavyweight preparation.
+These are delivered behavior requirements, without restarting valid partial V1 checks.
+
 There is one current full input vector. Focusing/changing an input sets active axis; keyboard and numeric edits do the same. The initial axis is declared by the study's design (fuel: Mach). Every visible output shows its response to that input while all other selected values remain fixed. Add no global axis selector. Mark active input with the existing focus/selection recipe and label the x-axis concisely. Upstream outputs can remain flat when the active input is downstream; this is correct.
 
 Canonical `GraphView.project` and `GraphCanvas` still own topology/identity. Add an exploration rendering mode/slots for controls/curves without importing exploration business state into design primitives. Retain model editor, run and configuration graph behavior. Layout must accommodate every input with readable nodes, bounded canvas pan/zoom/scroll and progressive output expansion; no arbitrary four-input limit. Correlated/co-varied input bindings are explicit design assignments, never inferred by equal names.

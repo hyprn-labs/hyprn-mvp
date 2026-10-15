@@ -88,6 +88,34 @@ acceptance must include interacting inputs (for example `x*y`, with both inputs
 changed before prediction) and two categorical dimensions. This clarification does
 not invalidate completed V1 checks; V2–V4 implement the generalization.
 
+Approved preparation journey: while building the answer, declare the design/budget,
+resolve compatible original-model results, calculate only missing points, fit/update
+the surrogate, independently assess it, prepare useful prediction/curve caches, then
+atomically publish a ready version. Show actual stages and completed/total work; do
+not invent duration percentages or equate scalar-run count with completed fitting.
+Keep a prior ready version usable under its explicit prior settings/domain during
+preparation. Failure/cancellation retains compatible points, never an incomplete
+fit published as ready.
+
+Incremental original-model reuse is required in V2–V4. Result identity includes exact
+source/model/runtime/numerical settings, complete canonical values/units and relevant
+resolved category bindings. Budget, accuracy-target or sample-density changes alone
+must not invalidate these results. Fit/query caches also include surrogate and query
+identities. Check authorization/provenance before reuse; failed/unknown work follows
+reconciliation and never becomes a cached valid number. Extend the retained design
+with new seeded vectors instead of regenerating unrelated LHS points; deduplicate
+exactly and charge only genuinely new evaluations against the additional budget.
+Retain training/check partitions; adaptive reuse of checks requires fresh independent
+assessment. Range expansion may reuse compatible points but requires reassessment.
+OpenMDAO may refit on accumulated data when incremental training is unsupported;
+original-model evaluations remain delta-only.
+
+Sample settings previews reusable points, new calculations, additional budget and
+preparation state. Sliding consumes prepared exact data or cheap existing-surrogate
+queries. Cold preparation/execution on every slider change fails the intended
+experience. No browser physics or custom predictor replaces bounded OpenMDAO reuse.
+This clarification does not restart valid V1 checks.
+
 1. Measure original-model execution, launch overhead, training and prediction separately. If exact evaluation is fast enough, use it through the same bounded path; still deliver the requested estimated/calculated interface and surrogate fallback for costly models. Never optimize away containment.
 2. Sample joint input space under an explicit total budget, not a Cartesian product. Allocate across chosen categories, training/refinement and independent checks before launching. The preview refuses an underfunded minimum design with an actionable choice; it does not silently exceed the cap. Failed attempted evaluations consume budget. Training/prediction also have memory/CPU/time limits.
 3. Every original-model point has fresh case state. Initially use the existing isolated scalar execution path. Reuse prepared immutable source bytes and orchestration machinery; any in-process/batched optimization must first pass order/permutation/repeated-case and malicious-state-contamination tests. Recreating OpenMDAO Problem alone is not proof that Python module/global state was reset.
