@@ -193,7 +193,7 @@ class UnitsGuardTests(unittest.TestCase):
             'units-guards', 'units-contracts', 'units-staging', 'units-model',
             'units-api', 'units-public-types', 'units-resolution', 'units-configuration',
             'units-bundle', 'units-history', 'units-launcher', 'units-worker',
-            'units-attestation', 'units-native', 'units-engineering',
+            'units-attestation', 'units-native', 'units-engineering', 'units-origin',
             'units-ui-authoring', 'units-ui-configuration', 'units-ui-reading', 'units-ui-history',
         }
         self.assertEqual({g for g in runner.GROUPS if g.startswith('units-')}, expected)
@@ -225,7 +225,7 @@ class UnitsGuardTests(unittest.TestCase):
     def test_units_privileges_and_interpreters_are_bounded(self):
         self.assertEqual(runner.UNITS_NATIVE_GROUPS, {
             'units-history', 'units-launcher', 'units-worker', 'units-attestation',
-            'units-native', 'units-engineering',
+            'units-native', 'units-engineering', 'units-origin',
         })
         for group in runner.UNITS_APP_GROUPS | set(runner.UNITS_BROWSER_GROUPS):
             self.assertEqual(runner.GROUP_INTERPRETERS[group], fixture.APPROVED_CONTRACT_PYTHON)

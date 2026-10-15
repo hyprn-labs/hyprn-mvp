@@ -85,6 +85,10 @@ GROUPS = {
     ),
     'units-attestation': ('deployment/tests/test_attestation.py',),
     'units-engineering': ('deployment/tests/test_engineering_units.py',),
+    'units-origin': (
+        'integration/tests/test_native_program.py::'
+        'test_instrumented_http_native_origin_restart_and_disabled_generator',
+    ),
     'units-native': (
         'deployment/tests/units_native_fixture.py',
         'deployment/tests/test_units_native.py',
@@ -1003,6 +1007,7 @@ UNITS_NATIVE_GROUPS = frozenset(
         'units-attestation',
         'units-native',
         'units-engineering',
+        'units-origin',
     }
 )
 UNITS_APP_GROUPS = frozenset(
