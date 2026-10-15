@@ -781,6 +781,12 @@
    "configuration_assumptions/1"
   ],
   "execution": "durable_scalar_submission",
+  "execution_budget": {
+   "default_wall_seconds": 300,
+   "includes_startup": true,
+   "max_wall_seconds": 3600,
+   "min_wall_seconds": 1
+  },
   "limits": {
    "computational_record": {
     "computational_runs": 64,
@@ -802,6 +808,17 @@
    "result_source_outputs": 50,
    "result_source_runs": 100,
    "source_bytes": 262144
+  },
+  "model_formats": {
+   "create_request": [
+    "3"
+   ],
+   "edit_request": [
+    "4"
+   ],
+   "saved_record": [
+    "4"
+   ]
   },
   "modeling": [
    "model_revision_listing",
@@ -5036,7 +5053,7 @@
  "study_id": "51000000-0000-4000-8000-000000000001",
  "unit_catalog": {
   "affine_conversion": false,
-  "catalog_digest": "f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3",
+  "catalog_digest": "9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45",
   "engine": "OpenMDAO",
   "engine_source_sha256": "9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92",
   "engine_version": "3.45.1",
@@ -5069,7 +5086,27 @@
    "g/cm**3",
    "m**2",
    "cm**2",
-   "mm**2"
+   "mm**2",
+   "m**3",
+   "cm**3",
+   "mm**3",
+   "kg/m**2",
+   "g/m**2",
+   "1/m**2",
+   "J/(kg*K)",
+   "kJ/(kg*K)",
+   "J",
+   "kJ",
+   "MJ",
+   "W",
+   "kW",
+   "MW",
+   "m**3/s",
+   "kg/s",
+   "m/s**2",
+   "N*m",
+   "W/(m*K)",
+   "W/(m**2*K)"
   ]
  }
 }
