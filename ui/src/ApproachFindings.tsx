@@ -25,6 +25,7 @@ import {
   ActionDialog,
   Button,
   DataTable,
+  CriterionRecord,
   DialogFrame,
   Disclosure,
   Panel,
@@ -112,7 +113,11 @@ function ScientificAnswer({
           )}
         </>
       )}
-      <ActionDialog title="Answer record details" label="Record details" size="sm" variant="quiet">
+      <ActionDialog
+        title={answer.case_id ? 'Case answer record details' : 'Study answer record details'}
+        size="sm"
+        variant="quiet"
+      >
         <dl className="answer-record-details">
           <dt>Answer version</dt>
           <dd>
@@ -248,15 +253,19 @@ function AnswerBasis({
   useEffect(() => {
     if (kind === 'evidence') void load();
   }, [api, studyId, id, kind, api.actor, api.csrf]);
-  if (kind === 'evidence') return visibleRecord && !('answer_version_id' in visibleRecord)
-    ? <EvidenceRecordBody compact brief record={visibleRecord} />
-    : <div className="answer-evidence-loading">
+  if (kind === 'evidence')
+    return visibleRecord && !('answer_version_id' in visibleRecord) ? (
+      <EvidenceRecordBody compact brief record={visibleRecord} />
+    ) : (
+      <div className="answer-evidence-loading">
         <p role={error ? 'alert' : 'status'}>{error || 'Loading evidence…'}</p>
         {error && <Button onClick={() => void load()}>Retry evidence</Button>}
-      </div>;
+      </div>
+    );
   return (
     <>
       <Button
+        size="sm"
         aria-haspopup="dialog"
         onClick={() => {
           invoker.current = document.activeElement as HTMLElement;
@@ -264,13 +273,11 @@ function AnswerBasis({
           if (!visibleRecord) void load();
         }}
       >
-        {label ??
-          'View case answer version ' +
-            id.slice(0, 8)}
+        {label ?? 'View case answer version ' + id.slice(0, 8)}
       </Button>
       <DialogFrame
         ref={dialog}
-        className="action-dialog"
+        className="action-dialog answer-dialog"
         aria-labelledby={headingId}
         onClose={() => {
           if (invoker.current?.isConnected) invoker.current.focus();
@@ -449,24 +456,6 @@ function RunFacets({ run }: { run: PublicRunDetail }) {
           results.execution.state === 'failed' ? results.execution.message : undefined
         }
       />
-      <ul aria-label="Individual criterion outcomes">
-        {results.criteria.map((item, index) => (
-          <li key={item.criterion_id}>
-            <StatusTag
-              tone={
-                item.outcome === 'met' ? 'ok' : item.outcome === 'violated' ? 'alarm' : 'advisory'
-              }
-            >
-              {item.outcome === 'met'
-                ? 'Met'
-                : item.outcome === 'violated'
-                  ? 'Not met'
-                  : 'Not evaluated'}
-            </StatusTag>{' '}
-            · Criterion {index + 1} · {item.reason.replaceAll('_', ' ')}
-          </li>
-        ))}
-      </ul>
     </>
   );
 }
@@ -521,7 +510,6 @@ function RecordedOutputs({ run }: { run: PublicRunDetail }) {
     <>
       <div className="section-actions">
         <h4>Outputs</h4>
-
       </div>
       {table(false)}
     </>
@@ -672,19 +660,26 @@ function FindingRow({
             ? 'Run ' + id.slice(0, 8)
             : (configuration?.name ?? 'Configuration ' + id.slice(0, 8))}
         </h4>
-        <Button
-          size="sm"
-          onClick={() =>
-            onOpen({
-              view: usage.kind === 'run' ? 'runs' : 'configurations',
-              ...(usage.kind === 'run'
-                ? { run: usage.run_id }
-                : { configuration: usage.configuration_revision_id }),
-            })
-          }
-        >
-          {usage.kind === 'run' ? 'View run' : 'View configuration'}
-        </Button>
+        <div className="support-record-actions run-reference-actions">
+          <Button
+            size="sm"
+            onClick={() =>
+              onOpen({
+                view: usage.kind === 'run' ? 'runs' : 'configurations',
+                ...(usage.kind === 'run'
+                  ? { run: usage.run_id }
+                  : { configuration: usage.configuration_revision_id }),
+              })
+            }
+          >
+            {usage.kind === 'run' ? 'View run' : 'View configuration'}
+          </Button>
+          {run && (
+            <Button size="sm" aria-expanded={details} onClick={() => setDetails((value) => !value)}>
+              Run details
+            </Button>
+          )}
+        </div>
       </div>
       {cited !== undefined && (
         <p className="context-line">{cited ? 'Used in this answer' : 'Additional run'}</p>
@@ -711,11 +706,6 @@ function FindingRow({
             </p>
           )}
 
-          <div className="section-actions approach-finding-actions">
-            <Button size="sm" aria-expanded={details} onClick={() => setDetails((value) => !value)}>
-              Run details
-            </Button>
-          </div>
           {details && (
             <div className="approach-finding-details">
               <RunFacets run={run} />
@@ -880,7 +870,7 @@ function CriterionFacts({ run }: { run: PublicRunDetail }) {
     configuration = run.history?.configuration,
     model = run.history?.model_snapshot;
   if (!results) return null;
-  const shown = results.criteria.slice(0, 3);
+  const shown = results.criteria;
   const portName = (target: { instance_id: string; port_id: string }) => {
     const instance = model?.instances.find((item) => item.instance_id === target.instance_id),
       port = model?.definitions
@@ -900,112 +890,124 @@ function CriterionFacts({ run }: { run: PublicRunDetail }) {
         const output = declared
           ? results.outputs.find((value) => sameTarget(value.target, declared.target))
           : undefined;
-        const recorded =
-          output &&
-          output.availability === 'available' &&
+        const actual =
+          output?.availability === 'available' &&
           output.value !== null &&
           Number.isFinite(output.value)
-            ? `${String(output.value)} ${unitLabel(output.units)}`
-            : 'not computed';
+            ? output.value
+            : null;
         return (
           <li key={item.criterion_id}>
-            <StatusTag tone={criterionTone[item.outcome]}>
-              {criterionWord[item.outcome]}
-            </StatusTag>{' '}
-            Criterion {index + 1}
-            {declared ? (
-              <>
-                {' '}
-                · {portName(declared.target)} {criterionOperators[declared.operator]}{' '}
-                {String(declared.threshold)} {unitLabel(declared.units)} · output {recorded}
-              </>
-            ) : (
-              ' · criterion definition unavailable'
+            <CriterionRecord
+              number={index + 1}
+              target={declared ? portName(declared.target) : null}
+              comparison={
+                declared ? criterionOperators[declared.operator] : 'Requirement unavailable'
+              }
+              threshold={declared?.threshold ?? null}
+              units={declared ? unitLabel(declared.units) : ''}
+              tolerances={
+                declared?.operator === 'eq'
+                  ? {
+                      absolute: declared.absolute_tolerance ?? null,
+                      relative: declared.relative_tolerance ?? null,
+                    }
+                  : undefined
+              }
+              evaluation={{
+                label: criterionWord[item.outcome],
+                tone: criterionTone[item.outcome],
+                actual,
+                units: output ? unitLabel(output.units) : '',
+              }}
+            />
+            {item.reason !== 'threshold_comparison' && (
+              <p className="context-line">{item.reason.replaceAll('_', ' ')}</p>
             )}
           </li>
         );
       })}
-      {results.criteria.length > shown.length && (
-        <li>
-          {plural(results.criteria.length - shown.length, 'more criterion evaluation')} in this
-          run's details
-        </li>
-      )}
     </ul>
   );
 }
 
-/** One expandable row per case keeps every configuration and run, with its purpose
+/** One case detail keeps every configuration and run, with its purpose
  * and explicit scientific assessment. Coverage never supplies an interpretation. */
 function CaseCard({
+  approachVersion,
   group,
   headingId,
   content,
   onCreateConfiguration,
-  expanded,
   answer,
   answerStatus,
   support,
 }: {
+  approachVersion: string;
   support: ReactNode;
   answer: ReactNode;
   answerStatus: string;
-  expanded?: number;
   group: Group;
   headingId: string;
   content: ApproachSavedRead3['version']['content'];
   onCreateConfiguration?: (caseId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (expanded !== undefined) setOpen(true);
-  }, [expanded]);
   const item = group.item,
     binding = item?.binding_id
       ? content.model_bindings.find((b) => b.binding_id === item.binding_id)
       : undefined;
   return (
     <article className="approach-case-card" aria-labelledby={headingId}>
-      <Disclosure open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-        <summary className="approach-case-toggle">
-          <h3 id={headingId} tabIndex={-1}>
-            {group.title}
-          </h3>
-          <StatusTag tone={answerStatus === 'Assessed' ? 'inert' : 'advisory'}>
-            {answerStatus}
-          </StatusTag>
-        </summary>
-        <div className="approach-case-content">
-          <p className="context-copy approach-case-question">
-            {item
-              ? item.question || 'Case question not described'
-              : 'Configurations and runs linked to this approach version without a case.'}
-          </p>
-          {item && (
-            <>
-              <h4>Purpose</h4>
-              <p className="context-copy">{item.rationale || 'Rationale not described'}</p>
-              <p className="context-line">
-                {binding
-                  ? 'Model version ' + binding.model_revision_id.slice(0, 8)
-                  : 'Proposed case · no model version selected'}
-              </p>
-            </>
-          )}
-          <h4>What this case tells us</h4>
-          {answer}
-          {item && item.binding_id && onCreateConfiguration && (
-            <Button
-              aria-label={'Create configuration for ' + item.title}
-              onClick={() => onCreateConfiguration(item.case_id)}
-            >
-              Create configuration
-            </Button>
-          )}
-          {support}
-          {item && !!item.evidence_links.length && <ApproachCaseContext item={item} />}
-        </div>
-      </Disclosure>
+      <div className="approach-case-card-head">
+        <h3 id={headingId} tabIndex={-1}>
+          {group.title}
+        </h3>
+        <StatusTag tone={answerStatus === 'Assessed' ? 'inert' : 'advisory'}>
+          {answerStatus}
+        </StatusTag>
+      </div>
+      <div className="approach-case-content">
+        <p className="context-copy approach-case-question">
+          {item
+            ? item.question || 'Case question not described'
+            : 'Configurations and runs linked to this approach version without a case.'}
+        </p>
+        {item && (
+          <>
+            <h4>Purpose</h4>
+            <p className="context-copy">{item.rationale || 'Rationale not described'}</p>
+          </>
+        )}
+        <h4>What this case tells us</h4>
+        {answer}
+        {item && item.binding_id && onCreateConfiguration && (
+          <Button
+            aria-label={'Create configuration for ' + item.title}
+            onClick={() => onCreateConfiguration(item.case_id)}
+          >
+            Create configuration
+          </Button>
+        )}
+        {support}
+        {item && !!item.evidence_links.length && (
+          <section className="case-sources">
+            <h4>Case sources</h4>
+            <ApproachCaseContext item={item} />
+          </section>
+        )}
+        <ActionDialog title="Case record details" size="sm" variant="quiet">
+          <dl className="hf-record-details">
+            <dt>Case</dt>
+            <dd>{group.id}</dd>
+            <dt>Approach version</dt>
+            <dd>{approachVersion}</dd>
+            <dt>Model version</dt>
+            <dd>{binding?.model_revision_id ?? 'No model selected'}</dd>
+            <dt>Model binding</dt>
+            <dd>{binding?.binding_id ?? 'None'}</dd>
+          </dl>
+        </ActionDialog>
+      </div>
     </article>
   );
 }
@@ -1343,7 +1345,10 @@ export function ApproachFindings({
   // Exact version-qualified case navigation: focus that case's result, never a
   // similarly named case or the first case. Unknown identities are reported.
   useEffect(() => {
-    if (!focusCase) return;
+    if (!focusCase) {
+      setMissingCase('');
+      return;
+    }
     const known =
       focusCase.id === 'none' ||
       saved.version.content.cases.some((item) => item.case_id === focusCase.id);
@@ -1373,7 +1378,7 @@ export function ApproachFindings({
       </section>
     );
   const incomplete = loading || error || !!cursor || rows.some((row) => row.loading || row.error);
-  const groups = groupFindings(saved, rows, caseId);
+  const groups = groupFindings(saved, rows, focusCase?.id ?? caseId);
   const cardGroups = groups.filter((group) => group.item || group.rows.length);
   const row = (item: Row, configuration?: Configuration) => (
     <FindingRow
@@ -1553,96 +1558,135 @@ export function ApproachFindings({
   // Results first (recorded facts, exact coverage, no verdict), then one card per case.
   return (
     <section className="approach-usage" aria-label="Approach usage">
-      {section !== 'answer' && <Panel
-        id={casesId}
-        className="approach-section"
-        label="Cases and their answers"
-        title="Cases and their answers"
-        headingLevel={3}
-      >
-        <div className="approach-usage-review">
-          <div role="region" aria-label="Case filter" id={base + '-results'} tabIndex={-1}>
-            {missingCase && (
-              <p role="alert">
-                This case is not part of approach v{saved.version.version_number}. No other case is
-                shown in its place.
-              </p>
-            )}
-            <div className="section-actions approach-usage-controls">
-              <label>
-                Case filter
-                <Select
-                  aria-label="Findings case"
-                  value={caseId}
-                  onChange={(event) => setCaseId(event.target.value)}
-                >
-                  <option value="">All cases</option>
-                  {saved.version.content.cases.map((item) => (
-                    <option key={item.case_id} value={item.case_id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+      {section !== 'answer' && (
+        <Panel
+          id={casesId}
+          className="approach-section"
+          label="Cases"
+          title="Cases"
+          headingLevel={3}
+        >
+          <div className="approach-usage-review">
+            <div role="region" aria-label="Case filter" id={base + '-results'} tabIndex={-1}>
+              {missingCase && (
+                <p role="alert">
+                  This case is not part of approach v{saved.version.version_number}. No other case
+                  is shown in its place.
+                </p>
+              )}
+              {!focusCase && (
+                <div className="section-actions approach-usage-controls">
+                  <label>
+                    Case filter
+                    <Select
+                      aria-label="Findings case"
+                      value={caseId}
+                      onChange={(event) => setCaseId(event.target.value)}
+                    >
+                      <option value="">All cases</option>
+                      {saved.version.content.cases.map((item) => (
+                        <option key={item.case_id} value={item.case_id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-        {loading && <p role="status">Loading supporting results…</p>}
-        {error && <p role="alert">Supporting results could not be loaded.</p>}
-        {accessUnverified && (
-          <p role="alert">Study access could not be verified. Retry the read.</p>
-        )}
-        <div className="approach-case-cards">
-          {cardGroups.map((group) => (
-            <CaseCard
-              key={group.id}
-              group={group}
-              headingId={domId('card', group.id)}
-              content={saved.version.content}
-              expanded={focusCase?.id === group.id ? focusCase.token : undefined}
-              onCreateConfiguration={onCreateConfiguration}
-              support={answers.some((item) => item.case_id === group.id) ? null : supportFor(group)}
-              answer={
-                group.item ? answerFor(group.id) : <p>No case is associated with these records.</p>
-              }
-              answerStatus={
-                answerState === 'loading'
-                  ? 'Loading answer'
-                  : answerState === 'error'
-                    ? 'Answer unavailable'
-                    : answers.some((item) => item.case_id === group.id)
-                      ? 'Assessed'
-                      : 'Not assessed'
-              }
-            />
-          ))}
-          {!cardGroups.length && <p>No cases</p>}
-          {!caseId && (
-            <RemainingWork
-              content={saved.version.content}
-              headingId={base + '-remaining'}
-              onViewStep={onViewStep}
-            />
+          {loading && <p role="status">Loading supporting results…</p>}
+          {error && <p role="alert">Supporting results could not be loaded.</p>}
+          {accessUnverified && (
+            <p role="alert">Study access could not be verified. Retry the read.</p>
           )}
-        </div>
-        {error && (
-          <Button disabled={loading} onClick={() => void page(failedCursor.current)}>
-            Retry supporting results
-          </Button>
-        )}
-      </Panel>}
-      {section !== 'cases' && <Panel
-        id={answerId}
-        className="approach-section approach-study-answer"
-        label="Answer to the study question"
-        title="Answer to the study question"
-        headingLevel={3}
-      >
-        {answerFor(null)}
-        {answerState === 'error' && (
-          <Button onClick={() => setAnswerReview((value) => value + 1)}>Retry answer read</Button>
-        )}
-      </Panel>}
+          <div className="approach-case-cards">
+            {!focusCase &&
+              cardGroups.map((group) => (
+                <article className="case-list-row" key={group.id}>
+                  <div>
+                    <h3>{group.title}</h3>
+                    <p className="context-copy">{group.item?.question}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      onOpen({ study: studyId, view: 'cases', approach: version, case: group.id })
+                    }
+                  >
+                    Open case
+                  </Button>
+                </article>
+              ))}
+            {focusCase && (
+              <Button
+                className="link back-link"
+                onClick={() => onOpen({ study: studyId, view: 'cases', approach: version })}
+              >
+                ← All cases
+              </Button>
+            )}
+            {cardGroups
+              .filter((group) => group.id === focusCase?.id)
+              .map((group) => (
+                <CaseCard
+                  key={group.id}
+                  group={group}
+                  approachVersion={version}
+                  headingId={domId('card', group.id)}
+                  content={saved.version.content}
+                  onCreateConfiguration={onCreateConfiguration}
+                  support={
+                    answers.some((item) => item.case_id === group.id) ? null : supportFor(group)
+                  }
+                  answer={
+                    group.item ? (
+                      answerFor(group.id)
+                    ) : (
+                      <p>No case is associated with these records.</p>
+                    )
+                  }
+                  answerStatus={
+                    answerState === 'loading'
+                      ? 'Loading answer'
+                      : answerState === 'error'
+                        ? 'Answer unavailable'
+                        : answers.some((item) => item.case_id === group.id)
+                          ? 'Assessed'
+                          : 'Not assessed'
+                  }
+                />
+              ))}
+            {!cardGroups.length && <p>No cases</p>}
+            {!caseId && !focusCase && (
+              <RemainingWork
+                content={saved.version.content}
+                headingId={base + '-remaining'}
+                onViewStep={onViewStep}
+              />
+            )}
+          </div>
+          {error && (
+            <Button disabled={loading} onClick={() => void page(failedCursor.current)}>
+              Retry supporting results
+            </Button>
+          )}
+        </Panel>
+      )}
+      {section !== 'cases' && (
+        <Panel
+          id={answerId}
+          className="approach-section approach-study-answer"
+          label="Answer to the study question"
+          title="Answer to the study question"
+          headingLevel={3}
+        >
+          {answerFor(null)}
+          {answerState === 'error' && (
+            <Button onClick={() => setAnswerReview((value) => value + 1)}>Retry answer read</Button>
+          )}
+        </Panel>
+      )}
     </section>
   );
 }

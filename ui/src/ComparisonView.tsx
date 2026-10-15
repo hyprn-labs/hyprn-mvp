@@ -510,7 +510,7 @@ export function ComparisonView({
       {allowImport && (actionHost || showComparison) && (
         <ActionDialog title="Import" actionHost={actionHost} disabled={!!api.pending}>
           {feedback}
-          <p>Choose a HYPRN MVP portable model record (.json).</p>
+          <p>Choose a HYPRN portable model record (.json).</p>
           <FilePicker
             label="Portable model record file"
             accept="application/json,.json"
@@ -537,7 +537,8 @@ export function ComparisonView({
               <h3>Ready to import</h3>
               <p>
                 {preview.package.revisions.length} model versions ·{' '}
-                {preview.package.files.length} files
+                {preview.package.files.length}{' '}
+                files
               </p>
               <p>
                 {preview.collision

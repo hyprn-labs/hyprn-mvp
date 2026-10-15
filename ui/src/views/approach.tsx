@@ -4,7 +4,7 @@ import { isResourceIdentity, type WorkspaceLink } from '../workspaceModel';
 import type { GuardContext, ViewContext, ViewEntry } from './registry';
 
 /** An approach link names at most an approach version and a case of that exact version. */
-function approachLink(link: WorkspaceLink, query: URLSearchParams) {
+export function approachLink(link: WorkspaceLink, query: URLSearchParams) {
   if (link.model || link.revision || link.configuration || link.run) {
     throw new Error('This approach link has conflicting resource context.');
   }
@@ -42,10 +42,10 @@ function renderApproach(ctx: ViewContext) {
               })
             }
           >
-            Return to modeling approach
+            {approachReturn.view === 'cases' ? 'Return to case' : 'Return to modeling approach'}
           </Button>
         )}
-      {view === 'approach' && caseReturn?.link.study === study.study_id && (
+      {(view === 'approach' || view === 'cases') && caseReturn?.link.study === study.study_id && (
         <Button className="link back-link" onClick={returnFromCase}>
           {caseReturn.link.run
             ? 'Return to run'

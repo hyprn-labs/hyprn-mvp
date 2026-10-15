@@ -10,7 +10,20 @@ import { Assumptions } from './Assumptions';
 import { ModelAssumptionsLink } from './ConfigurationRecord';
 import { ConfigurationChanges, ModelAssumptionChanges, evidenceUseChange } from './ChangePreview';
 import { EvidenceReferences, evidenceAccessLost } from './EvidenceView';
-import { Button, Panel, CriterionRecord, DataTable, Field, TextInput, TextArea, Select, DialogFrame, StatusTag, formatNumber } from './design';
+import {
+  Button,
+  Panel,
+  CriterionRecord,
+  DataTable,
+  Field,
+  TextInput,
+  TextArea,
+  Select,
+  DialogFrame,
+  StatusTag,
+  RecordState,
+  formatNumber,
+} from './design';
 import { ActionDialog, SectionHeader } from './Presentation';
 import { RecordedConfiguration } from './RecordedConfiguration';
 import { criterionOperators } from './criterionLabels';
@@ -392,6 +405,9 @@ export function ConfigurationPanel({ initialApproach = null, modified, onCancelM
             disabled={busy || !!api.pending}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
+          <div className="record-state-row">
+            <RecordState state={dirty ? 'changed' : saved ? 'draft' : 'new'} />
+          </div>
           <p>
             {'name' in model ? model.name : 'Source run model'} ·{' '}
             {snapshot
@@ -400,7 +416,6 @@ export function ConfigurationPanel({ initialApproach = null, modified, onCancelM
           </p>
         </div>
         <div className="section-actions">
-          <StatusTag>{saved && !dirty ? 'Saved' : 'Draft'}</StatusTag>
           <div className="section-actions" ref={resourceActionsRef} />
         </div>
       </div>

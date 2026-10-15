@@ -14,6 +14,7 @@ export {
   Panel,
   Readout,
   RecordBar,
+  RecordState,
   SourceChip,
   StatusTag,
   Tabs,

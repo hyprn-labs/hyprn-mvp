@@ -32,7 +32,7 @@ export function modelSummary(snapshot: Snapshot) {
   const counts =
     `${plural(components, 'component', 'components')} · ` +
     plural(snapshot.connections.length, 'connection', 'connections');
-  return `${counts} · select a component to inspect its source and method`;
+  return counts;
 }
 type SourceRead =
   | { kind: 'text'; text: string }
@@ -197,7 +197,7 @@ export function MethodExplanation({ step, source }: { step: ApproachStep1; sourc
       )}
       {step.intent.transformation && (
         <section className="inspector-section method-calculation">
-          <h4>Calculation in plain words</h4>
+          <h4>Calculation logic</h4>
           <p className="context-copy">{step.intent.transformation}</p>
         </section>
       )}
@@ -240,39 +240,40 @@ export function ComponentWhatWhy({
           {link.instanceIds.length > 1 && (
             <p className="context-line">Shared method · {link.step.title}</p>
           )}
-          <MethodExplanation step={link.step} />
-          <div className="section-actions">
-            {onEditStep && (
+          {onEditStep && (
+            <div className="method-edit-actions">
               <Button size="sm" onClick={() => onEditStep(link)}>
                 Edit explanation
               </Button>
-            )}
-
-          </div>
+            </div>
+          )}
+          <MethodExplanation step={link.step} />
         </section>
       ))}
       <Disclosure className="component-source">
         <summary>Python function</summary>
         {source}
       </Disclosure>
-      <div className="method-record-actions">{links.map(link => (
-            <ActionDialog key={link.key} title="Method record" size="sm">
-              <dl className="hf-record-details">
-                <dt>Method</dt>
-                <dd>
-                  {link.stepNumber} · {link.step.title || 'Untitled method'}
-                </dd>
-                <dt>Approach version</dt>
-                <dd>{link.versionNumber ?? 'Draft'}</dd>
-                <dt>Approach version ID</dt>
-                <dd>{link.approachVersionId ?? 'Current draft'}</dd>
-                <dt>Step ID</dt>
-                <dd>{link.stepId}</dd>
-                <dt>Linked model versions</dt>
-                <dd>{link.modelRevisionIds.join(', ')}</dd>
-              </dl>
-            </ActionDialog>
-      ))}</div>
+      <div className="method-record-actions">
+        {links.map((link) => (
+          <ActionDialog key={link.key} title="Method record" size="sm" variant="quiet">
+            <dl className="hf-record-details">
+              <dt>Method</dt>
+              <dd>
+                {link.stepNumber} · {link.step.title || 'Untitled method'}
+              </dd>
+              <dt>Approach version</dt>
+              <dd>{link.versionNumber ?? 'Draft'}</dd>
+              <dt>Approach version ID</dt>
+              <dd>{link.approachVersionId ?? 'Current draft'}</dd>
+              <dt>Step ID</dt>
+              <dd>{link.stepId}</dd>
+              <dt>Linked model versions</dt>
+              <dd>{link.modelRevisionIds.join(', ')}</dd>
+            </dl>
+          </ActionDialog>
+        ))}
+      </div>
     </>
   );
 }

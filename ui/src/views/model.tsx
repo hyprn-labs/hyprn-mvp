@@ -1,4 +1,4 @@
-import { Button, Panel, RecordBar, Select, StatusTag, TextInput } from '../design';
+import { Button, Panel, RecordBar, Select, StatusTag, RecordState, TextInput } from '../design';
 import { ModelEditor } from '../ModelEditor';
 import { ModelView } from '../ModelView';
 import { ActionDialog } from '../Presentation';
@@ -163,13 +163,7 @@ function renderModel(ctx: ViewContext) {
                   'Model')}
             </h2>
             <p className="model-context">
-              <StatusTag tone={dirty ? 'advisory' : 'inert'}>
-                {revision
-                  ? 'Read-only model version'
-                  : dirty
-                    ? 'Unsaved local edits'
-                    : 'Draft · saved'}
-              </StatusTag>
+              <RecordState state={revision ? 'saved' : dirty ? 'changed' : 'draft'} />
               {revision ? (
                 <RecordAttribution kind="model_version" id={revision.model_revision_id} />
               ) : (
@@ -236,7 +230,12 @@ function renderModel(ctx: ViewContext) {
               <div className="hf-action-list">
                 <div ref={setModelActionHost} />
                 {revision && (
-                  <ActionDialog title="Model version record" label="Record details">
+                  <ActionDialog
+                    title="Model version record"
+                    label="Model record details"
+                    size="sm"
+                    variant="quiet"
+                  >
                     <dl className="hf-record-details">
                       <dt>Model version</dt>
                       <dd>{revision.model_revision_id}</dd>

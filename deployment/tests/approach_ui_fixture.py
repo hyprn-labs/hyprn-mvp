@@ -54,15 +54,54 @@ def run(*, group):
             length = int(self.headers.get('Content-Length', 0))
             if length < 0 or length > 2 * 1024 * 1024:
                 return self.respond(413, b'Request too large', 'text/plain')
-            if group in ('approach-ui-controller','approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') and self.path == '/fixture/model-package' and self.command == 'GET':
+            if (
+                group
+                in (
+                    'approach-ui-controller',
+                    'approach-ui-method',
+                    'approach-ui-demo',
+                    'approach-ui-assumptions',
+                    'approach-ui-configuration',
+                    'approach-ui-history',
+                )
+                and self.path == '/fixture/model-package'
+                and self.command == 'GET'
+            ):
                 from approach_model_fixture import example
                 return self.respond(200,json.dumps(example()).encode(),'application/json')
-            if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') and self.path == '/fixture/failure-package' and self.command == 'GET':
+            if (
+                group
+                in (
+                    'approach-ui-method',
+                    'approach-ui-demo',
+                    'approach-ui-assumptions',
+                    'approach-ui-configuration',
+                    'approach-ui-history',
+                )
+                and self.path == '/fixture/failure-package'
+                and self.command == 'GET'
+            ):
                 from approach_model_fixture import failure_case,package
                 from hyprn_mvp_app.store import uid
                 case=failure_case();key=uid();cases[key]=case
                 return self.respond(200,json.dumps(dict(key=key,package=package(case['frozen']['model_snapshot']),configuration=case['frozen']['configuration'])).encode(),'application/json')
-            if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') and self.path in ('/fixture/retain-failure','/fixture/retain-failed-outcome','/fixture/retain-uncertain') and self.command == 'POST':
+            if (
+                group
+                in (
+                    'approach-ui-method',
+                    'approach-ui-demo',
+                    'approach-ui-assumptions',
+                    'approach-ui-configuration',
+                    'approach-ui-history',
+                )
+                and self.path
+                in (
+                    '/fixture/retain-failure',
+                    '/fixture/retain-failed-outcome',
+                    '/fixture/retain-uncertain',
+                )
+                and self.command == 'POST'
+            ):
                 from approach_model_fixture import retain_failure
                 guard.scope_from_environment();body=json.loads(self.rfile.read(length))
                 if set(body)!={'key','study_id','run_id'} or body['key'] not in cases:return self.respond(400,b'Invalid fixture handoff','text/plain')
@@ -71,7 +110,18 @@ def run(*, group):
                 Submissions(store,None,None).read(actor,body['study_id'],body['run_id'])
                 result=retain_failure(store,actor,body['study_id'],body['run_id'],cases[body['key']],complete=self.path == '/fixture/retain-failed-outcome',uncertain=self.path == '/fixture/retain-uncertain')
                 return self.respond(200,json.dumps(result).encode(),'application/json')
-            if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') and self.path in ('/fixture/model-outage','/fixture/model-available') and self.command == 'POST':
+            if (
+                group
+                in (
+                    'approach-ui-method',
+                    'approach-ui-demo',
+                    'approach-ui-assumptions',
+                    'approach-ui-configuration',
+                    'approach-ui-history',
+                )
+                and self.path in ('/fixture/model-outage', '/fixture/model-available')
+                and self.command == 'POST'
+            ):
                 modeling.offline=self.path == '/fixture/model-outage'
                 return self.respond(200,b'{}','application/json')
             if group == 'approach-ui-history' and self.path == '/fixture/process-export' and self.command == 'POST':
@@ -121,7 +171,7 @@ def run(*, group):
                 route = urlsplit(self.path).path
                 # P4-S6b: study archive/restore commands (S6a) for the Home archive journey.
                 answer_write = (
-                    group == 'approach-ui-method'
+                    group in ('approach-ui-method', 'approach-ui-demo')
                     and self.command == 'POST'
                     and re.fullmatch(r'/api/1/studies/[0-9a-f-]{36}/answers', route) is not None
                 )
@@ -134,6 +184,7 @@ def run(*, group):
                     or group
                     in (
                         'approach-ui-method',
+                        'approach-ui-demo',
                         'approach-ui-assumptions',
                         'approach-ui-configuration',
                         'approach-ui-history',
@@ -198,14 +249,25 @@ def run(*, group):
             auth.recover('correct horse battery staple')
             with store.connection() as db: actor=db.execute("SELECT actor_id FROM users WHERE username='owner'").fetchone()[0]
         else: actor = auth.provision('owner','correct horse battery staple')
-        if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history'):
+        if group in (
+            'approach-ui-method',
+            'approach-ui-demo',
+            'approach-ui-assumptions',
+            'approach-ui-configuration',
+            'approach-ui-history',
+        ):
             from approach_model_fixture import Models
             # Existing catalog transport, data-only; never a native producer.
             from test_unit_guidance_api import UnitTransport
             class FindingsModels(Models):
                 def call(self,method,path,raw,headers):
                     body=json.loads(raw) if raw else None
-                    if group=='approach-ui-method' and path.endswith(('/preview','/edits')) and body and any(e['kind']=='revise_definition' for e in body.get('edits',[])):
+                    if (
+                        group in ('approach-ui-method', 'approach-ui-demo')
+                        and path.endswith(('/preview', '/edits'))
+                        and body
+                        and any(e['kind'] == 'revise_definition' for e in body.get('edits', []))
+                    ):
                         # Explicit description-only private double. Native atomic semantics
                         # are separately qualified by task44; no candidate is executed here.
                         from copy import deepcopy
@@ -326,7 +388,20 @@ def run(*, group):
                 native_pair=dict(study_id=sid,source_id=source_id,downstream_id=downstream_id,records=records,
                     scope='Actual retained source and downstream runs; both original approach pins are null. New configuration uses declared private modeling compatibility, no new numerical execution.')
                 (scope.root/'evidence'/'native-pair.json').write_text(json.dumps(native_pair,indent=2))
-        app = create_app(store,auth,modeling.client if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') else NoModeling())
+        app = create_app(
+            store,
+            auth,
+            modeling.client
+            if group
+            in (
+                'approach-ui-method',
+                'approach-ui-demo',
+                'approach-ui-assumptions',
+                'approach-ui-configuration',
+                'approach-ui-history',
+            )
+            else NoModeling(),
+        )
         stage=guard.scoped_path(scope,'artifacts/ui'); stage.mkdir()
         dist=guard.scoped_path(scope,'artifacts/dist'); evidence=guard.scoped_path(scope,'evidence')
         (stage/'package.json').write_text('{"type":"module"}')
@@ -343,7 +418,18 @@ window.approachHarness={api,controller,checkPackage,canonical,sha256,unresolvedM
 function Harness(){const state=useApproachController(controller);return <main><h1>Approach controller verification harness</h1><p>This is not the product layout.</p><Button onClick={()=>controller.save()}>Save draft</Button><output aria-label="Controller status">{state.status}</output><output aria-label="Local question">{state.local?.question ?? ''}</output><output aria-label="Draft question">{state.server?.draft?.content.question ?? ''}</output><output aria-label="Version question">{state.saved?.version.content.question ?? ''}</output><output aria-label="Dirty">{String(controller.dirty)}</output><p role="alert">{state.error}</p></main>}
 createRoot(document.getElementById('root')).render(location.search.includes('workspace') ? <Workspace/> : <Harness/>);
 ''')
-        config=dict(root=str(stage),base='/ui/',build=dict(outDir=str(dist),target='esnext'),resolve=dict(alias={'react':str(REPO/'ui/node_modules/react'),'react-dom':str(REPO/'ui/node_modules/react-dom')}))
+        config = dict(
+            root=str(stage),
+            base='/ui/',
+            publicDir=str(REPO / 'ui/public'),
+            build=dict(outDir=str(dist), target='esnext'),
+            resolve=dict(
+                alias={
+                    'react': str(REPO / 'ui/node_modules/react'),
+                    'react-dom': str(REPO / 'ui/node_modules/react-dom'),
+                }
+            ),
+        )
         (stage/'vite.config.mjs').write_text('export default '+json.dumps(config))
         env=guard.clean_environment(scope)
         build=['node',str(REPO/'ui/node_modules/vite/bin/vite.js'),'build','--config',str(stage/'vite.config.mjs'),'--configLoader','runner']
@@ -384,7 +470,38 @@ createRoot(document.getElementById('root')).render(location.search.includes('wor
         (evidence/'public-api-calls.json').write_text(json.dumps(calls,indent=2)+'\n')
         native=[n for n in sys.modules if n.split('.')[0] in {'aiida','openmdao','openturns'}]
         passed=returncode==0 and stats.get('expected',0)>0 and not native and not any(stats.get(k,0) for k in ('unexpected','skipped','flaky'))
-        record=dict(group=group,passed=passed,tests=stats.get('expected',0)+stats.get('unexpected',0),failures=stats.get('unexpected',0),skipped=stats.get('skipped',0),command=command,build_command=build,native_imports=native,fixture=('Actual product/browser/HTTP/API/auth/receipts/store; public authoring, declared private modeling transport and synthetic retained-failure Submissions handoff; history group additionally reads a private copy of actual retained native records through a new public pinned configuration; original native runs have no approach pin; no native producer or candidate execution' if group in ('approach-ui-method','approach-ui-assumptions','approach-ui-configuration','approach-ui-history') else 'Actual controller/browser/HTTP/API/auth/receipts/store; public scientific writes only; no modeling or numerical execution'))
+        record = dict(
+            group=group,
+            passed=passed,
+            tests=stats.get('expected', 0) + stats.get('unexpected', 0),
+            failures=stats.get('unexpected', 0),
+            skipped=stats.get('skipped', 0),
+            command=command,
+            build_command=build,
+            native_imports=native,
+            fixture=(
+                (
+                'Actual product/browser/HTTP/API/auth/receipts/store; public authoring, '
+                'declared private modeling transport and synthetic retained-failure '
+                'Submissions handoff; history group additionally reads a private copy of '
+                'actual retained native records through a new public pinned configuration; '
+                'original native runs have no approach pin; no native producer or candidate '
+                'execution'
+            )
+                if group
+                in (
+                    'approach-ui-method',
+                    'approach-ui-demo',
+                    'approach-ui-assumptions',
+                    'approach-ui-configuration',
+                    'approach-ui-history',
+                )
+                else (
+                'Actual controller/browser/HTTP/API/auth/receipts/store; public scientific '
+                'writes only; no modeling or numerical execution'
+            )
+            ),
+        )
         if native_pair:
             with store.connection() as db:
                 preserved=all(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0]==raw for rid,raw in original_payloads.items())

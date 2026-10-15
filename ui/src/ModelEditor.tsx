@@ -939,7 +939,7 @@ export function ModelEditor({
           ) : (
             <fieldset disabled={blocked}>
               <SectionHeader
-                title={componentLabel}
+                title={<span className="sr-only">Component actions</span>}
                 actions={
                   <>
                     <ActionDialog title="Edit component" label="Edit component">
@@ -1055,7 +1055,7 @@ export function ModelEditor({
                           ])
                         }
                       >
-                        Add input port
+                        Add input quantity
                       </Button>
                       <Button
                         onClick={() =>
@@ -1070,12 +1070,13 @@ export function ModelEditor({
                           ])
                         }
                       >
-                        Add output port
+                        Add output quantity
                       </Button>
                     </ActionDialog>
                   </>
                 }
               />
+              <h3 className="component-detail-title">{componentLabel}</h3>
               {explain(
                 selected,
                 <div className="component-source">

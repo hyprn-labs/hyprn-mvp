@@ -645,9 +645,7 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
           )}
           {limits.map((item) => (
             <article className="study-limit-item" key={item.limit_id}>
-              <p className="context-copy">
-                {item.statement}
-              </p>
+              <p className="context-copy">{item.statement}</p>
               <Citations
                 brief
                 links={item.evidence_links}
@@ -692,11 +690,11 @@ function StudyDetails({limitsHeading}:{limitsHeading:RefObject<HTMLHeadingElemen
               )}
             </article>
           ))}
-          {(content.limitations.trim() || onChange) && (
+          {content.limitations.trim() && (
             <article className="study-limit-item">
               {onChange ? (
                 <TextArea
-                  aria-label="Additional limits"
+                  aria-label="Earlier limits text"
                   value={content.limitations}
                   maxLength={4096}
                   disabled={disabled}
@@ -783,12 +781,14 @@ type OverviewQuestion={kind:'loading'}|{kind:'none';draft:boolean}|{kind:'error'
  * reply after sign-out, access loss or leaving Overview is discarded. A retry re-reads only
  * the exact version already selected. Evidence comes from that version's closure. */
 export function OverviewStudyQuestion({
+  requestedVersion,
   api,
   studyId,
   children,
 }: {
   api: HyprnMvpApi;
   studyId: string;
+  requestedVersion?: string;
   // null means no saved version; undefined means the read is not yet available.
   children: (
     question: ReactNode,
@@ -813,7 +813,7 @@ export function OverviewStudyQuestion({
     setState({ kind: 'loading' });
     void (async () => {
       try {
-        let version = selected.current;
+        let version = requestedVersion ?? selected.current;
         if (!version) {
           const approach = await api.approach(studyId, read.signal);
           if (!valid()) return;
@@ -855,7 +855,7 @@ export function OverviewStudyQuestion({
       current = false;
       read.abort();
     };
-  }, [api, studyId, api.actor, api.csrf, attempt]);
+  }, [api, studyId, api.actor, api.csrf, attempt, requestedVersion]);
   useEffect(
     () => () => {
       selected.current = null;
@@ -880,7 +880,10 @@ export function OverviewStudyQuestion({
           </Button>,
           record.version.approach_version_id,
           record,
-          () => { selected.current = null; setAttempt(value=>value+1); },
+          () => {
+            selected.current = null;
+            setAttempt((value) => value + 1);
+          },
         )}
         <StudyDetailsDialog ref={details} />
       </ApproachAnnotations>

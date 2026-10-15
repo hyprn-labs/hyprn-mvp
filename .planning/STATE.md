@@ -1,5 +1,11 @@
 # Project State
 
+- Current demo polish: logo-only HYPRN branding, scoped record actions, consistent
+  persistence states, readable study/model/answer details and exact Cases navigation.
+  See [demo polish checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/demo-polish.md).
+  Local demo review is next; older reading-suite reconciliation and external-release
+  legal/source-offer review remain explicit obligations. No science records changed.
+
 ## Project Reference
 
 See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVER.md).

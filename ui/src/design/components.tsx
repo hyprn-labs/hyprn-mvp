@@ -700,3 +700,19 @@ export function DataTable(p: DataTableProps): ReactElement {
     </div>
   );
 }
+
+
+/** Storage and editability are separate from scientific outcome. */
+export function RecordState({ state }: {
+  state: 'draft' | 'changed' | 'saved' | 'new'
+}): ReactElement {
+  const label = {
+    draft: 'Saved draft',
+    changed: 'Unsaved changes',
+    saved: 'Saved version · read-only',
+    new: 'New draft',
+  }[state];
+  return <StatusTag className="hf-record-state" tone={state === 'changed' ? 'warning' : 'inert'}>
+    {label}
+  </StatusTag>;
+}

@@ -165,6 +165,7 @@ GROUPS = {
     ),
     'approach-ui-reading': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'approach-ui-method': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
+    'approach-ui-demo': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'approach-ui-assumptions': (
         'deployment/tests/approach_ui_fixture.py',
         'ui/tests/approach.spec.ts',
@@ -954,6 +955,7 @@ APPROACH_BROWSER_GROUPS = {
     'approach-ui-controller': '@approach-controller',
     'approach-ui-reading': '@approach-reading',
     'approach-ui-method': '@approach-method',
+    'approach-ui-demo': '@approach-demo',
     'approach-ui-assumptions': '@approach-assumptions',
     'approach-ui-configuration': '@approach-configuration',
     'approach-ui-history': '@approach-history',

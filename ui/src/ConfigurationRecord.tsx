@@ -235,7 +235,13 @@ export function ModelAssumptionsLink({ model, records, configuration, closure }:
 
 /** Scoped configuration provenance action for saved and retained headers. */
 export function ConfigurationRecordDetails({ configuration: c }: { configuration: ConfigurationRevision }) {
-  return <ActionDialog title="Configuration record" label="Record details" size="sm">
+  return (
+    <ActionDialog
+      title="Configuration record"
+      label="Configuration record details"
+      size="sm"
+      variant="quiet"
+    >
       <dl className="hf-record-details">
         <AttributionDetail
           kind="configuration_version"
@@ -250,5 +256,6 @@ export function ConfigurationRecordDetails({ configuration: c }: { configuration
       <pre tabIndex={0} aria-label="Saved configuration JSON">
         {JSON.stringify(c, null, 2)}
       </pre>
-    </ActionDialog>;
+    </ActionDialog>
+  );
 }

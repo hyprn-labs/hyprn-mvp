@@ -307,6 +307,12 @@ export function Workspace() {
         setRequestedCase(target.case ? { approach: target.approach, id: target.case, token: ++caseToken.current } : undefined);
         await approach.open(sid, target.approach);
       } else if ((target.view === 'overview' || target.view === 'cases')) {
+        setRequestedApproach(target.approach);
+        setRequestedCase(
+          target.case
+            ? { approach: target.approach, id: target.case, token: ++caseToken.current }
+            : undefined,
+        );
         // Overview and approach are application-owned; no mutable model read.
       } else if (target.run) {
         const run = await api.run(sid, target.run); if (token !== generation.current) return;
@@ -353,7 +359,15 @@ export function Workspace() {
     try { origin = parseViewLink(currentLink.current); } catch { origin = null; }
     navigate(() => {
       setCaseReturn(origin?.study === sid ? { link: origin, key: returnKey } : null);
-      void openLink({ study: sid, view: 'approach', approach: target.approach_version_id, case: target.case_id ?? 'none' }, true);
+      void openLink(
+        {
+          study: sid,
+          view: 'cases',
+          approach: target.approach_version_id,
+          case: target.case_id ?? 'none',
+        },
+        true,
+      );
     });
   }
   function returnFromCase() {
@@ -487,186 +501,614 @@ export function Workspace() {
     returnToConfiguration, runFilters, setRunFilters, runListEpoch, submitted, setActiveRun,
     runInspection, setRunInspection, createModified,
   };
-  return <CaseNavigation.Provider value={openCase}><main ref={workspaceRoot}>
-    <header className="appbar"><p className="brand">HYPRN MVP</p>{signedIn && <>
-      <nav aria-label="Main navigation">
-        <Button aria-current={page === 'home' ? 'page' : undefined}
-          onClick={() => navigate(() => void openPage('home'))}>Home</Button>
-        {study && <><span className="breadcrumb-study">/ {study.name}</span>
-          <span className="breadcrumb-section">/ {breadcrumbOf(view)}</span></>}
-      </nav>
-      <Button className="profile-link" aria-current={page === 'profile' ? 'page' : undefined}
-        onClick={() => navigate(() => void openPage('profile'))}>Profile</Button>
-    </>}</header>
-    {error != null && <div role="alert"><p>{message(error)}</p>{study && !api.pending && <Button onClick={() => navigate(() => void chooseStudy(study.study_id))}>Retry study read</Button>}</div>}
-    {notice && <p aria-live="polite">{notice}</p>}
-    {busy && <p role="status" aria-live="polite"><StatusTag tone="running">Request in progress…</StatusTag></p>}
-    {!signedIn ? <Panel className="login"><h1>Sign in to HYPRN MVP</h1>
-      <form onSubmit={e => { e.preventDefault(); void perform(async () => {
-        await api.login(username, password); setPassword(''); setSignedIn(true);
-        const target = parseViewLink(window.location.hash);
-        if (target) await openLink(target);
-        else await openPage(window.location.hash === '#profile' ? 'profile'
-          : window.location.hash === '#new-study' ? 'new-study' : 'home');
-      }); }}>
-        <fieldset disabled={busy}>
-          <label>Username<TextInput autoComplete="username" required value={username}
-            onChange={e => setUsername(e.target.value)} /></label>
-          <label>Password<TextInput type="password" autoComplete="current-password" required
-            value={password} onChange={e => setPassword(e.target.value)} /></label>
-          <Button type="submit" variant="primary">Sign in</Button>
-        </fieldset>
-      </form></Panel> : <>
-      {api.pending && <aside><p>{api.pending.category === "run" ? "Submission outcome is uncertain. Check the original command before making more changes." : "Command outcome is uncertain. Check the original command before making more changes."}</p><Button disabled={busy} onClick={() => void perform(async () => { await reconcileCommand(); })}>Check original command</Button>{api.retryReady && <Button disabled={busy} onClick={() => void perform(async () => { if (view === 'approach' && approach.ownsPendingCommand) { await approach.retryOriginal(); return; } const category = api.pending?.category; await api.retryOriginal(); if (category === 'study_archive' && page === 'home' && !api.pending) { await reloadStudies(); setNotice('Original command resolved. Study lists reloaded.'); return; } setNotice(api.pending ? 'Original command is still pending.' : 'Original command resolved. Reload the study after reviewing unsaved edits.'); })}>Retry original command</Button>}</aside>}
-      {resolvedRuns.filter(item => item.actor === api.actor).map(item => <aside key={item.study + item.run}><p>Run {item.run} was accepted in study {item.study}. Your current workspace is unchanged.</p><Button onClick={() => navigate(() => void openLink({ study: item.study, view: 'runs', run: item.run }))}>Open original run</Button></aside>)}
-      <div className="workspace-shell">
-      <div className="workspace-content">
-      {page === 'profile' && <Panel className="profile-page"><h1>Profile</h1><dl><dt>Account name</dt><dd>{username}</dd></dl><Button disabled={busy || !!api.pending} onClick={() => navigate(() => void perform(async () => { await api.logout(); clearSession(); setUsername(''); window.history.replaceState(null, '', '/ui/'); currentLink.current = ''; }))}>Sign out</Button></Panel>}
-      {page === 'home' && <section className="home-page"><div className="page-heading"><div><h1>Studies</h1></div><Button variant="primary" icon={<ActionIcon name="add" />} disabled={busy || !!api.pending} onClick={() => navigate(() => void openPage('new-study'))}>New study</Button></div>
-        <div className="catalogue-toolbar"><label className="study-search"><span className="sr-only">Filter loaded studies</span><TextInput placeholder="Find a study…" type="search" value={filter} onChange={e => setFilter(e.target.value)} /></label>
-          <div ref={homeTabs}><Tabs variant="segmented" label="Study list" value={homeView} onChange={next => setHomeView(next === 'archived' ? 'archived' : 'active')} items={[{ id: 'active', label: 'Studies', count: loading || studiesFailed ? undefined : studies.length, tabId: 'home-tab-active', panelId: 'home-panel-active' }, { id: 'archived', label: 'Archived', count: loading || studiesFailed ? undefined : archivedStudies.length, tabId: 'home-tab-archived', panelId: 'home-panel-archived' }]} /></div></div>
-        {filter && !loading && !studiesFailed && <p className="context-line home-count">{visibleStudies.length} of {homeList.length} loaded {homeView === 'archived' ? 'archived studies' : 'studies'}</p>}
-        <div
-          role="tabpanel"
-          id="home-panel-active"
-          aria-labelledby="home-tab-active"
-          hidden={homeView !== 'active'}
-        >
-          {homeView === 'active' &&
-            (loading ? (
-              <p role="status" aria-busy="true">
-                <StatusTag tone="running">Loading studies…</StatusTag>
-              </p>
-            ) : studiesFailed ? (
-              <Button onClick={() => void openPage('home')}>Retry studies</Button>
-            ) : (
-              <Panel className="study-list" bodyClassName="catalogue-body" label="Studies">
-                {visibleStudies.map((s) => (
-                  <article className="study-row" key={s.study_id}>
-                    <div>
-                      <h2>{s.name}</h2>
-                      {s.description && <p>{s.description}</p>}
-                      {creatorChip(createdStudies.get(s.study_id))}
-                    </div>
-                    <div className="actions">
+  return (
+    <CaseNavigation.Provider value={openCase}>
+      <main ref={workspaceRoot}>
+        <header className="appbar">
+          <img className="brand" src="/ui/hyprn-logo.png" alt="HYPRN" />
+          {signedIn && (
+            <>
+              <nav aria-label="Main navigation">
+                <Button
+                  aria-current={page === 'home' ? 'page' : undefined}
+                  onClick={() => navigate(() => void openPage('home'))}
+                >
+                  Home
+                </Button>
+                {study && (
+                  <>
+                    <span className="breadcrumb-study">/ {study.name}</span>
+                    <span className="breadcrumb-section">/ {breadcrumbOf(view)}</span>
+                  </>
+                )}
+              </nav>
+              <Button
+                className="profile-link"
+                aria-current={page === 'profile' ? 'page' : undefined}
+                onClick={() => navigate(() => void openPage('profile'))}
+              >
+                Profile
+              </Button>
+            </>
+          )}
+        </header>
+        {error != null && (
+          <div role="alert">
+            <p>{message(error)}</p>
+            {study && !api.pending && (
+              <Button onClick={() => navigate(() => void chooseStudy(study.study_id))}>
+                Retry study read
+              </Button>
+            )}
+          </div>
+        )}
+        {notice && <p aria-live="polite">{notice}</p>}
+        {busy && (
+          <p role="status" aria-live="polite">
+            <StatusTag tone="running">Request in progress…</StatusTag>
+          </p>
+        )}
+        {!signedIn ? (
+          <Panel className="login">
+            <h1>Sign in</h1>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void perform(async () => {
+                  await api.login(username, password);
+                  setPassword('');
+                  setSignedIn(true);
+                  const target = parseViewLink(window.location.hash);
+                  if (target) await openLink(target);
+                  else
+                    await openPage(
+                      window.location.hash === '#profile'
+                        ? 'profile'
+                        : window.location.hash === '#new-study'
+                          ? 'new-study'
+                          : 'home',
+                    );
+                });
+              }}
+            >
+              <fieldset disabled={busy}>
+                <label>
+                  Username
+                  <TextInput
+                    autoComplete="username"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Password
+                  <TextInput
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </label>
+                <Button type="submit" variant="primary">
+                  Sign in
+                </Button>
+              </fieldset>
+            </form>
+          </Panel>
+        ) : (
+          <>
+            {api.pending && (
+              <aside>
+                <p>
+                  {api.pending.category === 'run'
+                    ? 'Submission outcome is uncertain. ' +
+                      'Check the original command before making more changes.'
+                    : 'Command outcome is uncertain. ' +
+                      'Check the original command before making more changes.'}
+                </p>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void perform(async () => {
+                      await reconcileCommand();
+                    })
+                  }
+                >
+                  Check original command
+                </Button>
+                {api.retryReady && (
+                  <Button
+                    disabled={busy}
+                    onClick={() =>
+                      void perform(async () => {
+                        if (view === 'approach' && approach.ownsPendingCommand) {
+                          await approach.retryOriginal();
+                          return;
+                        }
+                        const category = api.pending?.category;
+                        await api.retryOriginal();
+                        if (category === 'study_archive' && page === 'home' && !api.pending) {
+                          await reloadStudies();
+                          setNotice('Original command resolved. Study lists reloaded.');
+                          return;
+                        }
+                        setNotice(
+                          api.pending
+                            ? 'Original command is still pending.'
+                            : 'Original command resolved. ' +
+                              'Reload the study after reviewing unsaved edits.',
+                        );
+                      })
+                    }
+                  >
+                    Retry original command
+                  </Button>
+                )}
+              </aside>
+            )}
+            {resolvedRuns
+              .filter((item) => item.actor === api.actor)
+              .map((item) => (
+                <aside key={item.study + item.run}>
+                  <p>
+                    Run {item.run} was accepted in study {item.study}. Your current workspace is
+                    unchanged.
+                  </p>
+                  <Button
+                    onClick={() =>
+                      navigate(
+                        () => void openLink({ study: item.study, view: 'runs', run: item.run }),
+                      )
+                    }
+                  >
+                    Open original run
+                  </Button>
+                </aside>
+              ))}
+            <div className="workspace-shell">
+              <div className="workspace-content">
+                {page === 'profile' && (
+                  <Panel className="profile-page">
+                    <h1>Profile</h1>
+                    <dl className="profile-account">
+                      <dt>Account name:</dt>
+                      <dd>{username}</dd>
+                    </dl>
+                    <Button
+                      disabled={busy || !!api.pending}
+                      onClick={() =>
+                        navigate(
+                          () =>
+                            void perform(async () => {
+                              await api.logout();
+                              clearSession();
+                              setUsername('');
+                              window.history.replaceState(null, '', '/ui/');
+                              currentLink.current = '';
+                            }),
+                        )
+                      }
+                    >
+                      Sign out
+                    </Button>
+                  </Panel>
+                )}
+                {page === 'home' && (
+                  <section className="home-page">
+                    <div className="page-heading">
+                      <div>
+                        <h1>Studies</h1>
+                      </div>
                       <Button
-                        aria-label={`Open study ${s.name}`}
-                        onClick={() => navigate(() => void chooseStudy(s.study_id))}
-                      >
-                        Open study
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        aria-label={`Archive study ${s.name}`}
-                        aria-haspopup="dialog"
+                        variant="primary"
+                        icon={<ActionIcon name="add" />}
                         disabled={busy || !!api.pending}
-                        onClick={() => askArchive(s)}
+                        onClick={() => navigate(() => void openPage('new-study'))}
                       >
-                        Archive
+                        New study
                       </Button>
                     </div>
-                  </article>
-                ))}
-                {!visibleStudies.length && (
-                  <p className="empty-state">
-                    {studies.length
-                      ? 'No studies match this filter.'
-                      : archivedStudies.length
-                        ? 'No studies. Archived studies are listed under Archived.'
-                        : 'No studies yet. Create a study to start building a model.'}
+                    <div className="catalogue-toolbar">
+                      <label className="study-search">
+                        <span className="sr-only">Filter loaded studies</span>
+                        <TextInput
+                          placeholder="Find a study…"
+                          type="search"
+                          value={filter}
+                          onChange={(e) => setFilter(e.target.value)}
+                        />
+                      </label>
+                      <div ref={homeTabs}>
+                        <Tabs
+                          variant="segmented"
+                          label="Study list"
+                          value={homeView}
+                          onChange={(next) =>
+                            setHomeView(next === 'archived' ? 'archived' : 'active')
+                          }
+                          items={[
+                            {
+                              id: 'active',
+                              label: 'Studies',
+                              count: loading || studiesFailed ? undefined : studies.length,
+                              tabId: 'home-tab-active',
+                              panelId: 'home-panel-active',
+                            },
+                            {
+                              id: 'archived',
+                              label: 'Archived',
+                              count: loading || studiesFailed ? undefined : archivedStudies.length,
+                              tabId: 'home-tab-archived',
+                              panelId: 'home-panel-archived',
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    {filter && !loading && !studiesFailed && (
+                      <p className="context-line home-count">
+                        {visibleStudies.length} of {homeList.length} loaded{' '}
+                        {homeView === 'archived' ? 'archived studies' : 'studies'}
+                      </p>
+                    )}
+                    <div
+                      role="tabpanel"
+                      id="home-panel-active"
+                      aria-labelledby="home-tab-active"
+                      hidden={homeView !== 'active'}
+                    >
+                      {homeView === 'active' &&
+                        (loading ? (
+                          <p role="status" aria-busy="true">
+                            <StatusTag tone="running">Loading studies…</StatusTag>
+                          </p>
+                        ) : studiesFailed ? (
+                          <Button onClick={() => void openPage('home')}>Retry studies</Button>
+                        ) : (
+                          <Panel
+                            className="study-list"
+                            bodyClassName="catalogue-body"
+                            label="Studies"
+                          >
+                            {visibleStudies.map((s) => (
+                              <article className="study-row" key={s.study_id}>
+                                <div>
+                                  <h2>{s.name}</h2>
+                                  {s.description && <p>{s.description}</p>}
+                                  {creatorChip(createdStudies.get(s.study_id))}
+                                </div>
+                                <div className="actions">
+                                  <Button
+                                    aria-label={`Open study ${s.name}`}
+                                    onClick={() => navigate(() => void chooseStudy(s.study_id))}
+                                  >
+                                    Open study
+                                  </Button>
+                                  <Button
+                                    variant="quiet"
+                                    aria-label={`Archive study ${s.name}`}
+                                    aria-haspopup="dialog"
+                                    disabled={busy || !!api.pending}
+                                    onClick={() => askArchive(s)}
+                                  >
+                                    Archive
+                                  </Button>
+                                </div>
+                              </article>
+                            ))}
+                            {!visibleStudies.length && (
+                              <p className="empty-state">
+                                {studies.length
+                                  ? 'No studies match this filter.'
+                                  : archivedStudies.length
+                                    ? 'No studies. Archived studies are listed under Archived.'
+                                    : 'No studies yet. Create a study to start building a model.'}
+                              </p>
+                            )}
+                          </Panel>
+                        ))}
+                    </div>
+                    <div
+                      role="tabpanel"
+                      id="home-panel-archived"
+                      aria-labelledby="home-tab-archived"
+                      hidden={homeView !== 'archived'}
+                    >
+                      {homeView === 'archived' &&
+                        (loading ? (
+                          <p role="status" aria-busy="true">
+                            <StatusTag tone="running">Loading studies…</StatusTag>
+                          </p>
+                        ) : studiesFailed ? (
+                          <Button onClick={() => void openPage('home')}>Retry studies</Button>
+                        ) : (
+                          <>
+                            <p className="context-line home-note">
+                              Archived studies are hidden from Home for everyone. Nothing in them is
+                              deleted.
+                            </p>
+                            <Panel
+                              className="study-list"
+                              bodyClassName="catalogue-body"
+                              label="Archived studies"
+                            >
+                              {visibleStudies.map((s) => (
+                                <article className="study-row" key={s.study_id}>
+                                  <div>
+                                    <h2>
+                                      {s.name} <StatusTag tone="inert">Archived</StatusTag>
+                                    </h2>
+                                    {s.description && <p>{s.description}</p>}
+                                    {creatorChip(createdStudies.get(s.study_id))}
+                                  </div>
+                                  <div className="actions">
+                                    <Button
+                                      aria-label={`Open study ${s.name}`}
+                                      onClick={() => navigate(() => void chooseStudy(s.study_id))}
+                                    >
+                                      Open study
+                                    </Button>
+                                    <Button
+                                      aria-label={`Restore study ${s.name}`}
+                                      disabled={busy || !!api.pending}
+                                      onClick={() => restoreStudy(s)}
+                                    >
+                                      Restore
+                                    </Button>
+                                  </div>
+                                </article>
+                              ))}
+                              {!visibleStudies.length && (
+                                <p className="empty-state">
+                                  {archivedStudies.length
+                                    ? 'No archived studies match this filter.'
+                                    : 'No archived studies.'}
+                                </p>
+                              )}
+                            </Panel>
+                          </>
+                        ))}
+                    </div>
+                  </section>
+                )}
+                {page === 'new-study' && (
+                  <Panel className="creation-page">
+                    <h1>New study</h1>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void perform(async () => {
+                          const token = generation.current,
+                            actor = api.actor;
+                          const created = await api.createStudy(newStudy);
+                          if (token !== generation.current || actor !== api.actor) return;
+                          setNewStudy('');
+                          await openLink({ study: created.study_id, view: 'overview' });
+                        });
+                      }}
+                    >
+                      <label>
+                        New study name
+                        <TextInput
+                          required
+                          maxLength={4096}
+                          value={newStudy}
+                          onChange={(e) => setNewStudy(e.target.value)}
+                        />
+                      </label>
+                      <div className="actions">
+                        <Button type="submit" variant="primary" disabled={busy || !!api.pending}>
+                          Create study
+                        </Button>
+                        <Button type="button" disabled={busy} onClick={() => void openPage('home')}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </Panel>
+                )}
+                {page === 'study' && loading && (
+                  <p aria-live="polite" aria-busy="true">
+                    Loading study/model…
                   </p>
                 )}
-              </Panel>
-            ))}
-        </div>
-        <div
-          role="tabpanel"
-          id="home-panel-archived"
-          aria-labelledby="home-tab-archived"
-          hidden={homeView !== 'archived'}
+                {study && (
+                  <AttributionContext.Provider value={studyAttribution}>
+                    {(view !== 'model' || !selectedModel) && !(view === 'runs' && runInspection) ? (
+                      <div className="study-heading actions">
+                        <h1>{study.name}</h1>
+                        {studyCreator && <AttributionChip {...studyCreator} />}
+                      </div>
+                    ) : null}
+                    <Tabs
+                      navigation
+                      className="workspace-views"
+                      label="Workspace sections"
+                      value={selectedTab(view)}
+                      onChange={(next) => chooseView(next as WorkspaceView)}
+                      items={studyTabs()}
+                    />
+                    {ctx &&
+                      viewRegistry.map((entry) => (
+                        <Fragment key={entry.name}>{entry.banner?.(ctx)}</Fragment>
+                      ))}
+                    {ctx &&
+                      viewRegistry.map((entry) => (
+                        <Fragment key={entry.name}>{entry.render(ctx)}</Fragment>
+                      ))}
+                    {(view === 'model' || view === 'configurations' || view === 'runs') &&
+                      !creatingModel && (
+                        <ComparisonView
+                          actionHost={resourceActions}
+                          allowImport={view === 'model'}
+                          key={[
+                            api.actor, study.study_id, view, displayedSnapshot?.model_id ?? 'none',
+                            displayedSnapshot && 'model_revision_id' in displayedSnapshot
+                              ? displayedSnapshot.model_revision_id
+                              : (displayedSnapshot?.draft_revision ?? 'none'),
+                            runInspection?.run_id ?? '',
+                            configuration?.configuration.configuration_revision_id ?? '',
+                          ].join(':')}
+                          api={api}
+                          study={study}
+                          root={workspaceRoot}
+                          navigate={navigate}
+                          scope={
+                            displayedSnapshot
+                              ? {
+                                  snapshot: displayedSnapshot,
+                                  values: variableContext,
+                                  configuration:
+                                    variableContext.kind === 'run'
+                                      ? variableContext.history.configuration
+                                          ?.configuration_revision_id
+                                      : variableContext.kind === 'configuration'
+                                        ? variableContext.configuration.configuration_revision_id
+                                        : undefined,
+                                  run: view === 'runs' ? runInspection?.run_id : undefined,
+                                  selection,
+                                  unsaved: dirty,
+                                }
+                              : null
+                          }
+                          onImported={async (imported) => {
+                            const token = ++generation.current;
+                            clearEditor();
+                            currentModel(imported);
+                            setModels((previous) => [
+                              ...previous.filter((m) => m.model_id !== imported.model_id),
+                              { model_id: imported.model_id, name: imported.name },
+                            ]);
+                            setView('model');
+                            link({
+                              study: study.study_id,
+                              model: imported.model_id,
+                              view: 'model',
+                            });
+                            const [fresh, entries] = await Promise.all([
+                              api.study(study.study_id),
+                              api.revisions(study.study_id, imported.model_id),
+                            ]);
+                            if (token !== generation.current) return;
+                            setCurrentStudy(fresh);
+                            setRevisions(entries);
+                            setNotice(
+                              'Model imported with preserved public identities. ' +
+                              'No source executed.',
+                            );
+                          }}
+                        />
+                      )}
+                  </AttributionContext.Provider>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+        <DialogFrame
+          ref={dialog}
+          aria-labelledby="dirty-title"
+          onCancel={() => {
+            transition.current = null;
+            returnFocus.current?.focus();
+          }}
         >
-          {homeView === 'archived' &&
-            (loading ? (
-              <p role="status" aria-busy="true">
-                <StatusTag tone="running">Loading studies…</StatusTag>
-              </p>
-            ) : studiesFailed ? (
-              <Button onClick={() => void openPage('home')}>Retry studies</Button>
-            ) : (
-              <>
-                <p className="context-line home-note">
-                  Archived studies are hidden from Home for everyone. Nothing in them is deleted.
-                </p>
-                <Panel
-                  className="study-list"
-                  bodyClassName="catalogue-body"
-                  label="Archived studies"
-                >
-                  {visibleStudies.map((s) => (
-                    <article className="study-row" key={s.study_id}>
-                      <div>
-                        <h2>
-                          {s.name} <StatusTag tone="inert">Archived</StatusTag>
-                        </h2>
-                        {s.description && <p>{s.description}</p>}
-                        {creatorChip(createdStudies.get(s.study_id))}
-                      </div>
-                      <div className="actions">
-                        <Button
-                          aria-label={`Open study ${s.name}`}
-                          onClick={() => navigate(() => void chooseStudy(s.study_id))}
-                        >
-                          Open study
-                        </Button>
-                        <Button
-                          aria-label={`Restore study ${s.name}`}
-                          disabled={busy || !!api.pending}
-                          onClick={() => restoreStudy(s)}
-                        >
-                          Restore
-                        </Button>
-                      </div>
-                    </article>
-                  ))}
-                  {!visibleStudies.length && (
-                    <p className="empty-state">
-                      {archivedStudies.length
-                        ? 'No archived studies match this filter.'
-                        : 'No archived studies.'}
-                    </p>
-                  )}
-                </Panel>
-              </>
-            ))}
-        </div>
-      </section>}
-      {page === 'new-study' && <Panel className="creation-page"><h1>New study</h1><form onSubmit={e => { e.preventDefault(); void perform(async () => { const token = generation.current, actor = api.actor; const created = await api.createStudy(newStudy); if (token !== generation.current || actor !== api.actor) return; setNewStudy(''); await openLink({ study: created.study_id, view: 'overview' }); }); }}><label>New study name<TextInput required maxLength={4096} value={newStudy} onChange={e => setNewStudy(e.target.value)} /></label><div className="actions"><Button type="submit" variant="primary" disabled={busy || !!api.pending}>Create study</Button><Button type="button" disabled={busy} onClick={() => void openPage('home')}>Cancel</Button></div></form></Panel>}
-      {page === 'study' && loading && <p aria-live="polite" aria-busy="true">Loading study/model…</p>}
-      {study && <AttributionContext.Provider value={studyAttribution}>
-        {(view !== 'model' || !selectedModel) && !(view === 'runs' && runInspection) ? (
-          <div className="study-heading actions">
-            <h1>{study.name}</h1>
-            {studyCreator && <AttributionChip {...studyCreator} />}
+          <h2 id="dirty-title">Unsaved changes</h2>
+          <p>
+            {guardsBlocked(guards)
+              ? 'Apply or discard the open editor changes before saving this draft.'
+              : 'Save your changes before leaving this draft?'}
+          </p>
+          <div className="actions">
+            <Button
+              disabled={busy || guardsBlocked(guards)}
+              onClick={() =>
+                void perform(async () => {
+                  const result = await saveGuards(guards);
+                  if (result.outcome !== 'saved') {
+                    transition.current = null;
+                    closeDialog();
+                    if (result.outcome === 'refused') result.entry.onRefused?.();
+                    return;
+                  }
+                  guards.forEach((guard) => guard.settle?.());
+                  const next = transition.current;
+                  transition.current = null;
+                  closeDialog();
+                  next?.();
+                })
+              }
+            >
+              Save changes
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                const next = transition.current;
+                transition.current = null;
+                discardGuards(guards);
+                closeDialog();
+                next?.();
+              }}
+            >
+              Discard changes
+            </Button>
+            <Button
+              data-safe-choice
+              onClick={() => {
+                transition.current = null;
+                closeDialog();
+              }}
+            >
+              Keep editing
+            </Button>
           </div>
-        ) : null}
-        <Tabs
-          navigation
-          className="workspace-views"
-          label="Workspace sections"
-          value={selectedTab(view)}
-          onChange={next => chooseView(next as WorkspaceView)}
-          items={studyTabs()}
-        />
-        {ctx && viewRegistry.map(entry => (
-          <Fragment key={entry.name}>{entry.banner?.(ctx)}</Fragment>))}
-        {ctx && viewRegistry.map(entry => (
-          <Fragment key={entry.name}>{entry.render(ctx)}</Fragment>))}
-        {(view === 'model' || view === 'configurations' || view === 'runs') && !creatingModel && <ComparisonView actionHost={resourceActions} allowImport={view === 'model'} key={`${api.actor}:${study.study_id}:${view}:${displayedSnapshot?.model_id ?? 'none'}:${displayedSnapshot && 'model_revision_id' in displayedSnapshot ? displayedSnapshot.model_revision_id : displayedSnapshot?.draft_revision ?? 'none'}:${runInspection?.run_id ?? ''}:${configuration?.configuration.configuration_revision_id ?? ''}`} api={api} study={study} root={workspaceRoot} navigate={navigate} scope={displayedSnapshot ? { snapshot: displayedSnapshot, values: variableContext, configuration: variableContext.kind === 'run' ? variableContext.history.configuration?.configuration_revision_id : variableContext.kind === 'configuration' ? variableContext.configuration.configuration_revision_id : undefined, run: view === 'runs' ? runInspection?.run_id : undefined, selection, unsaved: dirty } : null} onImported={async imported => { const token = ++generation.current; clearEditor(); currentModel(imported); setModels(previous => [...previous.filter(m => m.model_id !== imported.model_id), { model_id: imported.model_id, name: imported.name }]); setView('model'); link({ study: study.study_id, model: imported.model_id, view: 'model' }); const [fresh, entries] = await Promise.all([api.study(study.study_id), api.revisions(study.study_id, imported.model_id)]); if (token !== generation.current) return; setCurrentStudy(fresh); setRevisions(entries); setNotice('Model imported with preserved public identities. No source executed.'); }} />}
-      </AttributionContext.Provider>}
-      </div></div>
-    </>}
-    <DialogFrame ref={dialog} aria-labelledby="dirty-title" onCancel={() => { transition.current = null; returnFocus.current?.focus(); }}><h2 id="dirty-title">Unsaved changes</h2><p>{guardsBlocked(guards) ? "Apply or discard the open editor changes before saving this draft." : "Save your changes before leaving this draft?"}</p><div className="actions"><Button disabled={busy || guardsBlocked(guards)} onClick={() => void perform(async () => { const result = await saveGuards(guards); if (result.outcome !== 'saved') { transition.current = null; closeDialog(); if (result.outcome === 'refused') result.entry.onRefused?.(); return; } guards.forEach(guard => guard.settle?.()); const next = transition.current; transition.current = null; closeDialog(); next?.(); })}>Save changes</Button><Button variant="danger" disabled={busy} onClick={() => { const next = transition.current; transition.current = null; discardGuards(guards); closeDialog(); next?.(); }}>Discard changes</Button><Button data-safe-choice onClick={() => { transition.current = null; closeDialog(); }}>Keep editing</Button></div></DialogFrame>
-    <DialogFrame ref={archiveDialog} aria-labelledby="archive-title" onClose={() => { setArchiveTarget(null); const active = document.activeElement; if (archiveInvoker.current?.isConnected && (!active || active === document.body || archiveDialog.current?.contains(active))) archiveInvoker.current.focus(); }} className="action-dialog archive-dialog"><div className="dialog-heading"><h2 id="archive-title">Archive study</h2><Button variant="quiet" icon={<ActionIcon name="close" />} aria-label="Close Archive study" onClick={() => archiveDialog.current?.close()} /></div><div className="dialog-body"><p>Archive “{archiveTarget?.name}”? It disappears from Home for everyone. Nothing is deleted; restore it from Archived.</p><div className="actions"><Button variant="primary" disabled={busy || !!api.pending} onClick={confirmArchive}>Archive study</Button><Button data-safe-choice onClick={() => archiveDialog.current?.close()}>Cancel</Button></div></div></DialogFrame>
-    <footer><a href="/ui/THIRD_PARTY_NOTICES.txt">Third-party software notices</a></footer>
-  </main></CaseNavigation.Provider>;
+        </DialogFrame>
+        <DialogFrame
+          ref={archiveDialog}
+          aria-labelledby="archive-title"
+          onClose={() => {
+            setArchiveTarget(null);
+            const active = document.activeElement;
+            if (
+              archiveInvoker.current?.isConnected &&
+              (!active || active === document.body || archiveDialog.current?.contains(active))
+            )
+              archiveInvoker.current.focus();
+          }}
+          className="action-dialog archive-dialog"
+        >
+          <div className="dialog-heading">
+            <h2 id="archive-title">Archive study</h2>
+            <Button
+              variant="quiet"
+              icon={<ActionIcon name="close" />}
+              aria-label="Close Archive study"
+              onClick={() => archiveDialog.current?.close()}
+            />
+          </div>
+          <div className="dialog-body">
+            <p>
+              Archive “{archiveTarget?.name}”? It disappears from Home for everyone. Nothing is
+              deleted; restore it from Archived.
+            </p>
+            <div className="actions">
+              <Button variant="primary" disabled={busy || !!api.pending} onClick={confirmArchive}>
+                Archive study
+              </Button>
+              <Button data-safe-choice onClick={() => archiveDialog.current?.close()}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogFrame>
+        <footer>
+          <a href="/ui/THIRD_PARTY_NOTICES.txt">Third-party software notices</a>
+        </footer>
+      </main>
+    </CaseNavigation.Provider>
+  );
 }

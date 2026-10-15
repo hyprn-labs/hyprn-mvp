@@ -110,9 +110,9 @@ export function ModelMethodDetails({
               />
             </label>
             <label>
-              Calculation in plain words
+              Calculation logic
               <TextArea
-                aria-label="Calculation in plain words"
+                aria-label="Calculation logic"
                 maxLength={4096}
                 value={step.intent.transformation}
                 onChange={(event) => update('transformation', event.target.value)}

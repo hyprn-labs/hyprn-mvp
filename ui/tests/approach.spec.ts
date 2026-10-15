@@ -225,7 +225,7 @@ test('@approach-method precise reference errors remain visible and recover witho
   await page.emulateMedia({ colorScheme: 'dark' }); await readingShot(page, 'precise-reference-error-dark');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(alert).toHaveCount(0);
-  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   // An unchanged saved draft also needs visible issues from a successful preview response.
   await page.route('**/approach/preview', async route => {
     const response = await route.fetch(), value = await response.json();
@@ -254,7 +254,8 @@ test('@approach-assumptions local method assumptions save without model mutation
   await editor.getByLabel('Assumption statement',{exact:true}).fill('A scalar approximation is suitable for this investigation.');
   await editor.getByLabel('Assumption role',{exact:true}).selectOption('overall_method');
   await editor.getByRole('button',{name:'Apply assumption',exact:true}).click();await page.getByRole('dialog',{name:'Study details',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
   const content=(await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft.content;
   expect(content.assumptions).toHaveLength(1);expect(content.assumptions[0].role).toBe('overall_method');expect(content.model_bindings).toEqual([]);
@@ -263,23 +264,128 @@ test('@approach-assumptions local method assumptions save without model mutation
 async function seededConditions(page:Page,browser:any,baseURL:string|undefined,options:{cases?:boolean;failure?:boolean;second?:boolean}={}){
   await openProduct(page);const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
   const context=await browser.newContext({baseURL}),helper=await context.newPage();await helper.goto('/ui/');
-  const data=await helper.evaluate(async({sid,options})=>{
-    const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');const fixture=options.failure?await(await fetch('/fixture/failure-package')).json():null,pkg=fixture?.package??await(await fetch('/fixture/model-package')).json(),m=pkg.revisions[0];
-    await api.mutate(`/studies/${sid}/model-imports`,{command_id:crypto.randomUUID(),expected_revision:(await api.study(sid)).revision,package:pkg},'model',sid);
-    const evidence=await api.createEvidence(sid,{evidence_schema_version:'3',kind:'note',title:'Screening measurements',content:'The approximation applies within the measured operating range.',source_refs:[],resource_scope:{scope_version:'1',kind:'study',study_id:sid}});
-    await c.open(sid);const content=structuredClone(c.getSnapshot().local),binding={binding_id:crypto.randomUUID(),model_id:m.model_id,model_revision_id:m.model_revision_id},proposal={assumption_id:crypto.randomUUID(),statement:'The response is approximately linear in the measured range.',role:'proposed_model_condition',evidence_links:[{evidence_version_id:evidence.evidence_version_id,relation:'supports',locator:'Section 2 · Operating range'}]};
-    content.question='Why use the scalar response approximation?';content.scope='Measured operating conditions';content.model_bindings=[binding];content.assumptions=[proposal];content.steps=[{step_id:crypto.randomUUID(),title:'Predict the measured response',purpose:'Relate the imposed conditions to the response.',rationale:'Use the measured range as the basis for the approximation.',remaining_work:'',intent:{transformation:'Linear scalar response',inputs:'Measured operating condition',outputs:'Predicted response',depends_on_step_ids:[]},implementation_state:'linked',implementation_refs:[{kind:'model',binding_id:binding.binding_id}],assumption_refs:[{kind:'approach',assumption_id:proposal.assumption_id}],evidence_links:[]}];content.cases=[{case_id:crypto.randomUUID(),title:'Nominal range',question:'Does the response fit the measured range?',rationale:'Initial screening',binding_id:binding.binding_id,evidence_links:[]}];
-    if(options.cases)content.cases.push({...content.cases[0],case_id:crypto.randomUUID(),title:'Upper operating range',question:'Does the upper operating range satisfy the criterion?'});
-    c.edit(content);if(!await c.save()||!await c.saveVersion())throw new Error(c.getSnapshot().error);const saved=c.getSnapshot().saved;
-    let second=null;if(options.second){await c.open(sid);c.edit({...c.getSnapshot().local,question:'Second saved interpretation'});if(!await c.save()||!await c.saveVersion())throw new Error(c.getSnapshot().error);second=c.getSnapshot().saved;}
-    return {sid,model:m,proposal,evidence,saved,second,fixture};
-  },{sid,options});await context.close();await page.reload();await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit approach',exact:true}).click();return data;
+  const data = await helper.evaluate(
+    async ({ sid, options }) => {
+      const { api, controller: c } = (window as any).approachHarness;
+      await api.login('owner', 'correct horse battery staple');
+      const fixture = options.failure
+          ? await (await fetch('/fixture/failure-package')).json()
+          : null,
+        pkg = fixture?.package ?? (await (await fetch('/fixture/model-package')).json()),
+        m = pkg.revisions[0];
+      await api.mutate(
+        `/studies/${sid}/model-imports`,
+        {
+          command_id: crypto.randomUUID(),
+          expected_revision: (await api.study(sid)).revision,
+          package: pkg,
+        },
+        'model',
+        sid,
+      );
+      const evidence = await api.createEvidence(sid, {
+        evidence_schema_version: '3',
+        kind: 'note',
+        title: 'Screening measurements',
+        content: 'The approximation applies within the measured operating range.',
+        source_refs: [],
+        resource_scope: { scope_version: '1', kind: 'study', study_id: sid },
+      });
+      await c.open(sid);
+      const content = structuredClone(c.getSnapshot().local),
+        binding = {
+          binding_id: crypto.randomUUID(),
+          model_id: m.model_id,
+          model_revision_id: m.model_revision_id,
+        },
+        proposal = {
+          assumption_id: crypto.randomUUID(),
+          statement: 'The response is approximately linear in the measured range.',
+          role: 'proposed_model_condition',
+          evidence_links: [
+            {
+              evidence_version_id: evidence.evidence_version_id,
+              relation: 'supports',
+              locator: 'Section 2 · Operating range',
+            },
+          ],
+        };
+      content.question = 'Why use the scalar response approximation?';
+      content.scope = 'Measured operating conditions';
+      content.model_bindings = [binding];
+      content.assumptions = [proposal];
+      content.steps = [
+        {
+          step_id: crypto.randomUUID(),
+          title: 'Predict the measured response',
+          purpose: 'Relate the imposed conditions to the response.',
+          rationale: 'Use the measured range as the basis for the approximation.',
+          remaining_work: '',
+          intent: {
+            transformation: 'Linear scalar response',
+            inputs: 'Measured operating condition',
+            outputs: 'Predicted response',
+            depends_on_step_ids: [],
+          },
+          implementation_state: 'linked',
+          implementation_refs: [{ kind: 'model', binding_id: binding.binding_id }],
+          assumption_refs: [{ kind: 'approach', assumption_id: proposal.assumption_id }],
+          evidence_links: [],
+        },
+      ];
+      content.cases = [
+        {
+          case_id: crypto.randomUUID(),
+          title: 'Nominal range',
+          question: 'Does the response fit the measured range?',
+          rationale: 'Initial screening',
+          binding_id: binding.binding_id,
+          evidence_links: [],
+        },
+      ];
+      if (options.cases)
+        content.cases.push({
+          ...content.cases[0],
+          case_id: crypto.randomUUID(),
+          title: 'Upper operating range',
+          question: 'Does the upper operating range satisfy the criterion?',
+        });
+      c.edit(content);
+      if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+      const saved = c.getSnapshot().saved;
+      let second = null;
+      if (options.second) {
+        await c.open(sid);
+        c.edit({ ...c.getSnapshot().local, question: 'Second saved interpretation' });
+        if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+        second = c.getSnapshot().saved;
+      }
+      return { sid, model: m, proposal, evidence, saved, second, fixture };
+    },
+    { sid, options },
+  );
+  await context.close();
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
+  return data;
 }
 
 test('@approach-configuration saved case opens explicit configuration with exact approach context',async({page,browser,baseURL})=>{
   const data=await seededConditions(page,browser,baseURL);
   await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
   await expect(page.getByLabel('Configuration name',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Configuration context',{exact:true})).toContainText('Nominal range');
   await expect(page.getByLabel('Configuration context',{exact:true})).toContainText('Approach version 1');
@@ -323,11 +429,7 @@ test('@approach-method continuous sections preserve question and route', async (
   );
   await expect(page.getByRole('tablist', { name: 'Approach sections' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Method map' })).toHaveCount(0);
-  for (const name of [
-    'Reasoning and methods',
-    'Cases and their answers',
-    'Answer to the study question',
-  ]) {
+  for (const name of ['Reasoning and methods', 'Cases', 'Answer to the study question']) {
     await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
   }
   await expect(page).toHaveURL(route);
@@ -365,7 +467,7 @@ test('@approach-method continuous sections preserve question and route', async (
   const answerBox = page.getByRole('region', { name: 'Answer to the study question', exact: true });
   const methodsBox = page.getByRole('region', { name: 'Reasoning and methods', exact: true });
   expect((await answerBox.boundingBox())!.y).toBeLessThan((await methodsBox.boundingBox())!.y);
-  await page.getByRole('button', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
   await expect(page.getByLabel('Findings case', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add method step', exact: true })).toHaveCount(0);
@@ -439,7 +541,7 @@ test('@approach-method synthesis pins its earlier case-answer basis', async ({
   await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   const study = page.getByRole('region', { name: 'Answer to the study question', exact: true });
   await expect(study).toContainText('The study question remains open.');
-  await page.getByRole('button', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('button', { name: 'Cases', exact: true }).click();
   const nominal = page.getByRole('article', { name: 'Nominal range', exact: true });
   await nominal.locator('summary').first().click();
   await expect(nominal).toContainText('The comparison needs an additional measurement.');
@@ -505,7 +607,7 @@ test('@approach-method answer read failures stay distinct from unassessed', asyn
 });
 
 async function casesTab(page:Page){
-  await page.getByRole('heading',{name:'Cases and their answers',exact:true}).click();
+  await page.getByRole('heading', { name: 'Cases', exact: true }).click();
   if (await page.locator('.approach-usage').count())
     await expect(page.getByText('Loading usage…', { exact: true })).toHaveCount(0);
   for (const summary of await page.locator('.approach-case-card>details:not([open])>summary').all())
@@ -531,7 +633,10 @@ async function fillCaseConfiguration(page:Page,name:string,value='2'){
 async function saveCaseConfiguration(page:Page){
   const response=page.waitForResponse(r=>r.request().method()==='POST'&&/\/configurations$/.test(r.url()));
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  const saved=await response;expect(saved.status()).toBe(201);await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();return (await saved.json()).data;
+  const saved = await response;
+  expect(saved.status()).toBe(201);
+  await expect(page.getByText('Saved version · read-only', { exact: true })).toBeVisible();
+  return (await saved.json()).data;
 }
 
 test('@approach-configuration two cases save independent inputs criteria pins and immutable interpretation',async({page,browser,baseURL})=>{
@@ -548,35 +653,124 @@ test('@approach-configuration two cases save independent inputs criteria pins an
   expect(saved[0].configuration.configuration_revision_id).not.toBe(saved[1].configuration.configuration_revision_id);
   await expect(page.getByRole('region',{name:'Approach usage',exact:true})).toContainText('Nominal range configuration');await expect(page.getByRole('region',{name:'Approach usage',exact:true})).toContainText('Upper operating range configuration');
   await page.getByLabel('Findings case',{exact:true}).selectOption(data.saved.version.content.cases[1].case_id);await expect(page.getByRole('region',{name:'Approach usage',exact:true})).not.toContainText('Nominal range configuration');
-  await page.getByRole('button',{name:'View configuration',exact:true}).click();await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Return to modeling approach',exact:true}).click();
-  await page.getByRole('button',{name:'Edit approach',exact:true}).click();await expect(page.getByRole('button',{name:'Leave editing',exact:true})).toBeVisible();await writeQuestion(page,'A later interpretation that must not rewrite configurations');await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'View configuration', exact: true }).click();
+  await expect(page.getByText('Saved version · read-only', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Return to modeling approach', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Leave editing', exact: true })).toBeVisible();
+  await writeQuestion(page, 'A later interpretation that must not rewrite configurations');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   for(const record of saved)expect((await(await page.request.get(`/api/1/studies/${data.sid}/configurations/${record.configuration.configuration_revision_id}`)).json()).data).toEqual(record);
   await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await expect(page.getByRole('region',{name:'Approach usage',exact:true})).toContainText('Nominal range configuration');await readingShot(page,'approach-configuration-usage-light');await page.evaluate(()=>document.documentElement.dataset.theme='dark');await readingShot(page,'approach-configuration-usage-dark');
 });
 
 test('@approach-configuration exact pin change remove and copy preserve assumptions and context',async({page,browser,baseURL})=>{
-  const data=await seededConditions(page,browser,baseURL,{cases:true});await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Pin choices');
+  const data = await seededConditions(page, browser, baseURL, { cases: true });
+  await page
+    .getByLabel('Approach version', { exact: true })
+    .selectOption(data.saved.version.approach_version_id);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Pin choices');
   await page.getByRole('button',{name:'Change modeling approach',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Choose modeling approach',exact:true});await dialog.getByLabel('Intended case',{exact:true}).selectOption(data.saved.version.content.cases[1].case_id);await dialog.getByRole('button',{name:'Use selected approach',exact:true}).click();
   const original=await saveCaseConfiguration(page);expect(original.configuration.approach_binding.case_id).toBe(data.saved.version.content.cases[1].case_id);
   await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();await page.getByLabel('Configuration name',{exact:true}).fill('Unlinked independent copy');await page.getByRole('button',{name:'Remove approach link',exact:true}).click();const copy=await saveCaseConfiguration(page);expect(copy.configuration.schema_version).toBe('4');expect(copy.configuration.approach_binding).toBeNull();expect(copy.approach_closure).toBeNull();expect(copy.configuration.assumptions).toEqual(original.configuration.assumptions);expect(copy.configuration.context_snapshot).toEqual(original.configuration.context_snapshot);
-  expect((await(await page.request.get(`/api/1/studies/${data.sid}/configurations/${original.configuration.configuration_revision_id}`)).json()).data).toEqual(original);
+  expect((await(await page.request.get(`/api/1/studies/${data.sid}/configurations/` +
+          original.configuration.configuration_revision_id)).json()).data).toEqual(original);
 });
 
 test('@approach-configuration unapplied pin choice is protected and cancellation clears its guard',async({page,browser,baseURL})=>{
-  const data=await seededConditions(page,browser,baseURL,{cases:true});await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await expect(page.getByRole('region',{name:'Linked modeling approach',exact:true})).toContainText('Approach version 1');await page.getByRole('button',{name:'Change modeling approach',exact:true}).click();const pin=page.getByRole('dialog',{name:'Choose modeling approach',exact:true});await pin.getByLabel('Intended case',{exact:true}).selectOption(data.saved.version.content.cases[1].case_id);
+  const data = await seededConditions(page, browser, baseURL, { cases: true });
+  await page
+    .getByLabel('Approach version', { exact: true })
+    .selectOption(data.saved.version.approach_version_id);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await expect(
+    page.getByRole('region', { name: 'Linked modeling approach', exact: true }),
+  ).toContainText('Approach version 1');
+  await page.getByRole('button', { name: 'Change modeling approach', exact: true }).click();
+  const pin = page.getByRole('dialog', { name: 'Choose modeling approach', exact: true });
+  await pin
+    .getByLabel('Intended case', { exact: true })
+    .selectOption(data.saved.version.content.cases[1].case_id);
   await page.evaluate(sid=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'overview'}).toString();},data.sid);const guard=page.getByRole('dialog',{name:'Unsaved changes',exact:true});await expect(guard).toBeVisible();await guard.getByRole('button',{name:'Keep editing',exact:true}).click();await expect(pin.getByLabel('Intended case',{exact:true})).toHaveValue(data.saved.version.content.cases[1].case_id);await pin.getByRole('button',{name:'Keep current choice',exact:true}).click();await expect(page.getByRole('region',{name:'Configuration context',exact:true})).toContainText('Nominal range');await page.getByRole('button',{name:'Return to modeling approach',exact:true}).click();await expect(guard).toHaveCount(0);await expect(page.getByLabel('Approach version',{exact:true})).toHaveValue(data.saved.version.approach_version_id);
 });
 
 test('@approach-configuration usage pagination and incompatible approach choice are explicit',async({page,browser,baseURL})=>{
-  const data=await seededConditions(page,browser,baseURL);await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'First usage');const source=await saveCaseConfiguration(page);
+  const data = await seededConditions(page, browser, baseURL);
+  await page
+    .getByLabel('Approach version', { exact: true })
+    .selectOption(data.saved.version.approach_version_id);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'First usage');
+  const source = await saveCaseConfiguration(page);
   const helperContext=await browser.newContext({baseURL}),helper=await helperContext.newPage();await helper.goto('/ui/');
   const incompatible=await helper.evaluate(async({sid,source})=>{const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');const original=source.configuration;for(let i=0;i<10;i++){const configuration={schema_version:'4',study_id:sid,model_id:original.model_id,model_revision_id:original.model_revision_id,name:'Usage sample '+i,inputs:original.inputs.map((v:any)=>({kind:'literal',target:v.target,value:v.value,units:v.units,provenance:v.provenance})),criteria:[],numerical:original.numerical,context_source:{kind:'current_study',expected_study_revision:(await api.study(sid)).revision},notes:[],derivation:null,assumptions:[],general_context_evidence_version_ids:[],approach_selection:{approach_version_id:original.approach_binding.approach_version_id,case_id:original.approach_binding.case_id}};const p=await api.previewConfiguration4(configuration);await api.commitConfiguration4({command_id:crypto.randomUUID(),expected_revision:null,configuration_id:null,configuration,expected_preview_digest:p.candidate_digest});}await c.open(sid);c.edit({...c.getSnapshot().local,question:'Proposed alternative without model correspondence',model_bindings:[],steps:[],cases:[],assumptions:[]});if(!await c.save()||!await c.saveVersion())throw new Error(c.getSnapshot().error);return c.getSnapshot().saved;},{sid:data.sid,source});await helperContext.close();
   await page.getByRole('button',{name:'Return to modeling approach',exact:true}).click();const usage=page.getByRole('region',{name:'Approach usage',exact:true});await expect(usage.getByRole('button',{name:'View configuration',exact:true})).toHaveCount(10);await usage.getByRole('button',{name:'Load more usage',exact:true}).click();await expect(usage.getByRole('button',{name:'View configuration',exact:true})).toHaveCount(11);await expect(usage.getByRole('button',{name:'Load more usage',exact:true})).toHaveCount(0);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await page.getByRole('button',{name:'Change modeling approach',exact:true}).click();const pin=page.getByRole('dialog',{name:'Choose modeling approach',exact:true});await pin.getByLabel('Saved approach version',{exact:true}).selectOption(incompatible.version.approach_version_id);await expect(pin).toContainText('does not reference the configuration’s model version');await expect(pin.getByRole('button',{name:'Use selected approach',exact:true})).toBeDisabled();await pin.getByRole('button',{name:'Keep current choice',exact:true}).click();await expect(page.getByRole('region',{name:'Configuration context',exact:true})).toContainText('Approach version 1');
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Change modeling approach', exact: true }).click();
+  const pin = page.getByRole('dialog', { name: 'Choose modeling approach', exact: true });
+  await pin
+    .getByLabel('Saved approach version', { exact: true })
+    .selectOption(incompatible.version.approach_version_id);
+  await expect(pin).toContainText('does not reference the configuration’s model version');
+  await expect(
+    pin.getByRole('button', { name: 'Use selected approach', exact: true }),
+  ).toBeDisabled();
+  await pin.getByRole('button', { name: 'Keep current choice', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Configuration context', exact: true }),
+  ).toContainText('Approach version 1');
 });
 
 test('@approach-configuration failed run usage and modified seed keep change remove exact interpretation',async({page,browser,baseURL})=>{
-  const data=await seededConditions(page,browser,baseURL,{cases:true,failure:true});await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Failed screening');const source=await saveCaseConfiguration(page);
+  const data = await seededConditions(page, browser, baseURL, { cases: true, failure: true });
+  await page
+    .getByLabel('Approach version', { exact: true })
+    .selectOption(data.saved.version.approach_version_id);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Failed screening');
+  const source = await saveCaseConfiguration(page);
   const helperContext=await browser.newContext({baseURL}),helper=await helperContext.newPage();await helper.goto('/ui/');
   const run=await helper.evaluate(async({sid,id,key})=>{const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const run=await api.submitRun(sid,id);const response=await fetch('/fixture/retain-failed-outcome',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,study_id:sid,run_id:run.run_id})});if(!response.ok)throw new Error(await response.text());return api.run(sid,run.run_id);},{sid:data.sid,id:source.configuration.configuration_revision_id,key:data.fixture.key});await helperContext.close();expect(run.history.history_schema_version).toBe('6');expect(run.history.approach_closure.schema_version).toBe('3');expect(run.history.results.execution.state).toBe('failed');
   await page.getByRole('button',{name:'Return to modeling approach',exact:true}).click();const usage=page.getByRole('region',{name:'Approach usage',exact:true});await expect(usage.getByLabel('Run outcomes',{exact:true})).toContainText('None defined');await expect(usage.getByLabel('Run outcomes',{exact:true})).not.toContainText('Completed');await readingShot(page,'approach-failed-findings');
@@ -593,14 +787,99 @@ test('@approach-configuration failed run usage and modified seed keep change rem
 test('@approach-configuration genuine 200 percent context and pin picker keyboard theme review',async({baseURL,browser})=>{
   test.setTimeout(120000);const root=process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,extension=join(root,'artifacts/configuration-zoom-extension');await mkdir(extension);await writeFile(join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'Configuration zoom verification',version:'1.0',permissions:['tabs'],background:{service_worker:'worker.js'}}));await writeFile(join(extension,'worker.js'),'chrome.runtime.onInstalled.addListener(()=>{});');
   const context=await chromium.launchPersistentContext(join(root,'artifacts/configuration-zoom-profile'),{executablePath:chromiumExecutable(),headless:true,viewport:null,baseURL,args:['--disable-extensions-except='+extension,'--load-extension='+extension,'--window-size=1440,1000','--no-first-run']});const worker=context.serviceWorkers()[0]??await context.waitForEvent('serviceworker'),geometry:any[]=[];
-  try{const page=context.pages()[0]??await context.newPage(),data=await seededConditions(page,browser,baseURL,{cases:true});await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Nominal operating range');await expect(page.getByRole('region',{name:'Configuration context',exact:true})).toContainText('Approach version 1');
-    const cdp=await context.newCDPSession(page),info=await cdp.send('Browser.getWindowForTarget');await cdp.send('Browser.setWindowBounds',{windowId:info.windowId,bounds:{width:1440,height:1087}});const dimensions=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));await cdp.send('Browser.setWindowBounds',{windowId:info.windowId,bounds:{width:1440+(1440-dimensions.width),height:1087+(1000-dimensions.height)}});
-    for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'approach-configuration-context-'+theme);}
-    const tab=await worker.evaluate(async(url)=>{const tabs=await(globalThis as any).chrome.tabs.query({});return tabs.find((t:any)=>t.url.startsWith(url)).id;},baseURL!);await worker.evaluate(id=>(globalThis as any).chrome.tabs.setZoom(id,2),tab);expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tab)).toBe(2);expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);
-    async function capture(name:string){await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));const bounds=await page.evaluate(()=>({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio}));expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width+1);geometry.push({name,...bounds});const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});await writeFile(join(root,'evidence/'+name+'.png'),Buffer.from(shot.data,'base64'));}
-    for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await page.getByRole('region',{name:'Configuration context',exact:true}).evaluate(e=>e.scrollIntoView({block:'start'}));await capture('approach-configuration-context-200-'+theme);const change=page.getByRole('button',{name:'Change modeling approach',exact:true});await change.focus();await change.press('Enter');const pin=page.getByRole('dialog',{name:'Choose modeling approach',exact:true});await expect(pin.getByRole('button',{name:'Use selected approach',exact:true})).toBeEnabled();await pin.getByLabel('Intended case',{exact:true}).focus();await expect(pin.getByLabel('Intended case',{exact:true})).toBeFocused();await capture('approach-configuration-picker-200-'+theme);await page.keyboard.press('Escape');await expect(change).toBeFocused();}
-    await writeFile(join(root,'evidence/approach-configuration-zoom-geometry.json'),JSON.stringify({zoom:2,viewport:page.viewportSize(),geometry},null,2));
-  }finally{await context.close();}
+  try {
+    const page = context.pages()[0] ?? (await context.newPage()),
+      data = await seededConditions(page, browser, baseURL, { cases: true });
+    await page
+      .getByLabel('Approach version', { exact: true })
+      .selectOption(data.saved.version.approach_version_id);
+    await casesTab(page);
+    await page
+      .locator('.case-list-row')
+      .filter({ hasText: 'Nominal range' })
+      .getByRole('button', { name: 'Open case', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+      .click();
+    await fillCaseConfiguration(page, 'Nominal operating range');
+    await expect(
+      page.getByRole('region', { name: 'Configuration context', exact: true }),
+    ).toContainText('Approach version 1');
+    const cdp = await context.newCDPSession(page),
+      info = await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setWindowBounds', {
+      windowId: info.windowId,
+      bounds: { width: 1440, height: 1087 },
+    });
+    const dimensions = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    await cdp.send('Browser.setWindowBounds', {
+      windowId: info.windowId,
+      bounds: {
+        width: 1440 + (1440 - dimensions.width),
+        height: 1087 + (1000 - dimensions.height),
+      },
+    });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+      await readingShot(page, 'approach-configuration-context-' + theme);
+    }
+    const tab = await worker.evaluate(async (url) => {
+      const tabs = await (globalThis as any).chrome.tabs.query({});
+      return tabs.find((t: any) => t.url.startsWith(url)).id;
+    }, baseURL!);
+    await worker.evaluate((id) => (globalThis as any).chrome.tabs.setZoom(id, 2), tab);
+    expect(await worker.evaluate((id) => (globalThis as any).chrome.tabs.getZoom(id), tab)).toBe(2);
+    expect(page.viewportSize()).toBeNull();
+    await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
+    async function capture(name: string) {
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      const bounds = await page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        dpr: devicePixelRatio,
+      }));
+      expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width + 1);
+      geometry.push({ name, ...bounds });
+      const shot = await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: false,
+      });
+      await writeFile(join(root, 'evidence/' + name + '.png'), Buffer.from(shot.data, 'base64'));
+    }
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+      await page
+        .getByRole('region', { name: 'Configuration context', exact: true })
+        .evaluate((e) => e.scrollIntoView({ block: 'start' }));
+      await capture('approach-configuration-context-200-' + theme);
+      const change = page.getByRole('button', { name: 'Change modeling approach', exact: true });
+      await change.focus();
+      await change.press('Enter');
+      const pin = page.getByRole('dialog', { name: 'Choose modeling approach', exact: true });
+      await expect(
+        pin.getByRole('button', { name: 'Use selected approach', exact: true }),
+      ).toBeEnabled();
+      await pin.getByLabel('Intended case', { exact: true }).focus();
+      await expect(pin.getByLabel('Intended case', { exact: true })).toBeFocused();
+      await capture('approach-configuration-picker-200-' + theme);
+      await page.keyboard.press('Escape');
+      await expect(change).toBeFocused();
+    }
+    await writeFile(
+      join(root, 'evidence/approach-configuration-zoom-geometry.json'),
+      JSON.stringify({ zoom: 2, viewport: page.viewportSize(), geometry }, null, 2),
+    );
+  } finally {
+    await context.close();
+  }
 });
 
 test('@approach-assumptions contextual evidence and exact model assumptions retain ownership',async({page,browser,baseURL})=>{
@@ -610,7 +889,8 @@ test('@approach-assumptions contextual evidence and exact model assumptions reta
   await step.getByRole('button',{name:'View evidence',exact:true}).click();const detail=page.getByRole('dialog',{name:/Evidence/}).last();await expect(detail).toContainText(data.evidence.content);await detail.getByRole('button',{name:'Done',exact:true}).click();
   await step.getByRole('button',{name:'Link assumption to Predict the measured response',exact:true}).click();const picker=page.getByRole('dialog',{name:'Link assumption',exact:true});await picker.getByRole('button',{name:/A scalar approximation is appropriate/}).click();await expect(step).toContainText('version '+data.model.model_revision_id.slice(0,8)+' · Model');await expect(step).not.toContainText('(read-only)');
   await step.getByRole('button',{name:'Add evidence to Predict the measured response rationale',exact:true}).click();const evidence=page.getByRole('dialog',{name:'Add evidence to Predict the measured response rationale',exact:true});await evidence.getByRole('button',{name:/Choose Screening measurements/}).click();await evidence.getByLabel('Relationship',{exact:true}).selectOption('challenges');await evidence.getByRole('button',{name:'Attach evidence',exact:true}).click();await step.getByRole('button',{name:'Edit citation',exact:true}).click();const citation=page.getByRole('dialog',{name:'Edit citation',exact:true});await citation.getByLabel('Evidence locator',{exact:true}).fill('Table 3 · Residuals');await citation.getByRole('button',{name:'Apply citation',exact:true}).click();
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   const current=(await(await page.request.get(`/api/1/studies/${data.sid}/approach`)).json()).data.draft.content;expect(current.steps[0].assumption_refs[1]).toMatchObject({kind:'model',assumption_id:data.model.assumptions[0].assumption_id});expect(current.steps[0].evidence_links[0]).toEqual({evidence_version_id:data.evidence.evidence_version_id,relation:'challenges',locator:'Table 3 · Residuals'});
   const model=(await(await page.request.get(`/api/1/studies/${data.sid}/models/${data.model.model_id}`)).json()).data;expect(model.assumptions).toEqual(data.model.assumptions);
   await readingShot(page,'approach-assumptions-light');await page.evaluate(()=>document.documentElement.dataset.theme='dark');await readingShot(page,'approach-assumptions-dark');
@@ -630,7 +910,16 @@ for(const uncertain of ['', 'acknowledgement', 'request'])test(`@approach-assump
   const revisions=(await(await page.request.get(`/api/1/studies/${sid}/models/${mid}/revisions`)).json()).data;const committed=revisions.find((r:any)=>r.model_revision_id!==data.model.model_revision_id);expect(committed).toBeTruthy();
   await page.getByRole('button',{name:'Return to modeling approach',exact:true}).click();if(!await page.getByRole('button',{name:'Leave editing',exact:true}).isVisible())await page.getByRole('button',{name:'Edit approach',exact:true}).click();await page.getByRole('button',{name:'See more details',exact:true}).click();await page.getByRole('button',{name:'Implement condition: '+data.proposal.statement,exact:true}).click();handoff=page.getByRole('dialog',{name:'Implement proposed condition',exact:true});await handoff.getByLabel('Condition target model',{exact:true}).selectOption(mid);await handoff.getByLabel('Condition committed model version',{exact:true}).selectOption(committed.model_revision_id);await handoff.getByLabel('Committed model assumption',{exact:true}).selectOption(target.assumption_id);await handoff.getByLabel('Condition method step',{exact:true}).selectOption(data.saved.version.content.steps[0].step_id);await handoff.getByRole('button',{name:'Replace with model assumption',exact:true}).click();await page.getByRole('dialog',{name:'Study details',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
   if(!uncertain){const other=await browser.newContext({baseURL}),helper=await other.newPage();await helper.goto('/ui/');await helper.evaluate(async sid=>{const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const d=(await api.approach(sid)).draft,body={schema_version:d.content.schema_version,expected_revision:d.revision,content:{...d.content,scope:'Another engineer updated the scientific scope.'}};const p=await api.previewApproach(sid,body);await api.saveApproachDraft(sid,{...body,command_id:crypto.randomUUID(),expected_preview_digest:p.preview_digest});},sid);await other.close();await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review latest draft',exact:true}).click();await expect(page.getByLabel('Review latest draft',{exact:true})).toContainText('Another engineer updated the scientific scope.');await page.getByRole('button',{name:'Reapply my changes',exact:true}).click();}
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();await expect(page.getByLabel('Approach version',{exact:true})).toContainText('v2 (read-only)');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save approach version', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Save approach version', exact: true })
+    .getByRole('button', { name: 'Save version', exact: true })
+    .click();
+  await expect(page.getByLabel('Approach version', { exact: true })).toContainText(
+    'v2 (read-only)',
+  );
   const v=(await(await page.request.get(`/api/1/studies/${sid}/approach/versions`)).json()).data.items[0];const saved=(await(await page.request.get(`/api/1/studies/${sid}/approach/versions/${v.approach_version_id}`)).json()).data;expect(saved.version.content.assumptions).toEqual([]);expect(saved.version.content.steps[0].assumption_refs[0]).toMatchObject({kind:'model',assumption_id:target.assumption_id,origin:{approach_version_id:data.saved.version.approach_version_id,assumption_id:data.proposal.assumption_id,digest:data.saved.version.digest}});
   await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);await expect(page.getByLabel('The modeling approach')).toContainText('Proposed model condition');await expect(page.getByLabel('The modeling approach').getByText('Proposed model condition · Approach-owned',{exact:true})).toHaveCount(0);expect((await(await page.request.get(`/api/1/studies/${sid}/approach/versions/${data.saved.version.approach_version_id}`)).json()).data).toEqual(data.saved);
 });
@@ -639,18 +928,82 @@ test('@approach-assumptions prior configuration assumption reference stays exact
   const data=await seededConditions(page,browser,baseURL);const context=await browser.newContext({baseURL}),helper=await context.newPage();await helper.goto('/ui/');
   const original=await helper.evaluate(async sid=>{const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const test=await(await fetch('/fixture/failure-package')).json(),m=test.package.revisions[0],c=test.configuration;await api.mutate(`/studies/${sid}/model-imports`,{command_id:crypto.randomUUID(),expected_revision:(await api.study(sid)).revision,package:test.package},'model',sid);const study=await api.study(sid);const configuration={schema_version:'3',study_id:sid,model_id:m.model_id,model_revision_id:m.model_revision_id,name:'Prior measurement comparison',inputs:c.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:i.provenance})),criteria:[],numerical:c.numerical,context_source:{kind:'current_study',expected_study_revision:study.revision},notes:['Earlier interpretation'],derivation:null,assumptions:[{assumption_id:crypto.randomUUID(),statement:'The earlier measurement uses the same operating range.',evidence_links:[]}],general_context_evidence_version_ids:[]};const preview=await api.previewConfiguration3(configuration);return api.commitConfiguration3({command_id:crypto.randomUUID(),expected_revision:null,configuration_id:null,configuration,expected_preview_digest:preview.candidate_digest});},data.sid);await context.close();
   await stepTab(page,'Assumptions & evidence');await page.getByRole('button',{name:'Link assumption to Predict the measured response',exact:true}).click();await page.getByRole('dialog',{name:'Link assumption',exact:true}).getByRole('button',{name:/Configuration Prior measurement comparison/}).click();await expect(page.getByRole('region',{name:'Predict the measured response assumptions and evidence',exact:true})).toContainText('Prior measurement comparison');
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();const draft=(await(await page.request.get(`/api/1/studies/${data.sid}/approach`)).json()).data.draft;expect(draft.content.steps[0].assumption_refs[1]).toEqual({kind:'configuration',configuration_revision_id:original.configuration.configuration_revision_id,assumption_id:original.configuration.assumptions[0].assumption_id});expect((await(await page.request.get(`/api/1/studies/${data.sid}/configurations/${original.configuration.configuration_revision_id}`)).json()).data).toEqual(original);
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+  const draft = (await (await page.request.get(`/api/1/studies/${data.sid}/approach`)).json()).data
+    .draft;
+  expect(draft.content.steps[0].assumption_refs[1]).toEqual({
+    kind: 'configuration',
+    configuration_revision_id: original.configuration.configuration_revision_id,
+    assumption_id: original.configuration.assumptions[0].assumption_id,
+  });
+  expect(
+    (
+      await (
+        await page.request.get(
+          `/api/1/studies/${data.sid}/configurations/` +
+          original.configuration.configuration_revision_id,
+        )
+      ).json()
+    ).data,
+  ).toEqual(original);
   for(const close of ['Cancel','Escape']){if(!await page.getByRole('button',{name:'Leave editing',exact:true}).isVisible())await page.getByRole('button',{name:'Edit approach',exact:true}).click();await expect(page.getByRole('button',{name:'Leave editing',exact:true})).toBeVisible();await page.getByRole('button',{name:'Approach actions',exact:true}).click();await page.getByRole('button',{name:'Earlier work',exact:true}).click();await expect(page.getByRole('dialog',{name:'Earlier work',exact:true})).toContainText('Add earlier work');await page.getByRole('button',{name:'Add earlier work',exact:true}).click();const basis=page.getByRole('dialog',{name:'Earlier work',exact:true});await basis.getByLabel('Earlier record',{exact:true}).selectOption('configuration/'+original.configuration.configuration_revision_id);await basis.getByLabel('Basis reason',{exact:true}).fill('A reason that will be cancelled.');if(close==='Cancel')await basis.getByRole('button',{name:'Cancel',exact:true}).click();else await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Earlier work',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('dialog',{name:'Approach actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('button',{name:'Back to overview',exact:true}).click();await expect(page.getByRole('button',{name:'View modeling approach',exact:true})).toBeVisible();await expect(page.getByRole('dialog',{name:'Unsaved changes',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'View modeling approach',exact:true}).click();}
 
 });
 
 for(const form of ['assumption','citation','evidence','question','step','case'])test(`@approach-assumptions unapplied ${form} edits survive hash navigation`,async({page,browser,baseURL})=>{
   const data=await seededConditions(page,browser,baseURL);let field:any;
-  if(form==='assumption'){await page.getByRole('button',{name:'See more details',exact:true}).click();await page.getByRole('button',{name:'Edit assumption: '+data.proposal.statement,exact:true}).click();field=page.getByRole('dialog',{name:'Approach assumption',exact:true}).getByLabel('Assumption statement',{exact:true});}
-  else if(form==='question'){await page.getByRole('button',{name:'Edit question and scope',exact:true}).click();field=page.getByRole('dialog',{name:'Edit question and scope',exact:true}).getByLabel('Engineering question',{exact:true});}
-  else if(form==='step'){await page.getByRole('button',{name:'Edit step 1',exact:true}).click();field=page.getByRole('dialog',{name:'Method step',exact:true}).getByLabel('Purpose',{exact:true});}
-  else if(form==='case'){await casesTab(page);await page.getByRole('button',{name:'Edit case 1',exact:true}).click();field=page.getByRole('dialog',{name:'Intended case',exact:true}).getByLabel('Case question',{exact:true});}
-  else{await stepTab(page,'Assumptions & evidence');await page.getByRole('button',{name:'Add evidence to Predict the measured response rationale',exact:true}).click();const picker=page.getByRole('dialog',{name:'Add evidence to Predict the measured response rationale',exact:true});if(form==='evidence'){await picker.getByRole('button',{name:'Create new',exact:true}).click();field=picker.getByLabel('Title',{exact:true});}else{await picker.getByRole('button',{name:/Choose Screening measurements/}).click();await picker.getByLabel('Relationship',{exact:true}).selectOption('context');await picker.getByRole('button',{name:'Attach evidence',exact:true}).click();await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit citation',exact:true}).click();field=page.getByRole('dialog',{name:'Edit citation',exact:true}).getByLabel('Evidence locator',{exact:true});}}
+  if (form === 'assumption') {
+    await page.getByRole('button', { name: 'See more details', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Edit assumption: ' + data.proposal.statement, exact: true })
+      .click();
+    field = page
+      .getByRole('dialog', { name: 'Approach assumption', exact: true })
+      .getByLabel('Assumption statement', { exact: true });
+  } else if (form === 'question') {
+    await page.getByRole('button', { name: 'Edit question and scope', exact: true }).click();
+    field = page
+      .getByRole('dialog', { name: 'Edit question and scope', exact: true })
+      .getByLabel('Engineering question', { exact: true });
+  } else if (form === 'step') {
+    await page.getByRole('button', { name: 'Edit step 1', exact: true }).click();
+    field = page
+      .getByRole('dialog', { name: 'Method step', exact: true })
+      .getByLabel('Purpose', { exact: true });
+  } else if (form === 'case') {
+    await casesTab(page);
+    await page.getByRole('button', { name: 'Edit case 1', exact: true }).click();
+    field = page
+      .getByRole('dialog', { name: 'Intended case', exact: true })
+      .getByLabel('Case question', { exact: true });
+  } else {
+    await stepTab(page, 'Assumptions & evidence');
+    await page
+      .getByRole('button', {
+        name: 'Add evidence to Predict the measured response rationale',
+        exact: true,
+      })
+      .click();
+    const picker = page.getByRole('dialog', {
+      name: 'Add evidence to Predict the measured response rationale',
+      exact: true,
+    });
+    if (form === 'evidence') {
+      await picker.getByRole('button', { name: 'Create new', exact: true }).click();
+      field = picker.getByLabel('Title', { exact: true });
+    } else {
+      await picker.getByRole('button', { name: /Choose Screening measurements/ }).click();
+      await picker.getByLabel('Relationship', { exact: true }).selectOption('context');
+      await picker.getByRole('button', { name: 'Attach evidence', exact: true }).click();
+      await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+      await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Edit citation', exact: true }).click();
+      field = page
+        .getByRole('dialog', { name: 'Edit citation', exact: true })
+        .getByLabel('Evidence locator', { exact: true });
+    }
+  }
   await field.fill('Preserve these unapplied local changes.');const exact=page.url();await page.evaluate(()=>{location.hash='';});const guard=page.getByRole('dialog',{name:'Unsaved changes',exact:true});await expect(guard).toBeVisible();await expect(guard.getByRole('button',{name:'Save changes',exact:true})).toBeDisabled();await guard.getByRole('button',{name:'Keep editing',exact:true}).click();await expect(field).toHaveValue('Preserve these unapplied local changes.');await expect(page).toHaveURL(exact);
   await page.evaluate(()=>{location.hash='';});await guard.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();
 });
@@ -674,7 +1027,7 @@ test('@approach-method proposed steps and cases persist through actual draft and
   await dialog.getByLabel('Intended inputs',{exact:true}).fill('Explicit operating condition');
   await dialog.getByLabel('Intended outputs',{exact:true}).fill('Predicted response');
   await dialog.getByRole('button',{name:'Apply step',exact:true}).click();
-  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases', exact: true }).click();
   await page.getByRole('button', { name: 'Add intended case', exact: true }).click();
   const caseDialog=page.getByRole('dialog',{name:'Intended case',exact:true});await caseDialog.getByLabel('Case title',{exact:true}).fill('Nominal conditions');await caseDialog.getByLabel('Case question',{exact:true}).fill('What is the nominal response?');await caseDialog.getByRole('button',{name:'Apply case',exact:true}).click();
   await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
@@ -685,7 +1038,7 @@ test('@approach-method proposed steps and cases persist through actual draft and
   await page.getByRole('button',{name:'Step 1 actions',exact:true}).click();await page.getByRole('button',{name:'Remove step 1',exact:true}).click();await page.getByRole('button',{name:'Remove this step',exact:true}).click();await page.getByRole('dialog',{name:'Remove method step',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('dialog',{name:'Step 1 actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Another step depends');
   await page.getByRole('button',{name:'Step 2 actions',exact:true}).click();await page.getByRole('button',{name:'Move step 2 up',exact:true}).click();await page.getByRole('dialog',{name:'Step 1 actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('button',{name:'Select step 1',exact:true})).toContainText('Interpret the response');
   await page.getByRole('button',{name:'Step 1 actions',exact:true}).click();await page.getByRole('button',{name:'Remove step 1',exact:true}).click();await page.getByRole('button',{name:'Remove this step',exact:true}).click();await expect(page.getByRole('button',{name:'Select step 2',exact:true})).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases', exact: true }).click();
   await page.getByRole('button', { name: 'Add intended case', exact: true }).click();
   await caseDialog.getByLabel('Case title', { exact: true }).fill('Alternative conditions');
   await caseDialog.getByRole('button', { name: 'Apply case', exact: true }).click();
@@ -706,11 +1059,12 @@ test('@approach-method proposed steps and cases persist through actual draft and
   await expect(
     page.getByRole('heading', { name: 'Alternative conditions', exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
   await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Select step 1', exact: true })).toBeVisible();
-  await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
+  await page.getByRole('heading', { name: 'Cases', exact: true }).click();
   await expect(
     page
       .getByRole('region', { name: 'Approach usage', exact: true })
@@ -763,7 +1117,8 @@ test('@approach-method exact repeated-instance references and parallel connectio
       .filter({ hasText: "outputs['u'] = inputs['x'] + inputs['z']" }),
   ).toBeVisible();
   await open.getByRole('button', { name: 'Done', exact: true }).click();
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   // Port and connection references resolve to their exact endpoints only: one input, one output.
   await selectMethod(page,1);
   await expect(detail).toContainText('Implemented in Model version '+model.model_revision_id.slice(0,8)+' · 1 input · 1 output');
@@ -796,13 +1151,39 @@ test('@approach-method prior configuration and failed run rationale are exact re
   for(const [kind,id] of [['configuration',data.configuration.configuration_revision_id],['run',data.run.run_id]]){
     await page.getByRole('button',{name:'Add earlier work',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Earlier work',exact:true});await dialog.getByLabel('Earlier record',{exact:true}).selectOption(kind+'/'+id);await dialog.getByLabel('Basis relation',{exact:true}).selectOption('challenges');await dialog.getByLabel('Basis reason',{exact:true}).fill(kind==='run'?'The failed screening motivated a revised method.':'These explicit inputs define the earlier scientific comparison.');await dialog.getByRole('button',{name:'Apply basis',exact:true}).click();
   }
-  await closeEarlier(page);await page.getByRole('button',{name:'Review approach changes',exact:true}).click();await expect(page.getByRole('heading',{name:'Approach changes',exact:true})).toBeVisible();await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await closeEarlier(page);
+  await page.getByRole('button', { name: 'Review approach changes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Approach changes', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Back to overview',exact:true}).click();await page.getByRole('button',{name:'View modeling approach',exact:true}).click();
   await page.getByRole('button',{name:'Edit approach',exact:true}).click();await expect(page.getByRole('button',{name:'Save draft',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Load linked records',exact:true}).click();await openEarlier(page);await page.getByRole('button',{name:'View earlier work',exact:true}).nth(1).click();const cleanRecord=page.getByRole('dialog',{name:'Earlier work record',exact:true});await expect(cleanRecord).toContainText('Earlier screening context');await cleanRecord.getByRole('button',{name:'Done',exact:true}).click();
-  await page.getByRole('button',{name:'Edit earlier work 2',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Earlier work',exact:true});await dialog.getByLabel('Basis reason',{exact:true}).fill('The recorded failure challenges the original interpretation.');await dialog.getByRole('button',{name:'Apply basis',exact:true}).click();await closeEarlier(page);await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Edit earlier work 2', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Earlier work', exact: true });
+  await dialog
+    .getByLabel('Basis reason', { exact: true })
+    .fill('The recorded failure challenges the original interpretation.');
+  await dialog.getByRole('button', { name: 'Apply basis', exact: true }).click();
+  await closeEarlier(page);
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
   await openEarlier(page);await page.getByRole('button',{name:'View earlier work',exact:true}).nth(1).click();const record=page.getByRole('dialog',{name:'Earlier work record',exact:true});await expect(record).toContainText('Earlier screening');await expect(record).toContainText('Results unavailable');await expect(record).toContainText('Earlier screening context');await readingShot(page,'approach-prior-failure');await record.getByRole('button',{name:'Done',exact:true}).click();
-  await closeEarlier(page);await page.getByRole('button',{name:'Edit approach',exact:true}).click();await openEarlier(page);await page.getByRole('button',{name:'Remove earlier work 1',exact:true}).click();await page.getByRole('dialog',{name:'Remove earlier work',exact:true}).getByRole('button',{name:'Remove this basis',exact:true}).click();await expect(page.getByRole('button',{name:'Remove earlier work 2',exact:true})).toHaveCount(0);await closeEarlier(page);await page.getByRole('button',{name:'Review approach changes',exact:true}).click();await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await closeEarlier(page);
+  await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
+  await openEarlier(page);
+  await page.getByRole('button', { name: 'Remove earlier work 1', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Remove earlier work', exact: true })
+    .getByRole('button', { name: 'Remove this basis', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Remove earlier work 2', exact: true }),
+  ).toHaveCount(0);
+  await closeEarlier(page);
+  await page.getByRole('button', { name: 'Review approach changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   expect((await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft.content.basis_refs).toHaveLength(1);
 });
 
@@ -825,12 +1206,16 @@ for(const dependent of ['case','assumption'])test(`@approach-method protects las
   },{sid,dependent});await context.close();
   await page.reload();await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('button',{name:'Select step 1',exact:true})).toContainText('Implemented method');
   // Edit only after the current draft read has settled (run 08 lost an edit made before it).
-  await page.getByRole('button',{name:'Edit approach',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit step 1',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Method step',exact:true});
+  await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit step 1', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Method step', exact: true });
   await dialog.getByLabel('Purpose',{exact:true}).fill('Keep this unsaved explanation');await dialog.getByRole('button',{name:'Remove reference 1',exact:true}).click();
   await expect(dialog.getByRole('alert')).toContainText(dependent==='case'?'An intended case uses':'references an assumption');
   await expect(dialog.getByRole('button',{name:'Remove reference 1',exact:true})).toBeVisible();await expect(dialog.getByLabel('Purpose',{exact:true})).toHaveValue('Keep this unsaved explanation');
   await dialog.getByRole('button',{name:'Apply step',exact:true}).click();await page.getByRole('button',{name:'Step 1 actions',exact:true}).click();await page.getByRole('button',{name:'Remove step 1',exact:true}).click();const removal=page.getByRole('dialog',{name:'Remove method step',exact:true});await removal.getByRole('button',{name:'Remove this step',exact:true}).click();await removal.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('dialog',{name:'Step 1 actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();await expect(page.getByRole('alert')).toContainText(dependent==='case'?'An intended case uses':'references an assumption');
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   const saved=(await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft.content;
   expect(saved.model_bindings).toEqual(original.model_bindings);expect(saved.cases).toEqual(original.cases);expect(saved.steps.map((s:any)=>s.assumption_refs)).toEqual(original.steps.map((s:any)=>s.assumption_refs));expect(saved.steps[0].purpose).toBe('Keep this unsaved explanation');
 });
@@ -841,7 +1226,7 @@ test('@approach-reading actual Overview entry, question editing, version restore
   expect((await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft).toBeNull();
   await readingShot(page,'approach-draft-light');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();
   await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
   await expect(page.getByLabel('Approach version',{exact:true})).toContainText('v1 (read-only)');
@@ -856,7 +1241,7 @@ test('@approach-reading actual Overview entry, question editing, version restore
   await expect(page.getByLabel('The modeling approach').getByRole('heading',{name:saved.version.content.question,exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Approach actions',exact:true}).click();await page.getByRole('button',{name:'Use this version in draft',exact:true}).click();
   await page.getByRole('dialog',{name:'Use this version in draft',exact:true}).getByRole('button',{name:'Restore draft',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   expect((await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft.content).toEqual(saved.version.content);
   expect((await(await page.request.get(`/api/1/studies/${sid}/approach/versions/${original.approach_version_id}`)).json()).data).toEqual(saved);
   await page.getByRole('button',{name:'Back to overview',exact:true}).click();
@@ -875,7 +1260,7 @@ test('@approach-reading dirty navigation and uncertain draft remain recoverable 
   await page.getByRole('button',{name:'Home',exact:true}).click();
   await expect(page.getByLabel('The modeling approach').getByRole('heading',{name:'Keep these local changes',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Check original command',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await writeQuestion(page,'Discard this proposal');await page.getByRole('button',{name:'Home',exact:true}).click();
   await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open study '+studyName,exact:true}).first().click();await page.getByRole('button',{name:'View modeling approach',exact:true}).click();
@@ -885,13 +1270,14 @@ test('@approach-reading dirty navigation and uncertain draft remain recoverable 
 test('@approach-reading historical retry keeps the exact selected version during an outage',async({page})=>{
   await openProduct(page);await writeQuestion(page,'Original interpretation');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();
   await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
   const select=page.getByLabel('Approach version',{exact:true});await expect(select).toContainText('v1 (read-only)');
   const version=await select.inputValue();
   await page.getByRole('button',{name:'Edit approach',exact:true}).click();await writeQuestion(page,'Today’s changed explanation');
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.route('**/approach/versions/'+version,route=>route.abort(),{times:1});
   await select.selectOption(version);await expect(page.getByRole('button',{name:'Retry this version',exact:true})).toBeVisible();
   expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('approach')).toBe(version);
@@ -904,7 +1290,10 @@ test('@approach-reading historical retry keeps the exact selected version during
 });
 
 test('@approach-reading stale draft compares explanation fields before explicit reapplication',async({page,browser,baseURL})=>{
-  await openProduct(page);await writeQuestion(page,'Initial method');await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await openProduct(page);
+  await writeQuestion(page, 'Initial method');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study');await writeQuestion(page,'My local method');
   const other=await browser.newContext({baseURL});
   try{
@@ -912,7 +1301,10 @@ test('@approach-reading stale draft compares explanation fields before explicit 
     const content=await otherPage.evaluate(async sid=>{const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const draft=(await api.approach(sid)).draft;const content={...draft.content,question:'Another engineer’s method',scope:'A changed scientific scope',limitations:'A new limitation',open_questions:'An unresolved alternative'};const body={schema_version:content.schema_version,expected_revision:draft.revision,content};const preview=await api.previewApproach(sid,body);await api.saveApproachDraft(sid,{...body,command_id:crypto.randomUUID(),expected_preview_digest:preview.preview_digest});return content;},sid);
     await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review latest draft',exact:true}).click();
     const review=page.getByLabel('Review latest draft',{exact:true});await expect(review).toContainText('My local method');await expect(review).toContainText(content.scope);await expect(review).toContainText(content.limitations);await expect(review).toContainText(content.open_questions);
-    await readingShot(page,'approach-stale-review');await review.getByRole('button',{name:'Reapply my changes',exact:true}).click();await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+    await readingShot(page, 'approach-stale-review');
+    await review.getByRole('button', { name: 'Reapply my changes', exact: true }).click();
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
     expect((await(await page.request.get(`/api/1/studies/${sid}/approach`)).json()).data.draft.content.question).toBe('My local method');
   }finally{await other.close();}
 });
@@ -923,7 +1315,8 @@ test('@approach-reading session loss preserves original pending command recovery
   await page.getByRole('button',{name:'Save draft',exact:true}).click();
   const check=page.getByRole('button',{name:'Check original command',exact:true});await expect(check).toBeVisible();
   await page.route('**/commands/*?category=approach_draft',route=>route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({error:{code:'unauthorized',message:'Session expired',fields:[],outcome:'unchanged'}})}),{times:1});
-  await check.click();await expect(page.getByRole('heading',{name:'Sign in to HYPRN MVP',exact:true})).toBeVisible();
+  await check.click();
+  await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
   await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(check).toBeVisible();await check.click();
   let retry:any;page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/approach/draft'))retry=request.postDataJSON();});
@@ -943,7 +1336,8 @@ test('@approach-reading @approach-method @approach-assumptions genuine 200 perce
     const page=context.pages()[0]??await context.newPage();await openProduct(page);await writeQuestion(page);
     const packageResponse=await page.request.get('/fixture/model-package');
     if(packageResponse.ok()){
-      await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+      await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+      await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
       const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!,other=await browser.newContext({baseURL}),helper=await other.newPage();await helper.goto('/ui/');
       await helper.evaluate(async({sid,pkg})=>{const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');await api.mutate(`/studies/${sid}/model-imports`,{command_id:crypto.randomUUID(),expected_revision:(await api.study(sid)).revision,package:pkg},'model',sid);await c.open(sid);const content=structuredClone(c.getSnapshot().local),m=pkg.revisions[0],binding={binding_id:crypto.randomUUID(),model_id:m.model_id,model_revision_id:m.model_revision_id};content.model_bindings=[binding];content.steps=[{step_id:crypto.randomUUID(),title:'Predict response from operating conditions',purpose:'Connect the imposed quantities to the predicted response.',rationale:'An explicit scalar approximation supports the initial screening.',intent:{transformation:'Combine the two operating quantities using the authored response law.',inputs:'Operating quantities x and z',outputs:'Predicted response u',depends_on_step_ids:[]},implementation_state:'partial',remaining_work:'Compare the declared relationship with supporting measurements.',implementation_refs:[{kind:'port',binding_id:binding.binding_id,instance_id:m.instances[1].instance_id,port_id:m.definitions[1].ports[2].port_id},{kind:'connection',binding_id:binding.binding_id,connection_id:m.connections[0].connection_id}],assumption_refs:[],evidence_links:[]}];content.cases=[{case_id:crypto.randomUUID(),title:'Nominal operating conditions',question:'Does the response remain within the intended operating envelope?',rationale:'Compare one explicit configuration with the initial screening.',binding_id:binding.binding_id,evidence_links:[]}];const evidence=await api.createEvidence(sid,{evidence_schema_version:'3',kind:'note',title:'Operating range measurements',content:'The scalar approximation is supported only within the measured range.',source_refs:[],resource_scope:{scope_version:'1',kind:'study',study_id:sid}});content.assumptions=[{assumption_id:crypto.randomUUID(),statement:'A scalar approximation describes the measured range.',role:'overall_method',evidence_links:[{evidence_version_id:evidence.evidence_version_id,relation:'supports',locator:'Table 2 · Operating range'}]}];content.steps[0].assumption_refs=[{kind:'approach',assumption_id:content.assumptions[0].assumption_id}];content.cases[0].evidence_links=[{evidence_version_id:evidence.evidence_version_id,relation:'context',locator:'Nominal measurement'}];c.edit(content);if(!await c.save())throw new Error(c.getSnapshot().error);},{sid,pkg:await packageResponse.json()});await other.close();
       await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
@@ -966,7 +1360,7 @@ test('@approach-reading @approach-method @approach-assumptions genuine 200 perce
       if (packageResponse.ok()) {
         await page.locator('.method-implemented').scrollIntoViewIfNeeded();
         await capture('approach-method-200-' + theme);
-        await page.getByRole('heading', { name: 'Cases and their answers', exact: true }).click();
+        await page.getByRole('heading', { name: 'Cases', exact: true }).click();
         await page.locator('.approach-case').scrollIntoViewIfNeeded();
         await capture('approach-case-200-' + theme);
         await page.getByRole('heading', { name: 'Reasoning and methods', exact: true }).click();
@@ -1051,7 +1445,17 @@ async function retainedApproach(page:Page,browser:any,baseURL:string|undefined){
   await page.request.post('/fixture/model-available');
   const data=await seededConditions(page,browser,baseURL,{failure:true});
   await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Prior screening');const original=await saveCaseConfiguration(page);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Prior screening');
+  const original = await saveCaseConfiguration(page);
   const ctx=await browser.newContext({baseURL}),helper=await ctx.newPage();await helper.goto('/ui/');
   const retained=await helper.evaluate(async({data,original})=>{
     const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');const sid=data.sid;
@@ -1230,11 +1634,9 @@ test('@approach-history retained reader and export genuine 200 percent keyboard 
         .last();
       const methods = nested.getByRole('heading', { name: 'Reasoning and methods', exact: true });
       await methods.scrollIntoViewIfNeeded();
-      const cases = nested.getByRole('heading', { name: 'Cases and their answers', exact: true });
+      const cases = nested.getByRole('heading', { name: 'Cases', exact: true });
       await cases.scrollIntoViewIfNeeded();
-      await expect(
-        nested.getByRole('heading', { name: 'Cases and their answers', exact: true }),
-      ).toBeVisible();
+      await expect(nested.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
       await capture('approach-history-prior-200-' + theme);
       for (let i = 0; i < 4; i++) await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
@@ -1250,7 +1652,17 @@ test('@approach-history retained reader and export genuine 200 percent keyboard 
 test('@approach-history Findings retains partial pages, exact cases and per-row failures',async({page,browser,baseURL})=>{
   const d=await seededConditions(page,browser,baseURL,{cases:true,failure:true});
   await page.getByLabel('Approach version',{exact:true}).selectOption(d.saved.version.approach_version_id);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Repeated screening');const original=await saveCaseConfiguration(page);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Repeated screening');
+  const original = await saveCaseConfiguration(page);
   const ctx=await browser.newContext({baseURL}),helper=await ctx.newPage();await helper.goto('/ui/');
   const created=await helper.evaluate(async({d,original})=>{
     const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const o=original.configuration,ids=[o.configuration_revision_id];
@@ -1653,7 +2065,7 @@ test('@approach-reading polish contextual question and limits use real commands 
   await conditions.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(trigger).toBeFocused();
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save approach version', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Save approach version', exact: true })
@@ -1716,7 +2128,7 @@ test('@approach-reading polish contextual question and limits use real commands 
   await page.getByRole('button', { name: 'Edit approach', exact: true }).click();
   await writeQuestion(page, 'A changed current draft');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByLabel('Approach version', { exact: true }).selectOption(version);
   await expect(
     page.getByRole('heading', { name: 'Which observations bound the response?', exact: true }),
@@ -1768,7 +2180,8 @@ test('@approach-assumptions polish cited limits and conditions retain exact conf
   await picker.getByRole('button',{name:'Attach evidence',exact:true}).click();
   await expect(conditions.getByRole('region',{name:statement+' evidence',exact:true})).toContainText('Screening measurements');
   await conditions.getByRole('button',{name:'Done',exact:true}).click();
-  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button',{name:'Save approach version',exact:true}).click();await page.getByRole('dialog',{name:'Save approach version',exact:true}).getByRole('button',{name:'Save version',exact:true}).click();
   await expect(page.getByLabel('Approach version',{exact:true})).toContainText('v2 (read-only)');
   const frozen=(await(await page.request.get('/api/1/studies/'+data.sid+'/approach/versions/'+await page.getByLabel('Approach version',{exact:true}).inputValue())).json()).data;
@@ -1801,7 +2214,15 @@ test('@approach-assumptions polish cited limits and conditions retain exact conf
     await page.keyboard.press('Escape');
     await conditions.getByRole('button',{name:'Done',exact:true}).click();
   }
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
   await fillCaseConfiguration(page,'Exact retained conditions');
   const original=await saveCaseConfiguration(page);
   expect(original.approach_closure.schema_version).toBe('3');
@@ -1985,7 +2406,7 @@ test('@approach-reading Overview requires a saved approach and links its existin
     await page.getByRole('button', { name: 'Create modeling approach', exact: true }).click();
   await writeQuestion(page, 'Draft-only question must not become saved study context');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
   await expect(box).toContainText('A draft is available, but no approach version has been saved.');
   await expect(box).not.toContainText('Draft-only question must not become saved study context');
@@ -2263,7 +2684,7 @@ test('@approach-method proposed intent stays explicit', async ({
   await editor.getByRole('button', { name: 'Apply step', exact: true }).click();
   const detail = page.getByRole('region', { name: 'Selected method step', exact: true });
   await expect(
-    detail.getByRole('heading', { name: 'Calculation in plain words', exact: true }),
+    detail.getByRole('heading', { name: 'Calculation logic', exact: true }),
   ).toBeVisible();
   await expect(detail).toContainText('Proposed work — no model linked. No calculation is implied.');
   await expect(detail).toContainText('Explore the declared uncertainty');
@@ -2815,7 +3236,8 @@ test('@approach-configuration configuration host denial clears the picker displa
   const data=await linkedPicker(page,browser,baseURL);await createLinked(page);await fillCaseConfiguration(page,'Host denial draft');const commits=watchCommits(page);
   await revoke(page,data.sid);await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   await expectConfigurationContextCleared(page,commits);await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Host denial draft');
-  await expect(page.getByText('Saved · read-only',{exact:true})).toHaveCount(0);await readingShot(page,'t46n1-configuration-host-denied');
+  await expect(page.getByText('Saved version · read-only', { exact: true })).toHaveCount(0);
+  await readingShot(page, 't46n1-configuration-host-denied');
 });
 
 test('@approach-configuration configuration host denial fences a late picker record reply',async({page,browser,baseURL})=>{
@@ -3040,9 +3462,7 @@ test('@approach-configuration sign-out clears approach reading positions and Wor
     page.getByRole('region', { name: 'Selected method step', exact: true }).getByRole('tab'),
   ).toHaveCount(0);
   await casesTab(page);
-  await expect(
-    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
   await page.evaluate(sid=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'runs'}).toString();},data.sid);await expect(page.getByRole('heading',{name:'Run history',exact:true})).toBeVisible();
   await signOutAndIn(page);
   await page.evaluate(({sid,version})=>{location.hash=new URLSearchParams({v:'1',study:sid,view:'approach',approach:version}).toString();},{sid:data.sid,version});
@@ -3050,9 +3470,7 @@ test('@approach-configuration sign-out clears approach reading positions and Wor
   await expect(
     page.getByRole('heading', { name: 'Reasoning and methods', exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Selected method step', exact: true }).getByRole('tab'),
   ).toHaveCount(0);
@@ -3066,7 +3484,17 @@ async function caseNavigation(page:Page,browser:any,baseURL:string|undefined){
   await page.request.post('/fixture/model-available');
   const data=await seededConditions(page,browser,baseURL,{cases:true,failure:true});
   await page.getByLabel('Approach version',{exact:true}).selectOption(data.saved.version.approach_version_id);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Version one nominal');const original=await saveCaseConfiguration(page);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Version one nominal');
+  const original = await saveCaseConfiguration(page);
   const ctx=await browser.newContext({baseURL}),helper=await ctx.newPage();await helper.goto('/ui/');
   const made=await helper.evaluate(async({d,original})=>{
     const {api,controller:c}=(window as any).approachHarness;await api.login('owner','correct horse battery staple');const sid=d.sid,o=original.configuration,nominal=d.saved.version.content.cases[0].case_id;
@@ -3136,14 +3564,12 @@ test('@approach-configuration exact case links open the version-qualified case a
   await link.focus();await link.press('Enter');
   await expect(
     page
-      .getByRole('region', { name: 'Cases and their answers', exact: true })
+      .getByRole('region', { name: 'Cases', exact: true })
       .getByRole('region', { name: 'Usage review', exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel('Approach version',{exact:true})).toHaveValue(d.saved.version.approach_version_id);
   await expect.poll(()=>new URLSearchParams(new URL(page.url()).hash.slice(1)).get('case')).toBe(d.nominal);expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('approach')).toBe(d.saved.version.approach_version_id);
-  await expect(
-    page.getByRole('heading', { name: 'Cases and their answers', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
   await expect(usage.getByRole('heading',{name:'Nominal range',exact:true})).toBeFocused();await expect(usage).not.toContainText('Renamed nominal range');
   for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await readingShot(page,'case-navigation-results-'+theme);}await page.evaluate(()=>document.documentElement.dataset.theme='light');
   await page.getByRole('button',{name:'Return to run history',exact:true}).click();await expect(link).toBeFocused();await expect(filter).toHaveValue(`linked:${d.saved.version.approach_version_id}:${d.nominal}`);await expect(page.getByText('1 of 5 loaded runs',{exact:true})).toBeVisible();
@@ -3208,7 +3634,17 @@ async function resultsReview(page:Page,browser:any,baseURL:string|undefined){
   await page.request.post('/fixture/model-available');
   const d=await seededConditions(page,browser,baseURL,{cases:true,failure:true});
   await page.getByLabel('Approach version',{exact:true}).selectOption(d.saved.version.approach_version_id);
-  await casesTab(page);await page.getByRole('button',{name:'Create configuration for Nominal range',exact:true}).click();await fillCaseConfiguration(page,'Repeated screening');const original=await saveCaseConfiguration(page);
+  await casesTab(page);
+  await page
+    .locator('.case-list-row')
+    .filter({ hasText: 'Nominal range' })
+    .getByRole('button', { name: 'Open case', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create configuration for Nominal range', exact: true })
+    .click();
+  await fillCaseConfiguration(page, 'Repeated screening');
+  const original = await saveCaseConfiguration(page);
   const ctx=await browser.newContext({baseURL}),helper=await ctx.newPage();await helper.goto('/ui/');
   const created=await helper.evaluate(async({d,original})=>{
     const api=(window as any).approachHarness.api;await api.login('owner','correct horse battery staple');const o=original.configuration,ids=[o.configuration_revision_id];
@@ -3299,7 +3735,7 @@ test('@approach-history cases precede synthesis across repeats and failures', as
   for (const name of ['Nominal range', 'Upper operating range'])
     await expect(
       page
-        .getByRole('region', { name: 'Cases and their answers', exact: true })
+        .getByRole('region', { name: 'Cases', exact: true })
         .getByRole('heading', { name, exact: true }),
     ).toHaveCount(1);
   for (const theme of ['light', 'dark']) {
@@ -3624,7 +4060,7 @@ test('@approach-reading editor guard Save writes the approach draft before leavi
   await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open study '+studyName,exact:true}).first().click();await page.getByRole('button',{name:'View modeling approach',exact:true}).click();
   await expect(page.getByLabel('The modeling approach').getByRole('heading',{name:'Saved through the workspace guard',exact:true})).toBeVisible();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
 });
 test('@approach-reading editor guard refused study context save keeps the dialog and its transition; Discard restores the saved context',async({page})=>{
   // The guarded fixture proxy has no PATCH route, so only refusal and discard of study context are exercised here.
@@ -3834,7 +4270,7 @@ test('@approach-method expandable steps open the canonical model version', async
   await expect(explanation.locator('.method-narrative > section').getByRole('heading')).toHaveText([
     'Purpose',
     'Basis and reasoning',
-    'Calculation in plain words',
+    'Calculation logic',
   ]);
   await expect(explanation).toContainText('Connect explicit operating quantities to response.');
   await expect(explanation).toContainText('Use the declared response law for a bounded screening.');
@@ -3899,7 +4335,7 @@ test('@approach-configuration Cases show runs once and omit an empty limits link
     d.saved.version.approach_version_id,
   );
   await casesTab(page);
-  const panel = page.getByRole('region', { name: 'Cases and their answers', exact: true }),
+  const panel = page.getByRole('region', { name: 'Cases', exact: true }),
     results = panel.getByRole('region', { name: 'Usage review', exact: true }),
     usage = panel.getByRole('region', { name: 'Approach usage', exact: true });
   await expect(usage).toContainText('All usage loaded');
@@ -4187,7 +4623,7 @@ test('@approach-reading Empty Study details preserves the full question', async 
   await expect(details).not.toContainText('No limits');
   await details.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
-  await expect(page.getByText('Draft · saved', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save approach version', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Save approach version', exact: true })
@@ -4450,4 +4886,133 @@ test('@approach-method overview details edit all fields and preserve the saved q
   await details.getByRole('button', { name: 'Close Study details', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh usage', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Study details', exact: true })).toHaveCount(0);
+});
+
+test('@approach-demo branded study and model details keep clear controls and spacing', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const data = await describedApproach(page, browser, baseURL);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const logo = page.getByRole('img', { name: 'HYPRN', exact: true });
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(
+    true,
+  );
+  const method = page.getByRole('region', { name: 'Selected method step', exact: true });
+  await expect(method).not.toContainText('Implemented in Model version');
+  await expect(
+    method.getByRole('heading', { name: 'Calculation logic', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Back to overview', exact: true }).click();
+  await page.getByRole('button', { name: 'See more details', exact: true }).click();
+  const details = page.getByRole('dialog', { name: 'Study details', exact: true });
+  await details.getByRole('button', { name: 'Edit study', exact: true }).click();
+  await expect(
+    details.getByRole('textbox', { name: 'Earlier limits text', exact: true }),
+  ).toHaveCount(0);
+  await expect(details.getByRole('textbox', { name: 'Open questions', exact: true })).toBeVisible();
+  expect(
+    await details
+      .locator('.study-details > section')
+      .evaluateAll((nodes) =>
+        nodes.slice(1).every((node) => parseFloat(getComputedStyle(node).paddingTop) >= 16),
+      ),
+  ).toBe(true);
+  await details.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+  await details.getByRole('button', { name: 'Close Study details', exact: true }).click();
+  await page.evaluate(
+    ({ sid, mid }) => {
+      location.hash = new URLSearchParams({
+        v: '1',
+        view: 'model',
+        study: sid,
+        model: mid,
+      }).toString();
+    },
+    { sid: data.sid, mid: data.model.model_id },
+  );
+  await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+  await page
+    .locator('[data-instance="' + data.model.instances[1].instance_id + '"]')
+    .first()
+    .click();
+  const inspector = page.getByRole('region', { name: 'Selection inspector', exact: true });
+  const action = await inspector
+    .getByRole('button', { name: 'Edit component', exact: true })
+    .boundingBox();
+  const title = await inspector.locator('.component-detail-title').boundingBox();
+  expect(action!.y + action!.height).toBeLessThanOrEqual(title!.y);
+  await expect(page.getByText('Saved draft', { exact: true })).toBeVisible();
+  await expect(
+    inspector.getByRole('button', { name: 'View method in overview', exact: true }),
+  ).toHaveCount(0);
+  await readingShot(page, 'demo-model-light');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+    await page.setViewportSize({ width: 720, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await readingShot(page, 'demo-model-narrow-' + theme);
+  }
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  await expect(page.locator('.profile-account')).toHaveText('Account name:owner');
+});
+
+test('@approach-demo run opens its exact historical case and scoped records', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120000);
+  const d = await caseNavigation(page, browser, baseURL);
+  await openRuns(page, d.sid);
+  await runRow(page, d.runs.v1)
+    .getByRole('button', { name: /Nominal range/ })
+    .click();
+  await expect(page).toHaveURL(/view=cases/);
+  const query = new URLSearchParams(new URL(page.url()).hash.slice(1));
+  expect(query.get('approach')).toBe(d.saved.version.approach_version_id);
+  expect(query.get('case')).toBe(d.nominal);
+  const card = page.getByRole('article', { name: 'Nominal range', exact: true });
+  await expect(card).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Renamed nominal range', exact: true }),
+  ).toHaveCount(0);
+  await card.getByRole('button', { name: 'Case record details', exact: true }).click();
+  const record = page.getByRole('dialog', { name: 'Case record details', exact: true });
+  await expect(record).toContainText(d.saved.version.approach_version_id);
+  await expect(record).toContainText(d.nominal);
+  await record.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'View configuration', exact: true })).toBeVisible();
+  const run = card.getByRole('article', { name: 'run ' + d.runs.v1, exact: true });
+  const view = await run.getByRole('button', { name: 'View run', exact: true }).boundingBox();
+  const expand = await run.getByRole('button', { name: 'Run details', exact: true }).boundingBox();
+  expect(expand!.y).toBeGreaterThanOrEqual(view!.y + view!.height);
+  expect(expand!.x).toBe(view!.x);
+  await run.getByRole('button', { name: 'Run details', exact: true }).click();
+  await expect(run.getByRole('button', { name: 'Run details', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await readingShot(page, 'demo-case-detail');
+  await page.getByRole('button', { name: '← All cases', exact: true }).click();
+  await expect(page.locator('.case-list-row').filter({ hasText: 'Nominal range' })).toBeVisible();
+  await expect(page.locator('.approach-case-card')).toHaveCount(0);
+  // An unknown case never silently substitutes a real case.
+  await page.evaluate(
+    ({ sid, version }) => {
+      location.hash = new URLSearchParams({
+        v: '1',
+        view: 'cases',
+        study: sid,
+        approach: version,
+        case: crypto.randomUUID(),
+      }).toString();
+    },
+    { sid: d.sid, version: d.saved.version.approach_version_id },
+  );
+  await expect(page.getByRole('alert')).toContainText('No other case is shown in its place');
 });

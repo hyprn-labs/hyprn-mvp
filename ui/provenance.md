@@ -41,3 +41,7 @@ No material proprietary-source or licence conflict was found. New dependencies n
 - https://vite.dev/guide/
 - https://developer.mozilla.org/en-US/docs/Web/API/XMLSerializer/serializeToString
 - https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob
+
+## Product brand asset
+
+`public/hyprn-logo.png` is the HYPRN stacked colour-on-light logo supplied and authorized by the product owner for this interface. It is copied unchanged; it is not third-party software or a generated replacement. The source identity is recorded in the demo-polish checkpoint.

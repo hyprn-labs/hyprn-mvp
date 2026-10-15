@@ -125,7 +125,8 @@ export function resourceViewLink(link: WorkspaceLink, query: URLSearchParams) {
 export function workspaceHash(link: WorkspaceLink): string {
   const query = new URLSearchParams({ v: '1', view: link.view });
   for (const key of ['study', 'model', 'revision', 'configuration', 'run', 'approach'] as const) if (link[key]) query.set(key, link[key]!);
-  if (link.case && link.approach && link.view === 'approach') query.set('case', link.case);
+  if (link.case && link.approach && (link.view === 'approach' || link.view === 'cases'))
+    query.set('case', link.case);
   return '#' + query.toString();
 }
 

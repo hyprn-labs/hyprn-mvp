@@ -447,17 +447,6 @@ export function ApproachMethod({
       });
     onOpenModel?.(id);
   }
-  // One line instead of quantity cards: the step's exact references, counted by direction.
-  const count = (direction: 'input' | 'output' | 'residual') =>
-    quantities.filter((q) => q.port.direction === direction).length;
-  const implemented = model
-    ? [
-        'Implemented in Model version ' + model.model_revision_id.slice(0, 8),
-        plural(count('input'), 'input'),
-        plural(count('output'), 'output'),
-        ...(count('residual') ? [plural(count('residual'), 'residual')] : []),
-      ].join(' · ')
-    : '';
   return (
     <>
       {loadError && <p role="alert">This model version can't be loaded. {loadError}</p>}
@@ -548,10 +537,9 @@ export function ApproachMethod({
                                 </section>
                               </div>
                             </>
-                          ) : model ? (
+                          ) : model && onChange && onOpenModel ? (
                             <div className="method-implemented">
-                              <p>{implemented}</p>
-                              {onChange && onOpenModel && (
+                              {
                                 <ActionDialog
                                   title="Edit definitions at their owner"
                                   label="Edit definitions in model"
@@ -571,9 +559,9 @@ export function ApproachMethod({
                                     Open current model draft
                                   </Button>
                                 </ActionDialog>
-                              )}
+                              }
                             </div>
-                          ) : binding ? (
+                          ) : !model && binding ? (
                             <p>This model version can't be loaded.</p>
                           ) : null}
                           {active.remaining_work && (

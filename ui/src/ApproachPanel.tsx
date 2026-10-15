@@ -19,6 +19,7 @@ import {
   Select,
   DialogFrame,
   StatusTag,
+  RecordState,
   ActionDialog,
 } from './design';
 import {
@@ -160,91 +161,95 @@ export function ApproachReader({
         onOpenModel={onOpenModel}
       >
         <div role="region" aria-label="The modeling approach">
-          {presentation !== 'cases' && <StudyQuestionBox
-            question={content.question}
-            scope={content.scope}
-            headingId={sectionId + '-question'}
-            onDetails={() => details.current?.open()}
-            actions={
-              <>
-                {questionActions}
-                {source.kind === 'retained' && (
-                  <ActionDialog title="Earlier work">
-                    <ApproachBasis
-                      closure={source.record.closure}
-                      content={content}
-                      resolved={resolved}
-                    />
-                  </ActionDialog>
-                )}
-              </>
-            }
-          />
-          }
+          {presentation !== 'cases' && (
+            <StudyQuestionBox
+              question={content.question}
+              scope={content.scope}
+              headingId={sectionId + '-question'}
+              onDetails={() => details.current?.open()}
+              actions={
+                <>
+                  {questionActions}
+                  {source.kind === 'retained' && (
+                    <ActionDialog title="Earlier work">
+                      <ApproachBasis
+                        closure={source.record.closure}
+                        content={content}
+                        resolved={resolved}
+                      />
+                    </ActionDialog>
+                  )}
+                </>
+              }
+            />
+          )}
           <StudyDetailsDialog ref={details} editor={detailsEditor} actions={detailsActions} />
           {presentation !== 'full' && findingsContent}
-          {presentation !== 'cases' && <Panel
-            className="approach-section"
-            id={sectionId + '-methods'}
-            label="Reasoning and methods"
-            title="Reasoning and methods"
-            headingLevel={3}
-          >
-            <ApproachMethod
-              key={viewKey}
-              viewKey={viewKey}
-              version={
-                source.kind === 'draft'
-                  ? null
-                  : {
-                      id: source.record.version.approach_version_id,
-                      number: source.record.version.version_number,
-                    }
-              }
-              requestedStep={requestedStep}
-              onOpenModel={onOpenModel}
-              api={source.kind === 'draft' ? api : undefined}
-              studyId={studyId}
-              content={content}
-              resolved={resolved}
-              onChange={onChange}
-              disabled={disabled}
-            />
-          </Panel>}
-          {presentation === 'full' && (findings ? (
-            findingsContent
-          ) : (
-            <>
-              <Panel
-                className="approach-section"
-                id={sectionId + '-cases'}
-                label="Cases and their answers"
-                title="Cases and their answers"
-                headingLevel={3}
-              >
-                {casesPanel}
-              </Panel>
-              <Panel
-                id={sectionId + '-answer'}
-                className="approach-section approach-results"
-                label="Answer to the study question"
-                title="Answer to the study question"
-              >
-                <h3 className="approach-results-answer">
-                  {source.kind === 'draft'
-                    ? 'No study answer has been assessed.'
-                    : 'Scientific answers are not included in this historical record.'}
-                </h3>
-                <p className="context-line">
-                  {source.kind === 'draft'
-                    ? 'Save an approach version to connect configurations and runs ' +
-                      'to this explanation.'
-                    : 'Results belong to the configurations and runs that used this version. ' +
-                      'This view shows its explanation only.'}
-                </p>
-              </Panel>
-            </>
-          ))}
+          {presentation !== 'cases' && (
+            <Panel
+              className="approach-section"
+              id={sectionId + '-methods'}
+              label="Reasoning and methods"
+              title="Reasoning and methods"
+              headingLevel={3}
+            >
+              <ApproachMethod
+                key={viewKey}
+                viewKey={viewKey}
+                version={
+                  source.kind === 'draft'
+                    ? null
+                    : {
+                        id: source.record.version.approach_version_id,
+                        number: source.record.version.version_number,
+                      }
+                }
+                requestedStep={requestedStep}
+                onOpenModel={onOpenModel}
+                api={source.kind === 'draft' ? api : undefined}
+                studyId={studyId}
+                content={content}
+                resolved={resolved}
+                onChange={onChange}
+                disabled={disabled}
+              />
+            </Panel>
+          )}
+          {presentation === 'full' &&
+            (findings ? (
+              findingsContent
+            ) : (
+              <>
+                <Panel
+                  className="approach-section"
+                  id={sectionId + '-cases'}
+                  label="Cases"
+                  title="Cases"
+                  headingLevel={3}
+                >
+                  {casesPanel}
+                </Panel>
+                <Panel
+                  id={sectionId + '-answer'}
+                  className="approach-section approach-results"
+                  label="Answer to the study question"
+                  title="Answer to the study question"
+                >
+                  <h3 className="approach-results-answer">
+                    {source.kind === 'draft'
+                      ? 'No study answer has been assessed.'
+                      : 'Scientific answers are not included in this historical record.'}
+                  </h3>
+                  <p className="context-line">
+                    {source.kind === 'draft'
+                      ? 'Save an approach version to connect configurations and runs ' +
+                        'to this explanation.'
+                      : 'Results belong to the configurations and runs that used this version. ' +
+                        'This view shows its explanation only.'}
+                  </p>
+                </Panel>
+              </>
+            ))}
         </div>
       </ApproachAnnotations>
     </CaseNavigation.Provider>
@@ -384,7 +389,12 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
           {source && !absent && (
             <ActionDialog title="Approach actions" label="…" triggerLabel="Approach actions">
               <div className="hf-action-list">
-                <ActionDialog title="Approach record" label="Record details">
+                <ActionDialog
+                  title="Approach record"
+                  label="Approach record details"
+                  size="sm"
+                  variant="quiet"
+                >
                   <dl className="hf-record-details">
                     <AttributionDetail
                       kind={attributionKind}
@@ -440,13 +450,9 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
       {state.local && !absent && (
         <div className="section-actions approach-draft-status">
           <p role="status">
-            <StatusTag tone={controller.dirty ? 'advisory' : 'inert'}>
-              {controller.dirty
-                ? 'Unsaved local edits'
-                : state.server?.draft
-                  ? 'Draft · saved'
-                  : 'Draft · not saved'}
-            </StatusTag>
+            <RecordState
+              state={controller.dirty ? 'changed' : state.server?.draft ? 'draft' : 'new'}
+            />
           </p>
           {!state.saved && <RecordAttribution kind={attributionKind} id={attributionId} />}
           {editing &&

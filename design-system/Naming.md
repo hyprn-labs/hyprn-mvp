@@ -9,8 +9,8 @@ How the interface names domain records. This file is the single source for reade
 | Component definition | Definition name in the component-version editor | Definition version ID in monospace, explicitly labelled; updating one instance never silently updates its peers |
 | Quantity | Case-sensitive code symbol in monospace, with its descriptive name alongside when different | The port ID identifies the quantity inside the exact instance and version; neither replaces the symbol for the reader |
 | Model version | "Model version <short ID>" with the "Read-only model version" record bar | Saved model versions keep no model name, so the heading never borrows the mutable draft name or invents numbered versions |
-| Mutable model | Authored name plus "Draft · saved" or "Unsaved local edits" | Unsaved local changes differ from the saved draft; neither is a saved model version |
-| Configuration | Authored name plus "Saved · read-only"; model version as secondary context | Configuration version, model version and run are separate identities |
+| Mutable model | Authored name plus "Saved draft" or "Unsaved changes" | Unsaved local changes differ from the saved draft; neither is a saved model version |
+| Configuration | Authored name plus "Saved version · read-only"; model version as secondary context | Configuration version, model version and run are separate identities |
 | Run | Name from the configuration version it ran, plus the short run ID | Full run ID in the record bar and Record details. A run never borrows today's configuration, model or evidence name; a missing name falls back to "Run" and the short ID |
 | Assumption | The statement, with its attached evidence | One concept everywhere; the interface has no "notes", "component notes", "definition notes" or "configuration notes" |
 | Evidence | Its content and title first | Evidence version ID, typed scope and references in Record details; a missing scope reads "No scope." there and is never inferred |
@@ -49,14 +49,14 @@ Any change to a reader-facing name is made in this file together with the interf
 |---|---|---|
 | Method package | "package", the only use of the word | "model package", "inspection package", "package" for exports |
 | Model and data export | "Export model and data" opens the portable model, diagram, quantities CSV and source downloads | an unqualified "Export" action |
-| Portable model record (model import and export) | "Download portable model record", "Portable model record file", "Choose a HYPRN MVP portable model record (.json)." | "model package" |
+| Portable model record (model import and export) | "Download portable model record", "Portable model record file", "Choose a HYPRN portable model record (.json)." | "model package" |
 | Computational record export | Dialog "Export computational record"; actions "Create record export", "Download record export"; section "Computational record export"; "Record export SHA-256", "Record export size (bytes)", "Record export size limit"; "No record export was created." / "No record export was downloaded." | "Inspection package", "Create package", "Download package", an unqualified "export" for this archive |
 | Comparison (model version, configuration version or current draft) | "Compare", "Read comparison target", region "Comparison", "Right side identity", "Uses the loaded model; unsaved edits are excluded." | "snapshot" |
 | Criterion evaluation | "Criterion evaluator", "criterion evaluation" ("Display rounding never changes criterion evaluation or exported data.") | "assessment" for a threshold check. "Assessment" stays for the scientific interpretation ("No study answer has been assessed.") |
 | Run status ledger (accessible name) | "Run status" | "Scientific outcomes" |
 | Run outputs | "Outputs"; table "Output values"; full precision in numeric tooltips and exports; no precision dialog | "Recorded outputs", "Exact values", "Exact recorded values" |
 | Run files | "Run files" (table "Run files table"); "This run file is unavailable."; "Read-only run file"; "Execution diagnostics" | "Retained files", "retained artifact" |
-| Run history intro | "Newest first. Failed and incomplete runs stay listed." | "Recorded calculations, newest first." with a second "every attempt" note |
+| Run history intro | Omit; the list already communicates its contents | Repeated list-order or coverage commentary |
 | Run record bar | "Run record · Read-only" | "Read-only run record" with a line about retained inputs |
 | Modified-run availability | "Create modified run"; "Checking whether this run can be modified…"; "Available once the run has finished." | "Checking retained configuration…", "A complete retained terminal run is required." |
 | Run case link | "View case" | "View case context" |
@@ -88,7 +88,7 @@ Any change to a reader-facing name is made in this file together with the interf
 
 ## Fixed labels
 
-- Study tabs: Overview, Models, Configurations, Runs, Cases and their answers.
+- Study tabs: Overview, Models, Configurations, Runs, Cases.
 - Run tabs: Results, Model, Configuration.
 - Model views: Graph, XDSM.
 - Footer link: "Third-party software notices".

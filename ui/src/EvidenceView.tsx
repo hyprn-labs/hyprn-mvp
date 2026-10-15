@@ -165,7 +165,12 @@ export function EvidenceRecordBody({
             </>
           )}
           <div className="actions">
-            <ActionDialog title="Evidence record" label="Record details" size="sm">
+            <ActionDialog
+              title="Evidence record"
+              label="Evidence record details"
+              size="sm"
+              variant="quiet"
+            >
               {labels.length ? (
                 <>
                   <SectionHeader title="Context" />

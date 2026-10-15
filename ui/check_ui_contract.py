@@ -315,9 +315,14 @@ for file in ('src/views/model.tsx','src/ApproachMethod.tsx','src/ConfigurationRe
  assert '<ModelView' in (ROOT/file).read_text(),(file,'Reuses the canonical model view')
 inspector_text=(ROOT/'src/SelectionInspector.tsx').read_text()
 for term in (
- 'MethodExplanation', '>Purpose<', '>Basis and reasoning<',
- '>Calculation in plain words<', '>Python function<', 'verifySource(',
- 'ComponentSourceContent', 'modelAssumptions(snapshot)',
+    'MethodExplanation',
+    '>Purpose<',
+    '>Basis and reasoning<',
+    '>Calculation logic<',
+    '>Python function<',
+    'verifySource(',
+    'ComponentSourceContent',
+    'modelAssumptions(snapshot)',
 ):
  assert term in inspector_text,('src/SelectionInspector.tsx','Details: what, why, assumptions',term)
 removed_view={'src/SelectionInspector.tsx':('tiny-table','Incoming quantities','Outgoing quantities','DetailTabs','<DataTable'),
@@ -345,8 +350,11 @@ methods_text=(ROOT/'src/modelMethods.ts').read_text()
 for term in ('referencedInstances(','configurationContext(','linkedApproach(','api.fence(','api.readFailed(','useAccessLoss('):
  assert term in methods_text,('src/modelMethods.ts','Exact method links, session-scoped reads',term)
 model_view_text=(ROOT/'src/views/model.tsx').read_text()
-for term in ('label="Record details"','title="Model version record"'):
- assert term in model_view_text,('src/views/model.tsx','Model version record in Record details')
+for term in ('label="Model record details"', 'title="Model version record"'):
+    assert term in model_view_text, (
+        'src/views/model.tsx',
+        'Model version record in Record details',
+    )
 print('Model view: one canonical ModelView (Graph | XDSM, Details what/why/assumptions, one quantities table) reused in Models, Run › Model, configuration and approach; ports table, incoming/outgoing lists, Variables tab and model-assumption dialogs absent; browser gates remain separate.')
 
 
@@ -376,17 +384,33 @@ method_text=(ROOT/'src/ApproachMethod.tsx').read_text()
 for term in (
     'approach-method-rows',
     '<ApproachStepContext step={active} />',
-    "'Implemented in Model version '",
     'label="View model details"',
     'Edit definitions in model',
 ):
     assert term in method_text, ('src/ApproachMethod.tsx', 'Expandable method explanation', term)
-for removed in ('Model & quantities','QuantityCard','QuantityTable','ExactMethodSource','Source excerpt','View exact source','Inspect source and ports','Exact model element','title="Exact model version"','GraphView','method-quantity'):
- assert removed not in method_text,('src/ApproachMethod.tsx','Removed method step element',removed)
+for removed in (
+    'Implemented in Model version',
+    'Model & quantities',
+    'QuantityCard',
+    'QuantityTable',
+    'ExactMethodSource',
+    'Source excerpt',
+    'View exact source',
+    'Inspect source and ports',
+    'Exact model element',
+    'title="Exact model version"',
+    'GraphView',
+    'method-quantity',
+):
+    assert removed not in method_text, (
+        'src/ApproachMethod.tsx',
+        'Removed method step element',
+        removed,
+    )
 for term in (
     'label="Reasoning and methods"',
     'Reasoning and methods',
-    'Cases and their answers',
+    'Cases',
     'Answer to the study question',
 ):
     assert term in panel_text, ('src/ApproachPanel.tsx', 'Continuous approach section boxes', term)

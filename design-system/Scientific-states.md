@@ -42,3 +42,9 @@ Show `k / s` meeting a criterion over evaluable samples only when `s > 0`, the u
 ## Progress
 
 Use measured counts ("1 of 2 components evaluated", "9 of 50 iterations") or an indeterminate track with the stage in words ("Queued — waiting for a worker"). No percentage or remaining time is invented. Cancellation shows "Cancellation requested" until the worker confirms it. An uncertain outcome is an explicit warning, never a running track.
+
+## Record persistence
+
+Use the noninteractive `RecordState` beside or below the entity title. It describes storage/editability, never scientific success. `New draft`, `Saved draft`, and `Saved version · read-only` use the neutral ring and inert colour; `Unsaved changes` uses the warning triangle and warning colour. Run history uses `Saved run · read-only` with the shared record lock; execution and criteria retain their separate scientific tags.
+
+Record metadata uses compact quiet buttons at the owning card: `Model record details`, `Configuration record details`, `Run record details`, `Case record details`, `Case answer record details`, `Study answer record details`, `Approach record details`, and `Evidence record details`. `Method record` follows the Python function. A case is identified by both its case ID and approach version; an answer is a different versioned record. Do not repeat parent record controls inside child prose.

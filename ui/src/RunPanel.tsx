@@ -234,16 +234,92 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
   }
   const ports = history?.model_snapshot ? modelPorts(history.model_snapshot) : [];
   const label = (target: { instance_id: string; port_id: string }) => ports.find(p => refKey(p.target) === refKey(target))?.label ?? refKey(target);
-  return <section ref={outputRoot} aria-label="Runs" className="run-panel"><div hidden={!!selected}>
-    <div className="page-heading"><h2 id="history-title">Run history</h2><p>Newest first. Failed and incomplete runs stay listed.</p></div>
-    <div className="run-filters"><Button disabled={listBusy} onClick={() => void refreshList()}>Refresh run history</Button>
-      {!!runs.length && <><label>Filter loaded runs<TextInput type="search" value={filter} onChange={e => setFilters({ text: e.target.value })} /></label><label>Run case<Select aria-label="Run case" value={caseFilter} onChange={e => setFilters({ caseKey: e.target.value })}><option value="">All cases</option>{caseOptions.map(c => <option key={c.key} value={c.key}>{c.option}</option>)}{caseFilter && !caseOptions.some(c => c.key === caseFilter) && <option value={caseFilter}>Selected case · no loaded runs</option>}</Select></label><label>Run submission state<Select value={stateFilter} onChange={e => setFilters({ state: e.target.value })}><option value="">All states</option>{['accepted_run', 'prepared', 'preparation_failed', 'dispatching', 'recorded', 'uncertain'].map(state => <option key={state} value={state}>{submissionLabels[state as keyof typeof submissionLabels]}</option>)}</Select></label><p aria-live="polite">{visibleRuns.length} of {runs.length} loaded runs</p>{caseUnavailable && <Button disabled={listBusy} onClick={() => void refreshList()}>Retry case context</Button>}</>}
-    </div>
-    {listBusy && <p aria-live="polite"><StatusTag tone="running">Loading run history…</StatusTag></p>}{listError != null && !selected && <p role="alert">{message(listError)}</p>}
-    {listReady && !listBusy && !listError && !runs.length && <Panel><p>This study has no runs yet. Commit a configuration, then run the model. <a href="#configuration">Open configuration</a></p></Panel>}
-        {!!runs.length && <Panel className="run-history">
+  return (
+    <section ref={outputRoot} aria-label="Runs" className="run-panel">
+      <div hidden={!!selected}>
+        <div className="page-heading">
+          <h2 id="history-title">Run history</h2>
+        </div>
+        <div className="run-filters">
+          <Button disabled={listBusy} onClick={() => void refreshList()}>
+            Refresh run history
+          </Button>
+          {!!runs.length && (
+            <>
+              <label>
+                Filter loaded runs
+                <TextInput
+                  type="search"
+                  value={filter}
+                  onChange={(e) => setFilters({ text: e.target.value })}
+                />
+              </label>
+              <label>
+                Run case
+                <Select
+                  aria-label="Run case"
+                  value={caseFilter}
+                  onChange={(e) => setFilters({ caseKey: e.target.value })}
+                >
+                  <option value="">All cases</option>
+                  {caseOptions.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.option}
+                    </option>
+                  ))}
+                  {caseFilter && !caseOptions.some((c) => c.key === caseFilter) && (
+                    <option value={caseFilter}>Selected case · no loaded runs</option>
+                  )}
+                </Select>
+              </label>
+              <label>
+                Run submission state
+                <Select value={stateFilter} onChange={(e) => setFilters({ state: e.target.value })}>
+                  <option value="">All states</option>
+                  {[
+                    'accepted_run',
+                    'prepared',
+                    'preparation_failed',
+                    'dispatching',
+                    'recorded',
+                    'uncertain',
+                  ].map((state) => (
+                    <option key={state} value={state}>
+                      {submissionLabels[state as keyof typeof submissionLabels]}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <p aria-live="polite">
+                {visibleRuns.length} of {runs.length} loaded runs
+              </p>
+              {caseUnavailable && (
+                <Button disabled={listBusy} onClick={() => void refreshList()}>
+                  Retry case context
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+        {listBusy && (
+          <p aria-live="polite">
+            <StatusTag tone="running">Loading run history…</StatusTag>
+          </p>
+        )}
+        {listError != null && !selected && <p role="alert">{message(listError)}</p>}
+        {listReady && !listBusy && !listError && !runs.length && (
+          <Panel>
+            <p>
+              This study has no runs yet. Commit a configuration, then run the model.{' '}
+              <a href="#configuration">Open configuration</a>
+            </p>
+          </Panel>
+        )}
+        {!!runs.length && (
+          <Panel className="run-history">
             <ol className="run-list">
-              {visibleRuns.map(r => <li key={r.run_id}>
+              {visibleRuns.map((r) => (
+                <li key={r.run_id}>
                   <div>
                     <Button
                       variant="quiet"
@@ -257,7 +333,7 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                       Configuration version {r.configuration_revision_id.slice(0, 8)}
                       <RecordAttribution kind="run" id={r.run_id} inline />
                     </p>
-    </div>
+                  </div>
                   <RunCaseCell run={r} value={cases.get(r.run_id)!} />
                   <StatusTag
                     tone={
@@ -266,23 +342,26 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                         : r.state === 'uncertain'
                           ? 'warning'
                           : 'inert'
-}
+                    }
                   >
                     {submissionLabels[r.state]}
                   </StatusTag>
                 </li>
-              )}
+              ))}
             </ol>
             {!visibleRuns.length && <p>No runs match these filters.</p>}
-          </Panel>}
-    </div>
-      {selected && <section aria-label="Run details">
+          </Panel>
+        )}
+      </div>
+      {selected && (
+        <section aria-label="Run details">
           <p role="status">{modifiedReason}</p>
-          {seedRetry && <Button onClick={() => setSeedAttempt(n => n + 1)}>
-            Check modified run again</Button>}
+          {seedRetry && (
+            <Button onClick={() => setSeedAttempt((n) => n + 1)}>Check modified run again</Button>
+          )}
           <RuntimeComparisonView comparison={detail?.runtime_comparison} />
           <RecordBar
-            title="Run record · Read-only"
+            title="Saved run · read-only"
             returnLabel="Back to run history"
             onReturn={() => {
               generation.current++;
@@ -296,17 +375,30 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
               <h2>{history?.configuration?.name ?? 'Run record'}</h2>
               <p className="context-line">
                 Run {selected.slice(0, 8)}
-                {detailCase && <span className="run-detail-case"> · Case: {detailCase.label}
-                    {detailCase.link && <> <CaseContextLink
+                {detailCase && (
+                  <span className="run-detail-case">
+                    {' '}
+                    · Case: {detailCase.label}
+                    {detailCase.link && (
+                      <>
+                        {' '}
+                        <CaseContextLink
                           target={detailCase.link.target}
                           returnKey={'run-detail-case:' + selected}
-              label={`View case ${detailCase.link.name} in approach v${detailCase.link.version}`}
-                        >View case</CaseContextLink>
-      </>}
-                  </span>}
+                          label={
+                            `View case ${detailCase.link.name} in approach v` +
+                            detailCase.link.version
+                          }
+                        >
+                          View case
+                        </CaseContextLink>
+                      </>
+                    )}
+                  </span>
+                )}
                 <RecordAttribution kind="run" id={selected} inline />
               </p>
-    </div>
+            </div>
             <div className="section-actions">
               <div className="section-actions" role="group" aria-label="Run exports">
                 <div className="section-actions" ref={resourceActionsRef} />
@@ -320,8 +412,14 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                   />
                 )}
               </div>
-              {history && <>
-                  <ActionDialog title="Run record" label="Record details">
+              {history && (
+                <>
+                  <ActionDialog
+                    title="Run record"
+                    label="Run record details"
+                    size="sm"
+                    variant="quiet"
+                  >
                     {submittedBy && <p>Submitted by {attributionText(submittedBy)}</p>}
                     <dl className="hf-record-details">
                       <AttributionDetail kind="run" id={selected} label="Submitted by" />
@@ -341,193 +439,353 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                       <dd>{history.configuration?.digest ?? 'Unavailable'}</dd>
                     </dl>
                     <h3>Dependency versions</h3>
-                    {history.bundle ? <ul>
-                        {history.bundle.dependencies.map(d => <li key={d.name}>
+                    {history.bundle ? (
+                      <ul>
+                        {history.bundle.dependencies.map((d) => (
+                          <li key={d.name}>
                             {d.name}: {d.version} · {d.lock_path}
                           </li>
-                        )}
-                      </ul> : <p>Unavailable</p>}
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>Unavailable</p>
+                    )}
                   </ActionDialog>
-      </>}
-              {history?.configuration && history.model_snapshot && <Button
+                </>
+              )}
+              {history?.configuration && history.model_snapshot && (
+                <Button
                   disabled={!modifiedSeed}
                   onClick={() =>
                     modifiedSeed &&
                     navigate(() => onCreateModified(modifiedSeed, history.configuration!))
-}
+                  }
                 >
                   Create modified run
-                </Button>}
-              {(!detail || runPending(detail)) && <Button
-                disabled={loading} onClick={() => void refreshDetail()}>
+                </Button>
+              )}
+              {(!detail || runPending(detail)) && (
+                <Button disabled={loading} onClick={() => void refreshDetail()}>
                   Refresh run status
-                </Button>}
-    </div>
-    </div>
-      {loading && <p aria-live="polite" aria-busy="true">Loading run…</p>}{error != null && <p role="alert">{message(error)}</p>}
-      {detail && <>{runPending(detail) && detail.state !== 'uncertain' ? <Progress label={progressLabel(detail)} message="Status updates automatically. Results appear here when available." /> : detail.state === 'recorded' && !results && <p role="status"><StatusTag tone={['excepted', 'killed'].includes(detail.process_state ?? '') || (detail.exit_status != null && detail.exit_status !== 0) ? 'alarm' : 'inert'}>{detail.process_state === 'finished' ? 'Execution finished' : 'Execution stopped'}</StatusTag></p>}
-        {error != null && runPending(detail) && <p role="status">Connection interrupted. Retrying status updates automatically.</p>}
-        {detail.state === 'preparation_failed' && <p role="alert"><StatusTag tone="alarm">Preparation failed</StatusTag> The calculation did not run, so there are no results.</p>}
-        {detail.state === 'uncertain' && <p role="status"><StatusTag tone="warning">Submission outcome is uncertain</StatusTag> Checking the original command is a read; no new run will be submitted.</p>}
-        {!history && (!runPending(detail) || detail.state === 'uncertain') && <p>This run's record is not available yet.</p>}
-        {history?.errors.map((e, i) => <p role="alert" key={i}>{historyErrors[e.code]}</p>)}
-        <Tabs label="Run detail sections" value={tab} onChange={name => setTab(name as HistoryTab)} items={tabs.map((name, i) => ({ id: name, label: name, tabId: 'run-tab-' + i, panelId: 'run-panel-' + i }))} />
-        <section role="tabpanel" id="run-panel-0" aria-labelledby="run-tab-0" hidden={tab !== 'Results'}><Panel hidden={!results && runPending(detail) && detail.state !== 'uncertain'}>
-        {!results && (!runPending(detail) || detail.state === 'uncertain') && <p>No results for this run. Missing values are never shown as zero.</p>}
-        {results && (
-          <>
-            <RunOutcomes variant="ledger" outcomes={runOutcomes(detail)} />
-            {results.execution.state === 'failed' && (
-              <section
-                aria-label="Execution diagnostic"
-                className="run-execution-diagnostic"
-              >
-                <StatusTag tone="alarm">Execution failed</StatusTag>
-                <p className="context-copy">{results.execution.message}</p>
-              </section>
-            )}
-            <SectionHeader title="Outputs" />
-            <DataTable regionLabel="Output values">
-              <thead>
-                <tr>
-                  <th>Output</th>
-                  <th>Value</th>
-                  <th>Units</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.outputs.map((o) => (
-                  <tr key={refKey(o.target)}>
-                    <th scope="row">
-                      <Button
-                        variant="quiet"
-                        size="sm"
-                        disabled={!history?.model_snapshot}
-                        onClick={() => inspect({ kind: 'variable', ...o.target })}
-                        data-source-output={refKey(o.target)}
-                        aria-label={`Inspect output ${label(o.target)}`}
-                      >
-                        {label(o.target)}
-                      </Button>
-                    </th>
-                    <td
-                      className={
-                        o.availability === 'available' &&
-                        o.value !== null &&
-                        Number.isFinite(o.value)
-                          ? 'numeric-value numeric-cell hf-mono'
-                          : undefined
+                </Button>
+              )}
+            </div>
+          </div>
+          {loading && (
+            <p aria-live="polite" aria-busy="true">
+              Loading run…
+            </p>
+          )}
+          {error != null && <p role="alert">{message(error)}</p>}
+          {detail && (
+            <>
+              {runPending(detail) && detail.state !== 'uncertain' ? (
+                <Progress
+                  label={progressLabel(detail)}
+                  message="Status updates automatically. Results appear here when available."
+                />
+              ) : (
+                detail.state === 'recorded' &&
+                !results && (
+                  <p role="status">
+                    <StatusTag
+                      tone={
+                        ['excepted', 'killed'].includes(detail.process_state ?? '') ||
+                        (detail.exit_status != null && detail.exit_status !== 0)
+                          ? 'alarm'
+                          : 'inert'
                       }
                     >
-                      {o.availability === 'available' &&
-                      o.value !== null &&
-                      Number.isFinite(o.value) ? (
-                        <span title={`Full precision: ${o.value}`}>
-                          {formatNumber(o.value)}
-                        </span>
-                      ) : (
-                        <>
-                          not computed
-                          {o.reason && `: ${present(o.reason, outputReasons)}`}
-                        </>
-                      )}
-                    </td>
-                    <td>{o.units || 'dimensionless'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-          </>
-        )}
-        </Panel></section>
-        {history && <><section role="tabpanel" id="run-panel-1" aria-labelledby="run-tab-1" hidden={tab !== 'Model'}>
-          {history.model_snapshot ? <><SectionHeader title={<>Model version {history.model_snapshot.model_revision_id.slice(0, 8)} <StatusTag>Read-only</StatusTag></>} />{workspace}</> : <p>This run's model version can't be shown. The current model is not shown in its place.</p>}
-        </section>
-        <section role="tabpanel" id="run-panel-2" aria-labelledby="run-tab-2" hidden={tab !== 'Configuration'}><CaseNavigation.Provider value={null}><Panel className="recorded-configuration">
-          {history.configuration ? <>
-            <SectionHeader title={history.configuration.name} actions={<>
-              <StatusTag>Read-only</StatusTag>
-            <RecordAttribution kind="configuration_version"
-              id={history.configuration.configuration_revision_id} />
-            <ConfigurationRecordDetails configuration={history.configuration} /></>} />
-            <ConfigurationRecord onViewSourceResult={onViewSourceResult}
-              configuration={history.configuration}
-              approachClosure={'approach_closure' in history ? history.approach_closure : undefined}
-              model={history.model_snapshot} results={history.results} />
-          </> : <p>This run's configuration can't be shown. The current configuration is not shown
-            in its place.</p>}
-        </Panel></CaseNavigation.Provider></section>
-        <div hidden={tab !== 'Results'}><Disclosure className="run-files">
-          <summary>Run files and diagnostics</summary>
-          <SectionHeader
-            title="Run files"
-            actions={
-              <ActionDialog
-                title="Execution diagnostics and source mapping"
-                label="Diagnostics"
-              >
-                {results ? (
-                  <>
-                    <p>
-                      {present(results.execution.state, executionLabels)} ·{' '}
-                      {results.execution.message}
-                    </p>
-                    <pre tabIndex={0} aria-label="Execution diagnostics">
-                      {JSON.stringify({ execution: results.execution }, null, 2)}
-                    </pre>
-                  </>
-                ) : (
-                  <p>No verified execution diagnostics.</p>
-                )}
-                <p>
-                  Generated locations refer to the generated file this run used. Source
-                  maps identify authored blocks and their transformations; they never
-                  invent an authored line.
+                      {detail.process_state === 'finished'
+                        ? 'Execution finished'
+                        : 'Execution stopped'}
+                    </StatusTag>
+                  </p>
+                )
+              )}
+              {error != null && runPending(detail) && (
+                <p role="status">Connection interrupted. Retrying status updates automatically.</p>
+              )}
+              {detail.state === 'preparation_failed' && (
+                <p role="alert">
+                  <StatusTag tone="alarm">Preparation failed</StatusTag> The calculation did not
+                  run, so there are no results.
                 </p>
-                {sourceMap ? (
-                  <Button
-                    disabled={artifactBusy}
-                    onClick={() => void readArtifact(sourceMap, 'map')}
-                  >
-                    Read source mapping
-                  </Button>
-                ) : (
-                  <p>No source mapping is available.</p>
-                )}
-                {mappings && (
-                  <ul>
-                    {mappings.map((m, i) => (
-                      <li key={i}>
-                        <p>
-                          {m.generated_path}:{m.generated_line_start}–
-                          {m.generated_line_end} → {m.source_path} · SHA-256{' '}
-                          {m.source_sha256}
-                        </p>
-                        <p>Transforms: {m.transforms.join(', ')}</p>
-                        <Button
-                          onClick={() =>
-                            inspect({ kind: 'instance', instance_id: m.instance_id })
-                          }
+              )}
+              {detail.state === 'uncertain' && (
+                <p role="status">
+                  <StatusTag tone="warning">Submission outcome is uncertain</StatusTag> Checking the
+                  original command is a read; no new run will be submitted.
+                </p>
+              )}
+              {!history && (!runPending(detail) || detail.state === 'uncertain') && (
+                <p>This run's record is not available yet.</p>
+              )}
+              {history?.errors.map((e, i) => (
+                <p role="alert" key={i}>
+                  {historyErrors[e.code]}
+                </p>
+              ))}
+              <Tabs
+                label="Run detail sections"
+                value={tab}
+                onChange={(name) => setTab(name as HistoryTab)}
+                items={tabs.map((name, i) => ({
+                  id: name,
+                  label: name,
+                  tabId: 'run-tab-' + i,
+                  panelId: 'run-panel-' + i,
+                }))}
+              />
+              <section
+                role="tabpanel"
+                id="run-panel-0"
+                aria-labelledby="run-tab-0"
+                hidden={tab !== 'Results'}
+              >
+                <Panel hidden={!results && runPending(detail) && detail.state !== 'uncertain'}>
+                  {!results && (!runPending(detail) || detail.state === 'uncertain') && (
+                    <p>No results for this run. Missing values are never shown as zero.</p>
+                  )}
+                  {results && (
+                    <>
+                      <RunOutcomes variant="ledger" outcomes={runOutcomes(detail)} />
+                      {results.execution.state === 'failed' && (
+                        <section
+                          aria-label="Execution diagnostic"
+                          className="run-execution-diagnostic"
                         >
-                          Inspect mapped source{' '}
-                          {history.model_snapshot?.instances.find(
-                            (n) => n.instance_id === m.instance_id,
-                          )?.name ?? m.instance_id}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </ActionDialog>
-            }
-          />
-          <RetainedFiles key={selected} artifacts={history.artifacts} busy={artifactBusy} read={(a, mode) => void readArtifact(a, mode)} />
-          {preview && <section aria-label="Artifact preview" className="hf-artifact-preview"><SectionHeader title={preview.artifact.name} actions={<Button onClick={() => { artifactRequest.current++; setPreview(null); }}>Close preview</Button>} /><p className="evidence-content">SHA-256 {preview.artifact.sha256}</p><pre ref={previewElement} tabIndex={0} aria-label="Read-only run file">{preview.text}</pre></section>}
-
-        </Disclosure></div>
-
-        </>}
-      </>}
-    </section>}
-  </section>;
+                          <StatusTag tone="alarm">Execution failed</StatusTag>
+                          <p className="context-copy">{results.execution.message}</p>
+                        </section>
+                      )}
+                      <SectionHeader title="Outputs" />
+                      <DataTable regionLabel="Output values">
+                        <thead>
+                          <tr>
+                            <th>Output</th>
+                            <th>Value</th>
+                            <th>Units</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {results.outputs.map((o) => (
+                            <tr key={refKey(o.target)}>
+                              <th scope="row">
+                                <Button
+                                  variant="quiet"
+                                  size="sm"
+                                  disabled={!history?.model_snapshot}
+                                  onClick={() => inspect({ kind: 'variable', ...o.target })}
+                                  data-source-output={refKey(o.target)}
+                                  aria-label={`Inspect output ${label(o.target)}`}
+                                >
+                                  {label(o.target)}
+                                </Button>
+                              </th>
+                              <td
+                                className={
+                                  o.availability === 'available' &&
+                                  o.value !== null &&
+                                  Number.isFinite(o.value)
+                                    ? 'numeric-value numeric-cell hf-mono'
+                                    : undefined
+                                }
+                              >
+                                {o.availability === 'available' &&
+                                o.value !== null &&
+                                Number.isFinite(o.value) ? (
+                                  <span title={`Full precision: ${o.value}`}>
+                                    {formatNumber(o.value)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    not computed
+                                    {o.reason && `: ${present(o.reason, outputReasons)}`}
+                                  </>
+                                )}
+                              </td>
+                              <td>{o.units || 'dimensionless'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </DataTable>
+                    </>
+                  )}
+                </Panel>
+              </section>
+              {history && (
+                <>
+                  <section
+                    role="tabpanel"
+                    id="run-panel-1"
+                    aria-labelledby="run-tab-1"
+                    hidden={tab !== 'Model'}
+                  >
+                    {history.model_snapshot ? (
+                      <>
+                        <SectionHeader
+                          title={
+                            <>
+                              Model version{' '}
+                              {history.model_snapshot.model_revision_id.slice(0, 8)}{' '}
+                              <StatusTag>Read-only</StatusTag>
+                            </>
+                          }
+                        />
+                        {workspace}
+                      </>
+                    ) : (
+                      <p>
+                        This run's model version can't be shown. The current model is not shown in
+                        its place.
+                      </p>
+                    )}
+                  </section>
+                  <section
+                    role="tabpanel"
+                    id="run-panel-2"
+                    aria-labelledby="run-tab-2"
+                    hidden={tab !== 'Configuration'}
+                  >
+                    <CaseNavigation.Provider value={null}>
+                      <Panel className="recorded-configuration">
+                        {history.configuration ? (
+                          <>
+                            <SectionHeader
+                              title={history.configuration.name}
+                              actions={
+                                <>
+                                  <StatusTag>Read-only</StatusTag>
+                                  <RecordAttribution
+                                    kind="configuration_version"
+                                    id={history.configuration.configuration_revision_id}
+                                  />
+                                  <ConfigurationRecordDetails
+                                    configuration={history.configuration}
+                                  />
+                                </>
+                              }
+                            />
+                            <ConfigurationRecord
+                              onViewSourceResult={onViewSourceResult}
+                              configuration={history.configuration}
+                              approachClosure={
+                                'approach_closure' in history ? history.approach_closure : undefined
+                              }
+                              model={history.model_snapshot}
+                              results={history.results}
+                            />
+                          </>
+                        ) : (
+                          <p>
+                            This run's configuration can't be shown. The current configuration is
+                            not shown in its place.
+                          </p>
+                        )}
+                      </Panel>
+                    </CaseNavigation.Provider>
+                  </section>
+                  <div hidden={tab !== 'Results'}>
+                    <Disclosure className="run-files">
+                      <summary>Run files and diagnostics</summary>
+                      <SectionHeader
+                        title="Run files"
+                        actions={
+                          <ActionDialog
+                            title="Execution diagnostics and source mapping"
+                            label="Diagnostics"
+                          >
+                            {results ? (
+                              <>
+                                <p>
+                                  {present(results.execution.state, executionLabels)} ·{' '}
+                                  {results.execution.message}
+                                </p>
+                                <pre tabIndex={0} aria-label="Execution diagnostics">
+                                  {JSON.stringify({ execution: results.execution }, null, 2)}
+                                </pre>
+                              </>
+                            ) : (
+                              <p>No verified execution diagnostics.</p>
+                            )}
+                            <p>
+                              Generated locations refer to the generated file this run used. Source
+                              maps identify authored blocks and their transformations; they never
+                              invent an authored line.
+                            </p>
+                            {sourceMap ? (
+                              <Button
+                                disabled={artifactBusy}
+                                onClick={() => void readArtifact(sourceMap, 'map')}
+                              >
+                                Read source mapping
+                              </Button>
+                            ) : (
+                              <p>No source mapping is available.</p>
+                            )}
+                            {mappings && (
+                              <ul>
+                                {mappings.map((m, i) => (
+                                  <li key={i}>
+                                    <p>
+                                      {m.generated_path}:{m.generated_line_start}–
+                                      {m.generated_line_end} → {m.source_path} · SHA-256{' '}
+                                      {m.source_sha256}
+                                    </p>
+                                    <p>Transforms: {m.transforms.join(', ')}</p>
+                                    <Button
+                                      onClick={() =>
+                                        inspect({ kind: 'instance', instance_id: m.instance_id })
+                                      }
+                                    >
+                                      Inspect mapped source{' '}
+                                      {history.model_snapshot?.instances.find(
+                                        (n) => n.instance_id === m.instance_id,
+                                      )?.name ?? m.instance_id}
+                                    </Button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </ActionDialog>
+                        }
+                      />
+                      <RetainedFiles
+                        key={selected}
+                        artifacts={history.artifacts}
+                        busy={artifactBusy}
+                        read={(a, mode) => void readArtifact(a, mode)}
+                      />
+                      {preview && (
+                        <section aria-label="Artifact preview" className="hf-artifact-preview">
+                          <SectionHeader
+                            title={preview.artifact.name}
+                            actions={
+                              <Button
+                                onClick={() => {
+                                  artifactRequest.current++;
+                                  setPreview(null);
+                                }}
+                              >
+                                Close preview
+                              </Button>
+                            }
+                          />
+                          <p className="evidence-content">SHA-256 {preview.artifact.sha256}</p>
+                          <pre ref={previewElement} tabIndex={0} aria-label="Read-only run file">
+                            {preview.text}
+                          </pre>
+                        </section>
+                      )}
+                    </Disclosure>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      )}
+    </section>
+  );
 }
