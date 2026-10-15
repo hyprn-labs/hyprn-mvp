@@ -380,6 +380,19 @@ export class HyprnMvpApi {
     return (await this.request<AssumptionEvidenceResolution1>(modelPath(sid, mid) + '/assumption-evidence?' + query, undefined, 'GET', signal)).data;
   };
   readiness = async (sid: string) => (await this.request<ExecutionReadiness>(`/studies/${sid}/execution-readiness`)).data;
+  explorationBasis = async (
+    sid: string, answer: string, configuration: string, signal?: AbortSignal,
+  ) => (await this.request<import('./contract').ExplorationBasis1>(
+    `/studies/${sid}/answers/${answer}/exploration-basis/${configuration}`,
+    undefined, 'GET', signal,
+  )).data;
+  preparedExplorations = (
+    sid: string, answer: string, configuration: string, signal?: AbortSignal,
+  ) => this.list<import('./contract').ExplorationOperation1>(
+    `/studies/${sid}/exploration-requests?` +
+    new URLSearchParams({ answer_version_id: answer, configuration_revision_id: configuration }),
+    signal,
+  );
   configuration = async (sid: string, rid: string, signal?: AbortSignal) => (await this.request<FrozenConfigurationRead7>(`/studies/${sid}/configurations/${rid}`, undefined, 'GET', signal)).data;
   createModelCommand = async (sid: string, command: PublicNewModel) => (await this.mutate<ModelDraftRead4>(`/studies/${sid}/models`, command, 'model', sid)).data;
   createModel = async (study: Study, name: string, template: 'empty' | 'two_component_example') => this.createModelCommand(study.study_id, { command_id: crypto.randomUUID(), expected_revision: study.revision, name, template });

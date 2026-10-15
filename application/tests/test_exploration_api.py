@@ -44,6 +44,62 @@ def design_request(e):
     )
 
 
+def test_preparation_discovery_is_bounded_exact_and_authorized(basis_env, generated, monkeypatch):
+    e = basis_env
+    request = design_request(e)
+    path = '/api/1/studies/' + e['sid'] + '/exploration-requests'
+    query = dict(
+        answer_version_id=request['answer_version_id'],
+        configuration_revision_id=request['configuration_revision_id'],
+    )
+    empty = e['client'].get(path, params=query)
+    assert empty.status_code == 200
+    assert empty.json()['data'] == []
+    assert_http(generated, '/studies/{study_id}/exploration-requests', 'get', empty)
+    ids = []
+    # Query pagination is isolated here; actual result contracts and bytes are
+    # verified by the native browser journey. No numerical result is fabricated.
+    import hyprn_mvp_app.exploration as module
+
+    original = module.validate_public
+    monkeypatch.setattr(
+        module,
+        'validate_public',
+        lambda name, value: None if name == 'ExplorationOperation1' else original(name, value),
+    )
+    for _ in range(22):
+        pending = dict(request, command_id=uid())
+        assert e['client'].post(path, json=pending).status_code == 202
+        ids.append(pending['command_id'])
+        result = dict(
+            request_id=pending['command_id'],
+            result=dict(
+                request=dict(operation='fit_predict'),
+                basis=query,
+            ),
+        )
+        with e['store'].connection(write=True) as db:
+            db.execute(
+                "UPDATE receipts SET state='committed',result=? WHERE command_id=?",
+                (json.dumps(result), pending['command_id']),
+            )
+    first = e['client'].get(path, params=query).json()
+    assert [r['request_id'] for r in first['data']] == sorted(ids)[:20]
+    second = e['client'].get(path, params=dict(query, cursor=first['next_cursor'])).json()
+    assert [r['request_id'] for r in second['data']] == sorted(ids)[20:]
+    assert second['next_cursor'] is None
+    assert e['client'].get(path, params=dict(query, answer_version_id=uid())).status_code == 404
+    assert (
+        e['client'].get(path, params=dict(query, configuration_revision_id=uid())).status_code
+        == 404
+    )
+    assert e['client'].get(path, params=dict(query, extra='x')).status_code == 400
+    with e['store'].connection(write=True) as db:
+        db.execute('DELETE FROM memberships WHERE study_id=?', (e['sid'],))
+    assert e['client'].get(path, params=query).status_code == 404
+    assert not e['canary'].exists()
+
+
 def test_design_admission_and_reads_do_not_execute_source_or_numerics(basis_env, generated):
     e = basis_env
     request = design_request(e)

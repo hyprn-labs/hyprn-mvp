@@ -319,6 +319,8 @@ for path,methods in spec["paths"].items():
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
         elif '/exploration-requests' in path:
             schema=ref('ExplorationOperation1')
+            if method == 'get' and path.endswith('/exploration-requests'):
+                schema={'type': 'array', 'maxItems': 20, 'items': schema}
             if method == 'post':
                 status='202'
                 op['requestBody']['content']['application/json']['schema']=ref('ExplorationRequest1')
@@ -467,6 +469,9 @@ for path,methods in spec["paths"].items():
         elif "/runs/" in path:schema=ref("PublicRunDetail")
         else:raise ValueError(path)
         response=envelope(schema) if schema else None
+        if response and method == 'get' and path.endswith('/exploration-requests'):
+            response['properties']['next_cursor'] = nullable(uuid)
+            response['required'].append('next_cursor')
         if path.endswith(("/edits","/preview")) and "/models/" in path:response=ref("ModelDraftEditResponse4")
         op["responses"]={str(code):{"description":"Typed error; inspect outcome before retry","content":{"application/json":{"schema":ref("Error")}}} for code in (400,401,403,404,409,413,422,429,500,503)}
         if response and method=="get" and '/approach' not in path and (path=="/studies" or path.endswith(("/models","/configurations","/runs","/revisions","/evidence")) or "/evidence-families/" in path and path.endswith("/versions")):

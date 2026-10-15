@@ -489,6 +489,26 @@ class Explorations:
         validate_public('ExplorationOperation1', result)
         return result
 
+    def prepared_page(self, actor, sid, answer, configuration, cursor=None):
+        """Bounded completed preparations, scoped to one exact authorized basis."""
+        self.basis(actor, sid, answer, configuration)
+        with self.store.connection() as db:
+            self.store.authorize(db, actor, sid)
+            rows = db.execute(
+                'SELECT command_id,result FROM receipts WHERE scope=? '
+                "AND category='exploration' AND state='committed' "
+                'AND command_id>? '
+                "AND json_extract(result,'$.result.request.operation')='fit_predict' "
+                "AND json_extract(result,'$.result.basis.answer_version_id')=? "
+                "AND json_extract(result,'$.result.basis.configuration_revision_id')=? "
+                'ORDER BY command_id LIMIT 21',
+                (sid, cursor or '', answer, configuration),
+            ).fetchall()
+        items = [json.loads(row['result']) for row in rows[:20]]
+        for item in items:
+            validate_public('ExplorationOperation1', item)
+        return items, rows[19]['command_id'] if len(rows) > 20 else None
+
     def process_one(self, native):
         """One existing command receipt owns a bounded operation; unknown never retries."""
         with self.store.connection(write=True) as db:
