@@ -20,6 +20,25 @@ authorized [public API path](../../local-api-demo.md). Use that only in its auth
 context, not as a way around delegated restrictions. Verify current state on each
 installation; never infer capability from the roadmap or this dated description.
 
+Read the unit catalogue before declaring model quantities. For the authorized
+owner HTTP client, discovery uses `GET /api/1/capabilities` and
+`GET /api/1/studies/{study_id}/unit-catalog`. Use the current schema version that
+supports quantity definitions when advertised; do not omit semantic definitions
+merely because an older model format remains accepted. Unsupported units call for
+an explicit limitation or justified reformulation, never a false unit label.
+
+The owner client accepts `{"operation":"run_status","study_id":"<UUID>",
+"run_ids":["<UUID>"]}` for a single lightweight status read of up to 20 distinct
+runs. Use bounded batches and back off between unchanged observations. Read full
+records when results or a failure need inspection. Keep returned envelopes intact:
+a configuration's saved record is under `data.configuration`. Validate against the
+public response schema rather than assuming all reads have identical nesting.
+
+When a request is rejected unchanged, repair the indicated fields using the public
+schema and discovery results. Do not recreate the study. Save command IDs before
+mutations and returned identities immediately afterward; resolve uncertain outcomes
+through the command receipt rather than repeating the mutation.
+
 ## Primitive map
 
 | Primitive | Agent responsibility | Read-back acceptance |
@@ -96,7 +115,8 @@ This sequence follows actual dependencies; it is not a demand for redundant save
 7. Read the complete results needed for the question and verification. Plan a further
    case only when it resolves an identified error, sensitivity or coverage gap.
 8. Save case answers, then the study answer selecting their exact versions. Read them
-   back and inspect the corresponding public UI.
+   back; inspect the public UI when requested or relevant and accessible. An API-only
+   request does not require browser inspection.
 
 A changed coefficient generally needs a new configuration; changed equations need
 a new model version and corresponding configurations. A changed explanation may
@@ -131,6 +151,13 @@ may describe a typed source. Do not invent fields to make one surface resemble a
 General context evidence does not support an arbitrary assignment. Evidence for the
 standard atmosphere belongs with the method/assumption that uses it; attach it to an
 input only if it warrants that input. Recheck citations after changing values.
+
+Before comparing with a supplied reference result, record the target observable,
+system boundary, conditions, units/normalization, source locator and precision in
+the method's existing reasoning or evidence. Mark values as stated, graph-read,
+derived or adopted. If these differ from the authored calculation, explain which
+comparison remains meaningful; do not present a contextual ratio as validation.
+Use the same check for any reference document, dataset or previous study.
 
 ## Worked pattern: pump energy screening
 

@@ -2,6 +2,8 @@
 
 Use these small exercises before activating or revising the scientific guidance.
 They are synthetic fixtures, not fresh evidence of a study's numerical results.
+The aircraft examples below are hypothetical fixtures, including their printed-unit
+premises; they must not be cited as facts about any real reference paper.
 When independent evaluation is authorized, supply the request, raw facts, `SKILL.md`
 and its relevant references to an independent agent; keep the expected behavior
 below out of its initial context. No application writes or model execution are
@@ -125,3 +127,14 @@ The nine computational exercises and the three coherence exercises have not rece
 a new independent agent evaluation in this consolidation. Earlier results at
 `5cd430f` apply only to that earlier guidance. Current checks of packaging and public
 tool delivery establish neither scientific judgment nor a live authoring journey.
+
+## Callable study workflow
+
+The following domain-independent exercises cover the callable `hyprn` skill. These
+are evaluation cases, not claims that a new independent evaluation has passed.
+
+| Request and supplied facts | Observable expected behavior |
+|---|---|
+| "Use $hyprn to compare two heat-exchanger designs and their total annual operating expense using the attached report." The report supplies pressure-loss correlations and electricity prices, but no cleaning schedule or maintenance costs. The API supports explicit scalar models only. | Preserve both design comparison and total-expense deliverables. Identify which cost terms can be calculated and which need evidence; continue supported work. Establish the report's conditions, define quantities and scoped assumptions, and retain unresolved maintenance work. Do not report electricity expense as total expense or demand an optimizer before doing supported arithmetic. |
+| "Use $hyprn to reproduce the attached test result." The reference reports peak power at a particular temperature; the proposed model output is average power at another temperature. The current catalogue excludes a requested unit. | Discover units before authoring, establish the observable/condition mismatch before claiming reproduction, and record what evidence or method change would make the comparison useful. Do not silently normalize away the unit mismatch or claim agreement from similar numbers. |
+| "Continue this API-only study." Twenty-three run IDs and their command receipts exist. The API exposes batch status for at most 20 IDs. One readiness observation is stale; accepted runs continue progressing. A configuration read nests its saved record under `data.configuration`. | Use two lightweight status reads for the pending set, back off when unchanged, preserve errors and distinguish readiness from run state. Retrieve full details when needed, read the nested record correctly, reuse existing submissions and verify saved answers through the API without requiring a browser. |

@@ -11,6 +11,7 @@ from pathlib import Path
 import stat
 import sys
 from urllib.parse import unquote, urlsplit
+from uuid import UUID
 
 COOKIE = 'hyprn_mvp_session'
 LIMIT = 4 * 1024 * 1024
@@ -18,6 +19,15 @@ LIMIT = 4 * 1024 * 1024
 
 class ClientError(Exception):
     """A safe diagnostic that never includes request bodies or credentials."""
+
+
+def record_id(value):
+    try:
+        if isinstance(value, str) and str(UUID(value)) == value:
+            return value
+    except ValueError:
+        pass
+    raise ClientError('Study and run IDs must be canonical UUID strings.')
 
 
 def origin_address(origin):
@@ -124,6 +134,10 @@ class LocalApi:
         self.cookie, self.csrf = token, csrf
 
     def request(self, command):
+        if isinstance(command, dict) and command.get('operation') == 'run_status':
+            if set(command) != {'operation', 'study_id', 'run_ids'}:
+                raise ClientError('run_status requires only study_id and run_ids.')
+            return self.run_status(command['study_id'], command['run_ids'])
         if not isinstance(command, dict) or set(command) - {'method', 'path', 'body'}:
             raise ClientError('Expected an object with method, path and optional body only.')
         method = command.get('method', 'GET')
@@ -136,6 +150,17 @@ class LocalApi:
             raise ClientError('Login is required.')
         status, body, _ = self._send(method, path, command.get('body'))
         return {'status': status, 'body': body}
+
+    def run_status(self, study_id, run_ids):
+        """One lightweight public read; preserve the API envelope and never retry."""
+        study_id = record_id(study_id)
+        if not isinstance(run_ids, list) or not 1 <= len(run_ids) <= 20:
+            raise ClientError('run_status requires between 1 and 20 run IDs.')
+        ids = [record_id(value) for value in run_ids]
+        if len(set(ids)) != len(ids):
+            raise ClientError('run_status requires distinct run IDs.')
+        query = '&'.join('run_id=' + value for value in ids)
+        return self.request({'path': f'/api/1/studies/{study_id}/run-status?{query}'})
 
 
 def password_from_file(path):

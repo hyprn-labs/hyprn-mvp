@@ -10,6 +10,7 @@ import tempfile
 from threading import Thread
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[1])]
 import live_fence  # noqa: E402
@@ -105,6 +106,51 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(sum(path == '/api/1/disconnect' for _, path, _, _ in self.requests), 1)
         self.assertEqual(
             self.client.request({'path': '/api/1/commands/known-command'})['status'], 200
+        )
+
+    def test_status_shortcut_reads_twenty_runs_in_one_public_request(self):
+        study_id, run_ids = str(uuid4()), [str(uuid4()) for _ in range(20)]
+        result = self.client.request(
+            {'operation': 'run_status', 'study_id': study_id, 'run_ids': run_ids}
+        )
+        self.assertEqual(result, {'status': 200, 'body': {'data': {'study_id': 'created-study'}}})
+        self.assertEqual(len(self.requests), 2)
+        method, path, headers, body = self.requests[-1]
+        self.assertEqual(method, 'GET')
+        self.assertEqual(
+            path,
+            f'/api/1/studies/{study_id}/run-status?' + '&'.join('run_id=' + r for r in run_ids),
+        )
+        self.assertIsNone(body)
+        self.assertNotIn('X-CSRF-Token', headers)
+
+    def test_status_shortcut_rejects_invalid_batches_before_sending(self):
+        study_id, run_id = str(uuid4()), str(uuid4())
+        for ids in ([], [run_id] * 21, [run_id, run_id], run_id, [None], ['../runs']):
+            with self.subTest(ids=ids), self.assertRaises(ClientError):
+                self.client.run_status(study_id, ids)
+        for invalid in ('../studies', None, 'AAAAAAAA-AAAA-4AAA-AAAA-AAAAAAAAAAAA'):
+            with self.subTest(study_id=invalid), self.assertRaises(ClientError):
+                self.client.run_status(invalid, [run_id])
+        with self.assertRaises(ClientError):
+            self.client.request(
+                {'operation': 'run_status', 'study_id': study_id, 'run_ids': [run_id], 'body': {}}
+            )
+        self.assertEqual(len(self.requests), 1)
+
+    def test_json_lines_accept_status_shortcut_without_changing_the_response(self):
+        study_id, run_id = str(uuid4()), str(uuid4())
+        command = {'operation': 'run_status', 'study_id': study_id, 'run_ids': [run_id]}
+        output = io.StringIO()
+        with (
+            patch('sys.stdin', io.StringIO('test owner password\n' + json.dumps(command) + '\n')),
+            patch('sys.stdout', output),
+        ):
+            self.assertEqual(main(['--origin', self.origin, '--username', 'owner']), 0)
+        lines = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(
+            lines,
+            [{'ready': True}, {'status': 200, 'body': {'data': {'study_id': 'created-study'}}}],
         )
 
     def test_redirect_and_authorization_errors_are_returned_without_followup(self):

@@ -21,7 +21,7 @@ memory. Successful login emits `{"ready":true}`. Close stdin to end the client.
 The server's normal session expiry and authorization rules still apply.
 
 Send one JSON object per line and wait for its response before sending the next.
-Only `method`, `path` and optional `body` are accepted. `method` defaults to `GET`.
+Ordinary requests accept `method`, `path` and optional `body`; `method` defaults to `GET`.
 Responses are `{"status":200,"body":...}` with the unchanged public API envelope,
 or `{"error":"..."}` for a local/transport failure. Headers and credentials are
 never printed. Supply request fields from `contracts/hyprn-mvp.openapi.yaml`.
@@ -29,6 +29,25 @@ never printed. Supply request fields from `contracts/hyprn-mvp.openapi.yaml`.
 ```json
 {"method":"GET","path":"/api/1/studies"}
 ```
+
+Before authoring, read `/api/1/capabilities` and the selected study's
+`/api/1/studies/{study_id}/unit-catalog`. Consult the current public request/response
+schemas; for example, a configuration read wraps its saved record in
+`data.configuration`, rather than putting the revision ID directly under `data`.
+
+For pending runs, the client also accepts a read-only shortcut:
+
+```json
+{"operation":"run_status","study_id":"<study UUID>","run_ids":["<run UUID>"]}
+```
+
+It sends one `GET /api/1/studies/{study_id}/run-status?run_id=...` for 1–20 distinct
+run IDs, preserving the normal `{status, body}` response. The Python method is
+`client.run_status(study_id, run_ids)`. Split larger sets into batches of at most 20;
+retain only pending IDs for later polls. Back off when nothing changes (for example,
+5, 10, 20, then 30 seconds) and fetch full records for completed runs or diagnosis.
+This shortcut adds no scheduler, automatic retry, new endpoint or change to execution.
+Read stale readiness as an observation about the executor, not a failed accepted run.
 
 After creating a study, use its returned ID for reads and edits in this same
 process. Every request stays on the configured origin under `/api/1/`; no proxy,
@@ -57,4 +76,6 @@ demonstration calls the existing public endpoints directly. Save case and study 
 approach, case, configuration, run, evidence and case-answer versions as applicable.
 Separate observations from interpretation and keep unanswered deliverables explicit.
 Then conclude in chat with actual results, assumptions, sources and limitations,
-and inspect the saved reader journey in the UI. Do not substitute seeded models or results for the authoring loop.
+and inspect the saved reader journey in the UI when it is part of the request and
+accessible. API-only work requires record readback, not browser inspection. Do not
+substitute seeded models or results for the authoring loop.
