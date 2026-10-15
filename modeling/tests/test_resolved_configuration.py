@@ -59,7 +59,7 @@ puts 'PROJECTION_RESULT='+JSON.generate({'proof'=>proof,'candidate'=>candidate,'
     catalog_section = patch.split('+++ b/config/modeling.units.json\n', 1)[1].split('\n--- ', 1)[0]
     catalog = json.loads('\n'.join(line[1:] for line in catalog_section.splitlines() if line.startswith('+')))
     assert all(unit in result['catalog']['supported_units'] for unit in catalog['supported_units'])
-    assert len(result['catalog']['supported_units']) == 29
+    assert len(result['catalog']['supported_units']) == 49
     assert catalog['engine'] == 'OpenMDAO' and catalog['version'] == '3.45.1'
     assert artifact['schema_version'] == result['legacy']['schema_version'] == '3'
     assert artifact['configuration_digest'] == projected['digest']

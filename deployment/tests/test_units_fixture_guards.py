@@ -193,7 +193,7 @@ class UnitsGuardTests(unittest.TestCase):
             'units-guards', 'units-contracts', 'units-staging', 'units-model',
             'units-api', 'units-public-types', 'units-resolution', 'units-configuration',
             'units-bundle', 'units-history', 'units-launcher', 'units-worker',
-            'units-attestation', 'units-native',
+            'units-attestation', 'units-native', 'units-engineering',
             'units-ui-authoring', 'units-ui-configuration', 'units-ui-reading', 'units-ui-history',
         }
         self.assertEqual({g for g in runner.GROUPS if g.startswith('units-')}, expected)
@@ -224,7 +224,8 @@ class UnitsGuardTests(unittest.TestCase):
 
     def test_units_privileges_and_interpreters_are_bounded(self):
         self.assertEqual(runner.UNITS_NATIVE_GROUPS, {
-            'units-history', 'units-launcher', 'units-worker', 'units-attestation', 'units-native',
+            'units-history', 'units-launcher', 'units-worker', 'units-attestation',
+            'units-native', 'units-engineering',
         })
         for group in runner.UNITS_APP_GROUPS | set(runner.UNITS_BROWSER_GROUPS):
             self.assertEqual(runner.GROUP_INTERPRETERS[group], fixture.APPROVED_CONTRACT_PYTHON)
@@ -455,19 +456,77 @@ class UnitsStagingTests(unittest.TestCase):
 
     def test_units_staging_generator_pinned_catalog_and_factors(self):
         import subprocess, hashlib
-        result = self.trusted_python((self.runtime.REPO / 'modeling/generate_unit_catalog.py').read_text())
+
+        result = self.trusted_python(
+            (self.runtime.REPO / 'modeling/generate_unit_catalog.py').read_text()
+        )
         catalog = json.loads(result.stdout)
         self.assertEqual(catalog['version'], '3.45.1')
-        self.assertEqual(len(catalog['supported_units']), 29)
-        self.assertEqual(len(set(catalog['supported_units'])), 29)
-        body = {k:v for k,v in catalog.items() if k != 'catalog_digest'}
-        self.assertEqual(catalog['catalog_digest'], hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest())
+        self.assertEqual(len(catalog['supported_units']), 49)
+        self.assertEqual(len(set(catalog['supported_units'])), 49)
+        body = {k: v for k, v in catalog.items() if k != 'catalog_digest'}
+        self.assertEqual(
+            catalog['catalog_digest'],
+            hashlib.sha256(
+                json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+            ).hexdigest(),
+        )
         probe = """
 import hashlib, inspect, json
 from pathlib import Path
 import openmdao
 from openmdao.utils import units
-names=['','m','km','cm','mm','s','min','h','kg','g','N','Pa','kPa','MPa','K','degC','degF','rad','deg','m/s','km/h','J/kg','kJ/kg','MJ/kg','kg/m**3','g/cm**3','m**2','cm**2','mm**2']
+names=[
+    '',
+    'm',
+    'km',
+    'cm',
+    'mm',
+    's',
+    'min',
+    'h',
+    'kg',
+    'g',
+    'N',
+    'Pa',
+    'kPa',
+    'MPa',
+    'K',
+    'degC',
+    'degF',
+    'rad',
+    'deg',
+    'm/s',
+    'km/h',
+    'J/kg',
+    'kJ/kg',
+    'MJ/kg',
+    'kg/m**3',
+    'g/cm**3',
+    'm**2',
+    'cm**2',
+    'mm**2',
+    'm**3',
+    'cm**3',
+    'mm**3',
+    'kg/m**2',
+    'g/m**2',
+    '1/m**2',
+    'J/(kg*K)',
+    'kJ/(kg*K)',
+    'J',
+    'kJ',
+    'MJ',
+    'W',
+    'kW',
+    'MW',
+    'm**3/s',
+    'kg/s',
+    'm/s**2',
+    'N*m',
+    'W/(m*K)',
+    'W/(m**2*K)',
+]
 pairs=[]
 for a in names:
     for b in names:
@@ -480,25 +539,37 @@ for a in names:
 print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,source=hashlib.sha256(Path(inspect.getfile(units)).read_bytes()).hexdigest())))
 """
         checked = self.trusted_python(probe)
-        trusted=json.loads(checked.stdout)
+        trusted = json.loads(checked.stdout)
         self.assertEqual(trusted['version'], '3.45.1')
         self.assertEqual(catalog['source_sha256'], trusted['source'])
         self.assertEqual(catalog['supported_units'], trusted['names'])
-        expected=trusted['pairs']
+        expected = trusted['pairs']
         self.assertEqual(catalog['linear_pairs'], expected)
-        pairs={(a,b):factor for a,b,factor,offset in expected}
-        for pair,value in {( 'MJ/kg','J/kg'):1e6, ('g/cm**3','kg/m**3'):1000, ('cm**2','m**2'):1e-4, ('mm**2','m**2'):1e-6}.items():
+        pairs = {(a, b): factor for a, b, factor, offset in expected}
+        for pair, value in {
+            ('MJ/kg', 'J/kg'): 1e6,
+            ('g/cm**3', 'kg/m**3'): 1000,
+            ('cm**2', 'm**2'): 1e-4,
+            ('mm**2', 'm**2'): 1e-6,
+            ('cm**3', 'm**3'): 1e-6,
+            ('g/m**2', 'kg/m**2'): 1e-3,
+            ('kJ/(kg*K)', 'J/(kg*K)'): 1000,
+            ('MW', 'W'): 1e6,
+            ('N*m', 'J'): 1,
+        }.items():
             self.assertAlmostEqual(pairs[pair], value)
-        self.assertNotIn(('degC','K'), pairs)
-        self.assertEqual(pairs['degC','degC'],1)
+        self.assertNotIn(('degC', 'K'), pairs)
+        self.assertEqual(pairs['degC', 'degC'], 1)
         self.native_base()
+        legacy = json.loads((self.stage / 'config/modeling.units.json').read_text())
+        self.assertTrue(all(row in catalog['linear_pairs'] for row in legacy['linear_pairs']))
         self.apply(self.runtime.stage_units_native_patch(self.stage).read_text())
-        self.assertEqual((self.stage/'config/modeling.units.json').read_text(), result.stdout)
+        self.assertEqual((self.stage / 'config/modeling.units.json').read_text(), result.stdout)
 
     def test_units_staging_both_routes_and_inventory(self):
         self.native_base()
-        adapter=self.runtime.stage_modeling_contract(self.stage).read_text()
-        units=self.runtime.stage_units_native_patch(self.stage).read_text()
+        adapter = self.runtime.stage_modeling_contract(self.stage).read_text()
+        units = self.runtime.stage_units_native_patch(self.stage).read_text()
         self.apply(units)
         native=(self.stage/'app/services/native_materializer.rb').read_text()
         program=(self.stage/'app/services/native_program.rb').read_text()

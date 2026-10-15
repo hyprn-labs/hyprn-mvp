@@ -84,6 +84,7 @@ GROUPS = {
         'integration/tests/test_native_program.py',
     ),
     'units-attestation': ('deployment/tests/test_attestation.py',),
+    'units-engineering': ('deployment/tests/test_engineering_units.py',),
     'units-native': (
         'deployment/tests/units_native_fixture.py',
         'deployment/tests/test_units_native.py',
@@ -995,7 +996,14 @@ UNITS_BROWSER_GROUPS = {
     'units-ui-history': '@units-history',
 }
 UNITS_NATIVE_GROUPS = frozenset(
-    {'units-history', 'units-launcher', 'units-worker', 'units-attestation', 'units-native'}
+    {
+        'units-history',
+        'units-launcher',
+        'units-worker',
+        'units-attestation',
+        'units-native',
+        'units-engineering',
+    }
 )
 UNITS_APP_GROUPS = frozenset(
     {'units-api', 'units-public-types', 'units-resolution', 'units-configuration', 'units-bundle'}

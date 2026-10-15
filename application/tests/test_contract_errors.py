@@ -121,3 +121,127 @@ def test_api_malformed_json_body_is_explained_without_echo(client):
     assert error['code'] == 'invalid_request'
     assert [f['path'] for f in error['fields']] == ['/']
     assert 'JSON' in error['fields'][0]['message'] and SECRET not in response.text
+
+
+def approach_request():
+    return dict(schema_version='2', expected_revision=None, content=dict(
+        schema_version='2', question='Compare designs', scope='', limitations='',
+        open_questions='', model_bindings=[], steps=[], assumptions=[], cases=[],
+        basis_refs=[], original_question=None, elaboration=None, limit_items=[]))
+
+
+@pytest.mark.parametrize(
+    'failure,expected_path,expected_message',
+    [
+        ('role', '/content/assumptions/0/role', 'Required field is missing.'),
+        (
+            'question',
+            '/content/original_question',
+            'Expected object with required fields "text", "attribution" or null.',
+        ),
+        ('remaining_work', '/content/steps/0/remaining_work', 'Must be at most 0 characters.'),
+    ],
+)
+def test_versioned_approach_errors_name_the_actionable_field(
+    client, failure, expected_path, expected_message
+):
+    from uuid import uuid4
+
+    uid = str(uuid4())
+    request = approach_request()
+    validate('ApproachPreviewRequestRead2', request)
+    content = request['content']
+    if failure == 'role':
+        content['assumptions'] = [dict(assumption_id=uid, statement=SECRET, evidence_links=[])]
+    elif failure == 'question':
+        content['original_question'] = SECRET
+    else:
+        content['steps'] = [
+            dict(
+                step_id=uid,
+                title='Compute response',
+                purpose='',
+                rationale='',
+                remaining_work=SECRET,
+                intent=dict(transformation='', inputs='', outputs='', depends_on_step_ids=[]),
+                implementation_state='linked',
+                implementation_refs=[dict(kind='model', binding_id=uid)],
+                assumption_refs=[],
+                evidence_links=[],
+            )
+        ]
+    study = client.post(
+        '/api/1/studies', json=dict(command_id=uid, name='Diagnostic study')
+    ).json()['data']
+    response = client.post(
+        '/api/1/studies/' + study['study_id'] + '/approach/preview', json=request
+    )
+    assert response.status_code == 400, response.text
+    validate('Error', response.json())
+    assert response.json()['error']['fields'] == [
+        dict(path=expected_path, code='invalid', message=expected_message, element_ref=None)
+    ]
+    assert SECRET not in response.text
+
+
+def test_nested_discriminated_unit_error_identifies_expression():
+    value = dict(
+        temp_key='length',
+        name='Length',
+        code_symbol='length',
+        direction='input',
+        value_type='real_scalar',
+        units=dict(kind='physical', expression=SECRET),
+    )
+    error = rejected('PortDeclaration3', value)
+    fields = [f for f in error.fields if f['path'] == '/units/expression']
+    assert error.fields == fields and len(fields) == 1
+    assert fields[0]['message'].startswith('Must be one of:')
+    assert SECRET not in str(error.fields)
+
+
+def test_ambiguous_union_does_not_invent_a_selected_discriminator():
+    error = rejected('UnitDeclaration1', dict(expression=SECRET))
+    assert error.fields and SECRET not in str(error.fields)
+    for field in error.fields:
+        validate('Diagnostic', field)
+
+
+def test_model_preview_names_unsupported_unit_inside_versioned_edit(client):
+    import base64
+    import hashlib
+    from uuid import uuid4
+
+    raw = b"outputs['y'] = inputs['x']\n"
+    quantity = dict(
+        temp_key='x',
+        name='Input',
+        code_symbol='x',
+        direction='input',
+        value_type='real_scalar',
+        units=dict(kind='physical', expression='m'),
+    )
+    edit = dict(
+        kind='create_definition',
+        temp_key='component',
+        name='Transform',
+        definition_kind='explicit_component',
+        ports=[quantity],
+        source=dict(
+            encoding='base64',
+            media_type='text/x-python',
+            bytes=base64.b64encode(raw).decode(),
+            sha256=hashlib.sha256(raw).hexdigest(),
+        ),
+    )
+    body = dict(schema_version='4', expected_revision='draft', edits=[edit])
+    validate('PreviewRead4', body)
+    quantity['units']['expression'] = SECRET
+    response = client.post(f'/api/1/studies/{uuid4()}/models/{uuid4()}/preview', json=body)
+    assert response.status_code == 400, response.text
+    validate('Error', response.json())
+    fields = response.json()['error']['fields']
+    assert len(fields) == 1
+    assert fields[0]['path'] == '/edits/0/ports/0/units/expression'
+    assert fields[0]['message'].startswith('Must be one of:')
+    assert SECRET not in response.text

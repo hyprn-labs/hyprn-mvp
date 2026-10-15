@@ -13,7 +13,11 @@ own active-occurrence readiness.
 from .contracts import definition, DomainError, canonical, validate
 
 # Identity pins from the audited unit catalog table, not a fallback catalog or parser.
-UNIT_CATALOG_DIGEST = 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3'
+UNIT_CATALOG_DIGEST = '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45'
+# Historical artifacts authenticate their exact table; current discovery uses only the new pin.
+RETAINED_UNIT_CATALOG_DIGESTS = frozenset(
+    (UNIT_CATALOG_DIGEST, 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
+)
 UNIT_ENGINE_SOURCE_SHA256 = '9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92'
 UNIT_CATALOG_BYTES = 16384
 

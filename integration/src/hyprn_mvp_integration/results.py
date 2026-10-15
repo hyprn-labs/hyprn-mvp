@@ -28,7 +28,8 @@ def evaluate_criteria(result, criteria, unit_conversion=None):
         outcome, reason = 'unresolved', 'required_output_unavailable'
         output = outputs.get((criterion['target']['instance_id'], criterion['target']['port_id']))
         if result['schema_version'] == '1' and result['convergence']['state'] not in (
-            'converged', 'not_applicable'
+            'converged',
+            'not_applicable',
         ):
             reason = 'convergence_unresolved'
         elif output and output['availability'] == 'available':
@@ -209,6 +210,26 @@ def _result_unit(value, model_version):
             'm**2',
             'cm**2',
             'mm**2',
+            'm**3',
+            'cm**3',
+            'mm**3',
+            'kg/m**2',
+            'g/m**2',
+            '1/m**2',
+            'J/(kg*K)',
+            'kJ/(kg*K)',
+            'J',
+            'kJ',
+            'MJ',
+            'W',
+            'kW',
+            'MW',
+            'm**3/s',
+            'kg/s',
+            'm/s**2',
+            'N*m',
+            'W/(m*K)',
+            'W/(m**2*K)',
         }
     ):
         return value['expression']
@@ -226,9 +247,7 @@ def validate_result(raw, request, model, *, result_schema_version='1'):
         raise ValueError('Worker did not exit normally')
     prefix = 'HYPRN_MVP_RESULT_V' + result_schema_version + ' '
     lines = [
-        line[len(prefix) :]
-        for line in envelope['output'].splitlines()
-        if line.startswith(prefix)
+        line[len(prefix) :] for line in envelope['output'].splitlines() if line.startswith(prefix)
     ]
     if len(lines) != 1 or any(
         line.startswith('HYPRN_MVP_RESULT_V') and not line.startswith(prefix)
@@ -454,6 +473,7 @@ def retained_bundle(repository, request):
     if reader is None:
         raise UnsupportedRecordVersion('Unsupported retained bundle version')
     from hyprn_mvp_app.execution_bundle import bundle_layout
+
     layout = bundle_layout(manifest)
     manifest_fields = {
         'schema_version',
@@ -481,7 +501,8 @@ def retained_bundle(repository, request):
         manifest_fields |= {'approach_digest', 'approach_closure_digest'}
     if layout in ('8', '9'):
         manifest_fields.add('model_schema_version')
-    if manifest['schema_version'] == '10':manifest_fields.add('input_schema_version')
+    if manifest['schema_version'] == '10':
+        manifest_fields.add('input_schema_version')
     if set(manifest) != manifest_fields:
         raise ValueError('Unexpected retained manifest fields')
     if manifest['result_protocol_version'] != ('2' if manifest['schema_version'] == '10' else '1'):

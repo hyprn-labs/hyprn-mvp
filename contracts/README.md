@@ -58,6 +58,21 @@ Proposed changes, not implemented: a field pointer on the configuration-commit `
 - **Private modeling requests** bind study, actor, resource permissions, HTTP method, full path, raw body hash and a short expiry to the separate service credential.
 - **Recorded exception to "existing shapes are never edited".** Two read definitions were widened in place during early development, before any record was released: `ModelPackage` admits `ModelPackage4`, and `ExecutionVersions` admits execution bundle version `"8"`. The widened bodies are the accepted definitions. Every prior definition is now pinned individually by the contract tests, so any further in-place change fails; new shapes are added only as new versioned definitions.
 
+### Approved additive unit exception
+
+On 2026-10-15 the owner approved widening only the physical expression enumeration
+in `UnitDeclaration1` and its matching `UnitCatalog1` discovery enumeration/count,
+without introducing new record formats. The exact 20 added
+spellings are `m**3`, `cm**3`, `mm**3`, `kg/m**2`, `g/m**2`, `1/m**2`,
+`J/(kg*K)`, `kJ/(kg*K)`, `J`, `kJ`, `MJ`, `W`, `kW`, `MW`, `m**3/s`,
+`kg/s`, `m/s**2`, `N*m`, `W/(m*K)` and `W/(m**2*K)`.
+
+The contract guard removes only this exact suffix before checking the original
+schema hash. Existing spellings and conversion factors remain unchanged. Saved
+records and retained artifact schemas are not rewritten. New preparation pins the
+expanded catalogue and current schema; worker source and catalogue attestation
+remain mandatory. This exception does not authorize other in-place schema changes.
+
 ## Modeling contract wire notes
 
 - `create_definition` uses `kind: "create_definition"` as the edit discriminator and `definition_kind: "explicit_component"` for the definition type, because both cannot occupy the JSON key `kind`.

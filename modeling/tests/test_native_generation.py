@@ -137,10 +137,10 @@ puts 'NATIVE_RESULT='+JSON.generate({'artifact'=>first,'files'=>files,'capabilit
     artifact=result['artifact']; files={p:base64.b64decode(v) for p,v in result['files'].items()}
     check_program(artifact,files,artifact['prepared_digest'])
     validate('ProgramProvenance',json.loads(files['provenance/generator.json']))
-    validate('Capabilities',result['capabilities'])
+    validate('CapabilitiesRead2',result['capabilities'])
     assert files['sources/'+hashlib.sha256(raw).hexdigest()+'.py']==raw
     assert b'<%= File.write' in b''.join(b for p,b in files.items() if p.startswith('generated/impl/'))
-    assert artifact['schema_version']=='2'
+    assert artifact['schema_version']=='3'
 
 
 def test_actual_generator_failure_prevents_preparation():
@@ -350,4 +350,4 @@ puts 'NATIVE_RESULT='+JSON.generate({'source'=>draft['source_files'][0],'prepare
 """)
     assert base64.b64decode(result['source']['bytes'])==raw
     assert result['source']['sha256']==hashlib.sha256(raw).hexdigest()
-    assert result['inert'] and result['prepared']=='2'
+    assert result['inert'] and result['prepared']=='3'

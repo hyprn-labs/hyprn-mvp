@@ -19,10 +19,21 @@ import pytest
 from execution_fixtures import fixture, runtime_fixture
 from test_approach_closure import sample, D, link, signed, resolution
 from hyprn_mvp_app.approach_closure import build_closure
-from hyprn_mvp_app.execution import (assemble_bundle, validate_frozen_configuration,
-    validate_preparation, validate_retained_bundle, executable_digest, raw_hash,
-    StaticPreparation, Submissions)
-from hyprn_mvp_app.modeling import UNIT_CATALOG_DIGEST, validate
+from hyprn_mvp_app.execution import (
+    assemble_bundle,
+    validate_frozen_configuration,
+    validate_preparation,
+    validate_retained_bundle,
+    executable_digest,
+    raw_hash,
+    StaticPreparation,
+    Submissions,
+)
+from hyprn_mvp_app.modeling import validate
+from hyprn_mvp_app.units import UNIT_CATALOG_DIGEST as CURRENT_CATALOG_DIGEST
+
+# This admission corpus retains its original producer bytes and conversion proofs.
+UNIT_CATALOG_DIGEST = 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3'
 from hyprn_mvp_app.scientific_configuration import project_scientific_configuration as project
 from hyprn_mvp_app.store import canonical, digest, uid, Store, DomainError
 
@@ -35,19 +46,39 @@ def catalog(tmp_path_factory):
     # The producer's patched catalog is the 040 catalog with the 080 catalog hunk applied once,
     # exactly; the fixture carries those bytes.
     root = tmp_path_factory.mktemp('catalog')
-    (root/'config').mkdir()
-    created = (REPO/'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
+    (root / 'config').mkdir()
+    created = (REPO / 'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
     section = created.split('+++ b/config/modeling.units.json\n', 1)[1].split('\n--- ', 1)[0]
-    (root/'config/modeling.units.json').write_text('\n'.join(line[1:] for line in section.splitlines()[1:] if line.startswith('+')) + '\n')
-    patch = (REPO/'upstream/whatsopt-patches/080-unit-declarations.patch').read_text()
-    patch = patch[patch.index('--- a/config/modeling.units.json'):]
-    result = subprocess.run(['patch','--batch','--forward','--fuzz=0','-p1'], input=patch,
-                            text=True, cwd=root, capture_output=True)
+    (root / 'config/modeling.units.json').write_text(
+        '\n'.join(line[1:] for line in section.splitlines()[1:] if line.startswith('+')) + '\n'
+    )
+    patch = (REPO / 'upstream/whatsopt-patches/080-unit-declarations.patch').read_text()
+    patch = patch[patch.index('--- a/config/modeling.units.json') :]
+    result = subprocess.run(
+        ['patch', '--batch', '--forward', '--fuzz=0', '-p1'],
+        input=patch,
+        text=True,
+        cwd=root,
+        capture_output=True,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'offset' not in result.stdout and 'fuzz' not in result.stdout
-    assert (root/'config/modeling.units.json').read_bytes() == fixture()['files'][CATALOG_PATH]
-    value = json.loads((root/'config/modeling.units.json').read_bytes())
-    assert raw_hash(json.dumps({k:v for k,v in value.items() if k!='catalog_digest'}, sort_keys=True, separators=(',',':'), allow_nan=False).encode()) == UNIT_CATALOG_DIGEST
+    current = json.loads((root / 'config/modeling.units.json').read_bytes())
+    assert current['catalog_digest'] == CURRENT_CATALOG_DIGEST
+    value = json.loads(fixture()['files'][CATALOG_PATH])
+    assert current['supported_units'][: len(value['supported_units'])] == value['supported_units']
+    assert all(pair in current['linear_pairs'] for pair in value['linear_pairs'])
+    assert (
+        raw_hash(
+            json.dumps(
+                {k: v for k, v in value.items() if k != 'catalog_digest'},
+                sort_keys=True,
+                separators=(',', ':'),
+                allow_nan=False,
+            ).encode()
+        )
+        == UNIT_CATALOG_DIGEST
+    )
     return value
 
 

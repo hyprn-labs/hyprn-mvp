@@ -376,6 +376,62 @@ _BOUNDS = {
 }
 
 
+def _selected_union_errors(error):
+    """Follow an explicit wire discriminator or the submitted JSON type.
+
+    Do not guess a version from the number of failing fields. A branch can be
+    excluded only by its own type or kind/schema_version constraint; ambiguous
+    alternatives keep the ordinary closest-form diagnostic.
+    """
+
+    def branches(union):
+        grouped = {}
+        for child in union.context:
+            index = next(iter(child.schema_path), None)
+            if not isinstance(index, int):
+                return {}
+            grouped.setdefault(index, []).append(child)
+        return grouped
+
+    def contradicted(child):
+        if (
+            child.validator == 'additionalProperties'
+            and child.validator_value is False
+            and not child.path
+            and isinstance(child.instance, dict)
+        ):
+            properties = child.schema.get('properties', {})
+            patterns = child.schema.get('patternProperties', {})
+            if any(
+                key in child.instance
+                and key not in properties
+                and not any(re.search(pattern, key) for pattern in patterns)
+                for key in ('kind', 'schema_version')
+            ):
+                return True
+        if child.validator == 'type' and not child.path:
+            return True
+        if (
+            child.validator in ('const', 'enum')
+            and len(child.path) == 1
+            and child.path[0] in ('kind', 'schema_version')
+        ):
+            return True
+        if child.validator in ('oneOf', 'anyOf') and not child.path:
+            nested = branches(child)
+            return bool(nested) and all(
+                any(contradicted(item) for item in children) for children in nested.values()
+            )
+        return False
+
+    candidates = [
+        children
+        for children in branches(error).values()
+        if not any(contradicted(child) for child in children)
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def _explain(error):
     """Controlled messages from schema facts only; submitted values are never echoed.
 
@@ -383,6 +439,23 @@ def _explain(error):
     clearly closest, marked as such; otherwise it stays at the union's own path.
     """
     if error.validator in ('oneOf', 'anyOf') and error.context:
+        if all(child.validator == 'type' and not child.path for child in error.context):
+            forms = []
+            for child in error.context:
+                expected = child.validator_value
+                if not isinstance(expected, str):
+                    break
+                if expected == 'object' and child.schema.get('required'):
+                    expected += ' with required fields ' + ', '.join(
+                        _quote(name) for name in child.schema['required'][:20]
+                    )
+                if expected not in forms:
+                    forms.append(expected)
+            else:
+                return [issue(error.absolute_path, 'Expected ' + ' or '.join(forms) + '.')]
+        selected = _selected_union_errors(error)
+        if selected is not None:
+            return diagnostics(selected)
         closest = best_match([error])
         if closest is not error:
             return [
@@ -484,6 +557,7 @@ def public_record_view(value):
         validate('RetainedResults', value)
         result = {key: item for key, item in result.items() if key not in LEGACY_RESULT_FIELDS}
     if result != value:
-        result['record_view'] = dict(schema_version='1', source_sha256=digest(value),
-                                    view_sha256=digest(result))
+        result['record_view'] = dict(
+            schema_version='1', source_sha256=digest(value), view_sha256=digest(result)
+        )
     return result

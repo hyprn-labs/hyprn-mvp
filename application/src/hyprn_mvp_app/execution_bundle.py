@@ -44,7 +44,7 @@ from .contracts import (
 )
 from .scientific_configuration import project_scientific_configuration
 from .units import (
-    UNIT_CATALOG_DIGEST,
+    RETAINED_UNIT_CATALOG_DIGESTS,
     UNIT_ENGINE_SOURCE_SHA256,
     port_units,
     require_engine_unit,
@@ -138,7 +138,8 @@ _INPUT_FAMILIES = {**_FAMILIES, '9': BundleFamily('7', '4', frozenset({'2', '3',
 # Output format is independent of the immutable input bundle family.
 CURRENT_RESULT_PAIRINGS = frozenset(
     ('7', '10', configuration, model)
-    for _, bundle, configuration, model in RETAINED_PAIRINGS if bundle != '1'
+    for _, bundle, configuration, model in RETAINED_PAIRINGS
+    if bundle != '1'
 )
 RESULT_PAIRINGS = RETAINED_PAIRINGS | CURRENT_RESULT_PAIRINGS
 
@@ -895,7 +896,7 @@ def validate_unit_catalog(prepared, files, config, model, engine_unit):
             continue
         if (
             set(catalog) != fields
-            or catalog['catalog_digest'] != UNIT_CATALOG_DIGEST
+            or catalog['catalog_digest'] not in RETAINED_UNIT_CATALOG_DIGESTS
             or catalog['engine'] != 'OpenMDAO'
             or catalog['version'] != '3.45.1'
             or catalog['source_sha256'] != UNIT_ENGINE_SOURCE_SHA256
@@ -907,7 +908,7 @@ def validate_unit_catalog(prepared, files, config, model, engine_unit):
             separators=(',', ':'),
             allow_nan=False,
         ).encode()
-        if raw_hash(payload) != UNIT_CATALOG_DIGEST:
+        if raw_hash(payload) != catalog['catalog_digest']:
             raise ValueError('Retained unit catalog digest mismatch')
         catalogs.append(catalog)
     if len(catalogs) != 1:
@@ -940,7 +941,7 @@ def validate_unit_catalog(prepared, files, config, model, engine_unit):
                 conversion['policy'] != 'openmdao-linear-catalog-1'
                 or conversion['catalog_digest']
                 != (
-                    UNIT_CATALOG_DIGEST
+                    catalog['catalog_digest']
                     if model['schema_version'] == '3' or typed_targets[port_key(item['target'])]
                     else digest(catalog)
                 )
@@ -993,10 +994,9 @@ def validate_retained_bundle(bundle, request, frozen, *, raw_snapshot=False):
             if closure is not None:
                 closed('ApproachClosurePreUnits', closure)
         elif version in ('8', '9'):
-            if (
-                (version == '8' and not uses_polish_envelope(model, closure))
-                or manifest['model_schema_version'] != model['schema_version']
-            ):
+            if (version == '8' and not uses_polish_envelope(model, closure)) or manifest[
+                'model_schema_version'
+            ] != model['schema_version']:
                 raise ValueError('Bundle8 exact model/descriptive branch mismatch')
             if closure is not None:
                 closed('ApproachClosure4' if version == '9' else 'ApproachClosure3', closure)

@@ -107,7 +107,7 @@ def check_program(artifact, files, expected_digest):
     by existing model validation and the later production consumer, not this
     small program-format oracle.
     """
-    validate("PreparedModelArtifact", artifact)
+    validate("PreparedModelArtifact3" if artifact["schema_version"] == "3" else "PreparedModelArtifact", artifact)
     assert artifact["prepared_digest"] == expected_digest == digest({k: v for k, v in artifact.items() if k != "prepared_digest"})
     descriptors = artifact["files"]
     assert len({f["file_id"] for f in descriptors}) == len(descriptors)

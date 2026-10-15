@@ -93,3 +93,11 @@ Generation behaviour relies on [ActiveRecord transactions](https://api.rubyonrai
 | `db/migrate/20261008140100_add_probe_receipts.rb` | absent | `467eeb429337a6dc674c915e2528160d01d2f9e8ba911fc8ced273c761bcc240` |
 
 Patch 050 replaces the entire discipline template. Its complete reviewed postimage is materialized against the pinned original template and must equal SHA-256 `d9c720054302de48dd43116b7dc4cc563d1ca120c5ce278a2708e1b981bfcec7`. This removes a dependency on four intermediate authoring-template lines without changing the final template. The adapter-only 060 patch and the adapter section of 050 are represented by the cumulative 040–090 adapter, so their duplicate build-stage hunks are omitted; all complete patches remain in the corresponding source.
+
+## Ordinary engineering catalogue extension (2026-10-15)
+
+The approved additive catalogue extension is generated from the same reviewed
+OpenMDAO 3.45.1 units source. Patch 080 carries the generated 49-entry internal
+catalogue (48 physical spellings plus dimensionless). Existing spellings and
+conversion factors are preserved; no affine conversion or general parser is added.
+The exact schema exception and permitted suffix are recorded in contracts/README.md.

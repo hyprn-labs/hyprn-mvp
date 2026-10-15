@@ -155,9 +155,18 @@ def uuid_list(value, limit=1000):
 
 # Pinned unit_declarations/1 identities. This finite vocabulary is a wire
 # contract; numerical conversion remains exclusively OpenMDAO's responsibility.
-UNIT_CATALOG_DIGEST = 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3'
+UNIT_CATALOG_DIGEST = '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45'
+# Historical artifacts authenticate their exact table; current discovery uses only the new pin.
+RETAINED_UNIT_CATALOG_DIGESTS = frozenset(
+    (UNIT_CATALOG_DIGEST, 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
+)
 # RFC8785 digest of the same authenticated080 catalog, retained for string targets.
-LEGACY_TYPED_CATALOG_DIGEST = '93fc4085d924c6abb015cd351741569876b873693dc2c084b240716f16cfbc07'
+LEGACY_TYPED_CATALOG_DIGESTS = {
+    UNIT_CATALOG_DIGEST: '12e353e5595f9b83d7287f83c1b0dc6e9464fea56b053d8bf3abcfc7c0e914b0',
+    'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3': (
+        '93fc4085d924c6abb015cd351741569876b873693dc2c084b240716f16cfbc07'
+    ),
+}
 UNIT_ENGINE_SOURCE_SHA256 = '9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92'
 PHYSICAL_UNITS = frozenset(
     (
@@ -189,6 +198,26 @@ PHYSICAL_UNITS = frozenset(
         'm**2',
         'cm**2',
         'mm**2',
+        'm**3',
+        'cm**3',
+        'mm**3',
+        'kg/m**2',
+        'g/m**2',
+        '1/m**2',
+        'J/(kg*K)',
+        'kJ/(kg*K)',
+        'J',
+        'kJ',
+        'MJ',
+        'W',
+        'kW',
+        'MW',
+        'm**3/s',
+        'kg/s',
+        'm/s**2',
+        'N*m',
+        'W/(m*K)',
+        'W/(m**2*K)',
     )
 )
 
@@ -389,8 +418,8 @@ def verify_unit_catalog(manifest, files, prepared, model, config):
             allow_nan=False,
         ).encode()
         if (
-            catalog['catalog_digest'] != UNIT_CATALOG_DIGEST
-            or hashlib.sha256(payload).hexdigest() != UNIT_CATALOG_DIGEST
+            catalog['catalog_digest'] not in RETAINED_UNIT_CATALOG_DIGESTS
+            or hashlib.sha256(payload).hexdigest() != catalog['catalog_digest']
             or catalog['engine'] != 'OpenMDAO'
             or catalog['version'] != '3.45.1'
             or catalog['source_sha256'] != UNIT_ENGINE_SOURCE_SHA256
@@ -448,9 +477,9 @@ def verify_unit_catalog(manifest, files, prepared, model, config):
                 proof['policy'] != 'openmdao-linear-catalog-1'
                 or proof['catalog_digest']
                 != (
-                    UNIT_CATALOG_DIGEST
+                    catalogs[0]['catalog_digest']
                     if model['schema_version'] == '3' or typed_targets[port(item['target'])]
-                    else LEGACY_TYPED_CATALOG_DIGEST
+                    else LEGACY_TYPED_CATALOG_DIGESTS[catalogs[0]['catalog_digest']]
                 )
                 or proof['source_units'] != item['units']
                 or proof['destination_units'] != destination
@@ -1245,8 +1274,7 @@ def verify_approach(manifest, files, config):
     p = config['approach_binding']
     path = 'approach/closure.json'
     mixed = (
-        bundle_layout(manifest) == '6'
-        and frozen_json(files['model.json'])['schema_version'] == '2'
+        bundle_layout(manifest) == '6' and frozen_json(files['model.json'])['schema_version'] == '2'
     )
     roles = [f for f in manifest['files'] if f.get('role') == 'approach']
     reserved = {name for name in files if name.startswith('approach/')}
