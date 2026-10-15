@@ -20,7 +20,7 @@ REPO=Path(__file__).resolve().parents[2]
 
 
 class UnitsJourney(ApproachJourney):
-    def start(self):
+    def start(self, *, resume=False):
         import secrets,time
         from hyprn_mvp_app.store import Store,uid
         from hyprn_mvp_integration.calculation import NativeExecution
@@ -31,10 +31,18 @@ class UnitsJourney(ApproachJourney):
         base=guard.SCOPE_PREFIX+self.scope.run_uuid[:8]
         self.name=base+'-modeling'
         self.network=base+'-private';self.label='org.hyprn-mvp.test-scope='+self.scope.run_uuid
-        root=guard.scoped_path(self.scope,'artifacts/private-http');root.mkdir()
-        store=root/'modeling';store.mkdir();store.chmod(0o777)
-        key=guard.scoped_path(self.scope,'artifacts/fixture-model-key');key.write_text(secrets.token_hex(64));key.chmod(0o444)
-        rails=root/'rails.key';rails.write_text(secrets.token_hex(64));rails.chmod(0o444)
+        root = guard.scoped_path(self.scope, 'artifacts/private-http')
+        root.mkdir(exist_ok=resume)
+        store = root / 'modeling'
+        store.mkdir(exist_ok=resume)
+        store.chmod(0o777)
+        key=guard.scoped_path(self.scope,'artifacts/fixture-model-key')
+        rails=root/'rails.key'
+        if not resume:
+            key.write_text(secrets.token_hex(64))
+            key.chmod(0o444)
+            rails.write_text(secrets.token_hex(64))
+            rails.chmod(0o444)
         assert self.docker('inspect',self.name,check=False).returncode!=0
         assert self.docker('network','inspect',self.network,check=False).returncode!=0
         self.docker('network','create','--internal','--label',self.label,self.network)
@@ -85,14 +93,26 @@ class UnitsJourney(ApproachJourney):
             assert client.get(self.model_url+'/capabilities',headers={'Authorization':'Bearer forged'}).status_code==401
             assert client.post(self.model_url.replace('/modeling/1','')+'/api/v1/analyses/1/hyprn_mvp/run').status_code==404
         self.store=Store(self.scope.root/'artifacts/combined.sqlite')
-        self.setup=dict(model_url=self.model_url,password='fixture-'+uid(),production_http=True)
+        setup_path = self.scope.root / 'artifacts/combined-setup.json'
+        prior = json.loads(setup_path.read_text()) if resume else None
+        self.setup = dict(model_url=self.model_url,
+                          password=prior['password'] if prior else 'fixture-' + uid(),
+                          production_http=True)
         (self.scope.root/'artifacts/combined-setup.json').write_text(json.dumps(self.setup))
         self.start_web()
-        result=self.http.post('/api/1/studies',json=dict(command_id=uid(),name='Force evidence journey'))
-        assert result.status_code==201,result.text
-        self.study=result.json()['data'];self.sid=self.study['study_id']
+        if resume:
+            manifest = self.scope.root / 'artifacts/exploration-browser-input.json'
+            self.sid = json.loads(manifest.read_text())['study_id']
+            self.study=self.http.get('/api/1/studies/'+self.sid).json()['data']
+        else:
+            result = self.http.post('/api/1/studies',
+                                    json=dict(command_id=uid(), name='Force evidence journey'))
+            assert result.status_code==201,result.text
+            self.study = result.json()['data']
+            self.sid = self.study['study_id']
         with self.store.connection() as db:self.actor=db.execute("SELECT actor_id FROM users WHERE username='owner'").fetchone()[0]
-        guard.prepare_worker_fixture(self.scope,self.backend)
+        if not resume:
+            guard.prepare_worker_fixture(self.scope, self.backend)
         self.native=NativeExecution(backend=self.backend,root=self.scope.root)
         assert self.native.require_attestation()['passed']
         self.identity=dict(image=image,network=self.network,container=self.name,transport='production ModelingClient HTTP/JWT',

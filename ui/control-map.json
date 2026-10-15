@@ -1,6 +1,10 @@
 {
   "description": "Named UI controls and the browser spec test that proves each one. ui/check_ui_contract.py fails when a spec file is missing or no test title in it contains the named text. A mapping is not behavioural evidence: the browser groups that run these specs are.",
   "controls": {
+    "exploration-01": {
+      "spec": "exploration.spec.ts",
+      "test": "canonical graph keeps calculations in settings and predictions on selection"
+    },
     "approach-01": {
       "spec": "approach.spec.ts",
       "test": "@approach-reading actual Overview entry, question editing, version restore and immutable reads"

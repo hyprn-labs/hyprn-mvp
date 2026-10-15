@@ -595,3 +595,18 @@ dd{margin:var(--space-1) 0}
 .hf-table tbody th { font: inherit; text-transform: none; letter-spacing: normal; background: var(--surface); white-space: normal; }
 .hf-table td, .hf-table tbody th { vertical-align: top; overflow-wrap: anywhere; }
 .hf-table caption { text-align: left; padding: var(--space-2) var(--space-3); }
+/* Canonical graph port content: shared answer exploration recipes. */
+.hf-node__exploration-port { height: calc(var(--space-12) * 5); overflow: auto; padding: var(--space-2); }
+.hf-graph-exploration { max-height: calc(var(--space-12) * 12); }
+.hf-quantity-slider { display: grid; gap: var(--space-1); }
+.hf-quantity-slider input[type="range"] { width: 100%; min-height: var(--control-floor); accent-color: var(--accent); }
+.hf-quantity-result { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.hf-response-curve { margin: var(--space-1) 0; }
+.hf-response-curve svg { width: 100%; height: calc(var(--space-12) * 2); overflow: visible; }
+.hf-response-curve path { fill: none; stroke: var(--accent); }
+.hf-response-curve__estimate { stroke-dasharray: 4 3; }
+.hf-response-curve .hf-response-curve__axis { stroke: var(--line); }
+.hf-response-curve__calculated { fill: var(--accent); stroke: var(--accent); }
+.hf-response-curve__cursor { fill: var(--surface); stroke: var(--accent); }
+.hf-response-curve text { fill: var(--ink-muted); font: var(--type-small-size) var(--font-mono); }
+.hf-response-curve figcaption { color: var(--ink-muted); font: var(--type-small-size) var(--font-sans); }

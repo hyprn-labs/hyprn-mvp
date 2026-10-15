@@ -1,4 +1,5 @@
 import { RecordAttribution } from './attribution';
+import { AnswerExplorer } from './AnswerExplorer';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ApiError,
@@ -67,6 +68,9 @@ function ScientificAnswer({
 }) {
   return (
     <div className="approach-answer-record">
+      {!recordOnly && (
+        <AnswerExplorer api={api} studyId={studyId} answer={answer} onOpen={onOpen} />
+      )}
       <h4>Observations</h4>
       <p className="context-copy">{answer.observations}</p>
       <h4>Interpretation</h4>

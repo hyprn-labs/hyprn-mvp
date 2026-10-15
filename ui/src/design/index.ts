@@ -54,6 +54,7 @@ export { SourceSurface } from './source';
 export { formatNumber } from './numbers';
 
 export { BrandLogo } from './BrandLogo';
+export { QuantitySlider, QuantityResult, ResponseCurve } from './exploration';
 export {
   Assertion,
   AssertionList,

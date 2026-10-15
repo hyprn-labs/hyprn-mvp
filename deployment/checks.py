@@ -138,6 +138,7 @@ GROUPS = {
     'answers-api': ('application/tests/test_answers_api.py',),
     'exploration-contracts': ('application/tests/test_exploration_api.py',),
     'exploration-native': ('deployment/tests/test_exploration_native.py',),
+    'exploration-ui': ('deployment/tests/test_exploration_ui.py',),
     'approach-configuration': (
         'application/tests/test_approach_configuration.py',
         'application/tests/test_scientific_configuration.py',
@@ -984,6 +985,7 @@ APPROACH_NATIVE_GROUPS = frozenset(
         'investigation-worker',
         'fuel-native-provenance',
         'exploration-native',
+        'exploration-ui',
     }
 )
 APPROACH_APP_GROUPS = frozenset(
@@ -1725,7 +1727,7 @@ def pytest_qualification_passed(status, results, forbidden, *, mixed=False):
     )
 
 
-def contracts_child(group='contracts', *, units_mixed_repair=False):
+def contracts_child(group='contracts', *, units_mixed_repair=False, exploration_ui_resume=None):
     """Collect only data-only contracts after validating the full isolation scope."""
     validate_units_mixed_repair(group, units_mixed_repair)
     scope = fixture.scope_from_environment()
@@ -1757,8 +1759,19 @@ def contracts_child(group='contracts', *, units_mixed_repair=False):
         sys.path.insert(0, str(REPO / 'application/tests'))
     if group in NATIVE_BACKEND_GROUPS:
         global NATIVE_BACKEND
-        scope, NATIVE_BACKEND = fixture.create_native_fixture(scope)
+        if exploration_ui_resume:
+            assert group == 'exploration-ui' and scope.root == Path(exploration_ui_resume)
+            from aiida import load_profile
+            from aiida.manage import get_manager
+
+            load_profile(scope.profile)
+            NATIVE_BACKEND = get_manager().get_profile_storage()
+            fixture.validate_scope(scope)
+        else:
+            scope, NATIVE_BACKEND = fixture.create_native_fixture(scope)
         PROJECTION_SCOPE = scope
+    global EXPLORATION_UI_RESUME
+    EXPLORATION_UI_RESUME = bool(exploration_ui_resume)
     # Explicit plugins only: installed native pytest entry points must not load.
     os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
     import pytest
@@ -1854,7 +1867,9 @@ def prepare_image_builder(scope):
     )
 
 
-def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
+def run_group(
+    group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS, exploration_ui_resume=None
+):
     validate_units_mixed_repair(group, units_mixed_repair)
     if group == 'qualification':
         return run_qualification(jobs)
@@ -1888,7 +1903,9 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
             [scope.interpreter, '-B', 'ui/test_design_tooling.py'],
             ['node', 'ui/design_smoke.mjs'],
             [
-                'node', '--test', 'ui/tests/criterion-record.test.cjs',
+                'node',
+                '--test',
+                'ui/tests/criterion-record.test.cjs',
                 'ui/tests/design-colors.test.cjs',
             ],
             [
@@ -1943,17 +1960,27 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
     if group not in CHILD_GROUPS:
         raise ValueError('Group fixture/runner not implemented yet: ' + group)
     require_environment(group)
-    scope = fixture.allocate_scope(
-        replace(
-            fixture.new_scope(), interpreter=GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON)
+    scope = (
+        fixture.scope_at(Path(exploration_ui_resume))
+        if exploration_ui_resume
+        else fixture.allocate_scope(
+            replace(
+                fixture.new_scope(),
+                interpreter=GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON),
+            )
         )
     )
-    if group in {'ui-a', 'release-container'} | NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS:
+    if (
+        not exploration_ui_resume
+        and group in {'ui-a', 'release-container'} | NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS
+    ):
         prepare_image_builder(scope)
     env = fixture.clean_environment(scope)
     command = [scope.interpreter, '-B', str(Path(__file__).resolve()), '--' + group + '-child']
     if units_mixed_repair:
         command.append('--units-mixed-repair')
+    if exploration_ui_resume:
+        command.extend(['--exploration-ui-resume', str(scope.root)])
     started = time.monotonic()
     result = subprocess.run(command, env=env, cwd=REPO, capture_output=True, text=True)
     scope = fixture.Scope(
@@ -2057,7 +2084,7 @@ def findings_child(group):
     return 0 if passed else 1
 
 
-def child(group, *, units_mixed_repair=False):
+def child(group, *, units_mixed_repair=False, exploration_ui_resume=None):
     """Route one scoped child entry; the routing table is closed."""
     if group in DOCUMENTS_ROUTES:
         return documents_child(group)
@@ -2092,7 +2119,11 @@ def child(group, *, units_mixed_repair=False):
             retained=group == 'ui-a-retained', exported=group == 'ui-c', modified=group == 'ui-b'
         )
     if group in CHILD_GROUPS:
-        return contracts_child(group, units_mixed_repair=units_mixed_repair)
+        return contracts_child(
+            group,
+            units_mixed_repair=units_mixed_repair,
+            exploration_ui_resume=exploration_ui_resume,
+        )
     raise ValueError('Unknown child group')
 
 
@@ -2117,6 +2148,7 @@ def main():
         '--class', dest='group_class', choices=CLASSES, help='with --list: only this class'
     )
     parser.add_argument('--units-mixed-repair', action='store_true')
+    parser.add_argument('--exploration-ui-resume')
     parser.add_argument(
         '--jobs',
         type=int,
@@ -2126,6 +2158,10 @@ def main():
     )
     args = parser.parse_args()
     try:
+        if args.exploration_ui_resume and not (
+            args.group == 'exploration-ui' or args.exploration_ui_child
+        ):
+            raise ValueError('Exploration resume requires the exploration-ui group')
         if args.group_class is not None and not args.list:
             raise ValueError('--class is valid only with --list')
         if args.jobs is not None and args.group != 'qualification':
@@ -2147,7 +2183,11 @@ def main():
             )
         for group in child_groups:
             if getattr(args, flag(group)):
-                return child(group, units_mixed_repair=args.units_mixed_repair)
+                return child(
+                    group,
+                    units_mixed_repair=args.units_mixed_repair,
+                    exploration_ui_resume=args.exploration_ui_resume,
+                )
         if args.validate_browser:
             scope = fixture.scope_from_environment()
             if scope.url is None:
@@ -2160,6 +2200,7 @@ def main():
             args.group,
             units_mixed_repair=args.units_mixed_repair,
             jobs=QUALIFICATION_JOBS if args.jobs is None else args.jobs,
+            exploration_ui_resume=args.exploration_ui_resume,
         )
     except (ValueError, OSError, TypeError) as error:
         print('Check refused: ' + str(error), file=sys.stderr)

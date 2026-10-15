@@ -5,14 +5,19 @@ import { ActionDialog } from './primitives';
 import { groupSelected, selectGroup, selectedInstances, portSelected, isFree, type ViewProps } from '../GraphView';
 
 // Geometry is presentation only; snapshot and selected identity remain with the caller.
-export function GraphCanvas({ projection, selection, onSelect, trace, reveal, highlightedPorts }: ViewProps) {
+export function GraphCanvas({
+  projection, selection, onSelect, trace, reveal, highlightedPorts, portContent,
+}: ViewProps) {
   const marker = useId().replaceAll(':', ''); const viewport = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1); const [pan, setPan] = useState({ x: 0, y: 0 });
   const gesture = useRef<{ x: number; y: number; origin: typeof pan } | null>(null);
   const maxPorts = Math.max(1, ...projection.nodes.map(n => n.ports.length));
   const columns = projection.nodes.length > 4 ? 3 : 2;
   const token = (name: string) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
-  const pitch = token('--space-12'), portHeight = token('--control-floor'), nodeWidth = pitch * 4 + token('--space-6');
+  const pitch = token('--space-12');
+  const portHeight = portContent ? pitch * 5 : token('--control-floor');
+  const nodeWidth = pitch * (portContent ? 7 : 4) + token('--space-6');
+  const portCenter = token('--control-floor') * 1.5 + (portContent ? token('--space-2') : 0);
   const columnWidth = nodeWidth + pitch * 1.5, top = pitch, left = token('--space-6');
   const row = portHeight * (maxPorts + 1) + pitch * 2, width = columns * columnWidth + left * 2, height = Math.max(pitch * 7, Math.ceil(projection.nodes.length / columns) * row + top);
   const positions = new Map(projection.nodes.map((n, i) => [n.instance.instance_id, { x: left + (i % columns) * columnWidth, y: top + Math.floor(i / columns) * row }]));
@@ -43,14 +48,26 @@ export function GraphCanvas({ projection, selection, onSelect, trace, reveal, hi
       <Button size="sm" disabled={selection.kind === 'none'} onClick={focus}>Focus selection</Button>
       <ActionDialog title="How to read the graph" label="Help?" size="sm"><p>Arrows connect component outputs to inputs. Inputs without incoming connections need values in a configuration.</p><p>Drag the background to pan. With the diagram focused, use the arrow keys to pan. Reset view returns to 100%. Layout does not set numerical order.</p></ActionDialog>
     </div>
-    {!projection.nodes.length ? <p>No components in this model.</p> : <div className="graph-viewport" role="region" aria-label="Directed component diagram" ref={viewport} tabIndex={0}
+    {!projection.nodes.length ? <p>No components in this model.</p> : <div
+      className={'graph-viewport' + (portContent ? ' hf-graph-exploration' : '')}
+      role="region" aria-label="Directed component diagram" ref={viewport} tabIndex={0}
       onKeyDown={e => { if (e.target !== e.currentTarget || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault(); setPan(p => ({ x: p.x + (e.key === 'ArrowLeft' ? pitch : e.key === 'ArrowRight' ? -pitch : 0), y: p.y + (e.key === 'ArrowUp' ? pitch : e.key === 'ArrowDown' ? -pitch : 0) })); }}
       onPointerDown={e => { if (e.target === e.currentTarget || (e.target as Element).tagName === 'svg') { gesture.current = { x: e.clientX, y: e.clientY, origin: pan }; e.currentTarget.setPointerCapture(e.pointerId); } }}
       onPointerMove={e => { if (gesture.current) setPan({ x: gesture.current.origin.x + (e.clientX - gesture.current.x), y: gesture.current.origin.y + (e.clientY - gesture.current.y) }); }} onPointerUp={() => { gesture.current = null; }} onPointerCancel={() => { gesture.current = null; }}>
       <svg viewBox={`0 0 ${width * zoom} ${height * zoom}`} width={width * zoom} height={height * zoom} aria-label="Directed graph" className="connected-graph">
         <defs><marker id={marker} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
         <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-          {projection.groups.map((g, i) => { const from = positions.get(g.source)!, to = positions.get(g.target)!;const x = from.x + nodeWidth, y = from.y + portHeight * 1.5 + Math.max(0, projection.nodes.find(n => n.instance.instance_id === g.source)!.ports.findIndex(p => p.port_id === g.links[0].source_ref.port_id)) * portHeight, end = to.x, endY = to.y + portHeight * 1.5 + Math.max(0, projection.nodes.find(n => n.instance.instance_id === g.target)!.ports.findIndex(p => p.port_id === g.links[0].target_ref.port_id)) * portHeight;
+          {projection.groups.map((g, i) => {
+            const from = positions.get(g.source)!, to = positions.get(g.target)!;
+            const x = from.x + nodeWidth, end = to.x;
+            const source = projection.nodes.find(n => n.instance.instance_id === g.source)!;
+            const target = projection.nodes.find(n => n.instance.instance_id === g.target)!;
+            const sourceIndex = source.ports.findIndex(
+              p => p.port_id === g.links[0].source_ref.port_id);
+            const targetIndex = target.ports.findIndex(
+              p => p.port_id === g.links[0].target_ref.port_id);
+            const y = from.y + portCenter + Math.max(0, sourceIndex) * portHeight;
+            const endY = to.y + portCenter + Math.max(0, targetIndex) * portHeight;
             const feedback = to.y < from.y || (to.y === from.y && to.x <= from.x); const lane = pitch / 2 + (i % 3) * pitch / 3;
             const vertical = to.y > from.y && to.x === from.x;
             const d = vertical ? `M${x},${y} C${x + pitch * 2},${y} ${end + columnWidth},${endY} ${end + nodeWidth},${endY}` : feedback ? `M${x},${y} C${x + lane},${y - pitch * 2} ${end - lane},${endY - pitch * 2} ${end},${endY}` : `M${x},${y} C${x + pitch * 1.5},${y} ${end - pitch * 1.5},${endY} ${end},${endY}`;
@@ -68,7 +85,10 @@ export function GraphCanvas({ projection, selection, onSelect, trace, reveal, hi
                   selected={active} nameSelected={selection.kind === 'instance' && selection.instance_id === instance.instance_id}
                   status={incomplete ? 'incomplete' : undefined}
                   onSelect={() => onSelect({ kind: 'instance', instance_id: instance.instance_id })}
-                  ports={ports.map(port => ({ id: port.port_id, name: port.code_symbol, dir: port.direction === 'input' ? 'in' : 'out',
+                  ports={ports.map(port => ({
+                    id: port.port_id, name: port.code_symbol,
+                    dir: port.direction === 'input' ? 'in' : 'out',
+                    content: portContent?.(instance.instance_id, port),
                     title: port.name + ' · ' + port.code_symbol + ' · ' + unitLabel(port.units) + '\n' + instance.instance_id + ' / ' + port.port_id,
                     state: port.direction === 'input' ? isFree(projection, instance.instance_id, port.port_id) ? 'free' : 'connected' : 'output',
                     selected: portSelected(selection, instance.instance_id, port.port_id) || highlightedPorts?.has(instance.instance_id + '/' + port.port_id),

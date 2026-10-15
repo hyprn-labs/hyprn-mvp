@@ -58,6 +58,20 @@ function render(name, el) {
   return html;
 }
 
+const missingExploration = render('QuantityResult unavailable', h(F.QuantityResult, {
+  value: null, units: 'm', state: 'unavailable',
+}));
+check('Unavailable exploration output never becomes zero',
+  missingExploration.includes('Not computed') && !missingExploration.includes('>0'));
+const explorationCurve = render('ResponseCurve gap', h(F.ResponseCurve, {
+  label: 'Illustrative response', axis: 'x (m)', units: 'm', selected: 1,
+  points: [{x:0,y:0},{x:1,y:null},{x:2,y:2}], calculated: [{x:0,y:0}],
+}));
+check('Unavailable curve intervals are not connected',
+  !explorationCurve.includes('hf-response-curve__estimate'));
+check('Calculated curve points are distinct filled markers',
+  explorationCurve.includes('hf-response-curve__calculated'));
+
 const expected = [
   'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',
   'SourceChip', 'InferenceBlock', 'RecordBar', 'ModelNode', 'DataTable', 'AttributionChip',

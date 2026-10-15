@@ -32,6 +32,7 @@ def parser():
     check.add_argument('--jobs', type=int, metavar='N',
                        help='with qualification: groups run at once (default 3; 1 runs them one after the other)')
     check.add_argument('--units-mixed-repair', action='store_true', help=argparse.SUPPRESS)
+    check.add_argument('--exploration-ui-resume', help=argparse.SUPPRESS)
     return root
 
 
@@ -67,6 +68,8 @@ def dev_check(args):
         raise toolchain.ToolchainError('--jobs is valid only with qualification', 2)
     runner = (['--list', *(['--class', args.group_class] if args.group_class else [])] if args.list
               else ['--group', args.group, *(['--units-mixed-repair'] if args.units_mixed_repair else []),
+                    *(['--exploration-ui-resume', args.exploration_ui_resume]
+                      if args.exploration_ui_resume else []),
                     *(['--jobs', str(args.jobs)] if args.jobs is not None else [])])
     toolchain.provision('contract')
     interpreter = str(toolchain.provision('native'))

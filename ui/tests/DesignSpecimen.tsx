@@ -14,6 +14,9 @@ import {
   ReadingStack,
   StatusTag,
   TextInput,
+  QuantitySlider,
+  QuantityResult,
+  ResponseCurve,
 } from '../src/design';
 import { EvidenceRecordBody } from '../src/EvidenceView';
 import type { EvidenceSnapshot } from '../src/api';
@@ -38,6 +41,30 @@ export function DesignSpecimen() {
     <main className="workspace-shell">
       <BrandLogo />
       <ReadingStack>
+        <ReadingSection aria-label="Answer exploration recipes">
+          <QuantitySlider
+            label="Illustrative input"
+            units="m"
+            values={[0, 1, 2]}
+            value={1}
+            onChange={() => {}}
+          />
+          <QuantityResult value={0} units="m" state="calculated" />
+          <QuantityResult value={2} units="m" state="estimated" />
+          <QuantityResult value={null} units="m" state="unavailable" reason="No estimate" />
+          <ResponseCurve
+            label="Illustrative response"
+            axis="Input (m)"
+            units="m"
+            selected={1}
+            points={[
+              { x: 0, y: 0 },
+              { x: 1, y: 2 },
+              { x: 2, y: null },
+            ]}
+            calculated={[{ x: 0, y: 0 }]}
+          />
+        </ReadingSection>
         <ReadingSection aria-label="Control recipes">
           <h1>Shared design reference</h1>
           {(['desk', 'sm', 'floor'] as const).map((size) => (

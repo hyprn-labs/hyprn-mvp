@@ -641,6 +641,7 @@ const PORT: Record<PortState, string> = {
 };
 
 export interface ModelNodePort {
+  content?: ReactNode;
   name: string;
   dir: 'in' | 'out';
   state?: PortState;
@@ -686,7 +687,7 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
       </Button>
       {(p.ports ?? []).map((pt) => {
         const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
-        return (
+        const control = (
           <Button
             size="floor"
             align="start"
@@ -706,6 +707,11 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
             </span>
           </Button>
         );
+        return pt.content ? (
+          <div key={pt.id ?? pt.dir + pt.name} className="hf-node__exploration-port">
+            {control}{pt.content}
+          </div>
+        ) : control;
       })}
       {(p.definition || p.status) && (
         <div className="hf-node__foot">
