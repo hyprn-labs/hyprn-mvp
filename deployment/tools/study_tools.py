@@ -43,6 +43,11 @@ OPERATIONS = {
     'get_global_command': ('GET', '/api/1/commands/{command_id}', None),
     'save_answer': ('POST', S + '/answers', None),
     'get_answer': ('GET', S + '/answers/{answer_id}', None),
+    'get_exploration_basis': (
+        'GET',
+        S + '/answers/{answer_id}/exploration-basis/{revision_id}',
+        None,
+    ),
     'list_answers': ('GET', S + '/approach/versions/{version_id}/answers', None),
 }
 

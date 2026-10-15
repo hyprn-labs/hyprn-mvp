@@ -23,7 +23,8 @@ from .result_bindings import ResultBindings
 from .modified_runs import ModifiedRuns
 from .computational_export import records_for_store
 from .routes import (
-    answers, approach, capabilities, commands, configurations, evidence, models, readiness,
+    answers, approach, capabilities, commands, configurations, evidence, exploration,
+    models, readiness,
     records as record_routes, runs, session as session_routes, studies,
 )
 from .agent_runtime import routes as agent_routes, schema as agent_schema
@@ -48,7 +49,7 @@ def agent_boundary(method,path,session,registry=None):
 # Inclusion order is registration order, which fixes the generated contract's path order and
 # every operation id: append a new owner's router, never reorder.
 ROUTERS=(session_routes,capabilities,studies,readiness,approach,models,evidence,configurations,
-         record_routes,commands,runs,agent_routes,answers)
+         record_routes,commands,runs,agent_routes,answers,exploration)
 # Route options an owner router may not set: re-registration carries path, endpoint, method,
 # status code and name only, so any other declared option would be refused, never dropped.
 ROUTE_OPTIONS=("response_model","tags","dependencies","summary","description","responses","deprecated","operation_id",

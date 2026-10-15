@@ -390,6 +390,7 @@ transaction. These records do not enter modeling or execution bundles.
 | `modeling` | `contracts`, `store`, `units` |
 | `approach` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `store` |
 | `answers` | `approach`, `contracts`, `history` |
+| `exploration` | `answers`, `contracts`, `execution_bundle`, `history`, `units` |
 | `configuration` | `approach`, `contracts`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
 | `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
 | `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
@@ -397,7 +398,7 @@ transaction. These records do not enter modeling or execution bundles.
 | `auth` | `contracts`, `store` |
 | `ui` | — |
 | `edge` | `contracts` |
-| `routes` (package) | `answers`, `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store` |
+| `routes` (package) | `answers`, `approach`, `auth`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `exploration`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store` |
 | `agent_tools` (package) | `contracts` |
 | `agent_policy` | `agent_tools`, `contracts` |
 | `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `edge`, `store` |

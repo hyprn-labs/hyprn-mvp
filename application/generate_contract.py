@@ -8,6 +8,7 @@ sys.path.insert(0,str(Path(__file__).parent/"src"))
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.answers import DEFINITIONS as ANSWER_DEFINITIONS
+from hyprn_mvp_app.exploration import DEFINITIONS as EXPLORATION_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -22,6 +23,7 @@ def rewrite(value):
     return value
 schemas.update(rewrite(definitions()))
 schemas.update(rewrite(ANSWER_DEFINITIONS))
+schemas.update(rewrite(EXPLORATION_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
     'ApproachClosureRead3': 'ApproachClosureRead4',
@@ -315,6 +317,14 @@ for path,methods in spec["paths"].items():
             op['description']=(
                 'Explicit answer heads for this exact saved approach version. Empty means '
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif '/exploration-basis/' in path:
+            schema=ref('ExplorationBasis1')
+            op['description']=(
+                'Read the complete free/connected input inventory for an explicit frozen '
+                'configuration linked by this exact answer or its exact case answers. '
+                'Run IDs identify cited runs for this configuration, not computed values. '
+                'Source hashes only; no candidate execution, current-head substitution, '
+                'unit conversion, inferred ranges or inferred co-varying inputs.')
         elif path.endswith('/answers') or '/answers/' in path:
             schema=ref('ScientificAnswer1')
             if method=='post':
