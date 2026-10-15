@@ -4,7 +4,7 @@ Page compositions for HYPRN MVP at the 1440 × 1000 reference viewport. Build th
 
 ## The shell
 
-- **App bar**: `appbar-height` (66px) tall, `surface`, `line` bottom edge, `page-gutter` (28px) side padding. Left: the supplied HYPRN logo, with no duplicate text wordmark, then the main navigation: a "Home" link and, inside a study, the breadcrumb `/ <Study> / <Section>` (study name in `ink-muted`, truncated with an ellipsis; current section in `ink`). Right: the "Profile" button. Nothing else lives here.
+- **App bar**: `appbar-height` (66px) tall, `surface`, `line` bottom edge, `page-gutter` (28px) side padding. Left: the supplied HYPRN logo on its small `brand-ground` light plate in both themes, with no duplicate text wordmark, then the main navigation: a "Home" link and, inside a study, the breadcrumb `/ <Study> / <Section>` (study name in `ink-muted`, truncated with an ellipsis; current section in `ink`). Right: the "Profile" button. Nothing else lives here.
 - **Study header**: one `title` with the study name. The current section is named once, by the selected study tab; there is no subtitle repeating it. At the right end of the same row, a `quiet` "Agent activity" button, always shown inside a study and without a count, opens the study's Agent activity page. The header is omitted inside an open model and an open run, which carry their own headings.
 - **Study tabs** (`Tabs`, underline variant): Overview, Models, Configurations, Runs, Cases. They sit under the header, full width, with a `line` rule beneath and `space-6` below.
 - **Content** on `canvas`, maximum width `page-max` (1600px), `page-gutter` side padding.
@@ -49,9 +49,9 @@ The Models tab lists models ("New model" as the primary action, one row per mode
 
 ## Runs
 
-A single `Panel` list, newest first: one row per run (name from its configuration plus short run ID as a link, model version and configuration as `small` metadata, Execution and Criteria tags at the right); no list-order commentary Opening a run replaces the list; history and detail are never side by side.
+A single `Panel` list, newest first: one row per run (name from its configuration plus short run ID as a link, model version and configuration as `small` metadata, Execution and Criteria tags at the right); no list-order commentary. Opening a run replaces the list; history and detail are never side by side.
 
-The run detail shows the "Run record · Read-only" record bar and a heading with the run's actions grouped together (the side-by-side "Export model and data" and "Export computational record" group, Record details, "Create modified run"), shared by all its tabs, and the run tabs **Results · Model · Configuration**:
+The run detail shows the "Saved run · read-only" record bar and a heading with the run's actions grouped together (the side-by-side "Export model and data" and "Export computational record" group, Record details, "Create modified run"), shared by all its tabs, and the run tabs **Results · Model · Configuration**:
 
 - **Results** leads with the run headline (the "Run status" `Ledger` with Execution and Criteria; see [Scientific states](Scientific-states.md)), then the complete "Outputs" table. Each output appears once; no arbitrary subset is promoted. The table has Output, Value and Units columns. An unavailable value reads "not computed" with its reason in the Value cell.
 - **Model** shows the model version the run used, in the canonical model view, read-only.

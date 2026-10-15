@@ -52,3 +52,5 @@ export { TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, Section
 export { GraphCanvas } from './graph';
 export { SourceSurface } from './source';
 export { formatNumber } from './numbers';
+
+export { BrandLogo } from './BrandLogo';

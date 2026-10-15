@@ -6,7 +6,7 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 ## Principles
 
-1. **Grey is normal; colour asks for attention.** Following high-performance HMI practice (ISA-101), the resting interface is steel grey and ink. Colour appears only to mean something: `accent` for what you can act on, `alarm` / `warning` / `advisory` for what needs attention, `ok` for a recorded success, `trace` for provenance, `ai` for assistant-originated content. Never colour a block to make it look nicer.
+1. **Grey is normal; colour asks for attention.** Following high-performance HMI practice (ISA-101), the resting interface is neutral grey and charcoal ink. Colour appears only to mean something: `accent` for what you can act on, `alarm` / `warning` / `advisory` for what needs attention, `ok` for a recorded success, `trace` for provenance, `ai` for assistant-originated content. Never colour a block to make it look nicer.
 2. **One meaning per hue, everywhere.** A hue never changes job between screens. `trace` never marks a button; `accent` never marks a status; `ai` never appears on content a person typed or a run computed.
 3. **Every state is redundant.** Status is shape + word + colour, never colour alone (alarm diamond, warning triangle, advisory square, ok circle, inert hollow circle). It has to survive colour-blindness, glare on a plant-floor screen and greyscale printing.
 4. **Numbers are first-class.** Values are set in `readout` (the system monospace, tabular figures), units sit beside them in `ink-muted`, and missing values are words ("unassigned", "not computed"), never blanks or zeros.
@@ -25,7 +25,7 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 ## Visual foundations
 
-**Colour.** Build every screen on `canvas` with `surface` panels and `line` hairlines. Text is `ink` (values, titles), `ink-2` (body) or `ink-muted` (metadata and units). Use `accent` only for interaction: the single primary button per view, links, the active tab and selection (`accent-soft` fill + `accent` border). Status colours follow alarm priority: `alarm` (priority 1: failed, violated, invalid), `warning` (priority 2: not converged, partial, stale, needs review), `advisory` (priority 3: unassigned, not evaluated), then `ok` for recorded success and `inert` for not applicable. Never show a live "normal" state in green. A banner uses the `*-soft` ground with the matching text token. Text on a filled `accent`, `ai` or `alarm` button uses `on-accent`, `on-ai` or `on-alarm`, never literal white. Two themes exist: Day (light) and Control room (dark); every screen works in both.
+**Colour — Charcoal (approved Option B).** Interaction uses charcoal on light surfaces and light neutral ink on dark surfaces. Blue is reserved for visible keyboard focus, separate from selection. Quiet action links are underlined; primary and secondary controls retain their button boundaries. Build every screen on `canvas` with `surface` panels and `line` hairlines. Text is `ink` (values, titles), `ink-2` (body) or `ink-muted` (metadata and units). Use `accent` only for interaction: the single primary button per view, links, the active tab and selection (`accent-soft` fill + `accent` border). Status colours follow alarm priority: `alarm` (priority 1: failed, violated, invalid), `warning` (priority 2: not converged, partial, stale, needs review), `advisory` (priority 3: unassigned, not evaluated), then `ok` for recorded success and `inert` for not applicable. Never show a live "normal" state in green. A banner uses the `*-soft` ground with the matching text token. Text on a filled `accent`, `ai` or `alarm` button uses `on-accent`, `on-ai` or `on-alarm`, never literal white. Two themes exist: Day (light) and Control room (dark); every screen works in both.
 
 **Type.** The interface uses the operating system's fonts only: the system sans stack (`--font-sans`) for interface text (`title`, `heading`, `subheading`, `body`, `body-strong`, `small`, `label`), the system monospace stack (`--font-mono`) for every number, unit, identifier and line of code (`readout-lg`, `readout`, `code`), and `--font-condensed` (currently the same system sans stack) for dense tables (`table`, `table-head`). No font is downloaded from any host. Use one `title` per page. `label` and `table-head` are uppercase with tracking and are the only uppercase text; names and quantity symbols are never uppercased by table styles.
 
@@ -35,7 +35,7 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 **Surfaces.** Two layers only: `canvas`, then `surface`. Anything deeper is a `surface-sunken` well (read-only values, code, table headers) or a hairline, never a third raised layer.
 
-**Focus and states.** Every focusable element shows a 2px `focus` outline offset 2px; elements that clip outlines use `focus-ring`. Hover darkens `accent` to `accent-hover`; disabled is 45% opacity with the reason stated nearby. Selected = `accent-soft` fill + 2px `accent` edge.
+**Focus and states.** Every focusable element shows a 2px `focus` outline offset 2px; elements that clip outlines use `focus-ring`. The inverse record bar uses `focus-on-record`, a contrasting blue in both themes. Hover changes `accent` to `accent-hover`; disabled is 45% opacity with the reason stated nearby. Selected = `accent-soft` fill + 2px `accent` edge.
 
 **Assistant content.** Proposals sit in an `InferenceBlock`: a dashed `ai` border, an `ai-soft` header, the word "Proposal" and its status. The assistant's mark is a solid `ai` square with an iris glyph. There are no gradients anywhere in the system.
 
@@ -47,7 +47,11 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 Icons are small inline SVGs drawn independently for HYPRN MVP on a 24-unit grid (`ActionIcon`: close, back, add, import, export, chevrons, search) and passed to components as React nodes. No icon font or icon library is loaded. Icons always sit beside a word, except icon buttons, which carry an `aria-label`. Status marks are drawn shapes from the `StatusTag` component, not icons. The components' built-in glyphs (lock, return arrow, document, iris mark, basis glyphs) are inline SVGs too.
 
-There is no logo file. The wordmark is the text "HYPRN MVP" at the `heading` size, weight 700, in `ink`, at the left of the app bar.
+The approved stacked HYPRN logo is `ui/src/design/assets/brand/hyprn-stacked-color-on-light.png`, supplied by the product owner and used unchanged by the shared `BrandLogo` component without a duplicate text name. Screens import the component from the design entry point. Vite owns the hashed, base-aware asset URL; the source asset is never duplicated under public. Asset inlining is disabled for the self-only CSP. `brand-ink` and `brand-signal` document the asset colours; its orange signal stays inside the logo. Use `brand-ground` for a small light plate in both themes, independent of button `on-accent`. Do not recolour, redraw or introduce another lockup.
+
+**Source syntax.** `syntax-keyword` is neutral ink with body-strong weight; `syntax-string` and `syntax-number` use secondary ink. Comments use muted ink. Syntax is neither a warning, successful result nor interactive element. All source readers/editors share these roles.
+
+**Export palette.** Standalone SVG/PNG/HTML diagrams retain their existing fixed print palette in the single export renderer (`ui/src/exports.ts`). It provides a stable white-ground document independent of application theme. This change does not recolour old or new exported diagrams. Any future export palette revision must be centralized and separately verified.
 
 ## Implementation
 

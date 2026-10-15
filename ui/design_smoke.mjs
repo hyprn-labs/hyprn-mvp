@@ -58,8 +58,15 @@ function render(name, el) {
   return html;
 }
 
-const expected = ['Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger', 'SourceChip', 'InferenceBlock', 'RecordBar', 'ModelNode', 'DataTable', 'AttributionChip'];
+const expected = [
+  'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',
+  'SourceChip', 'InferenceBlock', 'RecordBar', 'ModelNode', 'DataTable', 'AttributionChip',
+];
 check('exports all ' + expected.length + ' components', expected.every((n) => typeof F[n] === 'function'), expected.filter((n) => typeof F[n] !== 'function').join(','));
+
+const brand = render('BrandLogo', h(F.BrandLogo));
+check('brand has its accessible product name', brand.includes('alt="HYPRN"'));
+check('brand remains an external self-origin asset', !brand.includes('data:image'));
 
 // Exact owner-approved families; no font assets or remote font CSS are needed.
 const tokensText = readFileSync(join(repoDir, 'design-system/tokens.json'), 'utf8');

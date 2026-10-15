@@ -2,7 +2,16 @@ import { useUnitCatalog } from './UnitEditor';
 import { unresolvedModelUnits } from './unitLabels';
 import type { ApproachSelection1 } from './contract';
 import type { ApproachHandoff } from './ApproachAssumptions';
-import { Button, Panel, TextInput, DialogFrame, Tabs, ActionIcon, StatusTag } from './design';
+import {
+  BrandLogo,
+  Button,
+  Panel,
+  TextInput,
+  DialogFrame,
+  Tabs,
+  ActionIcon,
+  StatusTag,
+} from './design';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, message } from './api';
 import type { ModelDraftRead4, ModelRevisionRead4, Study, PublicRun, PublicRunDetail, RevisionSummary, EvidenceRecord, FrozenConfigurationRead7, ConfigurationRevision, ModifiedRunSeedRead6 } from './api';
@@ -505,7 +514,7 @@ export function Workspace() {
     <CaseNavigation.Provider value={openCase}>
       <main ref={workspaceRoot}>
         <header className="appbar">
-          <img className="brand" src="/ui/hyprn-logo.png" alt="HYPRN" />
+          <BrandLogo />
           {signedIn && (
             <>
               <nav aria-label="Main navigation">

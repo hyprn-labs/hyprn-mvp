@@ -1,5 +1,5 @@
 /* GENERATED FILE - do not hand-edit.
- * Source: design-system/tokens.json (HYPRN MVP Foundry v1)
+ * Source: design-system/tokens.json (HYPRN Foundry v2)
  * Generator: ui/design_tokens.py (run `python3 ui/design_tokens.py`; `--check` detects staleness).
  */
 
@@ -78,17 +78,24 @@
 
 :root, [data-theme="light"] {
   color-scheme: light;
-  --canvas: #eef1f4;
-  --surface: #fbfcfd;
-  --surface-sunken: #e3e8ed;
-  --line: #c9d1da;
-  --line-strong: #7e8a97;
+  --brand-ink: #111820;
+  --brand-signal: #e03a10;
+  --brand-ground: #fbfcfd;
+  --syntax-keyword: #111820;
+  --syntax-string: #35414b;
+  --syntax-number: #35414b;
+  --focus-on-record: #a3bfff;
+  --canvas: #f1f2f2;
+  --surface: #fcfcfb;
+  --surface-sunken: #e8ebec;
+  --line: #cdd2d5;
+  --line-strong: #7c8895;
   --ink: #111820;
-  --ink-2: #33404d;
-  --ink-muted: #56636f;
-  --accent: #1d4fc4;
-  --accent-hover: #163d9a;
-  --accent-soft: #e4ebfa;
+  --ink-2: #35414b;
+  --ink-muted: #56616b;
+  --accent: #111820;
+  --accent-hover: #303b45;
+  --accent-soft: #e3e8eb;
   --on-accent: #ffffff;
   --focus: #1d4fc4;
   --ai: #6a3fc6;
@@ -110,23 +117,30 @@
   --record: #1b232c;
   --on-record: #e9eef3;
   --shadow-float: 0 8px 24px #11182029, 0 1px 3px #1118201f;
-  --focus-ring: 0 0 0 2px #fbfcfd, 0 0 0 4px #1d4fc4;
+  --focus-ring: 0 0 0 2px #fcfcfb, 0 0 0 4px #1d4fc4;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #0f1418;
-  --surface: #161c22;
-  --surface-sunken: #0b0f13;
-  --line: #2a333d;
+  --brand-ink: #111820;
+  --brand-signal: #e03a10;
+  --brand-ground: #fbfcfd;
+  --syntax-keyword: #e8edf2;
+  --syntax-string: #c3ccd5;
+  --syntax-number: #c3ccd5;
+  --focus-on-record: #1d4fc4;
+  --canvas: #10161b;
+  --surface: #181f25;
+  --surface-sunken: #0d1217;
+  --line: #343e47;
   --line-strong: #66727f;
   --ink: #e8edf2;
   --ink-2: #c3ccd5;
   --ink-muted: #94a1ae;
-  --accent: #7aa2ff;
-  --accent-hover: #a3bfff;
-  --accent-soft: #1a2a4d;
-  --on-accent: #0b1220;
+  --accent: #e3e9ed;
+  --accent-hover: #ffffff;
+  --accent-soft: #2c3741;
+  --on-accent: #111820;
   --focus: #a3bfff;
   --ai: #b49bff;
   --ai-soft: #2a2045;
@@ -147,24 +161,31 @@
   --record: #d6dee6;
   --on-record: #10161c;
   --shadow-float: 0 8px 24px #000000b3, 0 0 0 1px #2a333d;
-  --focus-ring: 0 0 0 2px #161c22, 0 0 0 4px #a3bfff;
+  --focus-ring: 0 0 0 2px #181f25, 0 0 0 4px #a3bfff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --canvas: #0f1418;
-    --surface: #161c22;
-    --surface-sunken: #0b0f13;
-    --line: #2a333d;
+    --brand-ink: #111820;
+    --brand-signal: #e03a10;
+    --brand-ground: #fbfcfd;
+    --syntax-keyword: #e8edf2;
+    --syntax-string: #c3ccd5;
+    --syntax-number: #c3ccd5;
+    --focus-on-record: #1d4fc4;
+    --canvas: #10161b;
+    --surface: #181f25;
+    --surface-sunken: #0d1217;
+    --line: #343e47;
     --line-strong: #66727f;
     --ink: #e8edf2;
     --ink-2: #c3ccd5;
     --ink-muted: #94a1ae;
-    --accent: #7aa2ff;
-    --accent-hover: #a3bfff;
-    --accent-soft: #1a2a4d;
-    --on-accent: #0b1220;
+    --accent: #e3e9ed;
+    --accent-hover: #ffffff;
+    --accent-soft: #2c3741;
+    --on-accent: #111820;
     --focus: #a3bfff;
     --ai: #b49bff;
     --ai-soft: #2a2045;
@@ -185,6 +206,6 @@
     --record: #d6dee6;
     --on-record: #10161c;
     --shadow-float: 0 8px 24px #000000b3, 0 0 0 1px #2a333d;
-    --focus-ring: 0 0 0 2px #161c22, 0 0 0 4px #a3bfff;
+    --focus-ring: 0 0 0 2px #181f25, 0 0 0 4px #a3bfff;
   }
 }

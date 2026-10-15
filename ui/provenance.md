@@ -44,4 +44,11 @@ No material proprietary-source or licence conflict was found. New dependencies n
 
 ## Product brand asset
 
-`public/hyprn-logo.png` is the HYPRN stacked colour-on-light logo supplied and authorized by the product owner for this interface. It is copied unchanged; it is not third-party software or a generated replacement. The source identity is recorded in the demo-polish checkpoint.
+`src/design/assets/brand/hyprn-stacked-color-on-light.png` is the HYPRN stacked colour-on-light logo supplied and authorized by the product owner for this interface. It is copied unchanged; it is not third-party software or a generated replacement. The source identity is recorded in the demo-polish checkpoint.
+
+`BrandLogo` owns the accessible name and theme-independent light ground. Vite imports
+this one source asset with `?no-inline`, generating a base-aware, hashed self-origin
+URL. Production disables asset inlining for compatibility with the self-only CSP.
+There is no runtime dependency on the original external location and no duplicate
+public master asset. The unchanged PNG SHA-256 is
+`3ec5f72242e291ff570315ea60ae7b669ce20e8dea20d62d7a712e3d74b9ac43`.

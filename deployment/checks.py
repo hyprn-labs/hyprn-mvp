@@ -290,6 +290,9 @@ GROUPS = {
         'ui/check_ui_contract.py',
         'ui/control-map.json',
         'ui/tests/criterion-record.test.cjs',
+        'ui/tests/design-colors.test.cjs',
+        'ui/test_design_tooling.py',
+        'ui/design_smoke.mjs',
         'ui/tsconfig.json',
         'ui/vite.config.ts',
     ),
@@ -1869,7 +1872,12 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
             [scope.interpreter, '-B', 'ui/check_design_system.py'],
             [scope.interpreter, '-B', 'ui/design_tokens.py', '--check'],
             [scope.interpreter, '-B', 'ui/check_ui_contract.py'],
-            ['node', '--test', 'ui/tests/criterion-record.test.cjs'],
+            [scope.interpreter, '-B', 'ui/test_design_tooling.py'],
+            ['node', 'ui/design_smoke.mjs'],
+            [
+                'node', '--test', 'ui/tests/criterion-record.test.cjs',
+                'ui/tests/design-colors.test.cjs',
+            ],
             [
                 'node',
                 str(REPO / 'ui/node_modules/typescript/bin/tsc'),

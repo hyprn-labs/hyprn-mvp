@@ -1,10 +1,12 @@
 # Project State
 
-- Current demo polish: logo-only HYPRN branding, scoped record actions, consistent
-  persistence states, readable study/model/answer details and exact Cases navigation.
-  See [demo polish checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/demo-polish.md).
-  Local demo review is next; older reading-suite reconciliation and external-release
-  legal/source-offer review remain explicit obligations. No science records changed.
+- Current demo design: approved Charcoal tokens, distinct blue keyboard focus,
+  shared neutral syntax roles and canonical unchanged logo owned by BrandLogo.
+  See [Charcoal checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/charcoal-design-system.md)
+  and [demo polish checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/demo-polish.md).
+  Next: local demo visual review. Older reading-suite reconciliation and
+  external-release legal/source-offer review remain explicit obligations.
+  No scientific records changed.
 
 ## Project Reference
 

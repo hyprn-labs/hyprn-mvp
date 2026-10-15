@@ -4949,14 +4949,37 @@ test('@approach-demo branded study and model details keep clear controls and spa
     inspector.getByRole('button', { name: 'View method in overview', exact: true }),
   ).toHaveCount(0);
   await readingShot(page, 'demo-model-light');
+  await inspector.getByText('Python function', { exact: true }).click();
+  const source = inspector.getByLabel('Python source', { exact: true });
+  const original = await source.inputValue();
+  await source.fill("if True:\n    outputs['y'] = inputs['u'] ** 2");
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
     await page.setViewportSize({ width: 720, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
+    const keyword = page.locator('.source-keyword').first();
+    await expect(keyword).toBeVisible();
+    expect(await keyword.evaluate((el) => getComputedStyle(el).color)).toBe(
+      theme === 'light' ? 'rgb(17, 24, 32)' : 'rgb(232, 237, 242)',
+    );
+    expect(Number(await keyword.evaluate((el) => getComputedStyle(el).fontWeight)))
+      .toBeGreaterThanOrEqual(600);
+    for (const kind of ['string', 'number']) {
+      expect(await page.locator('.source-' + kind).first()
+        .evaluate((el) => getComputedStyle(el).color)).toBe(
+        theme === 'light' ? 'rgb(53, 65, 75)' : 'rgb(195, 204, 213)',
+      );
+    }
+    const save = inspector.getByRole('button', { name: 'Save component', exact: true });
+    await save.hover();
+    await expect.poll(() => save.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+      theme === 'light' ? 'rgb(48, 59, 69)' : 'rgb(255, 255, 255)',
+    );
     await readingShot(page, 'demo-model-narrow-' + theme);
   }
+  await source.fill(original);
   await page.getByRole('button', { name: 'Profile', exact: true }).click();
   await expect(page.locator('.profile-account')).toHaveText('Account name:owner');
 });
@@ -5015,4 +5038,198 @@ test('@approach-demo run opens its exact historical case and scoped records', as
     { sid: d.sid, version: d.saved.version.approach_version_id },
   );
   await expect(page.getByRole('alert')).toContainText('No other case is shown in its place');
+});
+
+test('@approach-demo Charcoal roles across study views at 200% zoom', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120000);
+  const data = await caseNavigation(page, browser, baseURL);
+  const root = process.env.HYPRN_MVP_TEST_SCOPE_ROOT!;
+  const extension = join(root, 'artifacts/charcoal-zoom-extension');
+  await mkdir(extension);
+  await writeFile(
+    join(extension, 'manifest.json'),
+    JSON.stringify({
+      manifest_version: 3,
+      name: 'Charcoal zoom verification',
+      version: '1.0',
+      permissions: ['tabs'],
+      background: { service_worker: 'worker.js' },
+    }),
+  );
+  await writeFile(join(extension, 'worker.js'), 'chrome.runtime.onInstalled.addListener(()=>{});');
+  const context = await chromium.launchPersistentContext(join(root, 'artifacts/charcoal-profile'), {
+    executablePath: chromiumExecutable(),
+    headless: true,
+    viewport: null,
+    baseURL,
+    args: [
+      '--disable-extensions-except=' + extension,
+      '--load-extension=' + extension,
+      '--window-size=1440,1000',
+      '--no-first-run',
+    ],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const screen = context.pages()[0] ?? (await context.newPage());
+    const destination = (view: string, extra: Record<string, string> = {}) =>
+      '/ui/?workspace#' + new URLSearchParams({ v: '1', view, study: data.sid, ...extra });
+    await screen.goto(destination('overview'));
+    await screen.getByLabel('Username', { exact: true }).fill('owner');
+    await screen.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+    await screen.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(
+      screen.getByRole('button', { name: 'See more details', exact: true }),
+    ).toBeVisible();
+    const cdp = await context.newCDPSession(screen);
+    const info = await cdp.send('Browser.getWindowForTarget');
+    await cdp.send('Browser.setWindowBounds', {
+      windowId: info.windowId,
+      bounds: { width: 1440, height: 1087 },
+    });
+    const initial = await screen.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    await cdp.send('Browser.setWindowBounds', {
+      windowId: info.windowId,
+      bounds: {
+        width: 1440 + (1440 - initial.width),
+        height: 1087 + (1000 - initial.height),
+      },
+    });
+    const tab = await worker.evaluate(async (url) => {
+      const tabs = await (globalThis as any).chrome.tabs.query({});
+      return tabs.find((item: any) => item.url.startsWith(url)).id;
+    }, baseURL!);
+    await worker.evaluate((id) => (globalThis as any).chrome.tabs.setZoom(id, 2), tab);
+    expect(await worker.evaluate((id) => (globalThis as any).chrome.tabs.getZoom(id), tab)).toBe(2);
+    await expect.poll(() => screen.evaluate(() => innerWidth)).toBe(720);
+    const captures = [];
+    for (const theme of ['light', 'dark']) {
+      await screen.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+      const roles = await screen.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        return Object.fromEntries(
+          [
+            'accent',
+            'accent-hover',
+            'accent-soft',
+            'focus',
+            'brand-ground',
+            'syntax-keyword',
+            'syntax-string',
+            'syntax-number',
+            'warning',
+            'alarm',
+            'ai',
+            'trace',
+            'record',
+          ].map((name) => [name, style.getPropertyValue('--' + name).trim()]),
+        );
+      });
+      expect(roles.accent).toBe(theme === 'light' ? '#111820' : '#e3e9ed');
+      expect(roles.focus).toBe(theme === 'light' ? '#1d4fc4' : '#a3bfff');
+      expect(roles['brand-ground']).toBe('#fbfcfd');
+      expect(roles.warning).toBe(theme === 'light' ? '#a84c00' : '#ffa057');
+      expect(roles.alarm).toBe(theme === 'light' ? '#c4122f' : '#ff7686');
+      expect(roles.ai).toBe(theme === 'light' ? '#6a3fc6' : '#b49bff');
+      expect(roles.trace).toBe(theme === 'light' ? '#0b6a85' : '#56c6de');
+      expect(roles['syntax-keyword']).not.toBe(roles.warning);
+      expect(roles['syntax-number']).not.toBe(roles.accent);
+      const logo = screen.getByRole('img', { name: 'HYPRN', exact: true });
+      const src = await logo.getAttribute('src');
+      expect(src).toMatch(/^\/ui\/assets\/hyprn-stacked-color-on-light-[^/]+\.png$/);
+      expect((await screen.request.get(src!)).ok()).toBe(true);
+      expect(
+        await logo.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0),
+      ).toBe(true);
+      expect(await logo.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+        'rgb(251, 252, 253)',
+      );
+      const profile = screen.getByRole('button', { name: 'Profile', exact: true });
+      await profile.focus();
+      await screen.keyboard.press('Tab');
+      await screen.keyboard.press('Shift+Tab');
+      expect(await profile.evaluate((el) => getComputedStyle(el).outlineColor)).toBe(
+        theme === 'light' ? 'rgb(29, 79, 196)' : 'rgb(163, 191, 255)',
+      );
+      for (const view of ['overview', 'model', 'configurations', 'runs', 'cases']) {
+        const extra =
+          view === 'model'
+            ? { model: data.model.model_id, revision: data.model.model_revision_id }
+            : view === 'configurations'
+              ? { configuration: data.configs.v1 }
+              : view === 'runs'
+                ? { run: data.runs.v3 }
+                : view === 'cases'
+                  ? { approach: data.saved.version.approach_version_id, case: data.nominal }
+                  : {};
+        await screen.goto(destination(view, extra as Record<string, string>));
+        if (view === 'overview') {
+          await expect(
+            screen.getByRole('button', { name: 'See more details', exact: true }),
+          ).toBeVisible();
+        } else if (view === 'model') {
+          await expect(
+            screen.getByText('Saved version · read-only', { exact: true }),
+          ).toBeVisible();
+          await screen.getByRole('tab', { name: 'Graph', exact: true }).click();
+          await screen
+            .locator('[data-instance="' + data.model.instances[1].instance_id + '"]')
+            .first()
+            .click();
+          const python = screen.getByText('Python function', { exact: true });
+          await python.click();
+          await expect(screen.getByRole('region', { name: 'Selection inspector' }))
+            .toContainText("outputs['y'] = inputs['u'] ** 2");
+          await expect(screen.getByRole('tab', { name: 'Graph', exact: true }))
+            .toHaveAttribute('aria-selected', 'true');
+        } else if (view === 'configurations') {
+          await expect(
+            screen.getByText('Saved version · read-only', { exact: true }),
+          ).toBeVisible();
+          await expect(
+            screen.getByRole('heading', { name: 'Inputs and provenance', exact: true }),
+          ).toBeVisible();
+        } else if (view === 'runs') {
+          await expect(screen.getByText('Saved run · read-only', { exact: true })).toBeVisible();
+          await expect(
+            screen.getByRole('region', { name: 'Run details', exact: true }),
+          ).toContainText('Failed');
+        } else {
+          await expect(
+            screen.getByRole('article', { name: 'Nominal range', exact: true }),
+          ).toBeVisible();
+          const record = screen.getByRole('button', { name: 'Case record details', exact: true });
+          expect(await record.evaluate((el) => getComputedStyle(el).textDecorationLine)).toContain(
+            'underline',
+          );
+        }
+        await screen.evaluate(() => scrollTo(0, 0));
+        const bounds = await screen.evaluate(() => ({
+          width: innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        }));
+        expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width + 1);
+        const shot = await cdp.send('Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          captureBeyondViewport: false,
+        });
+        await writeFile(
+          join(root, `evidence/charcoal-${theme}-${view}-200.png`),
+          Buffer.from(shot.data, 'base64'),
+        );
+        captures.push({ theme, view, ...bounds });
+      }
+    }
+    await writeFile(
+      join(root, 'evidence/charcoal-zoom.json'),
+      JSON.stringify({ zoom: 2, viewport: null, captures }, null, 2),
+    );
+  } finally {
+    await context.close();
+  }
 });

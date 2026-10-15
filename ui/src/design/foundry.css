@@ -139,7 +139,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--type-body-size
 .hf-record__text b { font-weight: 600; }
 .hf-record .hf-btn { background: transparent; color: var(--on-record); border-color: var(--on-record); height: var(--row-dense); font-size: var(--type-small-size); }
 .hf-record .hf-btn:hover { color: var(--on-record); border-color: var(--on-record); text-decoration: underline; }
-.hf-record .hf-btn:focus-visible { outline-color: var(--on-record); }
+.hf-record .hf-btn:focus-visible { outline-color: var(--focus-on-record); }
 
 /* ModelNode */
 .hf-node { width: 216px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); text-align: left; padding: 0; font: inherit; color: inherit; cursor: pointer; display: block; }
@@ -457,3 +457,23 @@ pre{font-family:var(--font-mono);font-size:var(--type-code-size);line-height:var
 
 /* Workspace inspection uses the existing page extent; normal action dialogs stay compact. */
 .hf-dialog.action-dialog.hf-dialog--workspace{max-width:var(--page-max)}
+
+/* Charcoal interactions retain a non-colour affordance; selection stays on tabs/nodes. */
+.hf-btn--quiet, .hf-btn.link { text-decoration: underline; text-underline-offset: var(--space-1); }
+/* Source syntax has its own roles, independent of scientific outcomes. */
+.source-keyword { color: var(--syntax-keyword); font-weight: var(--type-body-strong-weight); }
+.source-string { color: var(--syntax-string); }
+.source-number { color: var(--syntax-number); }
+.source-comment { color: var(--ink-muted); }
+
+.hf-brand-logo {
+  display: block;
+  object-fit: contain;
+  height: calc(var(--appbar-height) - var(--space-3));
+  width: auto;
+  min-width: 0;
+  flex: none;
+  margin: 0;
+  background: var(--brand-ground);
+  border-radius: var(--radius-xs);
+}
