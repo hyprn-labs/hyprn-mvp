@@ -60,7 +60,8 @@ This is the only agent instruction file in the repository.
 
 - Before UI work read `design-system/README.md`, `Layouts.md` and `Scientific-states.md`; the UI skill under `.claude/skills/` restates the rules.
 - Build screens only from `ui/src/design` components. Colours, sizes, spacing, radii and type come only from tokens (`design-system/tokens.json`, generated into `ui/src/design/tokens.css`; never hand-edit the generated file).
-- No inline styles, external fonts, external URLs or CDNs. Status is shape + word + colour. Blank is "unassigned", missing output is "not computed", zero is an explicit value.
+- [Contour](design-system/Contour.md) is the current visual amendment: audited self-hosted Manrope, shared curvature and tonal elevation. Scientific, accessibility and ownership guarantees remain binding.
+- No inline styles, runtime remote fonts, external URLs or CDNs. Status is shape + word + colour. Blank is "unassigned", missing output is "not computed", zero is an explicit value.
 - Run `python3 ui/check_design_system.py` (no FAIL line) and `python3 ui/design_tokens.py --check`. Screenshots and other evidence stay outside the repository.
 - Automated browser evidence is never human acceptance; record the two separately.
 

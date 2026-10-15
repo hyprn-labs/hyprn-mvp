@@ -12,7 +12,6 @@ root = Path(__file__).resolve().parent
 TOKENS_LABEL = 'design-system/tokens.json'
 DEFAULT_TOKENS = root.parent / TOKENS_LABEL
 DEFAULT_OUT = root / 'src/design/tokens.css'
-THEMED_SHADOWS = ('shadow-float', 'focus-ring')
 
 
 def block(selector, lines, indent=''):
@@ -24,9 +23,8 @@ def theme_lines(data, theme):
     lines = ['color-scheme: ' + theme + ';']
     for token in data['color']['tokens']:
         lines.append('--' + token['name'] + ': ' + token['value'][theme] + ';')
-    shadows = {t['name']: t for t in data['shadow']['tokens']}
-    for name in THEMED_SHADOWS:
-        lines.append('--' + name + ': ' + shadows[name]['value'][theme] + ';')
+    for token in data['shadow']['tokens']:
+        lines.append('--' + token['name'] + ': ' + token['value'][theme] + ';')
     return lines
 
 

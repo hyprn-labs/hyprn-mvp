@@ -63,3 +63,5 @@ export {
   ReadingStack,
   ActionGroup,
 } from './compositions';
+
+export { WorkspaceShell, NavigationRail } from './workspace';

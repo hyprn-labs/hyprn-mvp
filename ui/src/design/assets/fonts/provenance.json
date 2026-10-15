@@ -1,0 +1,18 @@
+[
+  {
+    "family": "manrope",
+    "source": "https://raw.githubusercontent.com/google/fonts/1d0e46c7933245c8180fe83e47917961c913bbdb/ofl/manrope/Manrope%5Bwght%5D.ttf",
+    "revision": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+    "file": "manrope.ttf",
+    "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+    "license": "SIL Open Font License 1.1"
+  },
+  {
+    "family": "manrope",
+    "source": "https://raw.githubusercontent.com/google/fonts/1d0e46c7933245c8180fe83e47917961c913bbdb/ofl/manrope/OFL.txt",
+    "revision": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+    "file": "OFL.txt",
+    "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b",
+    "license": "SIL Open Font License 1.1"
+  }
+]

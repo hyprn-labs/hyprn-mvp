@@ -1,5 +1,5 @@
 /* GENERATED FILE - do not hand-edit.
- * Source: design-system/tokens.json (HYPRN Foundry v3)
+ * Source: design-system/tokens.json (HYPRN Contour v4)
  * Generator: ui/design_tokens.py (run `python3 ui/design_tokens.py`; `--check` detects staleness).
  */
 
@@ -11,10 +11,12 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-12: 48px;
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  --radius-xs: 6px;
+  --radius-sm: 12px;
+  --radius-md: 24px;
   --radius-full: 9999px;
+  --radius-shell: 32px;
+  --radius-mark: 2px;
   --control-compact: 28px;
   --icon-control: 18px;
   --icon-compact: 16px;
@@ -36,16 +38,19 @@
   --textarea-min: 80px;
   --label-gap: 6px;
   --appbar-brand-min: 90px;
-  --font-sans: -apple-system, "Segoe UI", system-ui, sans-serif;
-  --font-condensed: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --navigation-width: 204px;
+  --texture-pitch: 6px;
+  --font-sans: "Manrope", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-condensed: "Manrope", -apple-system, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --type-title-size: 28px;
-  --type-title-line: 36px;
-  --type-title-weight: 600;
-  --type-title-tracking: -0.01em;
+  --type-title-size: 30px;
+  --type-title-line: 40px;
+  --type-title-weight: 650;
+  --type-title-tracking: -0.035em;
   --type-heading-size: 20px;
   --type-heading-line: 28px;
-  --type-heading-weight: 600;
+  --type-heading-weight: 650;
+  --type-heading-tracking: -0.025em;
   --type-subheading-size: 16px;
   --type-subheading-line: 24px;
   --type-subheading-weight: 600;
@@ -120,8 +125,14 @@
   --inert: #6f7b88;
   --record: #1b232c;
   --on-record: #e9eef3;
+  --shell-ground: #e8edf0;
+  --surface-raised: #ffffff;
+  --surface-highlight: #ffffff;
+  --texture-ink: #11182008;
   --shadow-float: 0 8px 24px #11182029, 0 1px 3px #1118201f;
   --focus-ring: 0 0 0 2px #fcfcfb, 0 0 0 4px #1d4fc4;
+  --shadow-panel: 0 2px 4px #11182005, 0 12px 28px #11182008, inset 0 1px 0 #ffffffcc;
+  --shadow-shell: 0 8px 40px #1118200d, inset 0 1px 0 #ffffff;
 }
 
 [data-theme="dark"] {
@@ -164,8 +175,14 @@
   --inert: #8a97a4;
   --record: #d6dee6;
   --on-record: #10161c;
+  --shell-ground: #0c1218;
+  --surface-raised: #202830;
+  --surface-highlight: #27333e;
+  --texture-ink: #ffffff06;
   --shadow-float: 0 8px 24px #000000b3, 0 0 0 1px #2a333d;
   --focus-ring: 0 0 0 2px #181f25, 0 0 0 4px #a3bfff;
+  --shadow-panel: 0 2px 4px #00000024, 0 12px 28px #00000030, inset 0 1px 0 #ffffff0a;
+  --shadow-shell: 0 8px 40px #00000038, inset 0 1px 0 #ffffff0d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -209,7 +226,13 @@
     --inert: #8a97a4;
     --record: #d6dee6;
     --on-record: #10161c;
+    --shell-ground: #0c1218;
+    --surface-raised: #202830;
+    --surface-highlight: #27333e;
+    --texture-ink: #ffffff06;
     --shadow-float: 0 8px 24px #000000b3, 0 0 0 1px #2a333d;
     --focus-ring: 0 0 0 2px #181f25, 0 0 0 4px #a3bfff;
+    --shadow-panel: 0 2px 4px #00000024, 0 12px 28px #00000030, inset 0 1px 0 #ffffff0a;
+    --shadow-shell: 0 8px 40px #00000038, inset 0 1px 0 #ffffff0d;
   }
 }

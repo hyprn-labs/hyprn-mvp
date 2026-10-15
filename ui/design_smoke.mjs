@@ -7,6 +7,7 @@
 // directory that is removed when the smoke finishes.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'vite';
@@ -94,21 +95,39 @@ const brand = render('BrandLogo', h(F.BrandLogo));
 check('brand has its accessible product name', brand.includes('alt="HYPRN"'));
 check('brand remains an external self-origin asset', !brand.includes('data:image'));
 
-// Exact owner-approved families; no font assets or remote font CSS are needed.
+// Exact audited self-hosted interface font; scientific values retain system monospace.
 const tokensText = readFileSync(join(repoDir, 'design-system/tokens.json'), 'utf8');
 const tokens = JSON.parse(tokensText);
 const css = readFileSync(join(uiDir, 'src/design/tokens.css'), 'utf8');
 const families = {
-  sans: '-apple-system, "Segoe UI", system-ui, sans-serif',
-  condensed: '-apple-system, "Segoe UI", system-ui, sans-serif',
+  sans: '"Manrope", -apple-system, "Segoe UI", system-ui, sans-serif',
+  condensed: '"Manrope", -apple-system, "Segoe UI", system-ui, sans-serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 };
 for (const [name, stack] of Object.entries(families)) {
-  check(name + ' uses the exact system font stack', tokens.type.families[name] === stack && css.includes('--font-' + name + ': ' + stack + ';'));
+  check(name + ' uses the approved font stack',
+    tokens.type.families[name] === stack && css.includes('--font-' + name + ': ' + stack + ';'));
 }
-check('font asset list is empty', tokens.type.fonts.length === 0);
-const executableAssets = [tokensText, css, readFileSync(join(uiDir, 'src/design/foundry.css'), 'utf8'), readFileSync(join(outDir, 'design.mjs'), 'utf8')];
-check('design tokens, styles and bundle have no optional or remote font dependency', executableAssets.every(text => !/IBM Plex|Arial Narrow|@font-face|@import|fonts\.(?:googleapis|gstatic)\.com/i.test(text)));
+check('only the audited Manrope family is declared',
+  tokens.type.fonts.length === 1 && tokens.type.fonts[0].family === 'Manrope');
+const fontRoot = join(uiDir, 'src/design/assets/fonts');
+const fontHashes = {
+  'manrope.ttf': '3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6',
+  'OFL.txt': '58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b',
+};
+for (const [file, hash] of Object.entries(fontHashes)) {
+  check(file + ' retains its exact audited bytes',
+    createHash('sha256').update(readFileSync(join(fontRoot, file))).digest('hex') === hash);
+}
+const foundryCss = readFileSync(join(uiDir, 'src/design/foundry.css'), 'utf8');
+check('Manrope loads through a relative self-origin asset URL',
+  foundryCss.includes("url('./assets/fonts/manrope.ttf')"));
+const executableAssets = [
+  css, foundryCss, readFileSync(join(outDir, 'design.mjs'), 'utf8'),
+];
+check('design styles and bundle have no remote font dependency',
+  executableAssets.every(text =>
+    !/@import|url\(\s*['"]?https?:|fonts\.(?:googleapis|gstatic)\.com/i.test(text)));
 
 const actions = ['close', 'back', 'add', 'import', 'export', 'chevron-left', 'chevron-right', 'chevron-up', 'chevron-down', 'search'];
 check('exports ActionIcon', typeof F.ActionIcon === 'function');

@@ -4,6 +4,8 @@ The design system is the interface language of HYPRN MVP, a workspace where engi
 
 Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.md) before any UI work, then [Naming](Naming.md), [Coherence](Coherence.md) and the per-component notes in `components/`. The colour, type, spacing, radius, shadow and size values live in [`tokens.json`](tokens.json).
 
+[Contour](Contour.md) is the current visual authority for typography, curvature, surfaces and shell composition; it supersedes conflicting legacy visual descriptions in Layouts and component notes. Scientific meaning, entity ownership and interaction contracts remain binding.
+
 ## Principles
 
 1. **Grey is normal; colour asks for attention.** Following high-performance HMI practice (ISA-101), the resting interface is neutral grey and charcoal ink. Colour appears only to mean something: `accent` for what you can act on, `alarm` / `warning` / `advisory` for what needs attention, `ok` for a recorded success, `trace` for provenance, `ai` for assistant-originated content. Never colour a block to make it look nicer.
@@ -27,17 +29,17 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 **Colour — Charcoal (approved Option B).** Interaction uses charcoal on light surfaces and light neutral ink on dark surfaces. Blue is reserved for visible keyboard focus, separate from selection. Quiet action links are underlined; primary and secondary controls retain their button boundaries. Build every screen on `canvas` with `surface` panels and `line` hairlines. Text is `ink` (values, titles), `ink-2` (body) or `ink-muted` (metadata and units). Use `accent` only for interaction: the single primary button per view, links, the active tab and selection (`accent-soft` fill + `accent` border). Status colours follow alarm priority: `alarm` (priority 1: failed, violated, invalid), `warning` (priority 2: not converged, partial, stale, needs review), `advisory` (priority 3: unassigned, not evaluated), then `ok` for recorded success and `inert` for not applicable. Never show a live "normal" state in green. A banner uses the `*-soft` ground with the matching text token. Text on a filled `accent`, `ai` or `alarm` button uses `on-accent`, `on-ai` or `on-alarm`, never literal white. Two themes exist: Day (light) and Control room (dark); every screen works in both.
 
-**Type.** The interface uses the operating system's fonts only: the system sans stack (`--font-sans`) for interface text (`title`, `heading`, `subheading`, `body`, `body-strong`, `small`, `label`), the system monospace stack (`--font-mono`) for every number, unit, identifier and line of code (`readout-lg`, `readout`, `code`), and `--font-condensed` (currently the same system sans stack) for dense tables (`table`, `table-head`). No font is downloaded from any host. Use one `title` per page. `label` and `table-head` are uppercase with tracking and are the only uppercase text; names and quantity symbols are never uppercased by table styles.
+**Type.** Audited self-hosted Manrope (200–800) with system fallback supplies interface text and dense table labels. System monospace with tabular figures remains mandatory for quantities, units, identifiers and source. See [Contour](Contour.md). One title per page; uppercase only for label and table-head roles.
 
 **Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-4`; workbench panels sit `space-3` apart; sections separate by `space-6`. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. Button sizes are complete recipes in [Button](components/Button.md); their height grows for wrapped labels. The XDSM view uses a `space-12` matrix pitch.
 
-**Shape.** Corners are machined: `radius-xs` for tags and data cells, `radius-sm` for controls and graph nodes, `radius-md` for panels, dialogs and the record bar. `radius-full` is only for progress tracks and circular marks. Borders define objects; panels have no shadow. `shadow-float` is only for menus, popovers and the toast.
+**Shape.** Contour uses radius-xs for chips, radius-sm for proportional controls, radius-md for working panels and radius-shell for the central canvas. Shared shadows distinguish floating, raised and sunken surfaces. Status shapes remain unchanged.
 
-**Surfaces.** Two layers only: `canvas`, then `surface`. Anything deeper is a `surface-sunken` well (read-only values, code, table headers) or a hairline, never a third raised layer.
+**Surfaces.** Neutral shell-ground frames the canvas; raised panels use surface-raised and shadow-panel. Sunken values/code wells use surface-sunken without elevation. Static texture and restrained neutral gradients belong only to shell chrome, never over scientific text or data.
 
 **Focus and states.** Every focusable element shows a 2px `focus` outline offset 2px; elements that clip outlines use `focus-ring`. The inverse record bar uses `focus-on-record`, a contrasting blue in both themes. Hover changes `accent` to `accent-hover`; disabled is 45% opacity with the reason stated nearby. Selected = `accent-soft` fill + 2px `accent` edge.
 
-**Assistant content.** Proposals sit in an `InferenceBlock`: a dashed `ai` border, an `ai-soft` header, the word "Proposal" and its status. The assistant's mark is a solid `ai` square with an iris glyph. There are no gradients anywhere in the system.
+**Assistant content.** Proposals sit in an `InferenceBlock`: a dashed `ai` border, an `ai-soft` header, the word "Proposal" and its status. The assistant's mark is a solid `ai` square with an iris glyph. Neutral shell-chrome gradients follow Contour; assistant and scientific semantic colours retain their dedicated meanings.
 
 **Motion.** Only for state change: 120ms ease-out for hover and selection, 200ms for panels opening. The running indicator is the only loop. Respect `prefers-reduced-motion`.
 

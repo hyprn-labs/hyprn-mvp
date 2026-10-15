@@ -4,6 +4,8 @@ import type { ApproachSelection1 } from './contract';
 import type { ApproachHandoff } from './ApproachAssumptions';
 import {
   BrandLogo,
+  WorkspaceShell,
+  NavigationRail,
   Button,
   Panel,
   TextInput,
@@ -513,35 +515,9 @@ export function Workspace() {
   return (
     <CaseNavigation.Provider value={openCase}>
       <main ref={workspaceRoot}>
-        <header className="appbar">
-          <BrandLogo />
-          {signedIn && (
-            <>
-              <nav aria-label="Main navigation">
-                <Button
-                  variant="link"
-                  aria-current={page === 'home' ? 'page' : undefined}
-                  onClick={() => navigate(() => void openPage('home'))}
-                >
-                  Home
-                </Button>
-                {study && (
-                  <>
-                    <span className="breadcrumb-study">/ {study.name}</span>
-                    <span className="breadcrumb-section">/ {breadcrumbOf(view)}</span>
-                  </>
-                )}
-              </nav>
-              <Button
-                className="profile-link"
-                aria-current={page === 'profile' ? 'page' : undefined}
-                onClick={() => navigate(() => void openPage('profile'))}
-              >
-                Profile
-              </Button>
-            </>
-          )}
-        </header>
+        {!signedIn && (
+          <header className="hf-signin-brand"><BrandLogo /></header>
+        )}
         {error != null && (
           <div role="alert">
             <p>{message(error)}</p>
@@ -677,8 +653,31 @@ export function Workspace() {
                   </Button>
                 </aside>
               ))}
-            <div className="workspace-shell">
-              <div className="workspace-content">
+            <WorkspaceShell
+              navigation={
+                <NavigationRail
+                  primary={
+                    <>
+                      <Button
+                        variant="quiet"
+                        aria-current={page === 'home' ? 'page' : undefined}
+                        onClick={() => navigate(() => void openPage('home'))}
+                      >Home</Button>
+                      <Button
+                        variant="quiet"
+                        aria-current={page === 'profile' ? 'page' : undefined}
+                        onClick={() => navigate(() => void openPage('profile'))}
+                      >Profile</Button>
+                    </>
+                  }
+                  study={study?.name}
+                  section={study ? breadcrumbOf(view) : undefined}
+                  items={study ? studyTabs() : undefined}
+                  value={study ? selectedTab(view) : undefined}
+                  onChange={(next) => chooseView(next as WorkspaceView)}
+                />
+              }
+            >
                 {page === 'profile' && (
                   <Panel className="profile-page">
                     <h1>Profile</h1>
@@ -932,14 +931,6 @@ export function Workspace() {
                         {studyCreator && <AttributionChip {...studyCreator} />}
                       </div>
                     ) : null}
-                    <Tabs
-                      navigation
-                      className="workspace-views"
-                      label="Workspace sections"
-                      value={selectedTab(view)}
-                      onChange={(next) => chooseView(next as WorkspaceView)}
-                      items={studyTabs()}
-                    />
                     {ctx &&
                       viewRegistry.map((entry) => (
                         <Fragment key={entry.name}>{entry.banner?.(ctx)}</Fragment>
@@ -1013,8 +1004,7 @@ export function Workspace() {
                       )}
                   </AttributionContext.Provider>
                 )}
-              </div>
-            </div>
+            </WorkspaceShell>
           </>
         )}
         <DialogFrame

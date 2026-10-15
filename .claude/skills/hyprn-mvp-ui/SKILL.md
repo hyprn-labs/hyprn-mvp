@@ -24,7 +24,7 @@ Load this skill before any change under `ui/src` or `ui/tests`, any change to a 
 - Build screens only from the components exported by `ui/src/design`. Never write a second rendering of a component that exists there.
 - Colours, sizes, spacing, radii, shadows and type come only from tokens (`var(--…)` from `ui/src/design/tokens.css`). Never introduce a literal colour, px size, radius or font.
 - `ui/src/design/tokens.css` is generated from `design-system/tokens.json` by `python3 ui/design_tokens.py`. Never hand-edit it; change `tokens.json` and regenerate.
-- The served content security policy is `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'`. Therefore: no inline styles (`style=`, `setAttribute('style')`, `cssText`), no external fonts, no icon fonts, no external URLs and no CDNs. The interface uses the operating system's fonts only.
+- The served content security policy is `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'`. Therefore: no inline styles (`style=`, `setAttribute('style')`, `cssText`), no runtime remote fonts, no icon fonts, no external URLs and no CDNs. The interface uses audited self-hosted Manrope with system fallback; scientific values and source retain system monospace. [Contour](../../../design-system/Contour.md) supersedes the former flat-surface and machined-corner rules.
 - Icons are small inline SVGs passed as React nodes. An icon-only button carries an `aria-label`; every other icon sits beside a word.
 - Status is shape + word + colour, never colour alone (`StatusTag`).
 - A blank input reads "unassigned", a missing output reads "not computed", and zero is an explicit value shown as `0`. Never fill a blank with a default number and never show a missing output as `0` or an empty cell.
@@ -46,11 +46,11 @@ node ui/node_modules/typescript/bin/tsc --noEmit -p ui/tsconfig.json
 npm --prefix ui run build
 ```
 
-`ui/design-baseline.json` changes (`--update-baseline`) only for lines your change moved, and the commit says which. Browser groups run through the test-group runner (`deployment/checks.py --group <group>`).
+`ui/design-baseline.json` changes (`--update-baseline`) only for lines your change moved, and the commit says which. All checks run through `./hyprn-mvp dev check <group>`; combined-static includes the checks above.
 
 ## Definition of done for screen work
 
-- One screen per step.
+- One complete authorized UI journey per task; shared component adoption stays cohesive.
 - Screenshots at 1440 × 1000 in light and dark, compared with the design-system reference images.
 - Screenshots and other evidence stay outside the repository (in a scoped test folder or below the development evidence root), never in a tracked folder.
 - DOM and browser tests prove behaviour, not visual fidelity; automated browser evidence is never human acceptance.
