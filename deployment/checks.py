@@ -1907,6 +1907,7 @@ def run_group(
                 '--test',
                 'ui/tests/criterion-record.test.cjs',
                 'ui/tests/design-colors.test.cjs',
+                'ui/tests/exploration-inputs.test.cjs',
             ],
             [
                 'node',

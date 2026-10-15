@@ -24,6 +24,12 @@ import {
 import { unitLabel } from './unitLabels';
 import type { Selection, WorkspaceLink } from './workspaceModel';
 import { useAccessLoss } from './accessLoss';
+import {
+  explorationInputVector,
+  preparedInputUnitsMatch,
+  savedInputQuantity,
+  sameInputVector,
+} from './explorationInputs';
 
 const key = (ref: PortRef) => ref.instance_id + '/' + ref.port_id;
 type Loaded = {
@@ -93,7 +99,8 @@ export function AnswerExplorer({
     return () => fence.abort();
   }, [api, studyId, answer.answer_version_id, configuration, refresh]);
 
-  const fit = loaded?.fits[fitIndex];
+  const compatibleUnits = loaded && preparedInputUnitsMatch(loaded.basis.inputs);
+  const fit = compatibleUnits ? loaded?.fits[fitIndex] : undefined;
   const axis = fit && loaded?.basis.inputs.find((p) => key(p.target) === key(fit.request.axis));
   const baseline = axis?.binding.kind === 'free' ? axis.binding.assignment.value : null;
   const current = value === undefined ? baseline : value;
@@ -102,35 +109,15 @@ export function AnswerExplorer({
         (a, b) => a - b,
       )
     : [];
-  const vector =
-    axis && current === null
-      ? undefined
-      : loaded?.basis.inputs.flatMap((p) =>
-          p.binding.kind === 'free'
-            ? [
-                {
-                  target: p.target,
-                  units: p.units,
-                  value:
-                    axis && key(p.target) === key(axis.target) && current !== null
-                      ? current
-                      : p.binding.assignment.value,
-                },
-              ]
-            : [],
-        );
+  const vector = loaded && explorationInputVector(loaded.basis.inputs, axis?.target, current);
   // Only the same complete vector and exact model can provide calculated overlays.
   const matching = (run: PublicRunDetail) => {
     const c = run.history?.configuration;
     return (
       c &&
       c.model_revision_id === loaded?.basis.model_revision_id &&
-      c.inputs.length === vector?.length &&
-      vector.every((v) =>
-        c.inputs.some(
-          (i) => key(i.target) === key(v.target) && i.value === v.value && i.units === v.units,
-        ),
-      )
+      vector &&
+      sameInputVector(vector, c.inputs)
     );
   };
   const calculated = loaded?.runs.find(matching);
@@ -323,8 +310,9 @@ export function AnswerExplorer({
         <>
           {!fit && (
             <p>
-              No prepared estimates for this answer configuration. Calculated results remain
-              available.
+              {compatibleUnits
+                ? 'No prepared estimates. Calculated results remain available.'
+                : 'Estimates need model-declared units. Saved quantities stay unchanged.'}
             </p>
           )}
           {snapshot ? (
@@ -343,15 +331,15 @@ export function AnswerExplorer({
                   ) : axis && ref === key(axis.target) ? (
                     <QuantitySlider
                       label={input.name}
-                      units={input.units}
+                      units={savedInputQuantity(input)!.units}
                       values={values}
                       value={current}
                       onChange={setValue}
                     />
                   ) : (
                     <p className="hf-mono">
-                      {formatNumber(input.binding.assignment.value)} {unitLabel(input.units)} ·
-                      Fixed
+                      {formatNumber(input.binding.assignment.value)}{' '}
+                      {unitLabel(savedInputQuantity(input)!.units)} · Fixed
                     </p>
                   );
                 const output = loaded.basis.outputs.find((p) => key(p.target) === ref);
