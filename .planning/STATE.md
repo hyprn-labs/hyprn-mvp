@@ -9,6 +9,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 
 ## Current Position
 
+- Callable study workflow, 2026-10-15: `hyprn` is installed and discovered by Codex from its repository-owned source. Commit `baabd60` adds a brief-to-answer launch sequence and the owner client's lightweight batch-status shortcut. Client checks 10 and style checks 33 pass; a read of 20 retained runs matches their configuration pins. See [callable skill checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/hyprn-callable-skill.md). Full new-study behavioral evaluation, detailed API diagnostics and unit-catalogue expansion remain follow-ups; no numerical runtime or live scientific records changed.
 - Phase 1 is recorded complete. Its original gate passed 102/103 groups on `a66a1f3`; the remaining findings chain passed later on the continuation branch. That history is not a claim of full qualification on today's tree.
 - Phase 2 completed: 2.1, 2.1a, 2.2–2.8 and 2.8a–2.8c. Phase 3 completed: 3.1, 3.2, 3.2a, 3.3, 3.3a–3.3d and 3.4–3.10. Checkpoints retain exact commands, failures, counts, artifact identities and cleanup. Full 3.16 remains partial; its paths slice is verified.
 - Task 2.8 closes the combined schema/study-path/release attestation window. The current modeling producer and native captures are verified; the final runtime retains exactly 49 reviewed source paths and one unreplaced attestation. See [checkpoint 2.8](phases/02-local-edition/checkpoints/2.8.md).
@@ -53,7 +54,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and [HANDOVER.md](HANDOVE
 | Later evidence-label fix | Run-scoped evidence expects a synthetic root instance absent from the production model. Preserve frozen identities; the demonstrated conclusion uses study scope with exact run references. |
 | Demo export integration | Export processing is enabled; the existing queued computational-record request completed. No duplicate was submitted. |
 | Later performance work | `get_study_overview` reads whole owner lists; large-study scaling remains unqualified. |
-| Workflow-agent integration | Reader, real calculations, persisted answers and live UI verification are delivered. Independently evaluate the consolidated scientific guidance and expanded scenarios, then exercise it through the supported authoring client. Earlier nine-scenario evidence applies to its earlier revision; no global skill installation is implied. |
+| Workflow-agent integration | The user-scope `hyprn` skill is installed and discoverable. Independently evaluate the revised guidance and expanded scenarios, then exercise a new study through the supported authoring client. Earlier nine-scenario evidence applies only to its earlier revision. Diagnostics, reviewed units and execution observability remain separately scoped follow-ups. |
 
 ## Verification Constraints and Known Limits
 
