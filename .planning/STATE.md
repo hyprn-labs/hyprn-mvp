@@ -1,5 +1,7 @@
 # Project State
 
+- Active delivery: [interactive answer exploration](phases/03-agent-tools-for-coding-agents/answer-exploration/PLAN.md), received as the authorized execution handoff from the Vizualisers chat on 2026-10-15. Execute only 3.V1–3.V6 in dependency order, starting with the real fuel tracer for study `50e423fd-a709-4e21-9381-0b09022b4115`. Existing branch, one fresh executor at a time, serialized shared runtime/files; preserve unrelated ROADMAP and research edits. The plan's scoped execution adaptation governs this queue, not the historical Phase 3 inventory. Next checkpoint: 3.V1 exact answer-linked pins, bounded native surrogate proof and public-API/browser tracer. Full qualification and Guerric's human acceptance remain distinct requirements.
+
 - Current demo design: approved Charcoal tokens, distinct blue keyboard focus,
   shared neutral syntax roles and canonical unchanged logo owned by BrandLogo.
   See [Charcoal checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/charcoal-design-system.md)
