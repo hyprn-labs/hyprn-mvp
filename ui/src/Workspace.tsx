@@ -141,7 +141,7 @@ export function Workspace() {
   // adds its entry through the view's registry guard; the registry fixes the save order.
   // Metadata errors propagate and keep the dialog open.
   const guardContext: GuardContext = {
-    view, study, approach, approachEditing, approachEditingRef, setApproachEditing,
+    api, view, study, approach, approachEditing, approachEditingRef, setApproachEditing,
     setApproachEditEpoch, portPasteSlot, editorSlot, metadataDirty, saveMetadata,
     setCurrentStudy, evidenceSlot, configurationSlot,
   };

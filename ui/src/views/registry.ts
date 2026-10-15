@@ -53,6 +53,7 @@ export type ViewPlacement =
 
 /** What a view's editor guard reads: the shell's guard slots and the editors' dirty state. */
 export type GuardContext = {
+  api: HyprnMvpApi;
   view: WorkspaceView;
   study: Study | null;
   approach: ApproachController;
