@@ -17,6 +17,8 @@ def finite(value):
 
 
 def admit_request(request):
+    if isinstance(request, dict) and request.get('schema_version') == '2':
+        return admit_extension(request)
     if not isinstance(request, dict) or set(request) != {
         'schema_version',
         'operation',
@@ -102,6 +104,8 @@ def admit_request(request):
 
 def calculate(request):
     admit_request(request)
+    if request['schema_version'] == '2':
+        return extend_design(request)
     import numpy as np
     import openmdao.api as om
     import openmdao
@@ -206,6 +210,119 @@ def calculate(request):
                 problem.cleanup()
     result['compute_seconds'] = time.monotonic() - start
     return result
+
+
+def admit_extension(request):
+    """Closed bounded joint designs; no source, paths or executable model state."""
+    if set(request) != {'schema_version', 'operation', 'identity', 'seed', 'groups'}:
+        raise ValueError('Closed extension request required')
+    if (
+        request['operation'] != 'extend_design'
+        or type(request['seed']) is not int
+        or not 0 <= request['seed'] < 2**32
+    ):
+        raise ValueError('Explicit extension seed required')
+    if (
+        not isinstance(request['identity'], str)
+        or len(request['identity']) != 64
+        or any(c not in '0123456789abcdef' for c in request['identity'])
+    ):
+        raise ValueError('Exact design identity required')
+    groups = request['groups']
+    if not isinstance(groups, list) or not 1 <= len(groups) <= 8:
+        raise ValueError('Bounded category groups required')
+    total = 0
+    for group in groups:
+        if not isinstance(group, dict) or set(group) != {
+            'bounds',
+            'training_count',
+            'check_count',
+            'retained',
+        }:
+            raise ValueError('Closed design group required')
+        bounds = group['bounds']
+        if (
+            not isinstance(bounds, list)
+            or not 1 <= len(bounds) <= 32
+            or any(
+                not isinstance(b, list) or len(b) != 2 or not all(map(finite, b)) or b[0] >= b[1]
+                for b in bounds
+            )
+        ):
+            raise ValueError('Finite joint bounds required')
+        for name, minimum in [('training_count', 3), ('check_count', 2)]:
+            if type(group[name]) is not int or not minimum <= group[name] <= 64:
+                raise ValueError('Bounded partition counts required')
+        retained = group['retained']
+        if not isinstance(retained, list) or len(retained) > 128:
+            raise ValueError('Bounded retained design required')
+        vectors = set()
+        for row in retained:
+            if (
+                not isinstance(row, dict)
+                or set(row) != {'partition', 'vector'}
+                or row['partition'] not in ('training', 'check')
+            ):
+                raise ValueError('Exact retained partition required')
+            vector = row['vector']
+            if (
+                not isinstance(vector, list)
+                or len(vector) != len(bounds)
+                or not all(map(finite, vector))
+                or tuple(vector) in vectors
+            ):
+                raise ValueError('Distinct finite retained vector required')
+            vectors.add(tuple(vector))
+        total += sum(
+            max(group[count], sum(r['partition'] == partition for r in retained))
+            for partition, count in [('training', 'training_count'), ('check', 'check_count')]
+        )
+    if total > 128:
+        raise ValueError('Design point cap exceeded')
+    return request
+
+
+def extend_design(request):
+    """Append seeded LHS batches; retained coordinates/partitions never change.
+
+    The union is a sequence of LHS batches, not a claim of one re-stratified LHS.
+    Independent check points are reserved before any original evaluation.
+    """
+    from scipy.stats import qmc
+    import scipy
+    import numpy as np
+
+    start = time.monotonic()
+    groups = []
+    for index, group in enumerate(request['groups']):
+        rows = list(group['retained'])
+        seen = {tuple(r['vector']) for r in rows}
+        seed = np.random.SeedSequence([request['seed'], index, len(rows)])
+        sampler = qmc.LatinHypercube(d=len(group['bounds']), rng=np.random.default_rng(seed))
+        lo, hi = zip(*group['bounds'], strict=True)
+        for partition, count in [
+            ('training', group['training_count']),
+            ('check', group['check_count']),
+        ]:
+            missing = max(0, count - sum(r['partition'] == partition for r in rows))
+            for _ in range(4):
+                if not missing:
+                    break
+                for vector in qmc.scale(sampler.random(missing), lo, hi).tolist():
+                    if tuple(vector) not in seen:
+                        seen.add(tuple(vector))
+                        rows.append(dict(partition=partition, vector=vector))
+                        missing -= 1
+            if missing:
+                raise ValueError('Representable distinct sample space exhausted')
+        groups.append(rows)
+    return dict(
+        schema_version='2',
+        identity=request['identity'],
+        groups=groups,
+        scipy_version=scipy.__version__,
+        compute_seconds=time.monotonic() - start,
+    )
 
 
 def main():

@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, Request
 from ..contracts import DomainError
 from ..edge import response, valid_id
 from ..exploration import Explorations
+from ..sampling import Samples
 
 
 def router(deps):
     explorations = Explorations(deps.store, deps.configs)
+    samples = Samples(deps.store, deps.configs, deps.submissions)
     Actor = Annotated[str, Depends(deps.actor)]
     r = APIRouter()
 
@@ -73,6 +75,32 @@ def router(deps):
             explorations.basis(
                 who, sid, valid_id(answer_version_id), valid_id(configuration_revision_id)
             ),
+        )
+
+    @r.post('/api/1/studies/{study_id}/exploration-samples/preview')
+    def sample_preview(study_id: str, body: dict, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, samples.preview(who, valid_id(study_id), body))
+
+    @r.post('/api/1/studies/{study_id}/exploration-samples', status_code=202)
+    def sample_submit(study_id: str, body: dict, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, samples.submit(who, valid_id(study_id), body), 202)
+
+    @r.get('/api/1/studies/{study_id}/exploration-samples/{operation_id}')
+    def sample_status(study_id: str, operation_id: str, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, samples.status(who, valid_id(study_id), valid_id(operation_id)))
+
+    @r.post('/api/1/studies/{study_id}/exploration-samples/{operation_id}/controls')
+    def sample_control(study_id: str, operation_id: str, body: dict, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(
+            request, samples.control(who, valid_id(study_id), valid_id(operation_id), body)
         )
 
     return r

@@ -46,6 +46,14 @@ OPERATIONS = {
     'list_prepared_explorations': ('GET', S + '/exploration-requests', None),
     'submit_exploration': ('POST', S + '/exploration-requests', None),
     'get_exploration': ('GET', S + '/exploration-requests/{request_id}', None),
+    'preview_exploration_samples': ('POST', S + '/exploration-samples/preview', None),
+    'sample_exploration': ('POST', S + '/exploration-samples', None),
+    'get_exploration_samples': ('GET', S + '/exploration-samples/{operation_id}', None),
+    'control_exploration_samples': (
+        'POST',
+        S + '/exploration-samples/{operation_id}/controls',
+        None,
+    ),
     'get_exploration_basis': (
         'GET',
         S + '/answers/{answer_id}/exploration-basis/{revision_id}',

@@ -137,6 +137,7 @@ GROUPS = {
     'approach-api': ('application/tests/test_approach_api.py',),
     'answers-api': ('application/tests/test_answers_api.py',),
     'exploration-contracts': ('application/tests/test_exploration_api.py',),
+    'exploration-api': ('application/tests/test_sampling_api.py',),
     'exploration-native': ('deployment/tests/test_exploration_native.py',),
     'exploration-ui': ('deployment/tests/test_exploration_ui.py',),
     'approach-configuration': (
@@ -993,6 +994,7 @@ APPROACH_APP_GROUPS = frozenset(
         'findings-history',
         'answers-api',
         'exploration-contracts',
+        'exploration-api',
         'approach-closure',
         'approach-service',
         'approach-api',
@@ -1760,7 +1762,8 @@ def contracts_child(group='contracts', *, units_mixed_repair=False, exploration_
     if group in NATIVE_BACKEND_GROUPS:
         global NATIVE_BACKEND
         if exploration_ui_resume:
-            assert group == 'exploration-ui' and scope.root == Path(exploration_ui_resume)
+            assert group in ('exploration-ui', 'exploration-native')
+            assert scope.root == Path(exploration_ui_resume)
             from aiida import load_profile
             from aiida.manage import get_manager
 
@@ -2149,7 +2152,9 @@ def main():
         '--class', dest='group_class', choices=CLASSES, help='with --list: only this class'
     )
     parser.add_argument('--units-mixed-repair', action='store_true')
-    parser.add_argument('--exploration-ui-resume')
+    parser.add_argument(
+        '--exploration-ui-resume', '--exploration-resume', dest='exploration_ui_resume'
+    )
     parser.add_argument(
         '--jobs',
         type=int,
@@ -2160,9 +2165,11 @@ def main():
     args = parser.parse_args()
     try:
         if args.exploration_ui_resume and not (
-            args.group == 'exploration-ui' or args.exploration_ui_child
+            args.group in ('exploration-ui', 'exploration-native')
+            or args.exploration_ui_child
+            or args.exploration_native_child
         ):
-            raise ValueError('Exploration resume requires the exploration-ui group')
+            raise ValueError('Exploration resume requires an exploration native or UI group')
         if args.group_class is not None and not args.list:
             raise ValueError('--class is valid only with --list')
         if args.jobs is not None and args.group != 'qualification':

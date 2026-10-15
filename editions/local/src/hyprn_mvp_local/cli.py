@@ -32,7 +32,8 @@ def parser():
     check.add_argument('--jobs', type=int, metavar='N',
                        help='with qualification: groups run at once (default 3; 1 runs them one after the other)')
     check.add_argument('--units-mixed-repair', action='store_true', help=argparse.SUPPRESS)
-    check.add_argument('--exploration-ui-resume', help=argparse.SUPPRESS)
+    check.add_argument('--exploration-ui-resume', '--exploration-resume',
+                       dest='exploration_ui_resume', help=argparse.SUPPRESS)
     return root
 
 

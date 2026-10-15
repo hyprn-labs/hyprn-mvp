@@ -1119,6 +1119,7 @@ API, EDGE, ROUTES = 'hyprn_mvp_app.api', 'hyprn_mvp_app.edge', 'hyprn_mvp_app.ro
 AGENT_ROUTER = 'hyprn_mvp_app.agent_runtime.routes'
 ROUTE_OWNERS = frozenset('hyprn_mvp_app.' + m for m in (
     'store', 'auth', 'readiness', 'modeling', 'configuration', 'approach', 'answers', 'exploration',
+    'sampling',
     'execution', 'history',
     'result_bindings', 'modified_runs', 'computational_export'))
 
@@ -1191,6 +1192,7 @@ LAYERS = {
     ),
     'answers': frozenset({'approach', 'contracts', 'history'}),
     'exploration': frozenset({'answers', 'contracts', 'execution_bundle', 'history', 'units'}),
+    'sampling': frozenset({'contracts', 'exploration', 'history', 'readiness'}),
     'configuration': frozenset(
         {
             'approach',
@@ -1229,6 +1231,8 @@ LAYERS = {
     ),
     'dispatcher': frozenset(
         {
+            'configuration',
+            'sampling',
             'exploration',
             'computational_export',
             'contracts',
@@ -1244,6 +1248,7 @@ LAYERS = {
     'edge': frozenset({'contracts'}),
     'routes': frozenset(
         {
+            'sampling',
             'exploration',
             'answers',
             'approach',

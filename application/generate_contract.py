@@ -9,6 +9,7 @@ from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.answers import DEFINITIONS as ANSWER_DEFINITIONS
 from hyprn_mvp_app.exploration import DEFINITIONS as EXPLORATION_DEFINITIONS
+from hyprn_mvp_app.sampling import DEFINITIONS as SAMPLE_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -24,6 +25,7 @@ def rewrite(value):
 schemas.update(rewrite(definitions()))
 schemas.update(rewrite(ANSWER_DEFINITIONS))
 schemas.update(rewrite(EXPLORATION_DEFINITIONS))
+schemas.update(rewrite(SAMPLE_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
     'ApproachClosureRead3': 'ApproachClosureRead4',
@@ -317,6 +319,19 @@ for path,methods in spec["paths"].items():
             op['description']=(
                 'Explicit answer heads for this exact saved approach version. Empty means '
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif '/exploration-samples' in path:
+            schema=ref('ExplorationSamplePreview1' if path.endswith('/preview')
+                       else 'ExplorationSampleOperation1')
+            if method == 'post':
+                op['requestBody']['content']['application/json']['schema']=ref(
+                    'ExplorationSampleControl1' if path.endswith('/controls')
+                    else 'ExplorationSampleRequest1')
+                if path.endswith('/exploration-samples'):
+                    status='202'
+            op['description']=(
+                'Bounded incremental original-model samples. Exact vectors and independent '
+                'partitions are retained. Cancellation stops future evaluations; an in-flight '
+                'bounded scalar run is reconciled by its existing receipt.')
         elif '/exploration-requests' in path:
             schema=ref('ExplorationOperation1')
             if method == 'get' and path.endswith('/exploration-requests'):

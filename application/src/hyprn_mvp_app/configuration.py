@@ -17,6 +17,51 @@ class Configurations:
     def __init__(self,store,coordinator):
         self.store,self.coordinator=store,coordinator
 
+    def exploration_point(self, actor, sid, command, baseline, values, rationale):
+        """Freeze one explicit sampled vector from an immutable configuration.
+
+        This owner preserves exact model, evidence, approach and numerical pins.
+        No modeling service read or candidate-source execution is needed.
+        """
+        from uuid import UUID, uuid5
+        from .execution_bundle import validate_frozen_configuration
+
+        frozen = deepcopy(self.read(actor, sid, baseline))
+        configuration = frozen['configuration']
+        original = configuration['inputs']
+        key = lambda item: (item['target']['instance_id'], item['target']['port_id'])
+        mapping = {key(item): item for item in values}
+        if len(mapping) != len(values) or set(mapping) != {key(item) for item in original}:
+            raise DomainError('invalid_request', 400)
+        for item in original:
+            value = mapping[key(item)]
+            if value['units'] != item['units']:
+                raise DomainError('invalid_request', 400)
+            if item['value'] != value['value']:
+                item['value'] = value['value']
+                item['provenance']['statement'] = rationale
+                item['provenance']['kind'] = 'manual'
+                if 'result_binding' in item:
+                    item['result_binding'] = None
+        if 'derivation' in configuration:
+            configuration['derivation'] = None
+        configuration.update(configuration_id=str(uuid5(UUID(command), 'family')),
+                             configuration_revision_id=str(uuid5(UUID(command), 'version')),
+                             parent_revision_id=None)
+        configuration['digest'] = digest({k:v for k,v in configuration.items() if k != 'digest'})
+        validate_frozen_configuration(frozen)
+
+        def save(db):
+            db.execute('INSERT INTO configurations VALUES(?,?,?,?)',
+                       (configuration['configuration_revision_id'],
+                        configuration['configuration_id'], sid, json.dumps(frozen)))
+            db.execute('INSERT INTO configuration_families VALUES(?,?,?)',
+                       (configuration['configuration_id'], sid,
+                        configuration['configuration_revision_id']))
+            return dict(configuration_revision_id=configuration['configuration_revision_id'])
+        return self.store.command(actor, sid, 'exploration_configuration', command,
+                                  dict(baseline=baseline, values=values, rationale=rationale), save)
+
     def native_capabilities(self,actor,sid,*,strict=False):
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:

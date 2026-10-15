@@ -21,6 +21,8 @@ from .store import Store
 from .readiness import ObservationPublisher,transient_lock_error
 from .computational_export import records_for_store
 from .exploration import Explorations
+from .sampling import Samples
+from .configuration import Configurations
 
 MAX_MESSAGE=64*1024*1024
 # A store lock held past the busy timeout is transient contention, never a reason to
@@ -253,6 +255,7 @@ def main():
                 observation.refresh()
                 if not args.run_id:
                     Explorations(store, None).process_one(native)
+                    Samples(store, Configurations(store, None), service).process_one(native)
                 with store.connection() as db:
                     runs=[args.run_id] if args.run_id else [r[0] for r in db.execute(
                         "SELECT run_id FROM outbox WHERE state IN ('accepted_run','dispatching') AND COALESCE(json_extract(payload,'$.preparation_state'),'')!='preparation_failed' ORDER BY rowid LIMIT 100")]

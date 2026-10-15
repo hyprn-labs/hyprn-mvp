@@ -69,9 +69,11 @@ class Submissions:
         self.store,self.prepare,self.native=store,prepare,native
         self.fault=lambda point:None
 
-    def submit(self,actor,sid,body):
+    def submit(self,actor,sid,body,*,expected_runtime=None):
         command=body['command_id'];revision=body['configuration_revision_id']
         payload=dict(operation='submit_run',target=sid,configuration_revision_id=revision)
+        if expected_runtime is not None:
+            payload['expected_runtime'] = expected_runtime
         budget = body.get('execution_budget')
         if budget is not None:
             from .contracts import execution_wall_seconds
@@ -110,6 +112,8 @@ class Submissions:
                             actor=actor,
                             frozen=json.loads(row['payload']),
                             **({'execution_budget': budget} if budget is not None else {}),
+                            **({'expected_runtime': expected_runtime}
+                               if expected_runtime is not None else {}),
                         )
                     ),
                 ),
@@ -246,6 +250,9 @@ class Submissions:
                         dependencies=ResultBindings(self.store).dependencies(payload['actor'],row['study_id'],payload['frozen']['configuration'],self.native)
                     prepared,files=self.prepare(payload['actor'],row['study_id'],row['command_id'],payload['frozen'])
                     bundle=assemble_bundle(run_id,prepared,files,payload['frozen'],self.native.bundle_runtime(),dependencies)
+                    if (payload.get('expected_runtime') is not None
+                            and bundle['manifest']['runtime'] != payload['expected_runtime']):
+                        raise ValueError('Sample runtime changed')
                 except DomainError as error:
                     if error.status>=500:return  # Visible pending; no claim crossed.
                     self._preparation_failure(row,error.code,status=error.status)

@@ -158,3 +158,48 @@ edit/saved-model format 4. These are serialization formats, not scientific model
 versions. The owner-session `create_model` and edit/preview tools supply the
 appropriate format; unsupported explicit formats receive a `/schema_version`
 diagnostic. Existing format semantics and the private modeling contract stay intact.
+
+## Incremental original-model sampling
+
+`POST /studies/{id}/exploration-samples/preview` resolves exact answer/configuration
+references, explicit category tuples and budgets without numerical work or writes.
+`POST /exploration-samples` retains that request and advances it through the existing
+dispatcher. `GET /exploration-samples/{operation_id}` reads retained progress only;
+the `/controls` subresource accepts idempotent cancel, reconcile and resume commands.
+Owner-session tools expose the same public operations.
+
+Each combination names an exact baseline and an ordered list of numerical dimensions
+with bounds and units. Unvaried free assignments stay explicit in every full vector.
+Category dimensions declare their allowed values; the combination list declares the
+supported joint tuples, without generating an implicit Cartesian product. Current
+limits are 8 tuples, 32 varied inputs per tuple, 128 retained points per operation,
+3–64 training and 2–64 independent checks per tuple, and concurrency exactly 1.
+No default ranges, seed, targets, budgets or category bindings are inferred.
+
+An extension references `previous_operation_id`. Compatible coordinates and their
+training/check partitions are retained; seeded SciPy Latin-hypercube batches append
+only the deficit. The union of batches is not claimed to be one re-stratified LHS.
+Original-result identity includes model/source, numerical settings, runtime, category
+values and the complete ordered value/unit vector; targets, budget and density do
+not change it. Recorded failed/unavailable results remain inspectable through their
+run references and are never promoted to successful values or silently retried.
+
+The additional-evaluation budget charges accepted scalar attempts, including failures.
+Admission reserves each new point's requested execution allowance. The operation wall
+budget is an elapsed admission deadline: no further point is accepted without its
+remaining allowance. The existing hard per-run container limit still applies;
+preparation, native-process startup and reconciliation time are reported separately
+by the existing run lifecycle and are not a hard total-operation wall guarantee.
+Cancellation stops future acceptance after the current bounded scalar receipt is
+reconciled; it does not forcibly kill an already accepted native process. A cancelled
+unresolved scalar keeps its operation slot until explicit reconciliation establishes
+the outcome. Resume keeps the same deadline and budget. A new extension declares a
+new additional budget.
+
+Stable per-point command IDs recover interrupted configuration/run acceptance.
+An uncertain scalar launch is resolved only through its original receipt and native
+lookup; no age, retry or restart authorizes a replacement launch. An unknown numerical
+design artifact remains explicitly uncertain and never starts scalar evaluations.
+Generated designs are canonical data-only JSON artifacts with retained AiiDA creator
+links and hashes; no estimator serialization, executable upload or new store is used.
+These sample operations do not fit a surrogate or change a previously ready version.
