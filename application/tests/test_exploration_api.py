@@ -12,11 +12,119 @@ import json
 import pytest
 
 from hyprn_mvp_app.contracts import digest, uid
-from hyprn_mvp_app.exploration import quantities
+from hyprn_mvp_app.exploration import Explorations, quantities
 from test_assumptions_evidence_api import api, generated  # noqa: F401
 from test_answers_api import answer_env, body, saved  # noqa: F401
 from test_approach_api import assert_http, assert_shape
 from test_approach_closure import D, config, model, sample, signed
+
+
+def design_request(e):
+    inputs, outputs = quantities(e['frozen'])
+    axis = next(p for p in inputs if p['binding']['kind'] == 'free')['target']
+    return dict(
+        schema_version='1',
+        command_id=uid(),
+        selection_token=uid(),
+        operation='design',
+        answer_version_id=e['answer']['answer_version_id'],
+        configuration_revision_id=e['frozen']['configuration']['configuration_revision_id'],
+        axis=axis,
+        lower=0,
+        upper=2,
+        seed=17,
+        training_count=3,
+        check_count=2,
+        method='response_surface',
+        training_run_ids=[],
+        check_run_ids=[],
+        query_values=[0, 1],
+        tolerances=[dict(target=outputs[0]['target'], absolute=0.1, relative=0.01)],
+        rationale='Explicit synthetic slice for API admission only',
+    )
+
+
+def test_design_admission_and_reads_do_not_execute_source_or_numerics(basis_env, generated):
+    e = basis_env
+    request = design_request(e)
+    path = '/api/1/studies/' + e['sid'] + '/exploration-requests'
+    reply = e['client'].post(path, json=request)
+    assert reply.status_code == 202, reply.text
+    assert_http(generated, '/studies/{study_id}/exploration-requests', 'post', reply)
+    assert reply.json()['data']['state'] == 'pending'
+    assert not e['canary'].exists()
+    assert e['client'].post(path, json=request).json()['data'] == reply.json()['data']
+    read = e['client'].get(path + '/' + request['command_id'])
+    assert read.json()['data'] == reply.json()['data']
+    conflict = e['client'].post(path, json=dict(request, seed=18))
+    assert conflict.status_code == 409
+
+
+@pytest.mark.parametrize(
+    'changes',
+    [
+        {'seed': True},
+        {'seed': 1.0},
+        {'lower': float('inf')},
+        {'lower': 3},
+        {'query_values': [3]},
+        {'training_count': 33},
+        {'check_count': 0},
+        {'pickle': 'forbidden'},
+        {'operation': 'execute'},
+        {'rationale': '   '},
+        {'query_values': [True]},
+        {'query_values': [9007199254740992]},
+    ],
+)
+def test_invalid_design_never_queues_numerical_work(basis_env, changes):
+    e = basis_env
+    request = dict(design_request(e), **changes)
+    reply = e['client'].post(
+        '/api/1/studies/' + e['sid'] + '/exploration-requests',
+        content=json.dumps(request),
+        headers={'Content-Type': 'application/json'},
+    )
+    assert reply.status_code == 400, reply.text
+    with e['store'].connection() as db:
+        assert (
+            db.execute("SELECT COUNT(*) FROM receipts WHERE category='exploration'").fetchone()[0]
+            == 0
+        )
+
+
+def test_unknown_numerical_outcome_is_never_automatically_redispatched(basis_env):
+    e = basis_env
+    request = design_request(e)
+    path = '/api/1/studies/' + e['sid'] + '/exploration-requests'
+    assert e['client'].post(path, json=request).status_code == 202
+    calls = []
+
+    class LostResponse:
+        def explore(self, request):
+            calls.append(request)
+            raise TimeoutError('Transport lost after possible native computation')
+
+    owner = Explorations(e['store'], None)
+    assert owner.process_one(LostResponse()) is True
+    assert owner.process_one(LostResponse()) is False
+    read = e['client'].get(path + '/' + request['command_id'])
+    assert read.json()['data']['state'] == 'uncertain'
+    assert e['client'].post(path, json=request).json()['data'] == read.json()['data']
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('role, expected', [('reader', 403), ('absent', 404)])
+def test_numerical_admission_requires_current_study_write_access(basis_env, role, expected):
+    e = basis_env
+    request = design_request(e)
+    with e['store'].connection(write=True) as db:
+        if role == 'absent':
+            db.execute('DELETE FROM memberships WHERE study_id=?', (e['sid'],))
+        else:
+            db.execute('UPDATE memberships SET role=? WHERE study_id=?', (role, e['sid']))
+    reply = e['client'].post('/api/1/studies/' + e['sid'] + '/exploration-requests', json=request)
+    assert reply.status_code == expected
 
 
 @pytest.fixture

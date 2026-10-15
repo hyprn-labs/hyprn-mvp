@@ -14,6 +14,21 @@ def router(deps):
     Actor = Annotated[str, Depends(deps.actor)]
     r = APIRouter()
 
+    @r.post('/api/1/studies/{study_id}/exploration-requests', status_code=202)
+    def exploration_submit(study_id: str, body: dict, request: Request, who: Actor):
+        sid = valid_id(study_id)
+        with deps.store.connection() as db:
+            deps.store.authorize(db, who, sid, write=True)
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, explorations.submit(who, sid, body), 202)
+
+    @r.get('/api/1/studies/{study_id}/exploration-requests/{request_id}')
+    def exploration_status(study_id: str, request_id: str, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, explorations.status(who, valid_id(study_id), valid_id(request_id)))
+
     @r.get(
         '/api/1/studies/{study_id}/answers/{answer_version_id}'
         '/exploration-basis/{configuration_revision_id}'

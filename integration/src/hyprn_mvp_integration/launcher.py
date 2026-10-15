@@ -25,6 +25,7 @@ from hyprn_mvp_app.contracts import (
     execution_wall_seconds,
 )
 from . import installation
+from . import exploration
 
 
 def configured_installation():
@@ -223,6 +224,7 @@ def execution_source_hashes():
         'integration/src/hyprn_mvp_integration/__init__.py',
         'integration/src/hyprn_mvp_integration/launcher.py',
         'integration/src/hyprn_mvp_integration/worker.py',
+        'integration/src/hyprn_mvp_integration/exploration.py',
         'integration/src/hyprn_mvp_integration/results.py',
         'integration/src/hyprn_mvp_integration/calculation.py',
         'integration/src/hyprn_mvp_integration/computational_export.py',
@@ -456,16 +458,34 @@ def bundle_runtime(root=None):
     )
 
 
-def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=None):
+def isolated(
+    input_dir, *, canary=False, wall=None, expected_digest=None, root=None, exploration_digest=None
+):
     wall = execution_wall_seconds(POLICY['wall_seconds'] if wall is None else wall)
     root = runtime_root(root)
     if not canary:
         require_attestation(root=root)
-        if expected_digest is None:
+        if exploration_digest is not None:
+            path = Path(input_dir) / 'exploration.json'
+            if (
+                expected_digest is not None
+                or path.is_symlink()
+                or path.stat().st_size > 131072
+                or set(Path(input_dir).iterdir()) != {path}
+            ):
+                raise ValueError('Closed data-only exploration mount required')
+            raw = path.read_bytes()
+            if hashlib.sha256(raw).hexdigest() != exploration_digest:
+                raise ValueError('Exploration artifact identity mismatch')
+            exploration.admit_request(data_json(raw))
+        elif expected_digest is None:
             raise ValueError('Immutable expected bundle digest required')
-        verified = verify_bundle(
-            input_dir, selected_runtime(root=root), expected_digest, bundle_runtime(root=root)
-        )
+        else:
+            verified = verify_bundle(
+                input_dir, selected_runtime(root=root), expected_digest, bundle_runtime(root=root)
+            )
+    elif exploration_digest is not None:
+        raise ValueError('Exploration always requires attestation')
     owner = OWNER if root == ROOT else root.name
     name = ('hyprn-mvp-worker-' if root == ROOT else owner + '-worker-') + uuid4().hex
     args = [
@@ -519,6 +539,13 @@ def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=N
     args += (
         ['/input/canary.py']
         if canary
+        else [
+            '-m',
+            'hyprn_mvp_integration.exploration',
+            '/input/exploration.json',
+            exploration_digest,
+        ]
+        if exploration_digest is not None
         else [
             '-m',
             'hyprn_mvp_integration.worker',
@@ -580,6 +607,43 @@ def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=N
         subprocess.run(
             ['docker', 'rm', '-f', name], capture_output=True, timeout=20, env=docker_environment()
         )
+
+
+def explore(request, *, root=None):
+    """Bounded pure numerical operation; no source or caller-selected file mount."""
+    exploration.admit_request(request)
+    root = runtime_root(root)
+    require_attestation(root=root)
+    raw = canonical(request)
+    if len(raw) > 131072:
+        raise ValueError('Exploration input limit')
+    with tempfile.TemporaryDirectory(prefix='exploration-', dir=root) as directory:
+        path = Path(directory)
+        path.chmod(0o755)
+        (path / 'exploration.json').write_bytes(raw)
+        (path / 'exploration.json').chmod(0o444)
+        report = isolated(
+            path, root=root, wall=60, exploration_digest=hashlib.sha256(raw).hexdigest()
+        )
+    if report['reason'] != 'exited' or report['exit_code'] != 0:
+        raise RuntimeError('Bounded exploration computation failed')
+    records = [
+        line.removeprefix('EXPLORATION_RESULT=')
+        for line in report['output'].splitlines()
+        if line.startswith('EXPLORATION_RESULT=')
+    ]
+    if len(records) != 1:
+        raise ValueError('One numerical result required')
+    result = data_json(records[0].encode())
+    if result.get('identity') != request['identity']:
+        raise ValueError('Exploration result identity mismatch')
+    return dict(
+        result=result,
+        runtime=selected_runtime(root=root),
+        request_sha256=hashlib.sha256(raw).hexdigest(),
+        result_sha256=digest(result),
+        elapsed_seconds=report['seconds'],
+    )
 
 
 def host_home():
@@ -669,9 +733,10 @@ def attest(root=None):
         (
             'import hashlib,json\nimport hyprn_mvp_integration as p,h'
             'yprn_mvp_integration.worker as w,hyprn_mvp_integration.'
-            'results as r\nprint(json.dumps({n:hashlib.sha256(open(m.'
+            'results as r,hyprn_mvp_integration.exploration as e\n'
+            'print(json.dumps({n:hashlib.sha256(open(m.'
             "__file__,'rb').read()).hexdigest() for n,m in (('packag"
-            "e',p),('worker',w),('results',r))}))"
+            "e',p),('worker',w),('results',r),('exploration',e))}))"
         )
     )
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -704,6 +769,9 @@ def attest(root=None):
         package=hashlib.sha256(package.read_bytes()).hexdigest(),
         worker=before['worker_sha256'],
         results=before['runtime']['results_sha256'],
+        exploration=hashlib.sha256(
+            Path(__file__).with_name('exploration.py').read_bytes()
+        ).hexdigest(),
     )
     passed = (
         cases['memory']['state']['OOMKilled']

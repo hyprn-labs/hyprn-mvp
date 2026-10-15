@@ -42,6 +42,8 @@ def native_call(native, method, values, *, read_only=False, exports_only=False, 
         return archive_response(native.archive_record(values[0]))
     if method == 'resolve_results':
         return native.resolve_results(values[0])
+    if method == 'explore':
+        return native.explore(values[0])
     if method == 'read_record':
         return encode_record(native.read_record(*values))
     if method == 'require_attestation':

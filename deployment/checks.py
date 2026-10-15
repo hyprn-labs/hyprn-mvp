@@ -137,6 +137,7 @@ GROUPS = {
     'approach-api': ('application/tests/test_approach_api.py',),
     'answers-api': ('application/tests/test_answers_api.py',),
     'exploration-contracts': ('application/tests/test_exploration_api.py',),
+    'exploration-native': ('deployment/tests/test_exploration_native.py',),
     'approach-configuration': (
         'application/tests/test_approach_configuration.py',
         'application/tests/test_scientific_configuration.py',
@@ -982,6 +983,7 @@ APPROACH_NATIVE_GROUPS = frozenset(
         'investigation-native',
         'investigation-worker',
         'fuel-native-provenance',
+        'exploration-native',
     }
 )
 APPROACH_APP_GROUPS = frozenset(

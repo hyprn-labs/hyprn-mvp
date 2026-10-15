@@ -206,6 +206,18 @@ class ScalarParser(Parser):
             return self.exit_codes.ERROR_WORKER
 
 
+def exploration_calculation(request, root):
+    """AiiDA owns the immutable data-only input/result and computation identity."""
+    # AiiDA Dict normalizes float precision. Canonical file bytes preserve the
+    # exact design coordinates and finite predictions without executable state.
+    with request.open(mode='rb') as stream:
+        value = data_json(stream.read(131073))
+    result = launcher.explore(value, root=Path(root.value))
+    return orm.SinglefileData(
+        file=io.BytesIO(canonical(result)), filename='exploration-result.json'
+    )
+
+
 class NativeExecution:
     """Explicit fresh profile only. An uncertain stored node is never relaunched."""
 
@@ -220,6 +232,25 @@ class NativeExecution:
                 raise ValueError('Injected backend must belong to explicit fixture root')
             self.store_uuid = str(UUID(backend.get_repository().uuid))
         self.fault = lambda point: None
+
+    def explore(self, request):
+        from aiida.engine import calcfunction
+
+        self.require_attestation()
+        result, node = calcfunction(exploration_calculation).run_get_node(
+            orm.SinglefileData(
+                file=io.BytesIO(canonical(request)), filename='exploration-request.json'
+            ),
+            orm.Str(str(self.root)),
+        )
+        with result.open(mode='rb') as stream:
+            value = data_json(stream.read(131073))
+        return dict(
+            value,
+            process_uuid=node.uuid,
+            store_uuid=str(UUID(self.store_uuid)),
+            artifact_uuid=result.uuid,
+        )
 
     @classmethod
     def from_environment(cls):
@@ -346,8 +377,10 @@ class NativeExecution:
             if digest(raw_result) != source['results_digest']:
                 raise ValueError('Source results digest mismatch')
             result = read_stored_result(
-                raw_result, request, data_json(bundle['files']['model.json']),
-                result_schema_version=bundle['manifest'].get('result_protocol_version', '1')
+                raw_result,
+                request,
+                data_json(bundle['files']['model.json']),
+                result_schema_version=bundle['manifest'].get('result_protocol_version', '1'),
             )
             if result['execution']['state'] != 'finished' or result['execution']['exit_code'] != 0:
                 raise ValueError('Successful source execution required')

@@ -394,7 +394,7 @@ transaction. These records do not enter modeling or execution bundles.
 | `configuration` | `approach`, `contracts`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
 | `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
 | `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
-| `dispatcher` | `computational_export`, `contracts`, `execution`, `execution_bundle`, `modeling`, `readiness`, `store` |
+| `dispatcher` | `computational_export`, `contracts`, `execution`, `execution_bundle`, `exploration`, `modeling`, `readiness`, `store` |
 | `auth` | `contracts`, `store` |
 | `ui` | — |
 | `edge` | `contracts` |

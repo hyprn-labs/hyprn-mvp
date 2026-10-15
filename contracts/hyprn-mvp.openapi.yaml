@@ -10638,6 +10638,337 @@
         "description": "Save an immutable authored case answer (case_id) or study synthesis (case_id null). expected_revision is null for the first answer, otherwise its current answer_version_id. Receipt category answer_save. All basis IDs are exact, same-study references; synthesis may cite exact case answers from this approach version. No conclusion is inferred from execution or criteria. Ordinary study owner/writer sessions only."
       }
     },
+    "/studies/{study_id}/exploration-requests": {
+      "post": {
+        "summary": "Exploration Submit",
+        "operationId": "exploration_submit_api_1_studies__study_id__exploration_requests_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplorationRequest1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ExplorationOperation1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Bounded data-only slice design or assessed prediction from exact retained scalar runs. Poll the operation; an uncertain outcome is never redispatched."
+      }
+    },
+    "/studies/{study_id}/exploration-requests/{request_id}": {
+      "get": {
+        "summary": "Exploration Status",
+        "operationId": "exploration_status_api_1_studies__study_id__exploration_requests__request_id__get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ExplorationOperation1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Bounded data-only slice design or assessed prediction from exact retained scalar runs. Poll the operation; an uncertain outcome is never redispatched."
+      }
+    },
     "/studies/{study_id}/answers/{answer_version_id}/exploration-basis/{configuration_revision_id}": {
       "get": {
         "summary": "Exploration Basis",
@@ -59520,6 +59851,582 @@
         "required": [
           "approach_version_id",
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationRuntime1": {
+        "type": "object",
+        "properties": {
+          "image_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "architecture": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "python_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "worker_entrypoint": {
+            "enum": [
+              "hyprn_mvp_integration.worker"
+            ]
+          },
+          "policy_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "image_digest",
+          "architecture",
+          "python_version",
+          "worker_entrypoint",
+          "policy_digest"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationRequest1": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1"
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "selection_token": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "operation": {
+            "enum": [
+              "design",
+              "fit_predict"
+            ]
+          },
+          "answer_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "configuration_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "axis": {
+            "$ref": "#/components/schemas/PortRef"
+          },
+          "lower": {
+            "type": "number",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "upper": {
+            "type": "number",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "training_count": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 16
+          },
+          "check_count": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 16
+          },
+          "method": {
+            "enum": [
+              "response_surface",
+              "kriging"
+            ]
+          },
+          "training_run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 16
+          },
+          "check_run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 16
+          },
+          "query_values": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "minItems": 1,
+            "maxItems": 33
+          },
+          "tolerances": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "$ref": "#/components/schemas/PortRef"
+                },
+                "absolute": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "relative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "target",
+                "absolute",
+                "relative"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "schema_version",
+          "command_id",
+          "selection_token",
+          "operation",
+          "answer_version_id",
+          "configuration_revision_id",
+          "axis",
+          "lower",
+          "upper",
+          "seed",
+          "training_count",
+          "check_count",
+          "method",
+          "training_run_ids",
+          "check_run_ids",
+          "query_values",
+          "tolerances",
+          "rationale"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationOperation1": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "selection_token": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "complete",
+              "uncertain"
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplorationPrediction1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "request_id",
+          "selection_token",
+          "state",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationPrediction1": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ExplorationBasis1"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ExplorationRequest1"
+          },
+          "identity": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "query_inputs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 33,
+            "items": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/components/schemas/PortRef"
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "target",
+                  "value",
+                  "units"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "samples": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "run_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^[0-9a-f-]{36}$"
+                },
+                "configuration_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "bundle_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "results_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "runtime": {
+                  "$ref": "#/components/schemas/ExplorationRuntime1"
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Input"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ResolvedInput2"
+                      }
+                    ]
+                  },
+                  "maxItems": 1000
+                }
+              },
+              "required": [
+                "run_id",
+                "configuration_digest",
+                "bundle_digest",
+                "results_digest",
+                "runtime",
+                "inputs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "numerical": {
+            "$ref": "#/components/schemas/ExplorationNumerical1"
+          }
+        },
+        "required": [
+          "schema_version",
+          "basis",
+          "request",
+          "identity",
+          "query_inputs",
+          "samples",
+          "numerical"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationNumerical1": {
+        "type": "object",
+        "properties": {
+          "runtime": {
+            "$ref": "#/components/schemas/ExplorationRuntime1"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "result_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "process_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "store_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "artifact_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "schema_version": {
+                "const": "1"
+              },
+              "identity": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "method": {
+                "enum": [
+                  "response_surface",
+                  "kriging"
+                ]
+              },
+              "versions": {
+                "type": "object",
+                "properties": {
+                  "openmdao": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "scipy": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "numpy": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "openmdao",
+                  "scipy",
+                  "numpy"
+                ],
+                "additionalProperties": false
+              },
+              "training_vectors": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "minItems": 1,
+                  "maxItems": 1
+                }
+              },
+              "check_vectors": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "minItems": 1,
+                  "maxItems": 1
+                }
+              },
+              "outputs": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "estimated",
+                        "unavailable"
+                      ]
+                    },
+                    "reason": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "maxItems": 33,
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "assessed_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16
+                    },
+                    "evaluable_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16
+                    },
+                    "failed_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16
+                    },
+                    "max_absolute_error": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rmse": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "target_met": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "reason",
+                    "values",
+                    "assessed_count",
+                    "evaluable_count",
+                    "failed_count",
+                    "max_absolute_error",
+                    "rmse",
+                    "target_met"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "compute_seconds": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "schema_version",
+              "identity",
+              "method",
+              "versions",
+              "training_vectors",
+              "check_vectors",
+              "outputs",
+              "compute_seconds"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "runtime",
+          "request_sha256",
+          "result_sha256",
+          "elapsed_seconds",
+          "process_uuid",
+          "store_uuid",
+          "artifact_uuid",
+          "result"
         ],
         "additionalProperties": false
       },

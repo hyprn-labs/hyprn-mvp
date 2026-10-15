@@ -94,7 +94,7 @@ INTEGRATION_SEAM = BOUND_INTEGRATION + ('hyprn_mvp_integration.computational_exp
 # image and is never imported by the host-side runtime probe.
 ATTESTED_ROOTS = BOUND_INTEGRATION + ('hyprn_mvp_integration.worker',)
 PROJECT_SOURCES = ('application/src/', 'integration/src/')
-# Reviewed attested project modules (49-entry list; the other 35 entries are the
+# Reviewed attested project modules (50-entry list; the other 35 entries are the
 # deployment/generator/runtime/policy pins and the reviewed WhatsOpt patches).
 ATTESTED_PROJECT_FILES = frozenset({
     'application/src/hyprn_mvp_app/__init__.py',
@@ -111,6 +111,7 @@ ATTESTED_PROJECT_FILES = frozenset({
     'integration/src/hyprn_mvp_integration/launcher.py',
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/worker.py',
+    'integration/src/hyprn_mvp_integration/exploration.py',
 })
 # Every reviewed dynamic-loading construct is pinned by
 # (path, enclosing function, callee, count): new, removed or moved constructs fail,
@@ -357,7 +358,7 @@ def test_attested_project_sources_equal_the_static_launch_path_closure():
     assert not {p for p in bound if p.startswith(PROJECT_SOURCES)} - project  # no non-.py project entries
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in bound
-    assert len(bound) == 49
+    assert len(bound) == 50
 
 
 def _execution_source_list():
@@ -377,7 +378,7 @@ def test_attested_list_stays_a_reviewed_literal_in_the_launcher():
     values = assigns[0].value.elts
     assert all(isinstance(v, ast.Constant) and isinstance(v.value, str) for v in values)
     literal = [v.value for v in values]
-    assert len(literal) == len(set(literal)) == 39
+    assert len(literal) == len(set(literal)) == 40
     assert {p for p in literal if p.startswith(PROJECT_SOURCES)} == ATTESTED_PROJECT_FILES
     # The only computed addition is the reviewed WhatsOpt patch directory.
     assert len(augments) == 1
@@ -595,10 +596,10 @@ print(json.dumps(out))
 def test_a_runtime_recorded_against_a_wider_inventory_refuses_until_rebuilt_and_reattested():
     """A runtime.json recorded against a wider inventory (the current one
     plus the modules unreachable from every launch) fails closed on inventory drift before
-    any docker inspection; only the current 49-entry inventory passes that check (and then
+    any docker inspection; only the current 50-entry inventory passes that check (and then
     reaches the image check, stubbed here)."""
     result = probe(f'REPO={str(REPO)!r}\n' + FAIL_CLOSED_PROBE)
-    assert result['old'] == 51 and result['new'] == 49
+    assert result['old'] == 52 and result['new'] == 50
     assert result['old_error'] == 'RuntimeError: Execution source inventory drift; rebuild before attesting'
     assert result['new_error'] == 'LookupError: image check reached'
     assert result['docker_calls'] == 1
@@ -1228,6 +1229,7 @@ LAYERS = {
     ),
     'dispatcher': frozenset(
         {
+            'exploration',
             'computational_export',
             'contracts',
             'execution',
@@ -1749,7 +1751,7 @@ print(json.dumps([sorted(application_runtime.hashes()),
     documents = 'contracts/schemas/documents.schema.json'
     assert documents in application
     assert documents not in modeling | execution
-    assert len(modeling) == 23 and len(execution) == 49
+    assert len(modeling) == 23 and len(execution) == 50
     assert {
         'contracts/schemas/model.schema.json',
         'contracts/schemas/execution.schema.json',

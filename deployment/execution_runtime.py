@@ -197,6 +197,7 @@ def build_worker(*, root=None, engine=None, no_cache=False):
         recipe=sha(REPO / 'deployment/worker.Dockerfile'),
         worker=sha(worker),
         results=sha(worker.with_name('results.py')),
+        exploration=sha(worker.with_name('exploration.py')),
         package=sha(worker.with_name('__init__.py')),
         labels=labels,
     )
@@ -210,6 +211,7 @@ def build_worker(*, root=None, engine=None, no_cache=False):
         for source, name in [
             (worker, 'worker.py'),
             (worker.with_name('results.py'), 'results.py'),
+            (worker.with_name('exploration.py'), 'exploration.py'),
             (worker.with_name('__init__.py'), '__init__.py'),
             (REPO / 'deployment/worker.Dockerfile', 'Dockerfile'),
         ]:

@@ -317,6 +317,14 @@ for path,methods in spec["paths"].items():
             op['description']=(
                 'Explicit answer heads for this exact saved approach version. Empty means '
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif '/exploration-requests' in path:
+            schema=ref('ExplorationOperation1')
+            if method == 'post':
+                status='202'
+                op['requestBody']['content']['application/json']['schema']=ref('ExplorationRequest1')
+            op['description']=(
+                'Bounded data-only slice design or assessed prediction from exact retained '
+                'scalar runs. Poll the operation; an uncertain outcome is never redispatched.')
         elif '/exploration-basis/' in path:
             schema=ref('ExplorationBasis1')
             op['description']=(

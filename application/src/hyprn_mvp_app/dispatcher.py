@@ -20,6 +20,7 @@ from .modeling import ModelingClient
 from .store import Store
 from .readiness import ObservationPublisher,transient_lock_error
 from .computational_export import records_for_store
+from .exploration import Explorations
 
 MAX_MESSAGE=64*1024*1024
 # A store lock held past the busy timeout is transient contention, never a reason to
@@ -57,6 +58,7 @@ BRIDGE_ARITIES = {
     'read_record': 2,
     'resolve_results': 1,
     'archive_record': 1,
+    'explore': 1,
 }
 MAX_ARCHIVE=16*1024*1024
 MAX_INVENTORY=4*1024*1024
@@ -88,6 +90,8 @@ def bridge_request(method,values,*,read_only=False,exports_only=False):
             or (exports_only and method!='archive_record') or (method=='archive_record' and not exports_only)):
         raise ValueError('Unexpected bridge operation')
     raw=bridge_encode(dict(method=method,args=values))
+    if method == 'explore' and (not isinstance(values[0], dict) or len(raw) > 131072):
+        raise ValueError('Bounded exploration data required')
     if method == 'launch_budgeted':
         from .contracts import execution_wall_seconds
 
@@ -183,6 +187,7 @@ class NativeBridge:
     def read_record(self,request,association):return decode_record(self.call('read_record',request,association))
     def resolve_results(self,sources):return self.call('resolve_results',sources)
     def archive_record(self,preflight):return archive_response(self.call('archive_record',preflight))
+    def explore(self, request):return self.call('explore', request)
 
 
 def export_once(store,request_id=None):
@@ -246,6 +251,8 @@ def main():
             try:
                 if args.with_exports:export_once(store)
                 observation.refresh()
+                if not args.run_id:
+                    Explorations(store, None).process_one(native)
                 with store.connection() as db:
                     runs=[args.run_id] if args.run_id else [r[0] for r in db.execute(
                         "SELECT run_id FROM outbox WHERE state IN ('accepted_run','dispatching') AND COALESCE(json_extract(payload,'$.preparation_state'),'')!='preparation_failed' ORDER BY rowid LIMIT 100")]
