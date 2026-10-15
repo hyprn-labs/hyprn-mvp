@@ -5046,6 +5046,8 @@ test('@approach-demo Charcoal roles across study views at 200% zoom', async ({
   baseURL,
 }) => {
   test.setTimeout(120000);
+  const assertions = await describedApproach(page, browser, baseURL);
+  await addAssertionExamples(browser, baseURL, assertions.sid);
   const data = await caseNavigation(page, browser, baseURL);
   const root = process.env.HYPRN_MVP_TEST_SCOPE_ROOT!;
   const extension = join(root, 'artifacts/charcoal-zoom-extension');
@@ -5077,7 +5079,9 @@ test('@approach-demo Charcoal roles across study views at 200% zoom', async ({
     const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
     const screen = context.pages()[0] ?? (await context.newPage());
     const destination = (view: string, extra: Record<string, string> = {}) =>
-      '/ui/?workspace#' + new URLSearchParams({ v: '1', view, study: data.sid, ...extra });
+      '/ui/?workspace#' + new URLSearchParams({
+        v: '1', view, study: view === 'overview' ? assertions.sid : data.sid, ...extra,
+      });
     await screen.goto(destination('overview'));
     await screen.getByLabel('Username', { exact: true }).fill('owner');
     await screen.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
@@ -5171,6 +5175,12 @@ test('@approach-demo Charcoal roles across study views at 200% zoom', async ({
           await expect(
             screen.getByRole('button', { name: 'See more details', exact: true }),
           ).toBeVisible();
+          await screen.getByRole('button', { name: 'See more details', exact: true }).click();
+          const detail = screen.getByRole('dialog', { name: 'Study details', exact: true });
+          await expect(detail.locator('.hf-assertion')).toHaveCount(6);
+          expect(await detail.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+          await readingShot(screen, `consistency-study-${theme}-200`);
+          await detail.getByRole('button', { name: 'Close Study details', exact: true }).click();
         } else if (view === 'model') {
           await expect(
             screen.getByText('Saved version · read-only', { exact: true }),
@@ -5233,3 +5243,205 @@ test('@approach-demo Charcoal roles across study views at 200% zoom', async ({
     await context.close();
   }
 });
+
+test('@approach-demo shared control recipes survive context, wrapping and touch', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await page.goto('/ui/?specimen');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+    for (const width of [1280, 360]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const [size, height, font, line, gap] of [
+        ['desk', 36, 14, 20, 8],
+        ['sm', 28, 12, 16, 4],
+        ['floor', 48, 14, 20, 8],
+      ] as const) {
+        const group = page.getByRole('generic', { name: size + ' controls' });
+        for (const button of await group.getByRole('button').all()) {
+          const result = await button.evaluate((el) => {
+            const style = getComputedStyle(el),
+              r = el.getBoundingClientRect();
+            return {
+              height: r.height,
+              font: parseFloat(style.fontSize),
+              line: parseFloat(style.lineHeight),
+              gap: parseFloat(style.gap),
+              width: r.width,
+              icon: el.classList.contains('hf-btn--icon'),
+            };
+          });
+          expect(result.height).toBe(height);
+          expect(result.font).toBe(font);
+          expect(result.line).toBe(line);
+          expect(result.gap).toBe(gap);
+          if (result.icon) expect(result.width).toBe(height);
+        }
+      }
+      const assertions = page.locator('.hf-assertion');
+      const empty = assertions.nth(0).locator('.hf-evidence-stack');
+      await expect(empty).toBeHidden();
+      for (const assertion of await assertions.all()) {
+        const result = await assertion.evaluate((el) => {
+          const children = Array.from(el.children).filter(
+            (x) => getComputedStyle(x).display !== 'none',
+          );
+          return {
+            gap:
+              children.length > 1
+                ? children[1].getBoundingClientRect().top -
+                  children[0].getBoundingClientRect().bottom
+                : null,
+          };
+        });
+        if (result.gap !== null) expect(result.gap).toBe(12);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+      ).toBe(true);
+      await readingShot(page, `consistency-specimen-${theme}-${width}`);
+    }
+  }
+  const touch = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 900 },
+    hasTouch: true,
+  });
+  try {
+    const screen = await touch.newPage();
+    await screen.goto('/ui/?specimen');
+    expect(
+      await screen
+        .getByRole('button')
+        .evaluateAll((nodes) => nodes.every((node) => node.getBoundingClientRect().height >= 48)),
+    ).toBe(true);
+  } finally {
+    await touch.close();
+  }
+});
+
+test('@approach-demo study assertions share rhythm with zero, one and multiple sources', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const data = await describedApproach(page, browser, baseURL);
+  const saved = await addAssertionExamples(browser, baseURL, data.sid);
+  await page.goto(
+    '/ui/?workspace#' + new URLSearchParams({ v: '1', view: 'overview', study: data.sid }),
+  );
+  await page.reload();
+  await page.getByLabel('Username', { exact: true }).fill('owner');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'See more details', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Study details', exact: true });
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+    for (const width of [1280, 360]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const assertions = dialog.locator('.hf-assertion');
+      await expect(assertions).toHaveCount(6);
+      const measurements = await assertions.evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const children = Array.from(node.children).filter(
+            (el) => el.getBoundingClientRect().height > 0,
+          );
+          const statement = children[0].getBoundingClientRect();
+          return {
+            gap:
+              children.length > 1
+                ? children[1].getBoundingClientRect().top - statement.bottom
+                : null,
+            padding: getComputedStyle(node).paddingBottom,
+          };
+        }),
+      );
+      expect(measurements.map((x) => x.gap)).toEqual([null, 12, 12, null, 12, 12]);
+      expect(measurements.every((x) => x.padding === '0px')).toBe(true);
+      const sizes = await dialog
+        .getByRole('button', { name: 'View evidence', exact: true })
+        .evaluateAll((nodes) =>
+          nodes
+            .filter((n) => n.getBoundingClientRect().height)
+            .map((n) => ({
+              h: n.getBoundingClientRect().height,
+              font: getComputedStyle(n).fontSize,
+            })),
+        );
+      expect(sizes).toHaveLength(6);
+      expect(sizes.every((x) => x.h === 28 && x.font === '12px')).toBe(true);
+      expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      await readingShot(page, `consistency-study-${theme}-${width}`);
+    }
+  }
+  await dialog.getByRole('button', { name: 'Edit study', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Add assumption', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Approach assumption', exact: true });
+  await editor.getByRole('button', { name: 'Apply assumption', exact: true }).click();
+  await expect(editor.getByRole('alert')).toHaveText('Enter an assumption statement.');
+  await expect(editor.getByLabel('Assumption statement', { exact: true })).toBeFocused();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+  const prior = await (
+    await page.request.get(
+      `/api/1/studies/${data.sid}/approach/versions/${saved.version.approach_version_id}`,
+    )
+  ).json();
+  expect(prior.data.version.content).toEqual(saved.version.content);
+});
+
+async function addAssertionExamples(browser: any, baseURL: string | undefined, sid: string) {
+  const helperContext = await browser.newContext({ baseURL }),
+    helper = await helperContext.newPage();
+  await helper.goto('/ui/');
+  const saved = await helper.evaluate(async (sid) => {
+    const { api, controller: c } = (window as any).approachHarness;
+    await api.login('owner', 'correct horse battery staple');
+    await c.open(sid);
+    const sources = [];
+    for (const title of [
+      'Measured operating conditions',
+      'Independent reference with a deliberately long title for narrow layouts',
+    ]) {
+      sources.push(
+        await api.createEvidence(sid, {
+          evidence_schema_version: '3',
+          kind: 'note',
+          title,
+          content: 'Supports only the stated operating range.',
+          source_refs: [],
+          resource_scope: { scope_version: '1', kind: 'study', study_id: sid },
+        }),
+      );
+    }
+    const links = sources.map((record) => ({
+      evidence_version_id: record.evidence_version_id,
+      relation: 'supports',
+    }));
+    const content = c.getSnapshot().local;
+    c.edit({
+      ...content,
+      schema_version: '2',
+      original_question: null,
+      elaboration: null,
+      assumptions: [0, 1, 2].map((n) => ({
+        assumption_id: crypto.randomUUID(),
+        statement: 'Assumption ' + n + ': conditions remain within the declared range.',
+        role: 'overall_method',
+        evidence_links: links.slice(0, n),
+      })),
+      limit_items: [0, 1, 2].map((n) => ({
+        limit_id: crypto.randomUUID(),
+        statement: 'Limit ' + n + ': extrapolation beyond that range is not established.',
+        evidence_links: links.slice(0, n),
+      })),
+    });
+    if (!(await c.save()) || !(await c.saveVersion())) throw new Error(c.getSnapshot().error);
+    return c.getSnapshot().saved;
+  }, sid);
+  await helperContext.close();
+  return saved;
+}

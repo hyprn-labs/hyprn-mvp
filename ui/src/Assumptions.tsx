@@ -1,5 +1,7 @@
+import { ActionGroup } from './design';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, DialogFrame, SectionHeader, TextArea, StatusTag, Select, TextInput } from './design';
+import { Assertion, EvidenceStack } from './design';
 import { EvidencePicker } from './EvidencePicker';
 import { EvidenceRecordBody, evidenceAccessLost, evidenceTitle } from './EvidenceView';
 import { message, type HyprnMvpApi, type EvidenceRecord, type EvidenceSnapshot } from './api';
@@ -120,12 +122,12 @@ function OwnedAssumptions({
   /** Read-only: one row per link, relationship · title · View evidence. */
   function evidenceRows(item: ConfigurationAssumption) {
     return item.evidence_links.length ? (
-      <div className="assumption-evidence">
+      <EvidenceStack>
         {item.evidence_links.map((link) => {
           const record = records.find((r) => r.evidence_version_id === link.evidence_version_id),
             locator = approach ? (link as { locator?: string }).locator : undefined;
           return (
-            <div className="assumption-evidence-row" key={link.evidence_version_id + link.relation}>
+            <div className="hf-evidence-item" key={link.evidence_version_id + link.relation}>
               {record ? (
                 <EvidenceRecordBody
                   record={record}
@@ -144,7 +146,7 @@ function OwnedAssumptions({
             </div>
           );
         })}
-      </div>
+      </EvidenceStack>
     ) : (
       !brief && <p className="context-line">No evidence linked.</p>
     );
@@ -225,7 +227,7 @@ function OwnedAssumptions({
   return (
     <List
       aria-label={regionless ? undefined : ownerLabel + ' assumptions'}
-      className="assumption-list"
+      className="assumption-list hf-assertions"
     >
       {showHeading ? (
         <SectionHeader level={headingLevel} title="Assumptions" actions={addButton} />
@@ -234,8 +236,7 @@ function OwnedAssumptions({
       )}
       {!items.length && !brief && !editable && <p className="context-line">No assumptions</p>}
       {items.map((item) => (
-        <article className="evidence-record assumption-item" key={item.assumption_id}>
-          <p className="evidence-content">{item.statement}</p>
+        <Assertion className="assumption-item" key={item.assumption_id} statement={item.statement}>
           {itemContext && <p className="context-line assumption-owner">{itemContext(item)}</p>}
           {approach &&
             (!brief || (item as ApproachAssumption1).role === 'proposed_model_condition') && (
@@ -251,7 +252,7 @@ function OwnedAssumptions({
             )}
           {evidenceRows(item)}
           {editable && (
-            <div className="actions">
+            <ActionGroup className="actions">
               <Button
                 disabled={editable.disabled}
                 aria-label={'Edit assumption: ' + item.statement}
@@ -270,9 +271,9 @@ function OwnedAssumptions({
                 Remove assumption
               </Button>
               {itemActions?.(item)}
-            </div>
+            </ActionGroup>
           )}
-        </article>
+        </Assertion>
       ))}
       {removing && editable && (
         <DialogFrame
@@ -287,7 +288,7 @@ function OwnedAssumptions({
           <h2>Remove this assumption from {ownerLabel}?</h2>
           <p className="evidence-content">{removing.statement}</p>
           <p>Its evidence records and saved versions will remain.</p>
-          <div className="actions">
+          <ActionGroup className="actions">
             <Button data-safe-choice onClick={() => closeRemoval()}>
               Keep assumption
             </Button>
@@ -301,7 +302,7 @@ function OwnedAssumptions({
             >
               Remove assumption
             </Button>
-          </div>
+          </ActionGroup>
         </DialogFrame>
       )}
       {editing && editable && (
@@ -356,7 +357,7 @@ function OwnedAssumptions({
             Add evidence
           </Button>
           {error && <p role="alert">{error}</p>}
-          <div className="actions">
+          <ActionGroup className="actions">
             <Button
               variant="primary"
               disabled={editable.disabled || picker}
@@ -377,7 +378,7 @@ function OwnedAssumptions({
               Apply assumption
             </Button>
             <Button onClick={close}>Cancel</Button>
-          </div>
+          </ActionGroup>
           {discarding && (
             <>
               <p>Discard unsaved assumption changes?</p>
@@ -494,19 +495,99 @@ function AssumptionVersionChange({ api, studyId, ownerLabel, original, relation,
       if (apply) onApply(exact); else setProposed(exact);
     });
   }
-  return <DialogFrame ref={dialog} aria-label="Change evidence version" onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); onClose(); }}>
-    <h2>Change evidence version</h2><p>{ownerLabel}</p><p>The existing {relation === 'supports' ? 'Supports' : relation === 'challenges' ? 'Challenges' : 'Context'} relationship is preserved. Other uses remain unchanged.</p>
-    {unavailable ? <p role="alert">Evidence unavailable. Choose another record or remove the attachment.</p> : <>
-      <section aria-label="Evidence versions">{versions.map(record => <p key={record.evidence_version_id}><Button disabled={busy} aria-pressed={proposed?.evidence_version_id === record.evidence_version_id} title={record.evidence_version_id} onClick={() => void choose(record.evidence_version_id)}>Choose {evidenceTitle(record)} · Version {record.evidence_version_id.slice(0, 8)}{record.evidence_version_id === original.evidence_version_id ? ' · Current attachment' : ''}</Button></p>)}
-        {cursor && <Button disabled={busy} onClick={() => void loadVersions(true)}>Load more versions</Button>}
-      </section>
-      {proposed && <section aria-label="Proposed evidence replacement"><p>{evidenceTitle(original)} · Version <abbr title={original.evidence_version_id}>{original.evidence_version_id.slice(0, 8)}</abbr> → {evidenceTitle(proposed)} · Version <abbr title={proposed.evidence_version_id}>{proposed.evidence_version_id.slice(0, 8)}</abbr></p>
-        <p className="hf-visually-hidden">From evidence version {original.evidence_version_id} to evidence version {proposed.evidence_version_id}.</p><EvidenceRecordBody record={proposed} />
-      </section>}
-    </>}
-    {error && <p role="alert">{error}</p>}{busy && <p role="status">Checking evidence version…</p>}
-    <div className="actions"><Button onClick={onClose}>Keep current version</Button><Button variant="primary" disabled={busy || unavailable || !proposed || proposed.evidence_version_id === original.evidence_version_id || !!api.pending} onClick={() => proposed && void choose(proposed.evidence_version_id, true)}>Apply version change</Button></div>
-    {error && !unavailable && <Button disabled={busy} onClick={() => void loadVersions()}>Retry loading versions</Button>}
-    {(!proposed || proposed.evidence_version_id === original.evidence_version_id) && !unavailable && <p>Choose a different version before applying this change.</p>}
-  </DialogFrame>;
+  return (
+    <DialogFrame
+      ref={dialog}
+      aria-label="Change evidence version"
+      onCancel={(event) => {
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <h2>Change evidence version</h2>
+      <p>{ownerLabel}</p>
+      <p>
+        The existing{' '}
+        {relation === 'supports'
+          ? 'Supports'
+          : relation === 'challenges'
+            ? 'Challenges'
+            : 'Context'}{' '}
+        relationship is preserved. Other uses remain unchanged.
+      </p>
+      {unavailable ? (
+        <p role="alert">Evidence unavailable. Choose another record or remove the attachment.</p>
+      ) : (
+        <>
+          <section aria-label="Evidence versions">
+            {versions.map((record) => (
+              <p key={record.evidence_version_id}>
+                <Button
+                  disabled={busy}
+                  aria-pressed={proposed?.evidence_version_id === record.evidence_version_id}
+                  title={record.evidence_version_id}
+                  onClick={() => void choose(record.evidence_version_id)}
+                >
+                  Choose {evidenceTitle(record)} · Version {record.evidence_version_id.slice(0, 8)}
+                  {record.evidence_version_id === original.evidence_version_id
+                    ? ' · Current attachment'
+                    : ''}
+                </Button>
+              </p>
+            ))}
+            {cursor && (
+              <Button disabled={busy} onClick={() => void loadVersions(true)}>
+                Load more versions
+              </Button>
+            )}
+          </section>
+          {proposed && (
+            <section aria-label="Proposed evidence replacement">
+              <p>
+                {evidenceTitle(original)} · Version{' '}
+                <abbr title={original.evidence_version_id}>
+                  {original.evidence_version_id.slice(0, 8)}
+                </abbr>{' '}
+                → {evidenceTitle(proposed)} · Version{' '}
+                <abbr title={proposed.evidence_version_id}>
+                  {proposed.evidence_version_id.slice(0, 8)}
+                </abbr>
+              </p>
+              <p className="hf-visually-hidden">
+                From evidence version {original.evidence_version_id} to evidence version{' '}
+                {proposed.evidence_version_id}.
+              </p>
+              <EvidenceRecordBody record={proposed} />
+            </section>
+          )}
+        </>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {busy && <p role="status">Checking evidence version…</p>}
+      <ActionGroup className="actions">
+        <Button onClick={onClose}>Keep current version</Button>
+        <Button
+          variant="primary"
+          disabled={
+            busy ||
+            unavailable ||
+            !proposed ||
+            proposed.evidence_version_id === original.evidence_version_id ||
+            !!api.pending
+          }
+          onClick={() => proposed && void choose(proposed.evidence_version_id, true)}
+        >
+          Apply version change
+        </Button>
+      </ActionGroup>
+      {error && !unavailable && (
+        <Button disabled={busy} onClick={() => void loadVersions()}>
+          Retry loading versions
+        </Button>
+      )}
+      {(!proposed || proposed.evidence_version_id === original.evidence_version_id) &&
+        !unavailable && <p>Choose a different version before applying this change.</p>}
+    </DialogFrame>
+  );
 }

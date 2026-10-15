@@ -88,17 +88,94 @@ export function ChangePreview({ api, proposal }: { api: HyprnMvpApi; proposal: C
     catch (e) { setError(e); setPreview(null); }
     finally { setBusy(false); }
   }
-  return <DialogFrame ref={dialog} aria-labelledby="change-preview-title" onCancel={e => { e.preventDefault(); if (!busy) proposal.finish(null); }} className="change-preview">
-    <h2 id="change-preview-title">Preview changes</h2><p>Save these changes together. Existing configurations and runs stay unchanged.</p>
-    {busy && <p role="status">Checking changes…</p>}
-    {error != null && <div role="alert"><p>{message(error)}</p>{error instanceof ApiError && error.detail.fields.map((field, i) => <p key={i}>{field.path}: {field.message}</p>)}</div>}
-    {preview && <DifferenceTable before={base} after={preview} />}
+  return (
+    <DialogFrame
+      ref={dialog}
+      aria-labelledby="change-preview-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) proposal.finish(null);
+      }}
+      className="change-preview"
+    >
+      <h2 id="change-preview-title">Preview changes</h2>
+      <p>Save these changes together. Existing configurations and runs stay unchanged.</p>
+      {busy && <p role="status">Checking changes…</p>}
+      {error != null && (
+        <div role="alert">
+          <p>{message(error)}</p>
+          {error instanceof ApiError &&
+            error.detail.fields.map((field, i) => (
+              <p key={i}>
+                {field.path}: {field.message}
+              </p>
+            ))}
+        </div>
+      )}
+      {preview && <DifferenceTable before={base} after={preview} />}
 
-    {error != null && !api.pending && <Button disabled={busy} onClick={async () => { setBusy(true); try { setCurrent(await api.model(base.study_id, base.model_id)); } catch (e) { setError(e); } finally { setBusy(false); } }}>Review current revision</Button>}
-    {current && <section aria-label="Current revision differences"><h3>Current revision differences</h3><p>{current.draft_revision}</p><DifferenceTable before={base} after={current} /><Button disabled={busy || !!api.pending} onClick={() => { setBase(current); setCommand({ ...command, command_id: crypto.randomUUID(), expected_revision: current.draft_revision }); setCurrent(null); }}>Re-preview preserved proposal</Button><p>Re-preview keeps every proposed edit and its explicit definition/version references. Incompatible references must be corrected in the editor.</p></section>}
-    {api.pending && <p>Check the original command in command recovery. This proposal cannot submit a second command while its outcome is uncertain.</p>}
-    <div className="actions"><Button ref={safe} disabled={busy} onClick={() => proposal.finish(null)}>{proposal.safe}</Button><Button className="primary" disabled={busy || !preview || !!api.pending} onClick={() => void apply()}>{proposal.apply}</Button></div>
-  </DialogFrame>;
+      {error != null && !api.pending && (
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              setCurrent(await api.model(base.study_id, base.model_id));
+            } catch (e) {
+              setError(e);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Review current revision
+        </Button>
+      )}
+      {current && (
+        <section aria-label="Current revision differences">
+          <h3>Current revision differences</h3>
+          <p>{current.draft_revision}</p>
+          <DifferenceTable before={base} after={current} />
+          <Button
+            disabled={busy || !!api.pending}
+            onClick={() => {
+              setBase(current);
+              setCommand({
+                ...command,
+                command_id: crypto.randomUUID(),
+                expected_revision: current.draft_revision,
+              });
+              setCurrent(null);
+            }}
+          >
+            Re-preview preserved proposal
+          </Button>
+          <p>
+            Re-preview keeps every proposed edit and its explicit definition/version references.
+            Incompatible references must be corrected in the editor.
+          </p>
+        </section>
+      )}
+      {api.pending && (
+        <p>
+          Check the original command in command recovery. This proposal cannot submit a second
+          command while its outcome is uncertain.
+        </p>
+      )}
+      <div className="actions">
+        <Button ref={safe} disabled={busy} onClick={() => proposal.finish(null)}>
+          {proposal.safe}
+        </Button>
+        <Button
+          variant="primary"
+          disabled={busy || !preview || !!api.pending}
+          onClick={() => void apply()}
+        >
+          {proposal.apply}
+        </Button>
+      </div>
+    </DialogFrame>
+  );
 }
 
 type HumanChange = { id: string; label: string; before: string; after: string; evidence?: boolean };

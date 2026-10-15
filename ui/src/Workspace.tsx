@@ -519,6 +519,7 @@ export function Workspace() {
             <>
               <nav aria-label="Main navigation">
                 <Button
+                  variant="link"
                   aria-current={page === 'home' ? 'page' : undefined}
                   onClick={() => navigate(() => void openPage('home'))}
                 >

@@ -33,7 +33,8 @@ function renderApproach(ctx: ViewContext) {
         view !== approachReturn?.view &&
         approachReturn?.study === study.study_id && (
           <Button
-            className="link back-link"
+            variant="link"
+            className="back-link"
             onClick={() =>
               navigate(() => {
                 const target = approachReturn;
@@ -46,7 +47,7 @@ function renderApproach(ctx: ViewContext) {
           </Button>
         )}
       {(view === 'approach' || view === 'cases') && caseReturn?.link.study === study.study_id && (
-        <Button className="link back-link" onClick={returnFromCase}>
+        <Button variant="link" className="back-link" onClick={returnFromCase}>
           {caseReturn.link.run
             ? 'Return to run'
             : caseReturn.link.view === 'runs'

@@ -107,7 +107,11 @@ function Mark({ tone }: { tone: Tone }): ReactElement {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
   /** primary: once per view · secondary: default · quiet: inline/tertiary · ai: apply an assistant proposal · danger: inside a confirmation only */
-  variant?: 'primary' | 'secondary' | 'quiet' | 'ai' | 'danger';
+  variant?: 'primary' | 'secondary' | 'quiet' | 'link' | 'ai' | 'danger';
+  /** Text alignment and stacked content are explicit compositions, not screen overrides. */
+  align?: 'center' | 'start';
+  stacked?: boolean;
+  iconOnly?: boolean;
   /** desk 36px (default) · sm 28px · floor 48px for touch displays */
   size?: 'desk' | 'sm' | 'floor';
   /** Icon element (for example an inline SVG); decorative, so icon-only buttons need aria-label */
@@ -115,12 +119,31 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** The one button. primary at most once per view; ai only to apply an assistant proposal; danger only inside a confirmation. */
-export function Button({ variant = 'secondary', size = 'desk', icon, className, children, type, ...rest }: ButtonProps): ReactElement {
+export function Button({
+  variant = 'secondary',
+  size = 'desk',
+  align = 'center',
+  stacked = false,
+  iconOnly = false,
+  icon,
+  className,
+  children,
+  type,
+  ...rest
+}: ButtonProps): ReactElement {
   return (
     <button
       type={type ?? 'button'}
       {...rest}
-      className={cx('hf-btn', 'hf-btn--' + variant, size !== 'desk' && 'hf-btn--' + size, className)}
+      className={cx(
+        'hf-btn',
+        'hf-btn--' + variant,
+        'hf-btn--' + size,
+        align === 'start' && 'hf-btn--start',
+        stacked && 'hf-btn--stacked',
+        (iconOnly || (!!icon && !children)) && 'hf-btn--icon',
+        className,
+      )}
     >
       {icon ? <Icon>{icon}</Icon> : null}
       {children}
@@ -160,7 +183,12 @@ export interface FieldProps {
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
   onUnitChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
   className?: string;
-  inputProps?: { type?: 'number' | 'text'; step?: string; 'aria-label'?: string; 'data-input-key'?: string };
+  inputProps?: {
+    type?: 'number' | 'text';
+    step?: string;
+    'aria-label'?: string;
+    'data-input-key'?: string;
+  };
 }
 
 function noop(): void {}
@@ -170,7 +198,12 @@ export function Field(p: FieldProps): ReactElement {
   const blank = isBlank(p.value);
   const declared: FieldState = p.state ?? 'assigned';
   const state: FieldState = blank && declared === 'assigned' ? 'unassigned' : declared;
-  const id = p.id ?? 'hf-' + String(p.label || 'field').replace(/\W+/g, '-').toLowerCase();
+  const id =
+    p.id ??
+    'hf-' +
+      String(p.label || 'field')
+        .replace(/\W+/g, '-')
+        .toLowerCase();
   const tag = blank && state !== 'invalid' ? FIELD_TAG.unassigned : FIELD_TAG[state];
   const units = p.units ?? [p.unit ?? '1'];
   const msgId = p.message ? id + '-msg' : undefined;
@@ -195,7 +228,11 @@ export function Field(p: FieldProps): ReactElement {
     state === 'readonly' || units.length < 2 ? (
       <span className="hf-field__unit">{p.unit ?? units[0]}</span>
     ) : (
-      <select value={p.unit ?? units[0]} onChange={p.onUnitChange ?? noop} aria-label={'Unit of ' + (p.label || 'value')}>
+      <select
+        value={p.unit ?? units[0]}
+        onChange={p.onUnitChange ?? noop}
+        aria-label={'Unit of ' + (p.label || 'value')}
+      >
         {units.map((u) => (
           <option key={u} value={u}>
             {u}
@@ -204,13 +241,22 @@ export function Field(p: FieldProps): ReactElement {
       </select>
     );
   return (
-    <div className={cx('hf-field', 'hf-field--' + state, p.compact && 'hf-field--compact', p.className)}>
+    <div
+      className={cx(
+        'hf-field',
+        'hf-field--' + state,
+        p.compact && 'hf-field--compact',
+        p.className,
+      )}
+    >
       <label className={cx('hf-field__label', p.compact && 'hf-visually-hidden')} htmlFor={id}>
         <span className="hf-mono">{p.label}</span>
         {p.meaning ? <span className="hf-muted hf-field__meaning">{p.meaning}</span> : null}
-        {!p.compact && <span className="hf-field__tag">
-          <StatusTag tone={tag[0]}>{tag[1]}</StatusTag>
-        </span>}
+        {!p.compact && (
+          <span className="hf-field__tag">
+            <StatusTag tone={tag[0]}>{tag[1]}</StatusTag>
+          </span>
+        )}
       </label>
       <div className="hf-field__row">
         {input}
@@ -406,13 +452,18 @@ export function Readout(p: ReadoutProps): ReactElement {
       {missing ? (
         <span className="hf-readout__missing">{p.missingText || 'not computed'}</span>
       ) : (
-        <span className="hf-readout__value" title={typeof p.value === 'number' ? `Full precision: ${p.value}` : undefined}>
+        <span
+          className="hf-readout__value"
+          title={typeof p.value === 'number' ? `Full precision: ${p.value}` : undefined}
+        >
           {typeof p.value === 'number' ? formatNumber(p.value) : String(p.value)}
           {p.unit ? <span className="hf-readout__unit">{p.unit}</span> : null}
         </span>
       )}
       {p.source ? (
-        <span className={cx('hf-readout__basis', basis === 'inferred' && 'hf-readout__basis--inferred')}>
+        <span
+          className={cx('hf-readout__basis', basis === 'inferred' && 'hf-readout__basis--inferred')}
+        >
           <Icon>
             <Glyph name={b[0]} />
           </Icon>
@@ -582,7 +633,12 @@ export function RecordBar(p: RecordBarProps): ReactElement {
 
 export type PortState = 'connected' | 'free' | 'output' | 'unassigned';
 
-const PORT: Record<PortState, string> = { connected: 'Connected', free: 'Input', output: 'Output', unassigned: 'Needs value' };
+const PORT: Record<PortState, string> = {
+  connected: 'Connected',
+  free: 'Input',
+  output: 'Output',
+  unassigned: 'Needs value',
+};
 
 export interface ModelNodePort {
   name: string;
@@ -612,27 +668,54 @@ export interface ModelNodeProps {
 /** A component in the graph view: name, ports and definition version. */
 export function ModelNode(p: ModelNodeProps): ReactElement {
   return (
-    <div className={cx('hf-node', p.status && 'hf-node--' + p.status, p.className)} data-selected={p.selected || undefined}>
-      <Button className="hf-node__head" data-instance={p.instanceId} title={p.title}
-        aria-pressed={p.nameSelected ?? p.selected ?? false} onClick={p.onSelect}>
+    <div
+      className={cx('hf-node', p.status && 'hf-node--' + p.status, p.className)}
+      data-selected={p.selected || undefined}
+    >
+      <Button
+        size="floor"
+        align="start"
+        className="hf-node__head"
+        data-instance={p.instanceId}
+        title={p.title}
+        aria-pressed={p.nameSelected ?? p.selected ?? false}
+        onClick={p.onSelect}
+      >
         {p.index != null ? <span className="hf-node__idx">{p.index}</span> : null}
         <span className="hf-node__name">{p.name}</span>
       </Button>
       {(p.ports ?? []).map((pt) => {
         const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
-        return <Button key={pt.id ?? pt.dir + pt.name} className="hf-node__port" data-port={pt.id} title={pt.title}
-          aria-pressed={pt.selected ?? false} onClick={pt.onSelect}>
-          <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
-          <span className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}>
-            {st === 'unassigned' ? <Mark tone="advisory" /> : null}{PORT[st]}
-          </span>
-        </Button>;
+        return (
+          <Button
+            size="floor"
+            align="start"
+            key={pt.id ?? pt.dir + pt.name}
+            className="hf-node__port"
+            data-port={pt.id}
+            title={pt.title}
+            aria-pressed={pt.selected ?? false}
+            onClick={pt.onSelect}
+          >
+            <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+            <span
+              className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}
+            >
+              {st === 'unassigned' ? <Mark tone="advisory" /> : null}
+              {PORT[st]}
+            </span>
+          </Button>
+        );
       })}
-      {(p.definition || p.status) && <div className="hf-node__foot">
-        {p.definition}
-        {p.status === 'incomplete' ? <StatusTag tone="advisory">implementation missing</StatusTag> : null}
-        {p.status === 'proposed' ? <StatusTag tone="inert">proposed</StatusTag> : null}
-      </div>}
+      {(p.definition || p.status) && (
+        <div className="hf-node__foot">
+          {p.definition}
+          {p.status === 'incomplete' ? (
+            <StatusTag tone="advisory">implementation missing</StatusTag>
+          ) : null}
+          {p.status === 'proposed' ? <StatusTag tone="inert">proposed</StatusTag> : null}
+        </div>
+      )}
     </div>
   );
 }

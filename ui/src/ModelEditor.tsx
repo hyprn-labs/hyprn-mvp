@@ -1112,7 +1112,7 @@ export function ModelEditor({
               <Button
                 hidden={!dirty && !assumptionDirty}
                 id="save-component"
-                className="primary"
+                variant="primary"
                 disabled={!dirty && !assumptionDirty}
                 onClick={() => void save()}
               >
@@ -1243,7 +1243,7 @@ export function ModelEditor({
                   </p>
                   <UnitGuidance guidance={guidance} />
                   <Button
-                    className="primary"
+                    variant="primary"
                     disabled={!guidance.catalog}
                     onClick={() => act(addComponent)}
                   >

@@ -21,7 +21,7 @@ function configurationDraft(ctx: ViewContext) {
     <div hidden={view !== 'configurations'}>
       {(view === 'configurations' || !!sourceReturn) && (model || modified) && (
         <>
-          <Button className="link back-link" onClick={() => chooseView('configurations')}>
+          <Button variant="link" className="back-link" onClick={() => chooseView('configurations')}>
             ← All configurations
           </Button>
           <ConfigurationPanel
@@ -100,7 +100,7 @@ function configurationsPage(ctx: ViewContext) {
     <section className="configurations-page">
       {configuration ? (
         <>
-          <Button className="link back-link" onClick={() => chooseView('configurations')}>
+          <Button variant="link" className="back-link" onClick={() => chooseView('configurations')}>
             ← All configurations
           </Button>
           <RecordedConfiguration

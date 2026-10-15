@@ -29,7 +29,7 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 **Type.** The interface uses the operating system's fonts only: the system sans stack (`--font-sans`) for interface text (`title`, `heading`, `subheading`, `body`, `body-strong`, `small`, `label`), the system monospace stack (`--font-mono`) for every number, unit, identifier and line of code (`readout-lg`, `readout`, `code`), and `--font-condensed` (currently the same system sans stack) for dense tables (`table`, `table-head`). No font is downloaded from any host. Use one `title` per page. `label` and `table-head` are uppercase with tracking and are the only uppercase text; names and quantity symbols are never uppercased by table styles.
 
-**Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-4`; workbench panels sit `space-3` apart; sections separate by `space-6`. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. The XDSM view uses a `space-12` matrix pitch.
+**Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-4`; workbench panels sit `space-3` apart; sections separate by `space-6`. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. Button sizes are complete recipes in [Button](components/Button.md); their height grows for wrapped labels. The XDSM view uses a `space-12` matrix pitch.
 
 **Shape.** Corners are machined: `radius-xs` for tags and data cells, `radius-sm` for controls and graph nodes, `radius-md` for panels, dialogs and the record bar. `radius-full` is only for progress tracks and circular marks. Borders define objects; panels have no shadow. `shadow-float` is only for menus, popovers and the toast.
 
@@ -68,6 +68,8 @@ Implementation rules:
 ## Tokens and checks
 
 `tokens.json` is the single source of the token values. `python3 ui/design_tokens.py` generates `ui/src/design/tokens.css` from it; never hand-edit `tokens.css`, and `python3 ui/design_tokens.py --check` fails when it is stale.
+
+[Consistency](Consistency.md) records the shared ownership inventory and acceptance criteria. [Assertions](components/Assertion.md) defines scientific statement/evidence rhythm. `check_component_ownership.py` rejects raw controls, old class aliases and screen-level overrides of button recipes or assertion/evidence/logo internals, without a baseline.
 
 `python3 ui/check_design_system.py` keeps screen code on the tokens. It scans `ui/src/**/*.{ts,tsx,css}` except `ui/src/design/**` for colour literals (hex, `rgb()`/`hsl()` and, in CSS, the white/black keywords), CSS px literals, inline styles (`style=`, `setAttribute('style')`, `cssText`) and font declarations (`font-family`, `font` shorthand, `fontFamily`), and must report no new violations.
 

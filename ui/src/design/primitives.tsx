@@ -150,7 +150,22 @@ export function CriterionRecord({ number, target, comparison, threshold, units, 
 export function ActionDialog({ title, label = title, children, disabled = false, actionHost, completionKey, size, triggerLabel, variant, width = 'default' }: { variant?: ButtonProps['variant']; width?: 'default' | 'workspace'; size?: 'sm' | 'desk'; triggerLabel?: string; title: string; label?: string; children: ReactNode; disabled?: boolean; actionHost?: HTMLElement | null; completionKey?: number }) {
   const dialog = useRef<HTMLDialogElement>(null), invoker = useRef<HTMLElement | null>(null), id = useId();
   useEffect(() => { if (completionKey) dialog.current?.close(); }, [completionKey]);
-  const trigger = <Button variant={variant} size={size} aria-label={triggerLabel} disabled={disabled} aria-haspopup="dialog" onClick={() => { invoker.current = document.activeElement as HTMLElement; dialog.current?.showModal(); }}>{label}</Button>;
+  const trigger = (
+    <Button
+      variant={variant}
+      size={size}
+      iconOnly={label === '…'}
+      aria-label={triggerLabel}
+      disabled={disabled}
+      aria-haspopup="dialog"
+      onClick={() => {
+        invoker.current = document.activeElement as HTMLElement;
+        dialog.current?.showModal();
+      }}
+    >
+      {label}
+    </Button>
+  );
   // Native close normally restores focus; its delayed event must not steal a later selection.
   return <>{actionHost ? createPortal(trigger, actionHost) : trigger}
     <DialogFrame ref={dialog} aria-labelledby={id} className={'action-dialog' + (width === 'workspace' ? ' hf-dialog--workspace' : '')} onClose={() => { const active = document.activeElement; if (invoker.current?.isConnected && (active === document.body || !active || dialog.current?.contains(active))) invoker.current.focus(); }}>

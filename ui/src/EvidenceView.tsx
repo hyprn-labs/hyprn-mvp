@@ -1,3 +1,5 @@
+import { ActionGroup } from './design';
+import { EvidenceStack } from './design';
 import { AttributionDetail, RecordAttribution } from './attribution';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, HyprnMvpApi, message, type EvidenceRecord, type EvidenceSnapshot } from './api';
@@ -138,7 +140,7 @@ export function EvidenceRecordBody({
         )}
       </div>
       {!compact && <p className="evidence-content hf-evidence-excerpt">{record.content}</p>}
-      <div className="section-actions">
+      <ActionGroup className="section-actions">
         <ActionDialog title="Evidence detail" label="View evidence" size="sm">
           <h3 className="hf-evidence-title">{evidenceTitle(inspected)}</h3>
           <RecordAttribution kind="evidence_version" id={inspected.evidence_version_id} line />
@@ -164,7 +166,7 @@ export function EvidenceRecordBody({
               </ol>
             </>
           )}
-          <div className="actions">
+          <ActionGroup className="actions">
             <ActionDialog
               title="Evidence record"
               label="Evidence record details"
@@ -235,7 +237,7 @@ export function EvidenceRecordBody({
                 Choose this version
               </Button>
             )}
-          </div>
+          </ActionGroup>
           {loading && <p role="status">Loading versions…</p>}
           {error && (
             <p role="alert">
@@ -267,7 +269,7 @@ export function EvidenceRecordBody({
           )}
         </ActionDialog>
         {action}
-      </div>
+      </ActionGroup>
     </div>
   );
 }
@@ -277,7 +279,41 @@ export function EvidenceReferences({ records, ids, onRemove }: { records: Eviden
   return <EvidenceList records={records} ids={ids} onRemove={onRemove} compact />;
 }
 export function EvidenceList({ records, ids = records.map(e => e.evidence_version_id), onRemove, compact = false }: { records: EvidenceSnapshot[]; ids?: string[]; onRemove?: (id: string) => void; compact?: boolean }) {
-  return <div className="hf-evidence-list">{ids.map(id => { const record = records.find(e => e.evidence_version_id === id); return <article className={'evidence-record' + (compact ? ' hf-evidence-record--compact' : '')} key={id}>
-    {record ? <EvidenceRecordBody record={record} compact={compact} action={onRemove && <Button size="sm" onClick={() => onRemove(id)}>Remove attachment</Button>} /> : <><StatusTag tone="warning">Evidence unavailable</StatusTag><p className="evidence-content">{id}</p>{onRemove && <Button size="sm" onClick={() => onRemove(id)}>Remove attachment</Button>}</>}
-  </article>; })}</div>;
+  return (
+    <EvidenceStack className="hf-evidence-list">
+      {ids.map((id) => {
+        const record = records.find((e) => e.evidence_version_id === id);
+        return (
+          <article
+            className={'evidence-record' + (compact ? ' hf-evidence-record--compact' : '')}
+            key={id}
+          >
+            {record ? (
+              <EvidenceRecordBody
+                record={record}
+                compact={compact}
+                action={
+                  onRemove && (
+                    <Button size="sm" onClick={() => onRemove(id)}>
+                      Remove attachment
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              <>
+                <StatusTag tone="warning">Evidence unavailable</StatusTag>
+                <p className="evidence-content">{id}</p>
+                {onRemove && (
+                  <Button size="sm" onClick={() => onRemove(id)}>
+                    Remove attachment
+                  </Button>
+                )}
+              </>
+            )}
+          </article>
+        );
+      })}
+    </EvidenceStack>
+  );
 }

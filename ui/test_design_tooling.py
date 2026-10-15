@@ -206,5 +206,31 @@ class DesignSystemGuard(unittest.TestCase):
         self.assertIn('src/dom.ts:3:inline-style:style=', ts.stdout)
 
 
+class ComponentOwnership(unittest.TestCase):
+    def test_screen_cannot_resize_shared_controls_or_assertions(self):
+        from check_component_ownership import css_violations
+        for selector in ('.dialog .hf-btn', '.row > button'):
+            self.assertTrue(css_violations(selector + '{font-size:var(--type-small-size)}'))
+            self.assertTrue(css_violations(selector + '{min-height:var(--control-desk)}'))
+        self.assertTrue(css_violations('.hf-assertion {margin:0}'))
+        self.assertTrue(css_violations('.card .hf-panel__body {padding:var(--space-6)}'))
+        self.assertTrue(css_violations('.results td {padding-block:var(--space-1)}'))
+        self.assertFalse(css_violations('.results td {text-align:right}'))
+        self.assertFalse(css_violations('.toolbar {display:flex;gap:var(--space-2)}'))
+        self.assertFalse(css_violations('.toolbar>.hf-btn {margin-left:auto}'))
+
+    def test_raw_controls_and_class_aliases_are_rejected(self):
+        from check_component_ownership import check
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'src').mkdir()
+            (root / 'src/Screen.tsx').write_text('<button>Save</button>')
+            self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<Button className="primary">Save</Button>')
+            self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<Button variant="primary">Save</Button>')
+            self.assertFalse(check(root))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -165,7 +165,11 @@ GROUPS = {
     ),
     'approach-ui-reading': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'approach-ui-method': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
-    'approach-ui-demo': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
+    'approach-ui-demo': (
+        'deployment/tests/approach_ui_fixture.py',
+        'ui/tests/approach.spec.ts',
+        'ui/tests/DesignSpecimen.tsx',
+    ),
     'approach-ui-assumptions': (
         'deployment/tests/approach_ui_fixture.py',
         'ui/tests/approach.spec.ts',
@@ -286,6 +290,7 @@ GROUPS = {
     'combined-native': ('deployment/tests/test_native_journey.py::test_combined',),
     'combined-static': (
         'ui/check_design_system.py',
+        'ui/check_component_ownership.py',
         'ui/design_tokens.py',
         'ui/check_ui_contract.py',
         'ui/control-map.json',
@@ -1870,6 +1875,7 @@ def run_group(group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS):
         env = fixture.clean_environment(scope)
         commands = [
             [scope.interpreter, '-B', 'ui/check_design_system.py'],
+            [scope.interpreter, '-B', 'ui/check_component_ownership.py'],
             [scope.interpreter, '-B', 'ui/design_tokens.py', '--check'],
             [scope.interpreter, '-B', 'ui/check_ui_contract.py'],
             [scope.interpreter, '-B', 'ui/test_design_tooling.py'],

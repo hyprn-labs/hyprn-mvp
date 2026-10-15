@@ -1,5 +1,5 @@
 /* GENERATED FILE - do not hand-edit.
- * Source: design-system/tokens.json (HYPRN Foundry v2)
+ * Source: design-system/tokens.json (HYPRN Foundry v3)
  * Generator: ui/design_tokens.py (run `python3 ui/design_tokens.py`; `--check` detects staleness).
  */
 
@@ -15,6 +15,10 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-full: 9999px;
+  --control-compact: 28px;
+  --icon-control: 18px;
+  --icon-compact: 16px;
+  --prose-measure: 75ch;
   --control-desk: 36px;
   --control-floor: 48px;
   --row: 36px;

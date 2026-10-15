@@ -21,19 +21,51 @@ export function SourceEditor({ value, onChange, codeRef, error }: Props) {
       }
     });
   }
-  return <div className={`source-editor${expanded ? ' expanded' : ''}`}>
-    <p>Compute outputs from inputs. Set input values in a configuration.</p>
-    <div role="group" aria-label="Source actions" className="source-actions">
-      <Button ref={expand} type="button" aria-expanded={expanded} onClick={toggleExpanded}>{expanded ? 'Collapse source' : 'Expand source'}</Button>
+  return (
+    <div className={`source-editor${expanded ? ' expanded' : ''}`}>
+      <p>Compute outputs from inputs. Set input values in a configuration.</p>
+      <div role="group" aria-label="Source actions" className="source-actions">
+        <Button
+          size="sm"
+          ref={expand}
+          type="button"
+          aria-expanded={expanded}
+          onClick={toggleExpanded}
+        >
+          {expanded ? 'Collapse source' : 'Expand source'}
+        </Button>
+      </div>
+      <label htmlFor="python-source">Python source</label>
+      <SourceSurface display={display} codeRef={codeRef}>
+        <TextArea
+          id="python-source"
+          ref={codeRef}
+          value={value}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          wrap="off"
+          aria-describedby={error ? 'model-errors code-help' : 'code-help'}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              expand.current?.focus();
+            }
+          }}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setNotice('Text edited: the next save uses UTF-8 text with LF line endings.');
+          }}
+        />
+      </SourceSurface>
+      <p id="code-help" className="sr-only">
+        Tab leaves source. Escape focuses source actions. Save previews changes and never executes
+        source.
+      </p>
+      <p className="source-notice" aria-live="polite">
+        {notice}
+      </p>
     </div>
-    <label htmlFor="python-source">Python source</label>
-    <SourceSurface display={display} codeRef={codeRef}>
-      <TextArea id="python-source" ref={codeRef} value={value} spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" aria-describedby={error ? 'model-errors code-help' : 'code-help'}
-        onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); expand.current?.focus(); } }}
-        onChange={e => { onChange(e.target.value); setNotice('Text edited: the next save uses UTF-8 text with LF line endings.'); }} />
-    </SourceSurface>
-    <p id="code-help" className="sr-only">Tab leaves source. Escape focuses source actions. Save previews changes and never executes source.</p>
-    <p className="source-notice" aria-live="polite">{notice}</p>
-
-  </div>;
+  );
 }

@@ -319,7 +319,7 @@ export function ApproachPanel({ requestedCase, api, controller, studyId, request
   return (
     <section className="approach-page" aria-labelledby="approach-heading">
       <div className="approach-topline">
-        <Button className="link back-link" aria-label="Back to overview" onClick={onBack}>
+        <Button variant="link" className="back-link" aria-label="Back to overview" onClick={onBack}>
           ← Overview
         </Button>
       </div>

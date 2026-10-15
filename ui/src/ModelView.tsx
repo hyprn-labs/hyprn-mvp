@@ -70,11 +70,12 @@ export function ModelView({ snapshot, selection, onSelect, values = { kind: 'mod
         />
         <div className="panel-toggles">
           {selection.kind !== 'none' && (
-            <Button variant="quiet" onClick={() => onSelect({ kind: 'none' })}>
+            <Button variant="quiet" size="sm" onClick={() => onSelect({ kind: 'none' })}>
               Clear selection
             </Button>
           )}
           <Button
+            size="sm"
             aria-label="Details"
             aria-controls={id('model-details')}
             aria-expanded={detailsOpen}

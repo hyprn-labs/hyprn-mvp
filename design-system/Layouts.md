@@ -19,7 +19,7 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 1. **About this study** contains the saved study question and **See more details**. Its Study details dialog has one **Edit study** action for the name, list description, question, approach, assumptions, limits and open questions. Fields and assertion editors have distinct spacing.
 2. **Answer to the study question** follows immediately, then **Reasoning and methods**. The answer's supporting results lead with each case answer title and an aligned row of **View configuration**, **View run**, **View case answer** actions; identities remain in record details.
 3. **Cases** is a study tab. Its list has a case filter and an Open case action per row; selecting a case opens its detail with an All cases back action. Exact approach-version and case identities remain in the URL; configurations own their associated runs. Each answer separates its scientific explanation from supporting results and sources. A referenced case answer opens in a dialog.
-4. Expanded methods give the purpose a full-width lead, with separate shaded sections for basis/reasoning and calculation in plain words, followed by Python source. The sections stack on narrow screens. **View model details** stays at the bottom-right of the full method.
+4. Expanded methods give the purpose a full-width lead, with separate shaded sections for basis/reasoning and calculation logic, followed by Python source. The sections stack on narrow screens. **View model details** stays at the bottom-right of the full method.
 
 Study details keeps the question separate from the current approach and limits. Empty optional prose, assumptions and limits are omitted in read-only views; editing retains the controls needed to add them. Every assertion has its own compact evidence title and **View evidence** action; shared sources are not grouped away from the assertions. Version and relationship details belong inside the evidence view.
 
@@ -82,7 +82,7 @@ Opening a saved model version, or the model or configuration used by a run, show
 
 ## Narrow screens and 200% zoom
 
-Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the wordmark shrinks to `subheading` size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.
+Below 1150px the page gutters narrow and the model heading wraps. Below 1050px the workbench stacks (canvas, then details) and each part scrolls inside its own box. Below 600px rows, filters and action groups wrap to a single column and the unchanged logo retains its shared component size. Tables scroll inside their own box; the page never scrolls sideways. The primary action and header actions stay reachable without horizontal scrolling at genuine 200% zoom in both themes. Controls switch to `control-floor` on touch devices.
 
 
 ## Continuous modeling approach

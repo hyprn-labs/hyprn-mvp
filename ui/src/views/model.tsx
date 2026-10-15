@@ -147,7 +147,7 @@ function renderModel(ctx: ViewContext) {
         <div className="model-heading">
           <div>
             <Button
-              className="link"
+              variant="link"
               aria-label="All models"
               onClick={() =>
                 navigate(() => void openLink({ study: study.study_id, view: 'model' }))

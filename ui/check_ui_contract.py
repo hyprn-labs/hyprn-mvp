@@ -286,7 +286,7 @@ print('Session seam: one fence/readFailed/onSessionChange in api.ts, 9 protected
 # UI; stored annotations/notes, command payloads and exports are unchanged. A configuration
 # shows one line linking to its model's assumptions instead of repeating them.
 list_text=(ROOT/'src/Assumptions.tsx').read_text()
-for term in ('No assumptions</p>','assumption-evidence','relation={'):
+for term in ('No assumptions</p>','<Assertion','<EvidenceStack','relation={'):
  assert term in list_text,('src/Assumptions.tsx','Shared assumption list',term)
 for removed in ('No assumptions recorded','Add approach assumption','Approach-owned','showHeading&&<p>{ownerLabel}</p>'):
  assert removed not in list_text,('src/Assumptions.tsx','Removed assumption list element',removed)

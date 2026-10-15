@@ -410,13 +410,17 @@ def run(*, group):
         imports='import {createRoot} from "react-dom/client";\n'
         for symbols,module in [('HyprnMvpApi','api'),('ApproachController,useApproachController','ApproachController'),('Button','design'),('Workspace','Workspace'),('checkPackage,canonical,sha256','exports'),('unresolvedModelUnits','unitLabels'),('quantityDefinitions,referencedQuantities','quantityDefinitions')]:
             imports+='import {'+symbols+'} from '+json.dumps(str(REPO/'ui/src'/module))+';\n'
+        imports += ('import {DesignSpecimen} from '
+                    + json.dumps(str(REPO / 'ui/tests/DesignSpecimen.tsx')) + ';\n')
         imports+=''.join('import '+json.dumps(str(REPO/'ui/src'/p))+';\n' for p in ('design/tokens.css','design/foundry.css','styles.css'))
         (stage/'entry.tsx').write_text(imports+'''
 const api=new HyprnMvpApi(),controller=new ApproachController(api);
 api.onAuthorizationLoss=()=>controller.clear();
 window.approachHarness={api,controller,checkPackage,canonical,sha256,unresolvedModelUnits,quantityDefinitions,referencedQuantities};
 function Harness(){const state=useApproachController(controller);return <main><h1>Approach controller verification harness</h1><p>This is not the product layout.</p><Button onClick={()=>controller.save()}>Save draft</Button><output aria-label="Controller status">{state.status}</output><output aria-label="Local question">{state.local?.question ?? ''}</output><output aria-label="Draft question">{state.server?.draft?.content.question ?? ''}</output><output aria-label="Version question">{state.saved?.version.content.question ?? ''}</output><output aria-label="Dirty">{String(controller.dirty)}</output><p role="alert">{state.error}</p></main>}
-createRoot(document.getElementById('root')).render(location.search.includes('workspace') ? <Workspace/> : <Harness/>);
+const surface = location.search.includes('specimen') ? <DesignSpecimen/>
+  : location.search.includes('workspace') ? <Workspace/> : <Harness/>;
+createRoot(document.getElementById('root')).render(surface);
 ''')
         config = dict(
             root=str(stage),

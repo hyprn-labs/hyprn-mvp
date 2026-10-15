@@ -1620,7 +1620,7 @@ export function ApproachFindings({
               ))}
             {focusCase && (
               <Button
-                className="link back-link"
+                variant="link" className="back-link"
                 onClick={() => onOpen({ study: studyId, view: 'cases', approach: version })}
               >
                 ← All cases
