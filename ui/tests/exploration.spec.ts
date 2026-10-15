@@ -232,6 +232,10 @@ test('independent categories preserve common values and fence late loads', async
   await settings
     .getByRole('spinbutton', { name: 'product relative error', exact: true })
     .fill('0.01');
+  await settings.getByRole('spinbutton', { name: 'Seed', exact: true }).fill('');
+  await settings.getByRole('button', { name: 'Preview samples', exact: true }).click();
+  await expect(settings.getByRole('alert')).toContainText('Enter a whole number');
+  await settings.getByRole('spinbutton', { name: 'Seed', exact: true }).fill('17');
   const previewResponse = page.waitForResponse((r) =>
     r.url().endsWith('/exploration-samples/preview'),
   );

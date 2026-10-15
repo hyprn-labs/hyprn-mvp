@@ -133,6 +133,12 @@ export function ExplorationSettings({
         JSON.stringify({ ...design.request, command_id: '' })
     )
       throw new Error('Save the input design before previewing samples.');
+    if (
+      [seed, training, checks, budget, wall, pointWall].some(
+        (value) => value.trim() === '' || !Number.isSafeInteger(Number(value)),
+      )
+    )
+      throw new Error('Enter a whole number for the seed, sample counts and time budgets.');
     if (tolerances.some((t) => t.absolute.trim() === '' || t.relative.trim() === ''))
       throw new Error('Declare absolute and relative error targets for every output.');
     return {
