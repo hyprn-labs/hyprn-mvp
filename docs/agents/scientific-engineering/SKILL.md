@@ -71,7 +71,11 @@ is relevant. Do not create a second plan schema or a completion score.
    evaluation conditions, acceptable error where known, and what could reverse the
    decision. Scale effort to those consequences and sensitivities, not model size.
 4. Check the authorized execution surface. Delegated agents use only exposed tools.
-   The separately authorized owner demo uses [the public API helper](../local-api-demo.md).
+   The separately authorized owner demo uses the named study tools in
+   [the public API helper](../local-api-demo.md): start with `list_tools` and
+   `describe_tool`, then author through those operations. Use raw API requests only
+   for an operation absent from the tool list. The tools own model request-format
+   versions; scientific model versions remain explicit immutable pins.
    A tool named in guidance is not necessarily implemented or enabled. Read the live
    schema for fields, units and numerical modes; never guess them from this skill.
 
@@ -166,6 +170,14 @@ for results or diagnosis, not at every poll. Retain returned IDs and command rec
 as work progresses so a local scripting failure does not force reconstruction or
 duplicate submission. If timing is requested, distinguish preparation/authoring,
 submission-to-result elapsed time and answer work; report worker time only when measured.
+
+Choose an explicit execution wall budget appropriate to the work using live capability
+limits. This includes startup and is distinct from the HTTP response timeout. A
+recorded run may have no results: inspect `execution_diagnostic` before reading outputs.
+Do not treat a timeout as a violated physical criterion. Confirm terminal state and
+inspect diagnostics before deciding on one deliberate new run; preserve the failed
+attempt and stop repeated timeouts for diagnosis. An uncertain submission instead
+requires receipt reconciliation and must never be blindly repeated.
 
 For each completed run:
 

@@ -496,7 +496,9 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
                           : 'inert'
                       }
                     >
-                      {detail.process_state === 'finished'
+                      {detail.execution_diagnostic?.state === 'timed_out'
+                        ? 'Execution timed out'
+                        : detail.process_state === 'finished'
                         ? 'Execution finished'
                         : 'Execution stopped'}
                     </StatusTag>
@@ -521,7 +523,18 @@ export function RunPanel({ filters: hostFilters, onFilters, onViewSourceResult, 
               {!history && (!runPending(detail) || detail.state === 'uncertain') && (
                 <p>This run's record is not available yet.</p>
               )}
-              {history?.errors.map((e, i) => (
+              {detail.execution_diagnostic &&
+                detail.execution_diagnostic.state !== 'unavailable' && (
+                <p role="status">
+                  {detail.execution_diagnostic.message}
+                  {detail.execution_diagnostic.elapsed_seconds != null && (
+                    <> Elapsed wall time: {detail.execution_diagnostic.elapsed_seconds.toFixed(1)} s
+                      {' (includes startup and stopping).'}</>
+                  )}
+                </p>
+              )}
+              {history?.errors.filter(e => !(e.code === 'missing_results' &&
+                detail.execution_diagnostic?.state === 'timed_out')).map((e, i) => (
                 <p role="alert" key={i}>
                   {historyErrors[e.code]}
                 </p>

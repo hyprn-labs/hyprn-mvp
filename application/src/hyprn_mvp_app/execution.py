@@ -72,6 +72,18 @@ class Submissions:
     def submit(self,actor,sid,body):
         command=body['command_id'];revision=body['configuration_revision_id']
         payload=dict(operation='submit_run',target=sid,configuration_revision_id=revision)
+        budget = body.get('execution_budget')
+        if budget is not None:
+            from .contracts import execution_wall_seconds
+
+            if not isinstance(budget, dict) or set(budget) != {'wall_seconds'}:
+                raise DomainError('invalid_request', 400)
+            try:
+                execution_wall_seconds(budget['wall_seconds'])
+            except ValueError:
+                raise DomainError('invalid_request', 400) from None
+            payload['execution_budget'] = budget
+
         def accept(db):
             row=db.execute('SELECT payload FROM configurations WHERE study_id=? AND configuration_revision_id=?',(sid,revision)).fetchone()
             if row is None:raise DomainError('resource_not_found',404)
@@ -88,7 +100,20 @@ class Submissions:
             db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
                        'command_id,accepted_at) VALUES(?,?,?,?,?)',
                        (run_id,sid,revision,command,accepted_at))
-            db.execute('INSERT INTO outbox VALUES(?,?,?)',(run_id,'accepted_run',json.dumps(dict(actor=actor,frozen=json.loads(row['payload'])))))
+            db.execute(
+                'INSERT INTO outbox VALUES(?,?,?)',
+                (
+                    run_id,
+                    'accepted_run',
+                    json.dumps(
+                        dict(
+                            actor=actor,
+                            frozen=json.loads(row['payload']),
+                            **({'execution_budget': budget} if budget is not None else {}),
+                        )
+                    ),
+                ),
+            )
             self.fault('before_receipt')
             return result
         result=self.store.command(actor,sid,'run',command,payload,accept,receipt_state='accepted_run')
@@ -260,9 +285,16 @@ class Submissions:
                 self._preparation_failure(row,error.code,status=error.status)
                 return
             self.fault('after_claim')
-            try:record=self.native.launch(bundle,request)
-            except (OSError,TimeoutError,RuntimeError,ValueError):
-                with self.store.connection(write=True) as db:self._state(db,row['study_id'],row['command_id'],run_id,'uncertain')
+            try:
+                if 'execution_budget' in payload:
+                    record = self.native.launch_budgeted(
+                        bundle, request, payload['execution_budget']['wall_seconds']
+                    )
+                else:
+                    record = self.native.launch(bundle, request)
+            except (OSError, TimeoutError, RuntimeError, ValueError):
+                with self.store.connection(write=True) as db:
+                    self._state(db, row['study_id'], row['command_id'], run_id, 'uncertain')
                 return
             self._record(run_id,record)
         finally:

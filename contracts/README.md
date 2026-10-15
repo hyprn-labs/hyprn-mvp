@@ -136,3 +136,25 @@ Existing pinned digest fields identify the unchanged source. Exact artifact down
 computational archives retain historical bytes. Public views cannot replace exact saved
 records or their hashes. New run contexts use format2, and closures containing them use
 format4; these formats do not rewrite prior contexts.
+
+## Operational execution budget and model format discovery
+
+Run submission accepts optional `execution_budget: {wall_seconds: integer}` from
+1 through 3600; omission uses the attested 300-second default. The command digest
+binds an explicit budget; changing it on replay is a payload conflict. The native
+process records the effective budget as an immutable input and passes it to the
+restricted launcher. The outer job allowance is that budget plus 60 seconds. This
+is container-startup plus execution wall time, independent of HTTP waiting and
+scientific numerical settings. The attested policy fixes default and upper bound;
+per-run selection within that policy requires no re-attestation.
+
+The additive public run-detail `execution_diagnostic` projects only bounded,
+curated retained launcher metadata. It is independent of `history.results` and
+criterion evaluations. Missing or invalid diagnostics remain unavailable. Retained
+records are not rewritten; earlier artifacts without a budget return null for it.
+
+`capabilities.model_formats` distinguishes create-request format 3 from current
+edit/saved-model format 4. These are serialization formats, not scientific model
+versions. The owner-session `create_model` and edit/preview tools supply the
+appropriate format; unsupported explicit formats receive a `/schema_version`
+diagnostic. Existing format semantics and the private modeling contract stay intact.

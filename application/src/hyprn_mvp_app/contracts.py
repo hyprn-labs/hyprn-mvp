@@ -30,6 +30,17 @@ from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import best_match
 
 
+# Execution budgets are operational bounds, never physical model defaults.
+EXECUTION_WALL_DEFAULT = 300
+EXECUTION_WALL_MAX = 3600
+
+
+def execution_wall_seconds(value):
+    if type(value) is not int or not 1 <= value <= EXECUTION_WALL_MAX:
+        raise ValueError('Execution wall budget must be an integer from 1 to 3600 seconds')
+    return value
+
+
 def uid():
     return str(uuid4())
 

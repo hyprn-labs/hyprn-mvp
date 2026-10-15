@@ -47,8 +47,17 @@ def wait_out_lock(error,attempt,*,bounded):
     print(f'dispatcher: store busy ({error}); attempt {attempt}, retrying in {delay:g} s',file=sys.stderr,flush=True)
     return bool(select.select([sys.stdin],[],[],delay)[0])
 
-BRIDGE_ARITIES={'require_attestation':0,'bundle_runtime':0,'launch':2,
-                'matches':1,'inspect':1,'read_record':2,'resolve_results':1,'archive_record':1}
+BRIDGE_ARITIES = {
+    'require_attestation': 0,
+    'bundle_runtime': 0,
+    'launch': 2,
+    'launch_budgeted': 3,
+    'matches': 1,
+    'inspect': 1,
+    'read_record': 2,
+    'resolve_results': 1,
+    'archive_record': 1,
+}
 MAX_ARCHIVE=16*1024*1024
 MAX_INVENTORY=4*1024*1024
 
@@ -79,6 +88,10 @@ def bridge_request(method,values,*,read_only=False,exports_only=False):
             or (exports_only and method!='archive_record') or (method=='archive_record' and not exports_only)):
         raise ValueError('Unexpected bridge operation')
     raw=bridge_encode(dict(method=method,args=values))
+    if method == 'launch_budgeted':
+        from .contracts import execution_wall_seconds
+
+        execution_wall_seconds(values[2])
     if method=='archive_record':closed('ArchiveRecordRequest1',values[0])
     if method=='resolve_results':
         sources=values[0]
@@ -161,6 +174,10 @@ class NativeBridge:
     def require_attestation(self):return self.call('require_attestation')
     def bundle_runtime(self):return decode_files(self.call('bundle_runtime'))
     def launch(self,bundle,request):return self.call('launch',encode_files(bundle),request)
+
+    def launch_budgeted(self, bundle, request, wall_seconds):
+        return self.call('launch_budgeted', encode_files(bundle), request, wall_seconds)
+
     def matches(self,request):return self.call('matches',request)
     def inspect(self,process):return self.call('inspect',process)
     def read_record(self,request,association):return decode_record(self.call('read_record',request,association))

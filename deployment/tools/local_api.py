@@ -1,6 +1,8 @@
 """Owner-operated JSON-lines client of the local public API; credentials stay in memory."""
 
 import argparse
+import base64
+import hashlib
 import http.client
 from http.cookies import CookieError, SimpleCookie
 import ipaddress
@@ -80,7 +82,7 @@ class LocalApi:
         self.origin, self.timeout = origin, timeout
         self.cookie = self.csrf = None
 
-    def _send(self, method, path, body):
+    def _send(self, method, path, body, *, artifact=False):
         headers = {'Origin': self.origin, 'Accept': 'application/json'}
         if self.cookie:
             headers['Cookie'] = COOKIE + '=' + self.cookie
@@ -102,6 +104,20 @@ class LocalApi:
             raw = response.read(LIMIT + 1)
             if len(raw) > LIMIT:
                 raise ClientError('Response exceeds 4 MiB; mutation outcome may be uncertain.')
+            if artifact and response.status == 200:
+                digest = hashlib.sha256(raw).hexdigest()
+                if response.getheader('X-Content-SHA256') != digest:
+                    raise ClientError('Artifact integrity check failed.')
+                return (
+                    response.status,
+                    dict(
+                        bytes_base64=base64.b64encode(raw).decode('ascii'),
+                        sha256=digest,
+                        size=len(raw),
+                        media_type=response.getheader('Content-Type'),
+                    ),
+                    None,
+                )
             try:
                 result = json.loads(raw) if raw else None
             except (ValueError, UnicodeError):
@@ -133,7 +149,28 @@ class LocalApi:
             ) from None
         self.cookie, self.csrf = token, csrf
 
+    def read_artifact(self, study_id, run_id, artifact_id):
+        if not self.cookie:
+            raise ClientError('Login is required.')
+        path = '/api/1/studies/{}/runs/{}/artifacts/{}'.format(
+            record_id(study_id), record_id(run_id), record_id(artifact_id)
+        )
+        status, body, _ = self._send('GET', path, None, artifact=True)
+        return (
+            {'status': status, 'data': body} if status == 200 else {'status': status, 'error': body}
+        )
+
     def request(self, command):
+        if isinstance(command, dict) and 'tool' in command:
+            if set(command) != {'tool', 'arguments'}:
+                raise ClientError('Tool calls require tool and arguments only.')
+            if __package__:
+                from .study_tools import invoke
+            else:
+                # Resolve this shipped adapter without importing application or candidate code.
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+                from tools.study_tools import invoke
+            return invoke(self, command['tool'], command['arguments'])
         if isinstance(command, dict) and command.get('operation') == 'run_status':
             if set(command) != {'operation', 'study_id', 'run_ids'}:
                 raise ClientError('run_status requires only study_id and run_ids.')
@@ -230,4 +267,7 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools.local_api import main as package_main
+
+    raise SystemExit(package_main())

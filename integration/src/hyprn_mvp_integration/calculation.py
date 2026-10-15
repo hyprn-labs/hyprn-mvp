@@ -20,6 +20,7 @@ from hyprn_mvp_app.execution_bundle import (
     safe_path,
     validate_retained_bundle,
 )
+from hyprn_mvp_app.contracts import EXECUTION_WALL_DEFAULT, execution_wall_seconds
 from . import launcher
 
 PROFILE = launcher.PROFILE  # the execution store's native profile (installation or development)
@@ -54,6 +55,7 @@ class ScalarCalculation(CalcJob):
         super().define(spec)
         spec.input('frozen_bundle', valid_type=orm.FolderData)
         spec.input('request', valid_type=orm.Dict)
+        spec.input('wall_seconds', valid_type=orm.Int, required=False)
         spec.input_namespace(
             'upstream_results',
             dynamic=True,
@@ -68,6 +70,8 @@ class ScalarCalculation(CalcJob):
             if error:
                 return error
             try:
+                if 'wall_seconds' in inputs:
+                    execution_wall_seconds(inputs['wall_seconds'].value)
                 repository = inputs['frozen_bundle'].base.repository
                 with repository.open('manifest.json', mode='rb') as stream:
                     raw = stream.read(1048577)
@@ -157,6 +161,8 @@ class ScalarCalculation(CalcJob):
         code = CodeInfo()
         code.code_uuid = self.inputs.code.uuid
         code.cmdline_params = ['input', self.inputs.request.get_dict()['bundle_digest']]
+        if 'wall_seconds' in self.inputs:
+            code.cmdline_params.append(str(execution_wall_seconds(self.inputs.wall_seconds.value)))
         code.stdout_name = 'result.json'
         code.stderr_name = 'launcher.stderr'
         info = CalcInfo()
@@ -464,7 +470,11 @@ class NativeExecution:
             raise RuntimeError('Selected runtime attestation identity mismatch') from error
         return selected
 
-    def launch(self, bundle, request):
+    def launch_budgeted(self, bundle, request, wall_seconds):
+        return self.launch(bundle, request, wall_seconds=wall_seconds)
+
+    def launch(self, bundle, request, *, wall_seconds=EXECUTION_WALL_DEFAULT):
+        wall_seconds = execution_wall_seconds(wall_seconds)
         if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9'):
             raise ValueError('Unsupported bundle version; create a new run command')
         if (
@@ -509,8 +519,12 @@ class NativeExecution:
                 code=code,
                 frozen_bundle=retained,
                 request=orm.Dict(dict=request, backend=self.backend),
+                wall_seconds=orm.Int(wall_seconds, backend=self.backend),
                 upstream_results=upstream,
-                metadata={'disable_cache': True, 'options': {'max_wallclock_seconds': 60}},
+                metadata={
+                    'disable_cache': True,
+                    'options': {'max_wallclock_seconds': wall_seconds + 60},
+                },
             )
             self.fault('after_node')
             self.fault('before_continuation')

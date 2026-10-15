@@ -69,7 +69,10 @@ GROUPS = {
         'modeling/tests/test_resolved_configuration.py',
         'modeling/tests/test_native_generation.py',
     ),
-    'units-api': ('application/tests/test_unit_guidance_api.py',),
+    'units-api': (
+        'application/tests/test_unit_guidance_api.py',
+        'application/tests/test_execution_budget.py',
+    ),
     'units-public-types': ('application/tests/test_unit_guidance_api.py',),
     'units-resolution': ('application/tests/test_unit_resolution.py',),
     'units-configuration': ('application/tests/test_unit_configuration.py',),

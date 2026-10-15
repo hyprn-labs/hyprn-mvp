@@ -192,3 +192,19 @@ annual electricity expense? Select pressure rise 200 kPa, flow 0.010 m³/s, effi
 This illustrates an acceptable screening answer that rejects a stronger sizing claim.
 The same primitive sequence applies to thermal, structural, process and aircraft
 studies; the required physics and evidence change.
+
+## Owner-session tools and execution budgets
+
+Use the named tools documented in [the local client](../../local-api-demo.md).
+`describe_tool` supplies the public body schema; `create_model`, `preview_model`
+and `edit_model` choose request formats without changing saved scientific versions.
+Do not extrapolate a request format from `model/4` in capabilities. Consult
+`model_formats` for operation-specific formats if a direct API operation is needed.
+
+Use `submit_run` with an explicit `execution_budget.wall_seconds`, then `run_status`
+for lightweight polling and `get_run` for results or diagnosis. The default is 300
+seconds and the supported range is 1–3600 seconds, discoverable in capabilities.
+The native process retains the budget. Read `execution_diagnostic` even when
+`history.results` is null. `read_artifact` returns checked bytes separately from API
+envelopes. Preserve command IDs before calls and returned IDs after each step;
+resume from those records rather than restarting authoring after a local exception.

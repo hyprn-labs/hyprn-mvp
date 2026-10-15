@@ -33,17 +33,36 @@ class GuardTests(unittest.TestCase):
 
     def test_approach_groups_fail_closed_before_allocation(self):
         groups = runner.APPROACH_PYTEST_GROUPS | set(runner.APPROACH_BROWSER_GROUPS)
-        self.assertEqual(groups, {
-            'approach-contracts', 'approach-closure', 'approach-service',
-            'approach-api', 'answers-api', 'approach-configuration', 'approach-bundle',
-            'approach-worker', 'approach-history', 'approach-export',
-            'approach-native', 'approach-ui-controller',
-            'approach-ui-reading', 'approach-ui-method', 'approach-ui-assumptions',
-            'approach-ui-configuration', 'approach-ui-history',
-            'fuel-platform', 'fuel-native-provenance',
-            'investigation-native', 'investigation-worker', 'investigation-evidence',
-            'investigation-diagnostics', 'findings-history',
-        })
+        self.assertEqual(
+            groups,
+            {
+                'approach-contracts',
+                'approach-closure',
+                'approach-service',
+                'approach-api',
+                'answers-api',
+                'approach-configuration',
+                'approach-bundle',
+                'approach-worker',
+                'approach-history',
+                'approach-export',
+                'approach-native',
+                'approach-ui-controller',
+                'approach-ui-reading',
+                'approach-ui-method',
+                'approach-ui-demo',
+                'approach-ui-assumptions',
+                'approach-ui-configuration',
+                'approach-ui-history',
+                'fuel-platform',
+                'fuel-native-provenance',
+                'investigation-native',
+                'investigation-worker',
+                'investigation-evidence',
+                'investigation-diagnostics',
+                'findings-history',
+            },
+        )
         for group in groups:
             with self.subTest(group=group), patch.object(runner, 'targets_for', side_effect=ValueError('missing')), patch.object(fixture, 'allocate_scope') as allocate:
                 with self.assertRaises(ValueError): runner.run_group(group)
@@ -71,7 +90,13 @@ class GuardTests(unittest.TestCase):
             self.assertEqual(runner.GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON), fixture.APPROVED_PYTHON)
         for group, selector in runner.APPROACH_BROWSER_GROUPS.items():
             self.assertTrue(selector.startswith('@approach-'))
-            self.assertEqual(runner.GROUPS[group], ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'))
+            self.assertEqual(
+                runner.GROUPS[group],
+                (
+                    'deployment/tests/approach_ui_fixture.py',
+                    'ui/tests/approach.spec.ts',
+                ) + (('ui/tests/DesignSpecimen.tsx',) if group=='approach-ui-demo' else ()),
+            )
 
     def test_approach_child_guards_before_collection_or_native_setup(self):
         for group in runner.APPROACH_PYTEST_GROUPS:

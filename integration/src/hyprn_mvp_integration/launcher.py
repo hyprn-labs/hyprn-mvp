@@ -19,6 +19,11 @@ from uuid import uuid4
 from uuid import UUID
 from hyprn_mvp_app.contracts import DomainError, canonical, check_digest, data_json, digest
 from hyprn_mvp_app.execution_bundle import safe_path, verify_files, validate_retained_bundle
+from hyprn_mvp_app.contracts import (
+    EXECUTION_WALL_DEFAULT,
+    EXECUTION_WALL_MAX,
+    execution_wall_seconds,
+)
 from . import installation
 
 
@@ -67,7 +72,8 @@ POLICY = dict(
     memory='256m',
     cpus='0.5',
     pids='32',
-    wall_seconds=20,
+    wall_seconds=EXECUTION_WALL_DEFAULT,
+    max_wall_seconds=EXECUTION_WALL_MAX,
     output_bytes=65536,
     scratch_bytes=16777216,
     user='65534:65534',
@@ -451,6 +457,7 @@ def bundle_runtime(root=None):
 
 
 def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=None):
+    wall = execution_wall_seconds(POLICY['wall_seconds'] if wall is None else wall)
     root = runtime_root(root)
     if not canary:
         require_attestation(root=root)
@@ -530,7 +537,7 @@ def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=N
     reason = 'exited'
     try:
         while selector.get_map():
-            if time.monotonic() - start > (wall or POLICY['wall_seconds']):
+            if time.monotonic() - start > wall:
                 reason = 'wall_limit'
                 break
             for key, _ in selector.select(timeout=0.1):
@@ -558,6 +565,7 @@ def isolated(input_dir, *, canary=False, wall=None, expected_digest=None, root=N
             reason=reason,
             exit_code=proc.returncode,
             seconds=time.monotonic() - start,
+            wall_seconds=wall,
             state=state,
             output=bytes(collected[: POLICY['output_bytes']]).decode(errors='replace'),
         )
@@ -740,12 +748,13 @@ def main():
 
     args = sys.argv[1:]
     root = None
-    if len(args) == 4 and args[0] == '--runtime-root':
+    if len(args) in (4, 5) and args[0] == '--runtime-root':
         root = fixture_runtime_root(args[1])
         args = args[2:]
-    if len(args) != 2:
+    if len(args) not in (2, 3):
         raise ValueError('Fixed bundle directory and immutable expected digest required')
-    result = isolated(Path(args[0]).resolve(), expected_digest=args[1], root=root)
+    wall = execution_wall_seconds(int(args[2])) if len(args) == 3 else EXECUTION_WALL_DEFAULT
+    result = isolated(Path(args[0]).resolve(), expected_digest=args[1], wall=wall, root=root)
     print(json.dumps(result, allow_nan=False))
 
 

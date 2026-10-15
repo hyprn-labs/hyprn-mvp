@@ -79,3 +79,49 @@ Then conclude in chat with actual results, assumptions, sources and limitations,
 and inspect the saved reader journey in the UI when it is part of the request and
 accessible. API-only work requires record readback, not browser inspection. Do not
 substitute seeded models or results for the authoring loop.
+
+## Named study tools
+
+Use named tools for the owner-operated workflow in the same authenticated process:
+
+```json
+{"tool":"list_tools","arguments":{}}
+{"tool":"describe_tool","arguments":{"name":"create_model"}}
+{"tool":"create_model","arguments":{"study_id":"<study UUID>","body":{"command_id":"<new command UUID>","expected_revision":"<study revision>","name":"Heat balance","template":"empty"}}}
+{"tool":"submit_run","arguments":{"study_id":"<study UUID>","body":{"command_id":"<new command UUID>","configuration_revision_id":"<saved configuration UUID>","execution_budget":{"wall_seconds":300}}}}
+{"tool":"run_status","arguments":{"study_id":"<study UUID>","run_ids":["<run UUID>"]}}
+{"tool":"get_run","arguments":{"study_id":"<study UUID>","run_id":"<run UUID>"}}
+```
+
+The thin adapter is `deployment/tools/study_tools.py`. Tools return `{status,data}`
+or `{status,error}`; errors and uncertain transport outcomes are not retried.
+`describe_tool` returns identifier arguments and the exact public body schema with
+its referenced definitions. Model tools supply operation-specific request formats:
+creation uses 3; preview/edit uses 4. Omit `body.schema_version` for those tools.
+Format versions are serialization rules, distinct from immutable scientific model
+versions. Other bodies retain their public schema fields and exact revision checks.
+
+`submit_run` explicitly supplies a 300-second budget if omitted. An explicit integer
+from 1 to 3600 seconds changes only the operational wall-time budget, including
+container startup. The native process retains that budget; its outer job allowance
+adds 60 seconds for lifecycle overhead. The HTTP timeout is independent. Memory,
+CPU, output and containment restrictions remain enforced. The chosen budget is
+part of command identity: changing it requires a new command, never replay of an
+existing command with altered arguments.
+
+Read `execution_diagnostic` on a terminal `get_run` response. A timeout preserves
+`history.results: null`; it does not evaluate the physical criteria. Diagnostics
+report retained launcher observations, never inferred scientific outcomes or raw
+candidate stdout. Earlier artifacts without a recorded budget report it as null.
+
+`read_artifact` takes study_id, run_id and artifact_id and returns bounded base64
+bytes, their checked SHA-256, byte count and media type. Decode deliberately; an
+artifact is not an API envelope. Tools do not execute downloaded source. Retain
+command IDs before calls and returned resource IDs after each successful step.
+Uncertain mutations require receipt lookup, not resubmission. A recorded timeout
+may justify one deliberate new run after diagnosis; repeated timeouts require
+reconsidering the budget or model, not an automatic retry loop.
+
+This is a callable local JSON-lines tool layer using the authorized owner's session,
+not an enabled delegated MCP writer or a new scheduler. Raw API requests remain an
+escape hatch for operations absent from the tool list.

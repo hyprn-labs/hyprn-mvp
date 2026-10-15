@@ -32,6 +32,9 @@ export function executionResult(state: unknown): OutcomeLabel {
 export function executionStatus(run: RunHistoryItem | PublicRunDetail): OutcomeLabel {
   const result = 'history' in run ? run.history?.results?.execution : undefined;
   if (result) return executionResult(result.state);
+  if ('execution_diagnostic' in run && run.execution_diagnostic?.state === 'timed_out') {
+    return { label: 'Timed out', tone: 'alarm' };
+  }
   if ('process_state' in run) {
     if (run.process_state === 'excepted' || run.process_state === 'killed' || (run.exit_status != null && run.exit_status !== 0)) return { label: 'Failed', tone: 'alarm' };
     if (run.process_state === 'finished') return { label: 'Finished · results unavailable', tone: 'warning' };

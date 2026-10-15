@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from ..contracts import DomainError
 from ..edge import SubmitRun, page, response, valid_id
-from ..history import retained_read_integrity
+from ..history import retained_read_integrity, execution_diagnostic
+
 
 def router(deps):
     submissions,history=deps.submissions,deps.history
@@ -15,13 +16,21 @@ def router(deps):
     @r.post("/api/1/studies/{study_id}/runs",status_code=202)
     def submit(study_id:str,body:SubmitRun,request:Request,who:Actor):
         valid_id(body.configuration_revision_id)
-        return response(request,submissions.submit(who,valid_id(study_id),body.model_dump()),202)
+        return response(
+            request,
+            submissions.submit(who, valid_id(study_id), body.model_dump(exclude_none=True)),
+            202,
+        )
+
     @r.get("/api/1/studies/{study_id}/runs/{run_id}")
     def run_status(study_id:str,run_id:str,request:Request,who:Actor):
         result=submissions.read(who,valid_id(study_id),valid_id(run_id))
         if result['state']=='recorded':
             result['history']=history.read(who,study_id,run_id)
             result['retained_integrity']=retained_read_integrity(run_id,result['history'])
+            result['execution_diagnostic'] = execution_diagnostic(
+                result['history'], lambda aid: history.read(who, study_id, run_id, aid)
+            )
         return response(request,result)
     @r.get("/api/1/studies/{study_id}/runs")
     def run_history(study_id:str,request:Request,who:Actor,cursor:str|None=None,limit:int=100):

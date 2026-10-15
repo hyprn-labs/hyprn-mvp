@@ -59,9 +59,21 @@ class ConfigurationCommit(Closed):
 class ConfigurationCommitV2(ConfigurationCommit):
     configuration_id:str|None
     expected_preview_digest:str=Field(pattern=r'^[0-9a-f]{64}$')
+class ExecutionBudget(Closed):
+    wall_seconds: int = Field(
+        ge=1,
+        le=3600,
+        description='Container startup plus execution wall time in seconds; not the HTTP timeout.',
+    )
+
+
 class SubmitRun(Closed):
     command_id:str
     configuration_revision_id:str
+    execution_budget: ExecutionBudget = Field(
+        default_factory=lambda: ExecutionBudget(wall_seconds=300)
+    )
+
 
 @dataclass(frozen=True)
 class RouteDeps:
@@ -95,6 +107,16 @@ REQUEST_MESSAGES={"missing":"Required field is missing.","extra_forbidden":"Fiel
 def request_diagnostics(error):
     """Field-level detail for request-shape failures; submitted input is never echoed."""
     fields=[]
+    errors = error.errors()
+    if any(tuple(e.get('loc', ()))[-2:] == ('NewModel3', 'schema_version') for e in errors):
+        return [
+            issue(
+                ['schema_version'],
+                'Model creation accepts request format 3 (or omit schema_version for the legacy '
+                'request). Model editing and saved records may use format 4; discover '
+                'model_formats in capabilities.',
+            )
+        ]
     for item in error.errors()[:MAX_DIAGNOSTICS]:
         loc=list(item.get("loc",()))
         parts=loc[1:] if loc[:1]==["body"] else loc

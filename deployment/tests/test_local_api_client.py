@@ -1,6 +1,8 @@
 """The local helper uses one ordinary login and never repeats an uncertain mutation."""
 
 import io
+import base64
+import hashlib
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -68,6 +70,9 @@ class LocalApiTests(unittest.TestCase):
                 if status == 307:
                     self.send_header('Location', 'http://192.0.2.1/api/1/elsewhere')
                 encoded = json.dumps(response).encode()
+                if '/artifacts/' in self.path:
+                    encoded = b'\x00\xff'
+                    self.send_header('X-Content-SHA256', hashlib.sha256(encoded).hexdigest())
                 self.send_header('Content-Length', str(len(encoded)))
                 self.end_headers()
                 self.wfile.write(encoded)
@@ -83,6 +88,80 @@ class LocalApiTests(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
+
+    def test_every_named_tool_resolves_its_public_operation(self):
+        from tools.study_tools import OPERATIONS, describe_tool
+
+        for name in OPERATIONS:
+            description = describe_tool(name)
+            self.assertEqual(description['name'], name)
+            if OPERATIONS[name][0] != 'GET':
+                self.assertIsNotNone(description['body_schema'])
+
+    def test_artifact_tool_verifies_bytes_without_json_decoding(self):
+        reply = self.client.request(
+            dict(
+                tool='read_artifact',
+                arguments=dict(
+                    study_id=str(uuid4()), run_id=str(uuid4()), artifact_id=str(uuid4())
+                ),
+            )
+        )
+        self.assertEqual(reply['status'], 200)
+        self.assertEqual(base64.b64decode(reply['data']['bytes_base64']), b'\x00\xff')
+        self.assertEqual(reply['data']['sha256'], hashlib.sha256(b'\x00\xff').hexdigest())
+
+    def test_receipt_tool_includes_original_category(self):
+        self.client.request(
+            dict(
+                tool='get_command',
+                arguments=dict(study_id=str(uuid4()), command_id=str(uuid4()), category='run'),
+            )
+        )
+        self.assertTrue(self.requests[-1][1].endswith('?category=run'))
+
+    def test_named_model_tool_owns_format_and_keeps_response_data(self):
+        sid = str(uuid4())
+        reply = self.client.request(
+            dict(
+                tool='create_model',
+                arguments=dict(
+                    study_id=sid,
+                    body=dict(
+                        command_id=str(uuid4()),
+                        name='Model',
+                        expected_revision='revision',
+                        template='empty',
+                    ),
+                ),
+            )
+        )
+        self.assertEqual(reply['status'], 200)
+        self.assertIn('data', reply)
+        self.assertEqual(self.requests[-1][3]['schema_version'], '3')
+        with self.assertRaises(ClientError):
+            self.client.request(
+                dict(
+                    tool='create_model', arguments=dict(study_id=sid, body=dict(schema_version='4'))
+                )
+            )
+
+    def test_named_run_tool_is_explicit_and_does_not_retry(self):
+        self.client.request(
+            dict(
+                tool='submit_run',
+                arguments=dict(
+                    study_id=str(uuid4()),
+                    body=dict(command_id=str(uuid4()), configuration_revision_id=str(uuid4())),
+                ),
+            )
+        )
+        self.assertEqual(self.requests[-1][3]['execution_budget'], {'wall_seconds': 300})
+        self.assertEqual(len(self.requests), 2)
+        self.assertNotIn(
+            'delete_study',
+            self.client.request(dict(tool='list_tools', arguments={}))['data']['tools'],
+        )
 
     def test_create_read_edit_share_ordinary_cookie_and_csrf(self):
         for command in (

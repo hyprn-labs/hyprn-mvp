@@ -10654,6 +10654,23 @@
         ],
         "additionalProperties": false
       },
+      "ExecutionBudget": {
+        "properties": {
+          "wall_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 1.0,
+            "title": "Wall Seconds",
+            "description": "Container startup plus execution wall time in seconds; not the HTTP timeout."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "wall_seconds"
+        ],
+        "title": "ExecutionBudget"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -10891,6 +10908,9 @@
           "configuration_revision_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "execution_budget": {
+            "$ref": "#/components/schemas/ExecutionBudget"
           }
         },
         "additionalProperties": false,
@@ -59573,6 +59593,61 @@
               "type": "string"
             }
           },
+          "execution_budget": {
+            "type": "object",
+            "properties": {
+              "default_wall_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600
+              },
+              "min_wall_seconds": {
+                "const": 1
+              },
+              "max_wall_seconds": {
+                "const": 3600
+              },
+              "includes_startup": {
+                "const": true
+              }
+            },
+            "required": [
+              "default_wall_seconds",
+              "min_wall_seconds",
+              "max_wall_seconds",
+              "includes_startup"
+            ],
+            "additionalProperties": false
+          },
+          "model_formats": {
+            "type": "object",
+            "properties": {
+              "create_request": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "edit_request": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "saved_record": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "create_request",
+              "edit_request",
+              "saved_record"
+            ],
+            "additionalProperties": false
+          },
           "limits": {
             "type": "object",
             "properties": {
@@ -59628,6 +59703,8 @@
           "modeling",
           "execution",
           "unavailable",
+          "execution_budget",
+          "model_formats",
           "limits"
         ],
         "additionalProperties": false
@@ -59817,6 +59894,9 @@
             "$ref": "#/components/schemas/RetainedReadIntegrity1",
             "description": "Optional for older servers; absence means retained result verification is unavailable."
           },
+          "execution_diagnostic": {
+            "$ref": "#/components/schemas/ExecutionDiagnostic1"
+          },
           "record_view": {
             "$ref": "#/components/schemas/RecordView1"
           }
@@ -59826,6 +59906,67 @@
           "command_id",
           "state",
           "receipt_url"
+        ],
+        "additionalProperties": false
+      },
+      "ExecutionDiagnostic1": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "unavailable",
+              "timed_out",
+              "output_limit",
+              "memory_limit",
+              "completed",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "wall_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artifact_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "message",
+          "wall_seconds",
+          "elapsed_seconds",
+          "artifact_id"
         ],
         "additionalProperties": false
       },

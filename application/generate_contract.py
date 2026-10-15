@@ -76,8 +76,55 @@ schemas["Association"]=obj(dict(model_id=uuid,command_id=uuid))
 schemas["Session"]=obj(dict(actor_id=uuid,csrf_token=string,expires_at={"type":"number"}))
 schemas["EndedSession"]=obj(dict(ended={"const":True}))
 schemas["PendingModel"]=obj(dict(command_id=uuid,state={"const":"pending_remote"},receipt_url=string))
-schemas["ApplicationCapabilities"]=obj(dict(contract_versions=array(string),engineering=array(string),modeling=array({"enum":["model_revision_listing","model_rename","model_assumptions/1","unit_declarations/1","quantity_definitions/1"]}),execution=string,unavailable=array(string),
-    limits=obj({**{k:{"type":"integer"} for k in ("request_bytes","source_bytes","edits","elements","depth","result_source_outputs","result_source_runs","result_source_bindings","result_source_dependencies")},'computational_record':ref('ExportLimits')})))
+schemas['ApplicationCapabilities'] = obj(
+    dict(
+        contract_versions=array(string),
+        engineering=array(string),
+        modeling=array(
+            {
+                'enum': [
+                    'model_revision_listing',
+                    'model_rename',
+                    'model_assumptions/1',
+                    'unit_declarations/1',
+                    'quantity_definitions/1',
+                ]
+            }
+        ),
+        execution=string,
+        unavailable=array(string),
+        execution_budget=obj(
+            dict(
+                default_wall_seconds={'type': 'integer', 'minimum': 1, 'maximum': 3600},
+                min_wall_seconds={'const': 1},
+                max_wall_seconds={'const': 3600},
+                includes_startup={'const': True},
+            )
+        ),
+        model_formats=obj(
+            {k: array(string) for k in ('create_request', 'edit_request', 'saved_record')}
+        ),
+        limits=obj(
+            {
+                **{
+                    k: {'type': 'integer'}
+                    for k in (
+                        'request_bytes',
+                        'source_bytes',
+                        'edits',
+                        'elements',
+                        'depth',
+                        'result_source_outputs',
+                        'result_source_runs',
+                        'result_source_bindings',
+                        'result_source_dependencies',
+                    )
+                },
+                'computational_record': ref('ExportLimits'),
+            }
+        ),
+    )
+)
 # Shared StoredError keeps its diagnostic/status/text bounds.
 model_result={"anyOf":[obj(dict(data=ref("ModelDraftRead4"))),obj(dict(data=ref("ModelDraftRead4"),created_ids=ref("CreatedIds"),diagnostics=array(ref("Diagnostic")))),obj(dict(data=ref("ModelRevisionRead4")))]}
 run_states=["accepted_run","prepared","preparation_failed","dispatching","recorded","uncertain"]
@@ -108,6 +155,27 @@ schemas['RetainedReadIntegrity1']=obj(dict(schema_version={'const':'1'},
 schemas['RetainedReadIntegrity1']['properties']['results_digest']['description']='Verified retained result digest from this read. Null means verification is unavailable.'
 schemas['PublicRunDetail']={**schemas['PublicRun'],'properties':{**schemas['PublicRun']['properties'],'history':ref('RunHistoryRead6'),'runtime_comparison':ref('RuntimeComparison'),
     'retained_integrity':{**ref('RetainedReadIntegrity1'),'description':'Optional for older servers; absence means retained result verification is unavailable.'}}}
+schemas['ExecutionDiagnostic1'] = obj(
+    dict(
+        state={
+            'enum': [
+                'unavailable',
+                'timed_out',
+                'output_limit',
+                'memory_limit',
+                'completed',
+                'failed',
+            ]
+        },
+        message={'type': 'string', 'maxLength': 512},
+        wall_seconds=nullable({'type': 'integer', 'minimum': 1, 'maximum': 3600}),
+        elapsed_seconds=nullable({'type': 'number', 'minimum': 0}),
+        artifact_id=nullable(uuid),
+    )
+)
+schemas['PublicRunDetail']['properties']['execution_diagnostic'] = ref('ExecutionDiagnostic1')
+
+
 # Light run status: the facets and criterion outcomes reuse the RetainedResults definitions;
 # every value that is not held is null with its reason, never a zero.
 def reasoned(value,reasons):
@@ -195,7 +263,9 @@ schemas['PublicConfigurationPreview']={'oneOf':[ref('CompatibilityResult1'),ref(
 # uses ModelPackage with the qualified native Model4 branch.
 schemas["PublicModelPackageRead3"]={"oneOf":[ref("ModelPackage1"),ref("ModelPackage2"),ref("ModelPackage3")]}
 schemas["ImportModel"]["properties"]["package"]=ref("ModelPackage")
-schemas["SubmitRun"]["properties"]={"command_id":uuid,"configuration_revision_id":uuid}
+schemas['SubmitRun']['properties'].update(command_id=uuid, configuration_revision_id=uuid)
+
+
 def envelope(data):
     return obj(dict(schema_version={"const":"1"},request_id=uuid,data=data))
 spec["components"]["securitySchemes"]={"session":{"type":"apiKey","in":"cookie","name":"hyprn_mvp_session"}}

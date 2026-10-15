@@ -416,3 +416,25 @@ def test_quantity_reader_adoption_keeps_legacy_semantic_source_guard(env):
     with pytest.raises(DomainError) as error:
         env['coord'].read(env['actor'],env['sid'],env['mid'],response_schema='ModelDraftResponse')
     assert error.value.code=='backend_unavailable'
+
+
+def test_model_format_discovery_and_creation_diagnostic(env):
+    enable_quantity(env)
+    caps = env['client'].get('/api/1/capabilities').json()['data']
+    assert caps['model_formats'] == dict(
+        create_request=['3'], edit_request=['4'], saved_record=['4']
+    )
+    reply = env['client'].post(
+        '/api/1/studies/' + env['sid'] + '/models',
+        json=dict(
+            command_id=uid(),
+            expected_revision='token',
+            name='Model',
+            template='empty',
+            schema_version='4',
+        ),
+    )
+    assert reply.status_code == 400
+    fields = reply.json()['error']['fields']
+    assert len(fields) == 1 and fields[0]['path'] == '/schema_version'
+    assert 'Model creation accepts request format 3' in fields[0]['message']

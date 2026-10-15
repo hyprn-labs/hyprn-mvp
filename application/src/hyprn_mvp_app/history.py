@@ -43,6 +43,7 @@ Version interpretation points in this module; none holds its own table:
 """
 import base64
 import json
+import math
 from typing import NamedTuple
 from uuid import UUID, uuid5
 from .contracts import DomainError, canonical, check_digest, data_json, digest, raw_hash, validate
@@ -199,6 +200,68 @@ def complete_outcome(result,model,config):
         if (set(claim)!={'criterion_id','outcome','reason'} or claim['criterion_id']!=criterion['criterion_id']
                 or claim['outcome'] not in ('met','violated','unresolved') or not isinstance(claim['reason'],str)
                 or len(claim['reason'])>4096):raise ValueError('Invalid retained criterion evaluation')
+
+
+def execution_diagnostic(history, read_artifact):
+    """Curated launcher metadata from authenticated retained bytes, never worker stdout."""
+    result = dict(
+        state='unavailable',
+        message='Execution diagnostics are unavailable.',
+        wall_seconds=None,
+        elapsed_seconds=None,
+        artifact_id=None,
+    )
+    artifact = next((a for a in history['artifacts'] if a['name'] == 'result.json'), None)
+    if artifact is None:
+        return result
+    try:
+        raw, _ = read_artifact(artifact['artifact_id'])
+        value = data_json(raw)
+        reason = value['reason']
+        elapsed = value['seconds']
+        wall = value.get('wall_seconds')
+        from .contracts import execution_wall_seconds
+
+        if wall is not None:
+            execution_wall_seconds(wall)
+        if type(elapsed) not in (float, int) or not math.isfinite(elapsed) or elapsed < 0:
+            return result
+        if type(value['exit_code']) is not int:
+            return result
+        state = value.get('state')
+        if not isinstance(state, dict) or type(state.get('OOMKilled')) is not bool:
+            return result
+        if reason == 'wall_limit':
+            outcome = 'timed_out'
+            message = (
+                'Execution timed out'
+                + (f' after reaching the {wall}-second wall budget' if wall is not None else '')
+                + '. No numerical results were produced.'
+            )
+        elif reason == 'output_limit':
+            outcome = 'output_limit'
+            message = 'Execution stopped after exceeding the output limit.'
+        elif reason == 'exited' and state['OOMKilled']:
+            outcome = 'memory_limit'
+            message = 'Execution stopped after exceeding the memory limit.'
+        elif reason == 'exited':
+            outcome = 'completed' if value['exit_code'] == 0 else 'failed'
+            message = (
+                'Worker exited normally.'
+                if outcome == 'completed'
+                else 'Worker exited with an error.'
+            )
+        else:
+            return result
+        return dict(
+            state=outcome,
+            message=message,
+            wall_seconds=wall,
+            elapsed_seconds=elapsed,
+            artifact_id=artifact['artifact_id'],
+        )
+    except (ValueError, KeyError, TypeError, OverflowError, DomainError):
+        return result
 
 
 class RetainedRecordError(ValueError):

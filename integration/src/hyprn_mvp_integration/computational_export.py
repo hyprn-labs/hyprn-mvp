@@ -20,6 +20,7 @@ from hyprn_mvp_app.contracts import canonical, data_json, digest
 from hyprn_mvp_app.execution_bundle import closed
 from .results import retained_bundle, read_stored_result, validate_criteria, validate_result
 from . import launcher
+from hyprn_mvp_app.contracts import execution_wall_seconds
 
 RAW = 16777216
 EXPANDED = 33554432
@@ -33,6 +34,7 @@ NESTED_PATHS = 4096
 NODE_TYPES = {
     'process.calculation.calcjob.CalcJobNode.',
     'data.core.dict.Dict.',
+    'data.core.int.Int.',
     'data.core.folder.FolderData.',
     'data.core.remote.RemoteData.',
     'data.core.code.installed.InstalledCode.',
@@ -568,6 +570,7 @@ class Export:
             expected_inputs = (
                 {'request', 'frozen_bundle'}
                 | ({'code'} if 'code' in incoming else set())
+                | ({'wall_seconds'} if 'wall_seconds' in incoming else set())
                 | {'upstream_results__' + p for p in pins}
             )
             if set(incoming) != expected_inputs:
@@ -632,7 +635,15 @@ class Export:
             # validated scientific result through AiiDA's pinned serialization.
             # Compare that exact representation without rewriting either record.
             envelope = data_json(retrieved['result.json'])
-            exact(envelope, {'id', 'reason', 'exit_code', 'seconds', 'state', 'output'})
+            envelope_fields = {'id', 'reason', 'exit_code', 'seconds', 'state', 'output'}
+            if 'wall_seconds' in incoming:
+                envelope_fields.add('wall_seconds')
+                if (
+                    execution_wall_seconds(envelope.get('wall_seconds'))
+                    != incoming['wall_seconds'].value
+                ):
+                    raise ValueError('Retained execution budget differs from native input')
+            exact(envelope, envelope_fields)
             exact(
                 envelope['state'],
                 {
@@ -815,7 +826,19 @@ class Export:
         if role == 'process':
             if set(attributes) - PROCESS_ATTRIBUTES:
                 raise ValueError('Unapproved process metadata')
-            for key, expected in PROCESS_DEFAULTS.items():
+            defaults = dict(PROCESS_DEFAULTS)
+            if 'wall_seconds' in node.inputs:
+                wall = execution_wall_seconds(node.inputs.wall_seconds.value)
+                defaults.update(
+                    max_wallclock_seconds=wall + 60,
+                    metadata_inputs={
+                        'metadata': {
+                            'disable_cache': True,
+                            'options': {'max_wallclock_seconds': wall + 60},
+                        }
+                    },
+                )
+            for key, expected in defaults.items():
                 if key in attributes and canonical(attributes[key]) != canonical(expected):
                     raise ValueError('Unsupported process settings')
             if type(attributes['exit_status']) is not int or attributes['exit_status'] not in (
@@ -875,6 +898,10 @@ class Export:
         elif role in ('frozen_bundle', 'retrieved'):
             if attributes:
                 raise ValueError('Unapproved folder metadata')
+        elif role == 'wall_seconds':
+            if not isinstance(node, orm.Int) or set(attributes) != {'value'}:
+                raise ValueError('Invalid execution budget input')
+            execution_wall_seconds(attributes['value'])
         elif role == 'assessment':
             exact(attributes, {'version', 'evaluator_sha256'})
             if attributes['version'] != 'fixed-threshold-1' or not re.fullmatch(
@@ -918,12 +945,19 @@ class Export:
             raise ValueError('Unknown process repository files')
         request = self.approved[node.uuid]['request']
         bundle_digest = request['bundle_digest']
+        wall = (
+            execution_wall_seconds(node.inputs.wall_seconds.value)
+            if 'wall_seconds' in node.inputs
+            else None
+        )
+        arguments = ['input', bundle_digest] + ([str(wall)] if wall is not None else [])
+        extra = "' '" + str(wall) if wall is not None else ''
         script = (
             '#!/bin/bash\nexec > _scheduler-stdout.txt\nexec 2> _sched'
             "uler-stderr.txt\n\n\n'"
             f'{self.root}'
             "/launch-worker' 'input' '"
-            f'{bundle_digest}'
+            f'{bundle_digest}{extra}'
             "'  > 'result.json' 2> 'launcher.stderr'\n"
         ).encode()
         if files['_aiidasubmit.sh'] != script:
@@ -932,7 +966,7 @@ class Export:
             codes_info=[
                 dict(
                     code_uuid=node.inputs.code.uuid,
-                    cmdline_params=['input', bundle_digest],
+                    cmdline_params=arguments,
                     stdout_name='result.json',
                     stderr_name='launcher.stderr',
                 )
@@ -973,7 +1007,7 @@ class Export:
             codes_info=[
                 dict(
                     prepend_cmdline_params=[],
-                    cmdline_params=[str(self.root / 'launch-worker'), 'input', bundle_digest],
+                    cmdline_params=[str(self.root / 'launch-worker'), *arguments],
                     use_double_quotes=[False, False],
                     wrap_cmdline_params=False,
                     stdin_name=None,
@@ -987,7 +1021,7 @@ class Export:
             job_environment={},
             environment_variables_double_quotes=False,
             max_memory_kb=None,
-            max_wallclock_seconds=60,
+            max_wallclock_seconds=60 if wall is None else wall + 60,
         )
         if job != expected:
             raise ValueError('Unknown scheduler template')
