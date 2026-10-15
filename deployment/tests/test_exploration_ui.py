@@ -7,6 +7,7 @@ live_runtime_fence = live_fence.pytest_fixture('baseline')
 from copy import deepcopy
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import time
 
@@ -24,6 +25,12 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
     proof = dict(passed=False, human_acceptance=False, physical_validation=False)
     capture_only = False
     try:
+        if EXPLORATION_UI_RESUME:
+            # Replay validates today's product source, while retaining scientific records.
+            guard.validate_scope(SCOPE)
+            product = guard.scoped_path(SCOPE, 'artifacts/units-product-ui')
+            if product.exists():
+                shutil.rmtree(product)
         j.start(resume=EXPLORATION_UI_RESUME)
         if EXPLORATION_UI_RESUME:
             proof = json.loads((SCOPE.root / 'evidence/exploration-ui-proof.json').read_text())
