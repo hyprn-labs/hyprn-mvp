@@ -196,7 +196,7 @@ def test_source_result_original_units_and_private_conversion_proof(config,monkey
     assert project(saved['configuration'])['inputs'][0]['value']==value
     assert canonical(history)==original
     resolved=ResultBindings(e['store']).resolve(e['actor'],e['sid'],r['inputs'][0])
-    assert resolved['outcomes']['applicability']['state']=='unassessed'
+    assert 'applicability' not in resolved['outcomes']
 
 
 @pytest.mark.parametrize('bad',['unspecified','mismatch','unavailable','not_completed'])

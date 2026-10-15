@@ -24,6 +24,9 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
     j = UnitsJourney(SCOPE, BACKEND)
     proof = dict(passed=False, human_acceptance=False, physical_validation=False)
     capture_only = False
+    current_native = (
+        EXPLORATION_UI_RESUME and (SCOPE.root / 'evidence/exploration-native-proof.json').exists()
+    )
     try:
         if EXPLORATION_UI_RESUME:
             # Replay validates today's product source, while retaining scientific records.
@@ -32,7 +35,29 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
             if product.exists():
                 shutil.rmtree(product)
         j.start(resume=EXPLORATION_UI_RESUME)
-        if EXPLORATION_UI_RESUME:
+        if current_native:
+            original = json.loads(
+                (SCOPE.root / 'evidence/exploration-native-proof.json').read_text()
+            )
+            assert original['passed']
+            fit = original['fits'][0]
+            j.sid = fit['basis']['study_id']
+            answer = j.request('GET', 'answers/' + fit['basis']['answer_version_id'])
+            manifest = dict(
+                study_id=j.sid,
+                answer=answer,
+                fit=fit,
+                password=j.setup['password'],
+                selected_run_id=original['records'][0]['run_id'],
+                initial_state='Estimated',
+            )
+            proof.update(
+                origin=original['origin'],
+                fit=fit,
+                selected=j.request('GET', 'runs/' + manifest['selected_run_id']),
+            )
+            capture_only = True
+        elif EXPLORATION_UI_RESUME:
             proof = json.loads((SCOPE.root / 'evidence/exploration-ui-proof.json').read_text())
             manifest = json.loads(
                 (SCOPE.root / 'artifacts/exploration-browser-input.json').read_text()
@@ -143,6 +168,17 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
             (SCOPE.root / 'artifacts/exploration-browser-input.json').write_text(
                 json.dumps(manifest)
             )
+        from exploration_design_fixture import prepare
+
+        controls = prepare(j, manifest, SCOPE.root)
+        manifest['controls'] = controls
+        (SCOPE.root / 'artifacts/exploration-browser-input.json').write_text(json.dumps(manifest))
+        # This host owns the attested executor; retained reads must not imply
+        # current readiness. Refresh its real identity before inert admission.
+        assert j.native.require_attestation()['passed']
+        j.store.publish_execution_observation(
+            'ready', None, time.time(), j.native.bundle_runtime()['runtime']
+        )
         env = guard.clean_environment(j.scope)
         env['HYPRN_MVP_UI_BASE_URL'] = j.url
         env['HYPRN_MVP_UI_EVIDENCE_ROOT'] = str(SCOPE.root / 'evidence/browser')
@@ -154,7 +190,7 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
             str(REPO / 'ui/playwright.config.ts'),
             'exploration.spec.ts',
             '--grep',
-            'retained graph' if capture_only else 'canonical graph',
+            'all free inputs|independent categories',
             '--reporter=json',
         ]
         submitted = SCOPE.root / 'artifacts/exploration-submitted.json'
@@ -183,9 +219,9 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
                 browser.wait(timeout=10)
             assert browser.returncode == 0, 'Inspect exploration-browser.json and stderr'
         if capture_only:
-            assert j.process_count() == 9
+            assert j.process_count() == (18 if current_native else 9)
             assert j.request('GET', 'runs/' + proof['selected']['run_id']) == proof['selected']
-            proof['retained_browser_replay'] = True
+            proof.update(passed=True, retained_browser_replay=True, process_count=j.process_count())
             return
         assert dispatched is not None
         detail = j.request('GET', 'runs/' + dispatched)
@@ -201,5 +237,12 @@ def test_served_graph_preserves_calculated_and_estimated_identity():
             lifecycle_events=j.events,
         )
     finally:
-        (SCOPE.root / 'evidence/exploration-ui-proof.json').write_text(json.dumps(proof, indent=2))
+        # A startup refusal must never overwrite the original successful proof.
+        (SCOPE.root / 'evidence/exploration-controls-replay.json').write_text(
+            json.dumps(proof, indent=2)
+        )
+        if not EXPLORATION_UI_RESUME and proof['passed']:
+            (SCOPE.root / 'evidence/exploration-ui-proof.json').write_text(
+                json.dumps(proof, indent=2)
+            )
         j.close()

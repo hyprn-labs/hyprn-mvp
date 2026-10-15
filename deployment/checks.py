@@ -137,7 +137,10 @@ GROUPS = {
     'approach-api': ('application/tests/test_approach_api.py',),
     'answers-api': ('application/tests/test_answers_api.py',),
     'exploration-contracts': ('application/tests/test_exploration_api.py',),
-    'exploration-api': ('application/tests/test_sampling_api.py',),
+    'exploration-api': (
+        'application/tests/test_sampling_api.py',
+        'application/tests/test_exploration_design_api.py',
+    ),
     'exploration-native': ('deployment/tests/test_exploration_native.py',),
     'exploration-ui': ('deployment/tests/test_exploration_ui.py',),
     'approach-configuration': (

@@ -8,13 +8,67 @@ from ..contracts import DomainError
 from ..edge import response, valid_id
 from ..exploration import Explorations
 from ..sampling import Samples
+from ..exploration_design import Designs
 
 
 def router(deps):
     explorations = Explorations(deps.store, deps.configs)
     samples = Samples(deps.store, deps.configs, deps.submissions)
+    designs = Designs(deps.store, deps.configs)
     Actor = Annotated[str, Depends(deps.actor)]
     r = APIRouter()
+
+    @r.get('/api/1/studies/{study_id}/exploration-designs')
+    def design_list(
+        study_id: str,
+        answer_version_id: str,
+        request: Request,
+        who: Actor,
+        cursor: str | None = None,
+    ):
+        if set(request.query_params) - {'answer_version_id', 'cursor'} or any(
+            len(request.query_params.getlist(k)) != 1 for k in request.query_params
+        ):
+            raise DomainError('invalid_request', 400)
+        items, next_cursor = designs.page(
+            who,
+            valid_id(study_id),
+            valid_id(answer_version_id),
+            valid_id(cursor) if cursor else None,
+        )
+        return response(request, items, next_cursor=next_cursor)
+
+    @r.post('/api/1/studies/{study_id}/exploration-designs', status_code=201)
+    def design_save(study_id: str, body: dict, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, designs.save(who, valid_id(study_id), body), 201)
+
+    @r.get('/api/1/studies/{study_id}/exploration-designs/{design_id}')
+    def design_read(study_id: str, design_id: str, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, designs.read(who, valid_id(study_id), valid_id(design_id)))
+
+    @r.get('/api/1/studies/{study_id}/exploration-samples')
+    def sample_list(
+        study_id: str,
+        answer_version_id: str,
+        request: Request,
+        who: Actor,
+        cursor: str | None = None,
+    ):
+        if set(request.query_params) - {'answer_version_id', 'cursor'} or any(
+            len(request.query_params.getlist(k)) != 1 for k in request.query_params
+        ):
+            raise DomainError('invalid_request', 400)
+        items, next_cursor = samples.page(
+            who,
+            valid_id(study_id),
+            valid_id(answer_version_id),
+            valid_id(cursor) if cursor else None,
+        )
+        return response(request, items, next_cursor=next_cursor)
 
     @r.get('/api/1/studies/{study_id}/exploration-requests')
     def exploration_prepared(

@@ -8,6 +8,7 @@ import type {
   PortRef,
   PublicRunDetail,
   ScientificAnswer1,
+  ExplorationDesign1,
 } from './contract';
 import { GraphView, project, type Snapshot } from './GraphView';
 import {
@@ -29,7 +30,14 @@ import {
   preparedInputUnitsMatch,
   savedInputQuantity,
   sameInputVector,
+  selectInput,
+  carryCommon,
+  completeVector,
+  supportedCombination,
+  type Dimension,
+  type SelectedInput,
 } from './explorationInputs';
+import { ExplorationSettings } from './ExplorationSettings';
 
 const key = (ref: PortRef) => ref.instance_id + '/' + ref.port_id;
 type Loaded = {
@@ -56,8 +64,35 @@ export function AnswerExplorer({
   );
   const [loaded, setLoaded] = useState<Loaded | null>(null),
     [error, setError] = useState('');
-  const [fitIndex, setFitIndex] = useState(0),
-    [value, setValue] = useState<number | null | undefined>(undefined);
+  const [fitIndex, setFitIndex] = useState(0);
+  const [design, setDesign] = useState<ExplorationDesign1 | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selected, setSelected] = useState<SelectedInput[]>([]);
+  const [activeAxis, setActiveAxis] = useState<PortRef | null>(null);
+  const carry = useRef<{ vector: SelectedInput[]; dimensions: Dimension[] } | null>(null);
+  const combo = design && supportedCombination(design.request.combinations, categories);
+  const dimensions = combo?.dimensions ?? [];
+  useEffect(() => {
+    const fence = api.fence({ studyId });
+    setDesign(null);
+    void api
+      .explorationDesigns(studyId, answer.answer_version_id, fence.signal)
+      .then((items) => {
+        if (!fence.valid()) return;
+        const d = items[0];
+        if (d) {
+          setDesign(d);
+          setCategories(d.request.combinations[0].categories);
+          setConfiguration(d.request.combinations[0].configuration_revision_id);
+        }
+      })
+      .catch(async (e) => {
+        await api.readFailed(e, fence);
+        if (fence.valid()) setError(message(e));
+      })
+      .finally(fence.done);
+    return () => fence.abort();
+  }, [api, studyId, answer.answer_version_id]);
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const [busy, setBusy] = useState(false),
     [runId, setRunId] = useState(''),
@@ -72,7 +107,6 @@ export function AnswerExplorer({
     const token = ++generation.current,
       fence = api.fence({ studyId });
     setLoaded(null);
-    setValue(undefined);
     setError('');
     setFitIndex(0);
     setRunId('');
@@ -89,7 +123,19 @@ export function AnswerExplorer({
         if (fits.some((f) => f.basis.digest !== basis.digest))
           throw new Error('Prepared response does not match this answer basis.');
         const runs = await Promise.all(basis.run_ids.map((id) => api.run(studyId, id)));
-        if (fence.valid() && token === generation.current) setLoaded({ basis, frozen, fits, runs });
+        if (fence.valid() && token === generation.current) {
+          setLoaded({ basis, frozen, fits, runs });
+          const baseline = explorationInputVector(basis.inputs)!;
+          setSelected(
+            carry.current
+              ? carryCommon(carry.current.vector, carry.current.dimensions, baseline, dimensions)
+              : baseline,
+          );
+          carry.current = null;
+          setActiveAxis(
+            combo?.initial_axis ?? fits[0]?.request.axis ?? baseline[0]?.target ?? null,
+          );
+        }
       })
       .catch(async (e) => {
         await api.readFailed(e, fence);
@@ -97,19 +143,43 @@ export function AnswerExplorer({
       })
       .finally(fence.done);
     return () => fence.abort();
-  }, [api, studyId, answer.answer_version_id, configuration, refresh]);
+  }, [api, studyId, answer.answer_version_id, configuration, refresh, design, categories]);
 
   const compatibleUnits = loaded && preparedInputUnitsMatch(loaded.basis.inputs);
-  const fit = compatibleUnits ? loaded?.fits[fitIndex] : undefined;
-  const axis = fit && loaded?.basis.inputs.find((p) => key(p.target) === key(fit.request.axis));
+  const vector = completeVector(selected, dimensions);
+  const candidateFit = compatibleUnits
+    ? [loaded?.fits[fitIndex], ...(loaded?.fits ?? [])].find(
+        (f) => f && activeAxis && key(f.request.axis) === key(activeAxis),
+      )
+    : undefined;
+  // A one-axis preparation is usable only on its exact fixed-input slice.
+  const fit =
+    candidateFit &&
+    vector &&
+    candidateFit.query_inputs.some(
+      (query) =>
+        query.length === vector.length &&
+        query.every((p) =>
+          vector.some(
+            (v) =>
+              key(v.target) === key(p.target) &&
+              v.units === p.units &&
+              (key(p.target) === key(candidateFit.request.axis) || v.value === p.value),
+          ),
+        ),
+    )
+      ? candidateFit
+      : undefined;
+  const axis = loaded?.basis.inputs.find((p) => activeAxis && key(p.target) === key(activeAxis));
   const baseline = axis?.binding.kind === 'free' ? axis.binding.assignment.value : null;
-  const current = value === undefined ? baseline : value;
+  const current = axis
+    ? (selected.find((p) => key(p.target) === key(axis.target))?.value ?? null)
+    : null;
   const values = fit
     ? [...new Set([...fit.request.query_values, ...(baseline === null ? [] : [baseline])])].sort(
         (a, b) => a - b,
       )
     : [];
-  const vector = loaded && explorationInputVector(loaded.basis.inputs, axis?.target, current);
   // Only the same complete vector and exact model can provide calculated overlays.
   const matching = (run: PublicRunDetail) => {
     const c = run.history?.configuration;
@@ -205,7 +275,7 @@ export function AnswerExplorer({
       if (fence.valid() && token === generation.current) setError(message(e));
     } finally {
       fence.done();
-      if (token === generation.current) setBusy(false);
+      setBusy(false);
     }
   }
   async function readCalculation() {
@@ -226,6 +296,21 @@ export function AnswerExplorer({
     }
   }
   const snapshot = loaded?.frozen.model_snapshot;
+  function changeCategory(index: number, value: string) {
+    if (!design) return;
+    const next = categories.map((v, i) => (i === index ? value : v));
+    const mapped = supportedCombination(design.request.combinations, next);
+    generation.current++;
+    if (!mapped) {
+      setLoaded(null);
+      setError('This category combination is not supported.');
+      return;
+    }
+    carry.current = { vector: selected, dimensions };
+    setLoaded(null);
+    setCategories(next);
+    setConfiguration(mapped.configuration_revision_id);
+  }
   return (
     <Panel label="Explore the answer">
       <SectionHeader
@@ -233,7 +318,25 @@ export function AnswerExplorer({
         title="Explore the answer"
         actions={
           <ActionDialog title="Sample settings" label="Sample settings">
-            {answer.basis.configuration_revision_ids.length > 1 && (
+            {loaded && (
+              <ExplorationSettings
+                api={api}
+                studyId={studyId}
+                answer={answer}
+                basis={loaded.basis}
+                design={design}
+                categories={categories}
+                onSaved={(d) => {
+                  const selectedCombo =
+                    supportedCombination(d.request.combinations, categories) ??
+                    d.request.combinations[0];
+                  setDesign(d);
+                  setCategories(selectedCombo.categories);
+                  setConfiguration(selectedCombo.configuration_revision_id);
+                }}
+              />
+            )}
+            {!design && answer.basis.configuration_revision_ids.length > 1 && (
               <label>
                 Answer configuration
                 <Select value={configuration} onChange={(e) => setConfiguration(e.target.value)}>
@@ -245,10 +348,6 @@ export function AnswerExplorer({
                 </Select>
               </label>
             )}
-            <p>
-              One prepared input slice. Other inputs stay at this configuration’s values. Sampling
-              and rebuilding are not available here yet.
-            </p>
             {loaded && (
               <label>
                 Prepared response
@@ -257,7 +356,7 @@ export function AnswerExplorer({
                   disabled={!loaded.fits.length}
                   onChange={(e) => {
                     setFitIndex(Number(e.target.value));
-                    setValue(undefined);
+                    setActiveAxis(loaded.fits[Number(e.target.value)].request.axis);
                   }}
                 >
                   {loaded.fits.map((f, i) => (
@@ -301,6 +400,33 @@ export function AnswerExplorer({
           </ActionDialog>
         }
       />
+      {design?.request.category_dimensions.map((d, i) => (
+        <label key={d.name}>
+          {d.name}
+          <Select value={categories[i] ?? ''} onChange={(e) => changeCategory(i, e.target.value)}>
+            {d.values.map((v) => (
+              <option
+                key={v}
+                value={v}
+                disabled={
+                  !supportedCombination(
+                    design.request.combinations,
+                    categories.map((old, n) => (n === i ? v : old)),
+                  )
+                }
+              >
+                {v}
+                {!supportedCombination(
+                  design.request.combinations,
+                  categories.map((old, n) => (n === i ? v : old)),
+                )
+                  ? ' — unsupported combination'
+                  : ''}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ))}
       {error && <p role="alert">{error}</p>}
       {!configuration ? (
         <p>No configuration is linked directly to this answer.</p>
@@ -328,19 +454,25 @@ export function AnswerExplorer({
                 if (input)
                   return input.binding.kind === 'connected' ? (
                     <p>Connected · {unitLabel(input.units)}</p>
-                  ) : axis && ref === key(axis.target) ? (
+                  ) : (
                     <QuantitySlider
                       label={input.name}
                       units={savedInputQuantity(input)!.units}
-                      values={values}
-                      value={current}
-                      onChange={setValue}
+                      values={!design && fit && key(fit.request.axis) === ref ? values : undefined}
+                      lower={dimensions.find((d) => key(d.target) === ref)?.lower}
+                      upper={dimensions.find((d) => key(d.target) === ref)?.upper}
+                      step={dimensions.find((d) => key(d.target) === ref)?.step}
+                      value={selected.find((p) => key(p.target) === ref)?.value ?? null}
+                      onFocus={() => {
+                        if (!activeAxis || key(activeAxis) !== ref) generation.current++;
+                        setActiveAxis(target);
+                      }}
+                      onChange={(value) => {
+                        generation.current++;
+                        setActiveAxis(target);
+                        setSelected((old) => selectInput(old, dimensions, target, value));
+                      }}
                     />
-                  ) : (
-                    <p className="hf-mono">
-                      {formatNumber(input.binding.assignment.value)}{' '}
-                      {unitLabel(savedInputQuantity(input)!.units)} · Fixed
-                    </p>
                   );
                 const output = loaded.basis.outputs.find((p) => key(p.target) === ref);
                 if (!output) return null;
@@ -399,16 +531,20 @@ export function AnswerExplorer({
                       state={calculated ? 'calculated' : 'estimated'}
                       reason={calculated ? exact?.reason : estimated?.reason}
                     />
-                    {fit && axis && current !== null && (
+                    {axis && current !== null && (
                       <ResponseCurve
                         label={output.name}
                         units={output.units}
                         axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
                         selected={current}
-                        points={fit.request.query_values.map((x, i) => ({
-                          x,
-                          y: estimated?.values[i] ?? null,
-                        }))}
+                        points={
+                          fit
+                            ? fit.request.query_values.map((x, i) => ({
+                                x,
+                                y: estimated?.values[i] ?? null,
+                              }))
+                            : []
+                        }
                         calculated={calculatedPoints}
                       />
                     )}

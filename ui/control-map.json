@@ -3,7 +3,11 @@
   "controls": {
     "exploration-01": {
       "spec": "exploration.spec.ts",
-      "test": "canonical graph keeps calculations in settings and predictions on selection"
+      "test": "all free inputs use declared controls and the complete vector fences every curve"
+    },
+    "exploration-02": {
+      "spec": "exploration.spec.ts",
+      "test": "independent categories preserve common values and fence late loads"
     },
     "approach-01": {
       "spec": "approach.spec.ts",

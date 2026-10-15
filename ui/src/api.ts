@@ -393,6 +393,38 @@ export class HyprnMvpApi {
     new URLSearchParams({ answer_version_id: answer, configuration_revision_id: configuration }),
     signal,
   );
+  explorationDesigns = (sid: string, answer: string, signal?: AbortSignal) =>
+    this.list<import('./contract').ExplorationDesign1>(
+      `/studies/${sid}/exploration-designs?` +
+      new URLSearchParams({answer_version_id: answer}), signal);
+  saveExplorationDesign = async (
+    sid: string, body: import('./contract').ExplorationDesignRequest1,
+  ) => (await this.mutate<import('./contract').ExplorationDesign1>(
+    `/studies/${sid}/exploration-designs`, body, 'exploration_design', sid)).data;
+  explorationSamples = (sid: string, answer: string, signal?: AbortSignal) =>
+    this.list<import('./contract').ExplorationSampleOperation1 |
+      import('./contract').ExplorationSampleOperation2>(
+      `/studies/${sid}/exploration-samples?` +
+      new URLSearchParams({answer_version_id: answer}), signal);
+  previewExplorationSamples = async (
+    sid: string, body: import('./contract').ExplorationSampleRequest2, signal?: AbortSignal,
+  ) => (await this.request<import('./contract').ExplorationSamplePreview1>(
+    `/studies/${sid}/exploration-samples/preview`, body, 'POST', signal)).data;
+  submitExplorationSamples = async (
+    sid: string, body: import('./contract').ExplorationSampleRequest2,
+  ) => (await this.mutate<import('./contract').ExplorationSampleOperation2>(
+    `/studies/${sid}/exploration-samples`, body, 'exploration_sample', sid)).data;
+  readExplorationSamples = async (sid: string, id: string, signal?: AbortSignal) =>
+    (await this.request<import('./contract').ExplorationSampleOperation1 |
+      import('./contract').ExplorationSampleOperation2>(
+      `/studies/${sid}/exploration-samples/${id}`, undefined, 'GET', signal)).data;
+  controlExplorationSamples = async (
+    sid: string, id: string, action: 'cancel' | 'reconcile' | 'resume',
+  ) => (await this.mutate<import('./contract').ExplorationSampleOperation1 |
+    import('./contract').ExplorationSampleOperation2>(
+    `/studies/${sid}/exploration-samples/${id}/controls`,
+    {command_id:crypto.randomUUID(), action} as import('./contract').ExplorationSampleControl1,
+    'exploration_sample_control', sid)).data;
   configuration = async (sid: string, rid: string, signal?: AbortSignal) => (await this.request<FrozenConfigurationRead7>(`/studies/${sid}/configurations/${rid}`, undefined, 'GET', signal)).data;
   createModelCommand = async (sid: string, command: PublicNewModel) => (await this.mutate<ModelDraftRead4>(`/studies/${sid}/models`, command, 'model', sid)).data;
   createModel = async (study: Study, name: string, template: 'empty' | 'two_component_example') => this.createModelCommand(study.study_id, { command_id: crypto.randomUUID(), expected_revision: study.revision, name, template });

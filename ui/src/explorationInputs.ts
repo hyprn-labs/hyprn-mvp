@@ -1,4 +1,87 @@
 import type { ExplorationInput1, PortRef } from './contract';
+import type { ExplorationDesignRequest1 } from './contract';
+
+export type Dimension = ExplorationDesignRequest1['combinations'][number]['dimensions'][number];
+export type SelectedInput = { target: PortRef; value: number | null; units: string };
+
+export function selectInput(
+  vector: SelectedInput[],
+  dimensions: Dimension[],
+  target: PortRef,
+  value: number | null,
+) {
+  const control = dimensions.find((d) => key(d.target) === key(target));
+  return vector.map((p) => {
+    const d = dimensions.find((item) => key(item.target) === key(p.target));
+    return key(p.target) === key(target) ||
+      (control?.covary_group && d?.covary_group === control.covary_group)
+      ? { ...p, value }
+      : p;
+  });
+}
+
+export function carryCommon(
+  vector: SelectedInput[],
+  before: Dimension[],
+  baseline: SelectedInput[],
+  after: Dimension[],
+) {
+  let next = baseline;
+  for (const d of after) {
+    if (!d.common_key) continue;
+    const old = before.find(
+      (p) => p.common_key === d.common_key && p.units === d.units && p.step === d.step,
+    );
+    const value = old && vector.find((p) => key(p.target) === key(old.target))?.value;
+    if (
+      value !== undefined &&
+      value !== null &&
+      d.lower !== null &&
+      d.upper !== null &&
+      value >= d.lower &&
+      value <= d.upper &&
+      validStep(value, d)
+    )
+      next = selectInput(next, after, d.target, value);
+  }
+  return next;
+}
+
+export function validStep(value: number, d: Dimension) {
+  if (d.step === null) return true;
+  if (d.lower === null) return false;
+  const n = (value - d.lower) / d.step;
+  return Math.abs(n - Math.round(n)) <= Number.EPSILON * Math.max(1, Math.abs(n)) * 8;
+}
+
+export function completeVector(vector: SelectedInput[], dimensions: Dimension[]) {
+  if (
+    vector.some(
+      (p) =>
+        p.value === null ||
+        !Number.isFinite(p.value) ||
+        Math.abs(p.value) > Number.MAX_SAFE_INTEGER,
+    )
+  )
+    return undefined;
+  if (
+    dimensions.some((d) => {
+      const p = vector.find((i) => key(i.target) === key(d.target));
+      return !p || p.value === null || !validStep(p.value, d);
+    })
+  )
+    return undefined;
+  return vector as QuantityInput[];
+}
+
+export function supportedCombination(
+  combinations: ExplorationDesignRequest1['combinations'],
+  values: string[],
+) {
+  return combinations.find(
+    (c) => c.categories.length === values.length && c.categories.every((v, i) => v === values[i]),
+  );
+}
 
 type QuantityInput = { target: PortRef; value: number; units: string };
 const key = (ref: PortRef) => ref.instance_id + '/' + ref.port_id;

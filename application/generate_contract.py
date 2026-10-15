@@ -10,6 +10,7 @@ from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.answers import DEFINITIONS as ANSWER_DEFINITIONS
 from hyprn_mvp_app.exploration import DEFINITIONS as EXPLORATION_DEFINITIONS
 from hyprn_mvp_app.sampling import DEFINITIONS as SAMPLE_DEFINITIONS
+from hyprn_mvp_app.exploration_design import DEFINITIONS as DESIGN_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.store import AGENT_EFFECTS, RECOVERY_VALUES
 
@@ -26,6 +27,7 @@ schemas.update(rewrite(definitions()))
 schemas.update(rewrite(ANSWER_DEFINITIONS))
 schemas.update(rewrite(EXPLORATION_DEFINITIONS))
 schemas.update(rewrite(SAMPLE_DEFINITIONS))
+schemas.update(rewrite(DESIGN_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
     'ApproachClosureRead3': 'ApproachClosureRead4',
@@ -319,13 +321,27 @@ for path,methods in spec["paths"].items():
             op['description']=(
                 'Explicit answer heads for this exact saved approach version. Empty means '
                 'unassessed. Historical answer versions remain readable by their exact IDs.')
+        elif '/exploration-designs' in path:
+            schema=ref('ExplorationDesign1')
+            if method == 'get' and path.endswith('/exploration-designs'):
+                schema={'type':'array', 'maxItems':20, 'items':schema}
+            if method == 'post':
+                status='201'
+                op['requestBody']['content']['application/json']['schema']=ref('ExplorationDesignRequest1')
         elif '/exploration-samples' in path:
             schema=ref('ExplorationSamplePreview1' if path.endswith('/preview')
                        else 'ExplorationSampleOperation1')
+            if not path.endswith('/preview'):
+                schema={'anyOf':[ref('ExplorationSampleOperation1'),ref('ExplorationSampleOperation2')]}
+            if method == 'get' and path.endswith('/exploration-samples'):
+                schema={'type':'array', 'maxItems':20, 'items':schema}
             if method == 'post':
                 op['requestBody']['content']['application/json']['schema']=ref(
                     'ExplorationSampleControl1' if path.endswith('/controls')
                     else 'ExplorationSampleRequest1')
+                if not path.endswith('/controls'):
+                    op['requestBody']['content']['application/json']['schema']={
+                        'anyOf':[ref('ExplorationSampleRequest1'),ref('ExplorationSampleRequest2')]}
                 if path.endswith('/exploration-samples'):
                     status='202'
             op['description']=(
@@ -484,7 +500,8 @@ for path,methods in spec["paths"].items():
         elif "/runs/" in path:schema=ref("PublicRunDetail")
         else:raise ValueError(path)
         response=envelope(schema) if schema else None
-        if response and method == 'get' and path.endswith('/exploration-requests'):
+        if response and method == 'get' and path.endswith(
+            ('/exploration-requests','/exploration-designs','/exploration-samples')):
             response['properties']['next_cursor'] = nullable(uuid)
             response['required'].append('next_cursor')
         if path.endswith(("/edits","/preview")) and "/models/" in path:response=ref("ModelDraftEditResponse4")

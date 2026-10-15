@@ -9,26 +9,44 @@ export function QuantitySlider({
   label,
   units,
   values,
+  lower,
+  upper,
+  step,
+  onFocus,
   value,
   onChange,
 }: {
   label: string;
   units: string;
-  values: number[];
+  values?: number[];
+  lower?: number | null;
+  upper?: number | null;
+  step?: number | null;
+  onFocus?: () => void;
   value: number | null;
   onChange: (value: number | null) => void;
 }) {
   const id = useId(),
-    index = value === null ? -1 : values.indexOf(value);
+    index = value === null ? -1 : (values?.indexOf(value) ?? -1);
+  const declared = lower != null && upper != null;
+  const outside = declared && value !== null && (value < lower || value > upper);
+  const coordinate = declared && value !== null && step ? (value - lower) / step : 0;
+  const offStep =
+    Math.abs(coordinate - Math.round(coordinate)) >
+    Number.EPSILON * Math.max(1, Math.abs(coordinate)) * 8;
   return (
-    <div className="hf-quantity-slider">
+    <div
+      className="hf-quantity-slider"
+      onFocus={onFocus}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       <label htmlFor={id}>
         {label} · {unitLabel(units)}
       </label>
       <TextInput
         id={id}
         type="number"
-        step="any"
+        step={step ?? 'any'}
         value={value ?? ''}
         onChange={(event) => {
           const next = event.currentTarget.valueAsNumber;
@@ -39,20 +57,35 @@ export function QuantitySlider({
       />
       <input
         type="range"
-        aria-label={label + ' prepared points'}
-        min={0}
-        max={Math.max(0, values.length - 1)}
-        step={1}
-        value={Math.max(0, index)}
-        disabled={!values.length}
+        aria-label={label + (values ? ' prepared points' : ' range')}
+        min={values ? 0 : (lower ?? 0)}
+        max={values ? Math.max(0, values.length - 1) : (upper ?? 0)}
+        step={values ? 1 : (step ?? 'any')}
+        value={values ? Math.max(0, index) : (value ?? lower ?? 0)}
+        disabled={values ? !values.length : !declared || outside || value === null}
         aria-valuetext={
           value === null ? 'unassigned' : formatNumber(value) + ' ' + unitLabel(units)
         }
-        onChange={(event) => onChange(values[Number(event.currentTarget.value)])}
+        onChange={(event) =>
+          onChange(
+            values ? values[Number(event.currentTarget.value)] : event.currentTarget.valueAsNumber,
+          )
+        }
       />
-      {index < 0 && (
+      {(values ? index < 0 : !declared || outside || value === null) && (
         <span role="status">
-          {value === null ? 'Unassigned' : 'No prepared estimate at this value.'}
+          {value === null
+            ? 'Unassigned'
+            : values
+              ? 'No prepared estimate at this value.'
+              : !declared
+                ? 'Declare a range in Sample settings.'
+                : 'Outside the declared range.'}
+        </span>
+      )}
+      {offStep && (
+        <span role="status">
+          Use the declared step of {step} from {lower}.
         </span>
       )}
     </div>
@@ -116,7 +149,7 @@ export function ResponseCurve({
   const available = [...points, ...calculated].filter(
     (p): p is { x: number; y: number } => p.y !== null,
   );
-  if (!available.length) return <p>No computed response.</p>;
+  if (!available.length) return <p>{axis} · Not computed</p>;
   const xs = [...points, ...calculated].map((p) => p.x),
     ys = available.map((p) => p.y);
   const lo = Math.min(...xs),

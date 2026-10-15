@@ -6,6 +6,7 @@ launch authority. Reads never dispatch or hydrate native records.
 
 from copy import deepcopy
 import json
+import math
 import time
 from uuid import UUID, uuid5
 
@@ -25,6 +26,17 @@ from .exploration import (
 )
 from .history import History
 from .readiness import OBSERVATION_LIFETIME
+from .exploration_design import (
+    DEFINITIONS as DESIGN_DEFINITIONS,
+    DIMENSION,
+    Designs,
+    independent_dimensions,
+    grid_size,
+    mapped_values,
+    receipt_page,
+    on_step,
+    invalid,
+)
 
 
 def array(item, maximum=128, minimum=0):
@@ -179,10 +191,31 @@ DEFINITIONS = {
     ),
 }
 
+# Existing records remain unchanged; explicit steps and co-variation use a new shape.
+DEFINITIONS['ExplorationSampleRequest2'] = deepcopy(DEFINITIONS['ExplorationSampleRequest1'])
+_request2 = DEFINITIONS['ExplorationSampleRequest2']['properties']
+_request2['schema_version'] = dict(const='2')
+_combo2 = _request2['combinations']['items']
+_combo2['properties'].update(
+    model_id=_ID,
+    model_revision_id=_ID,
+    initial_axis=_ref('PortRef'),
+    dimensions=array(DIMENSION, 32, 1),
+)
+_combo2['required'] = list(_combo2['properties'])
+DEFINITIONS['ExplorationSampleOperation2'] = deepcopy(DEFINITIONS['ExplorationSampleOperation1'])
+DEFINITIONS['ExplorationSampleOperation2']['properties'].update(
+    schema_version=dict(const='2'),
+    request=_ref('ExplorationSampleRequest2'),
+)
+
 
 def validate(name, value):
     validator = Draft202012Validator(
-        {'$defs': definitions() | EXPLORATION | DEFINITIONS, **DEFINITIONS[name]},
+        {
+            '$defs': definitions() | EXPLORATION | DESIGN_DEFINITIONS | DEFINITIONS,
+            **DEFINITIONS[name],
+        },
         format_checker=FormatChecker(),
     )
     if not validator.is_valid(value):
@@ -211,11 +244,72 @@ class Samples:
 
     def status(self, actor, sid, operation):
         result = self.store.receipt(actor, sid, 'exploration_sample', operation)['result']
-        validate('ExplorationSampleOperation1', result)
+        validate('ExplorationSampleOperation' + result['schema_version'], result)
         return result
 
+    def page(self, actor, sid, answer, cursor=None):
+        return receipt_page(self.store, actor, sid, 'exploration_sample', answer, cursor)
+
     def resolve(self, actor, sid, request):
-        validate('ExplorationSampleRequest1', request)
+        validate(
+            'ExplorationSampleRequest2'
+            if request.get('schema_version') == '2'
+            else 'ExplorationSampleRequest1',
+            request,
+        )
+        if request['schema_version'] == '2':
+            answers = {c['answer_version_id'] for c in request['combinations']}
+            if len(answers) != 1:
+                raise DomainError('invalid_request', 400)
+            Designs(self.store, self.configurations).resolve(
+                actor,
+                sid,
+                dict(
+                    schema_version='1',
+                    command_id=request['command_id'],
+                    answer_version_id=next(iter(answers)),
+                    category_dimensions=request['category_dimensions'],
+                    rationale=request['rationale'],
+                    combinations=[
+                        {
+                            k: c[k]
+                            for k in (
+                                'categories',
+                                'configuration_revision_id',
+                                'model_id',
+                                'model_revision_id',
+                                'initial_axis',
+                                'dimensions',
+                            )
+                        }
+                        for c in request['combinations']
+                    ],
+                ),
+            )
+            for combo in request['combinations']:
+                if any(d['lower'] is None for d in combo['dimensions']):
+                    raise DomainError(
+                        'invalid_request',
+                        400,
+                        fields=[
+                            dict(
+                                path='/combinations',
+                                code='missing_range',
+                                message='Declare every input range before sampling.',
+                                element_ref=None,
+                            )
+                        ],
+                    )
+                axes = independent_dimensions(combo['dimensions'])
+                if all(d['step'] is not None for d in axes):
+                    size = math.prod(grid_size(d) for d in axes)
+                    if size < combo['training_count'] + combo['check_count']:
+                        invalid(
+                            '/combinations/dimensions/step',
+                            'insufficient_distinct_points',
+                            'Widen the declared grid or reduce training and check counts; '
+                            'each needs a distinct vector.',
+                        )
         integers = [
             request['seed'],
             *request['budget'].values(),
@@ -298,6 +392,21 @@ class Samples:
                         for k, p in free.items()
                     ):
                         continue
+                    if request['schema_version'] == '2':
+                        if any(not on_step(values[_key(d['target'])]['value'], d) for d in axes):
+                            continue
+                        groups = {}
+                        compatible = True
+                        for d in axes:
+                            group = d['covary_group']
+                            if group is None:
+                                continue
+                            value = values[_key(d['target'])]['value']
+                            if group in groups and groups[group] != value:
+                                compatible = False
+                            groups[group] = value
+                        if not compatible:
+                            continue
                     if old['identity'] != point_identity(
                         basis, config, runtime, combination['categories'], old['inputs']
                     ):
@@ -365,7 +474,12 @@ class Samples:
         return self.resolve(actor, sid, request)['preview']
 
     def submit(self, actor, sid, request):
-        validate('ExplorationSampleRequest1', request)
+        validate(
+            'ExplorationSampleRequest2'
+            if request.get('schema_version') == '2'
+            else 'ExplorationSampleRequest1',
+            request,
+        )
         previous = self.store.replay(
             actor, sid, 'exploration_sample', request['command_id'], request
         )
@@ -373,7 +487,7 @@ class Samples:
             return self.status(actor, sid, request['command_id'])
         resolved = self.resolve(actor, sid, request)
         result = dict(
-            schema_version='1',
+            schema_version=request['schema_version'],
             operation_id=request['command_id'],
             request=request,
             state='pending',
@@ -489,7 +603,7 @@ class Samples:
         result['completed_count'] = sum(p['state'] == 'recorded' for p in result['points'])
         result['failed_count'] = sum(p['state'] == 'failed' for p in result['points'])
         result['elapsed_seconds'] = max(0, time.time() - result['started_at'])
-        validate('ExplorationSampleOperation1', result)
+        validate('ExplorationSampleOperation' + result['schema_version'], result)
         state = (
             'committed'
             if result['state'] in ('complete', 'cancelled', 'limited', 'failed')
@@ -562,6 +676,11 @@ class Samples:
     def _design(self, native, sid, result, resolved):
         groups = []
         for i, combination in enumerate(result['request']['combinations']):
+            axes = (
+                independent_dimensions(combination['dimensions'])
+                if result['schema_version'] == '2'
+                else combination['dimensions']
+            )
             rows = []
             for point in result['points']:
                 if point['combination'] != i:
@@ -570,12 +689,12 @@ class Samples:
                 rows.append(
                     dict(
                         partition=point['partition'],
-                        vector=[values[_key(d['target'])] for d in combination['dimensions']],
+                        vector=[values[_key(d['target'])] for d in axes],
                     )
                 )
             groups.append(
                 dict(
-                    bounds=[[d['lower'], d['upper']] for d in combination['dimensions']],
+                    bounds=[[d['lower'], d['upper']] for d in axes],
                     training_count=combination['training_count'],
                     check_count=combination['check_count'],
                     retained=rows,
@@ -614,15 +733,24 @@ class Samples:
             free = [p for p in resolved['bases'][i]['inputs'] if p['binding']['kind'] == 'free']
             for row in rows:
                 vector = row['vector']
-                if len(vector) != len(combination['dimensions']) or row['partition'] not in (
+                axes = (
+                    independent_dimensions(combination['dimensions'])
+                    if result['schema_version'] == '2'
+                    else combination['dimensions']
+                )
+                if len(vector) != len(axes) or row['partition'] not in (
                     'training',
                     'check',
                 ):
                     raise ValueError('Malformed design vector')
-                varying = {
-                    _key(d['target']): v
-                    for d, v in zip(combination['dimensions'], vector, strict=True)
-                }
+                varying = (
+                    mapped_values(combination['dimensions'], vector)
+                    if result['schema_version'] == '2'
+                    else {
+                        _key(d['target']): v
+                        for d, v in zip(combination['dimensions'], vector, strict=True)
+                    }
+                )
                 values = [
                     dict(
                         target=p['target'],
@@ -649,8 +777,7 @@ class Samples:
                     )
                 else:
                     if any(
-                        not d['lower'] <= v <= d['upper']
-                        for d, v in zip(combination['dimensions'], vector, strict=True)
+                        not d['lower'] <= v <= d['upper'] for d, v in zip(axes, vector, strict=True)
                     ):
                         raise ValueError('Generated vector outside design')
                     point = dict(
@@ -671,10 +798,21 @@ class Samples:
             or len({p['identity'] for p in points}) != len(points)
             or not set(old) <= {p['identity'] for p in points}
         ):
+            if result['schema_version'] == '2':
+                result.update(
+                    state='failed',
+                    reason=(
+                        'Stepped design repeats a vector or cannot preserve independent '
+                        'partitions. Widen ranges, reduce counts or declare another seed.'
+                    ),
+                )
+                return
             raise ValueError('Design retention or count mismatch')
         result.update(
             points=points,
-            design_digest=digest(design),
+            design_digest=digest(dict(mapping_version='1', numerical=design, points=points))
+            if result['schema_version'] == '2'
+            else digest(design),
             design_artifact={
                 k: artifact[k]
                 for k in (

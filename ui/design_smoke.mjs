@@ -71,6 +71,18 @@ check('Unavailable curve intervals are not connected',
   !explorationCurve.includes('hf-response-curve__estimate'));
 check('Calculated curve points are distinct filled markers',
   explorationCurve.includes('hf-response-curve__calculated'));
+const declaredSlider = render('QuantitySlider declared integer range', h(F.QuantitySlider, {
+  label: 'Count', units: '', value: 7, lower: 0, upper: 10, step: 1, onChange() {},
+}));
+check('Declared integer slider shares its number and native range',
+  declaredSlider.includes('type="range"') && declaredSlider.includes('step="1"')
+  && declaredSlider.includes('value="7"'));
+const missingRange = render('QuantitySlider missing declaration', h(F.QuantitySlider, {
+  label: 'Length', units: 'm', value: 7, lower: null, upper: null, step: null, onChange() {},
+}));
+check('Missing range remains an actionable declaration gap',
+  missingRange.includes('Declare a range in Sample settings.')
+  && missingRange.includes('disabled'));
 
 const expected = [
   'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',

@@ -203,3 +203,24 @@ design artifact remains explicitly uncertain and never starts scalar evaluations
 Generated designs are canonical data-only JSON artifacts with retained AiiDA creator
 links and hashes; no estimator serialization, executable upload or new store is used.
 These sample operations do not fit a surrogate or change a previously ready version.
+
+### Declared exploration controls
+
+`POST /studies/{id}/exploration-designs` saves an immutable `ExplorationDesign1`
+receipt without numerical work. Its request declares independent category dimensions,
+supported tuples, exact configuration/model version pins, one initial axis and every
+free input's saved-unit range, optional step, optional explicit covary group and
+optional compatible common-selection key. Connected ports cannot be controls.
+Both bounds may be null; this is an explicit missing range, never a physical default.
+The read endpoint keeps the exact design; answer-filtered design and sample listings
+return at most 20 records with a cursor. Every endpoint uses ordinary study access.
+
+`ExplorationSampleRequest2` / `ExplorationSampleOperation2` add complete declared
+dimensions, steps and covary bindings while keeping version 1 shapes unchanged.
+The application maps bounded numerical design coordinates to the declared grid in
+saved units and expands covary groups before scalar submission. Every transformed
+full vector and partition is retained in the sample manifest; its design digest
+binds both the numerical design and transformed points. Repeated vectors after
+mapping fail before any scalar launch. Training and independent checks never share
+a mapped vector. Insufficient finite grids and missing ranges are refused before
+design generation. No unit conversion or numerical model runs in the browser.

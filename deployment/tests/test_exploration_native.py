@@ -224,7 +224,7 @@ def advance_samples(j):
     )
 
 
-def joint_fixture(j):
+def joint_fixture(j, *, all_combinations=False):
     """Nonfuel interaction with two independently named categorical dimensions."""
     from approach_native_fixture import source
 
@@ -233,48 +233,54 @@ def joint_fixture(j):
         b"outputs['product'] = inputs['x'] * inputs['y'] * "
         b"inputs['material_factor'] * inputs['regime_factor']\n"
     )
-    _, model = j.model(
-        'Joint interaction fixture',
-        [
-            dict(
-                kind='create_definition',
-                temp_key='d',
-                definition_kind='explicit_component',
-                name='Interaction',
-                ports=[
-                    dict(
-                        temp_key=n,
-                        direction='output' if n == 'product' else 'input',
-                        name=n,
-                        code_symbol=n,
-                        value_type='real_scalar',
-                        units=dict(kind='dimensionless'),
-                    )
-                    for n in names
-                ],
-                source=source(raw),
-            ),
-            dict(kind='instantiate', temp_key='i', version_ref=dict(temp_key='d')),
-        ],
-    )
-    instance = model['instances'][0]
-    definition = next(
-        d
-        for d in model['definitions']
-        if d['definition_version_id'] == instance['definition_version_id']
-    )
-    ports = {
-        p['code_symbol']: dict(instance_id=instance['instance_id'], port_id=p['port_id'])
-        for p in definition['ports']
-    }
+    edits = [
+        dict(
+            kind='create_definition',
+            temp_key='d',
+            definition_kind='explicit_component',
+            name='Interaction',
+            ports=[
+                dict(
+                    temp_key=n,
+                    direction='output' if n == 'product' else 'input',
+                    name=n,
+                    code_symbol=n,
+                    value_type='real_scalar',
+                    units=dict(kind='dimensionless'),
+                )
+                for n in names
+            ],
+            source=source(raw),
+        ),
+        dict(kind='instantiate', temp_key='i', version_ref=dict(temp_key='d')),
+    ]
+    models, port_maps = [], []
+    for index in range(2 if all_combinations else 1):
+        _, model = j.model('Joint interaction fixture ' + str(index), deepcopy(edits))
+        instance = model['instances'][0]
+        definition = next(
+            d
+            for d in model['definitions']
+            if d['definition_version_id'] == instance['definition_version_id']
+        )
+        ports = {
+            p['code_symbol']: dict(instance_id=instance['instance_id'], port_id=p['port_id'])
+            for p in definition['ports']
+        }
+        models.append(model)
+        port_maps.append(ports)
+    model, ports = models[0], port_maps[0]
     evidence = j.evidence('Synthetic product interaction; no physical inference')
-    binding = dict(
-        binding_id=uid(), model_id=model['model_id'], model_revision_id=model['model_revision_id']
-    )
+    bindings = [
+        dict(binding_id=uid(), model_id=m['model_id'], model_revision_id=m['model_revision_id'])
+        for m in models
+    ]
     method = step('Evaluate explicit multiplication')
     method.update(
         implementation_state='linked',
-        implementation_refs=[dict(kind='model', binding_id=binding['binding_id'])],
+        implementation_refs=[
+            dict(kind='model', binding_id=binding['binding_id']) for binding in bindings
+        ],
     )
     approach = j.save_approach(
         dict(
@@ -283,7 +289,7 @@ def joint_fixture(j):
             scope='Synthetic API acceptance',
             limitations='No physics',
             open_questions='',
-            model_bindings=[binding],
+            model_bindings=bindings,
             steps=[method],
             assumptions=[],
             cases=[],
@@ -291,7 +297,10 @@ def joint_fixture(j):
         )
     )
     configurations = []
-    for material, regime in [(2, 3), (5, 7)]:
+    pairs = [(2, 3), (2, 7), (5, 3), (5, 7)] if all_combinations else [(2, 3), (5, 7)]
+    for material, regime in pairs:
+        index = 1 if all_combinations and material == 5 else 0
+        model, ports = models[index], port_maps[index]
         config = j.configuration(
             model,
             'Explicit joint category tuple',
@@ -349,7 +358,13 @@ def joint_fixture(j):
                 check_count=2,
                 tolerances=[dict(target=ports['product'], absolute=1e-8, relative=0.01)],
             )
-            for category, config in zip([['a', 'low'], ['b', 'high']], configurations, strict=True)
+            for category, config in zip(
+                [['a', 'low'], ['a', 'high'], ['b', 'low'], ['b', 'high']]
+                if all_combinations
+                else [['a', 'low'], ['b', 'high']],
+                configurations,
+                strict=True,
+            )
         ],
         budget=dict(
             additional_evaluations=10, wall_seconds=7200, point_wall_seconds=60, concurrency=1
