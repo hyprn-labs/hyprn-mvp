@@ -53,3 +53,32 @@ This is a local demo UI delivery, not full release qualification or human accept
 Other host/browser qualification and stale older reading-suite expectations remain
 with their existing owners. No push or publication. Unrelated ROADMAP changes are
 preserved. Test artifacts remain outside the repository; cleanup and delivery follow.
+
+## Committed-tree acceptance and delivery
+
+Implementation: `a10e986a9959e499295b3b6a5b480f7b1c846ddc`.
+The only uncommitted implementation-tree delta was the unrelated ROADMAP edit.
+Final commands on that commit:
+
+| Command suffix (`./hyprn-mvp dev check`) | Result | Seconds | Scope UUID |
+|---|---|---:|---|
+| `combined-static` | 9/9 stages, zero failures | 5.10 | `7b407dee-ed52-419d-9de9-65469783d754` |
+| `style-ratchet` | 33/33 tests, zero failures | 11.49 | `abaac3ba-98ed-4c97-8aa6-0a395869c9eb` |
+| `approach-ui-demo` | 5/5 tests, zero failures/skips | 49.18 | `404f9856-c6c6-4d32-9109-24571a1f948b` |
+
+The verified production UI build was copied to the existing local demo's static
+mount. Its prior static files were copied for recovery; application stores and
+services were untouched. Delivered index SHA-256:
+`33fd7d4202c3de004718da47399af7aed780c8bb41bd87e0466c567110108dd4`.
+Full asset hashes, logs, screenshots, zoom measurements and cleanup ledger are in
+the external `hyprn-consistency` evidence folder used by this session.
+
+Live browser verification: signed in to the existing coolant-loop study, opened
+Study details, confirmed four assertions, zero empty evidence wrappers, no horizontal
+overflow, compact controls at 28px minimum/12px type, and 24px section padding.
+Opened the attached energy-balance evidence and confirmed its correct title and
+content, then returned to the study dialog. Screenshot saved. No scientific writes.
+
+Nineteen identity-checked scratch scopes were released after copying their evidence;
+the live scope and previous UI recovery copy remain. This final checkpoint/state
+update changes documentation only and refers to the exact tested implementation.

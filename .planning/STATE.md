@@ -4,7 +4,12 @@
   shared neutral syntax roles and canonical unchanged logo owned by BrandLogo.
   See [Charcoal checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/charcoal-design-system.md)
   and [demo polish checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/demo-polish.md).
-  Next: local demo visual review. Older reading-suite reconciliation and
+  The consistency pass is delivered in `a10e986`: complete button recipes, shared
+  assertion/evidence spacing, form/dialog rhythm and ownership enforcement.
+  Final checks: 9 static/build stages, 33 style tests, 5 browser journeys; live
+  study details verified after refresh. See the
+  [consistency checkpoint](phases/03-agent-tools-for-coding-agents/checkpoints/design-system-consistency.md).
+  Next: human demo review. Older reading-suite reconciliation and
   external-release legal/source-offer review remain explicit obligations.
   No scientific records changed.
 
