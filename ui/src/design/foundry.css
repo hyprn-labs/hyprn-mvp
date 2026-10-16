@@ -603,9 +603,18 @@ dd{margin:var(--space-1) 0}
 .hf-table td, .hf-table tbody th { vertical-align: top; overflow-wrap: anywhere; }
 .hf-table caption { text-align: left; padding: var(--space-2) var(--space-3); }
 /* Canonical graph port content: shared answer exploration recipes. */
-.hf-node__exploration-port { height: calc(var(--space-12) * 5); overflow: auto; padding: var(--space-2); }
-.hf-graph-exploration { max-height: calc(var(--space-12) * 12); }
+.hf-exploration-header { display: grid; gap: var(--space-3); margin-bottom: var(--space-3); }
+.hf-exploration-categories { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.hf-exploration-categories label { flex: 1; min-width: 0; }
+.hf-exploration-footer { display: flex; justify-content: flex-end; padding-top: var(--space-3); }
+.hf-node__exploration-port { padding: var(--space-2); border-bottom: 1px solid var(--line); }
+.hf-node__exploration-port[data-active] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.hf-node__port-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hf-node__port-column { min-width: 0; height: calc(var(--space-12) * 7); overflow: auto; overscroll-behavior: contain; }
+.hf-node__port-column + .hf-node__port-column { border-left: 1px solid var(--line); }
+.hf-graph-exploration { max-height: calc(var(--space-12) * 10); }
 .hf-quantity-slider { display: grid; gap: var(--space-1); }
+.hf-quantity-slider label, .hf-quantity-slider input { margin: 0; min-width: 0; }
 .hf-quantity-slider input[type="range"] { margin: 0; width: 100%; min-height: var(--control-floor); accent-color: var(--accent); }
 .hf-quantity-result { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
 .hf-response-curve { margin: var(--space-1) 0; }

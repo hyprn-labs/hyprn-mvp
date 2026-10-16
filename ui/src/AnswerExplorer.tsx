@@ -15,12 +15,12 @@ import type {
 import { GraphView, project, type Snapshot } from './GraphView';
 import {
   ActionDialog,
+  Disclosure,
   Button,
-  Panel,
+  AnswerExplorationPanel,
   QuantityResult,
   QuantitySlider,
   ResponseCurve,
-  SectionHeader,
   Select,
   formatNumber,
 } from './design';
@@ -396,96 +396,92 @@ export function AnswerExplorer({
     setConfiguration(mapped.configuration_revision_id);
   }
   return (
-    <Panel label="Explore the answer">
-      <SectionHeader
-        level={3}
-        title="Explore the answer"
-        actions={
-          <ActionDialog title="Sample settings" label="Sample settings">
-            {loaded && (
-              <ExplorationSettings
-                api={api}
-                studyId={studyId}
-                answer={answer}
-                basis={loaded.basis}
-                design={design}
-                categories={categories}
-                onPrepared={() => setRefresh((v) => v + 1)}
-                onSaved={(d) => {
-                  const selectedCombo =
-                    supportedCombination(d.request.combinations, categories) ??
-                    d.request.combinations[0];
-                  setDesign(d);
-                  setCategories(selectedCombo.categories);
-                  setConfiguration(selectedCombo.configuration_revision_id);
+    <AnswerExplorationPanel
+      settings={
+        <ActionDialog title="Sample settings" label="Sample settings">
+          {loaded && (
+            <ExplorationSettings
+              api={api}
+              studyId={studyId}
+              answer={answer}
+              basis={loaded.basis}
+              design={design}
+              categories={categories}
+              onPrepared={() => setRefresh((v) => v + 1)}
+              onSaved={(d) => {
+                const selectedCombo =
+                  supportedCombination(d.request.combinations, categories) ??
+                  d.request.combinations[0];
+                setDesign(d);
+                setCategories(selectedCombo.categories);
+                setConfiguration(selectedCombo.configuration_revision_id);
+              }}
+            />
+          )}
+          {!design && answer.basis.configuration_revision_ids.length > 1 && (
+            <label>
+              Answer configuration
+              <Select value={configuration} onChange={(e) => setConfiguration(e.target.value)}>
+                {answer.basis.configuration_revision_ids.map((id, i) => (
+                  <option key={id} value={id}>
+                    Configuration {i + 1}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+          {loaded && (
+            <label>
+              Prepared response
+              <Select
+                value={fitIndex}
+                disabled={!loaded.fits.length}
+                onChange={(e) => {
+                  setFitIndex(Number(e.target.value));
+                  setActiveAxis(loaded.fits[Number(e.target.value)].request.axis);
                 }}
-              />
-            )}
-            {!design && answer.basis.configuration_revision_ids.length > 1 && (
-              <label>
-                Answer configuration
-                <Select value={configuration} onChange={(e) => setConfiguration(e.target.value)}>
-                  {answer.basis.configuration_revision_ids.map((id, i) => (
-                    <option key={id} value={id}>
-                      Configuration {i + 1}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            {loaded && (
-              <label>
-                Prepared response
-                <Select
-                  value={fitIndex}
-                  disabled={!loaded.fits.length}
-                  onChange={(e) => {
-                    setFitIndex(Number(e.target.value));
-                    setActiveAxis(loaded.fits[Number(e.target.value)].request.axis);
-                  }}
-                >
-                  {loaded.fits.map((f, i) => (
-                    <option key={f.identity} value={i}>
-                      {f.request.method === 'kriging' ? 'Kriging' : 'Response surface'} ·{' '}
-                      {f.request.lower}–{f.request.upper}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            {fit && (
-              <>
-                <p>
-                  {preparationCounts} {fit.request.rationale}
-                </p>
-                <p>Observed agreement with the model is not physical validation.</p>
-              </>
-            )}
-            <Button disabled={busy} onClick={() => setRefresh((n) => n + 1)}>
-              Refresh preparations
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!loaded || !vector || busy || !!api.pending}
-              onClick={() => void calculate()}
-            >
-              Calculate selected point
-            </Button>
-            {busy && <p role="status">Submitting selected point…</p>}
-            {runId && (
-              <>
-                <p role="status">Calculation submitted.</p>
-                <Button onClick={() => void readCalculation()}>Read selected calculation</Button>
-                <Button onClick={() => onOpen({ study: studyId, view: 'runs', run: runId })}>
-                  Open selected run
-                </Button>
-              </>
-            )}
-            {error && <p role="alert">{error}</p>}
-          </ActionDialog>
-        }
-      />
-      {design?.request.category_dimensions.map((d, i) => (
+              >
+                {loaded.fits.map((f, i) => (
+                  <option key={f.identity} value={i}>
+                    {f.request.method === 'kriging' ? 'Kriging' : 'Response surface'} ·{' '}
+                    {f.request.lower}–{f.request.upper}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+          {fit && (
+            <>
+              <p>
+                {preparationCounts} {fit.request.rationale}
+              </p>
+              <p>Observed agreement with the model is not physical validation.</p>
+            </>
+          )}
+          <Button disabled={busy} onClick={() => setRefresh((n) => n + 1)}>
+            Refresh preparations
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!loaded || !vector || busy || !!api.pending}
+            onClick={() => void calculate()}
+          >
+            Calculate selected point
+          </Button>
+          {busy && <p role="status">Submitting selected point…</p>}
+          {runId && (
+            <>
+              <p role="status">Calculation submitted.</p>
+              <Button onClick={() => void readCalculation()}>Read selected calculation</Button>
+              <Button onClick={() => onOpen({ study: studyId, view: 'runs', run: runId })}>
+                Open selected run
+              </Button>
+            </>
+          )}
+          {error && <p role="alert">{error}</p>}
+        </ActionDialog>
+      }
+      categories={design?.request.category_dimensions.map((d, i) => (
         <label key={d.name}>
           {d.name}
           <Select value={categories[i] ?? ''} onChange={(e) => changeCategory(i, e.target.value)}>
@@ -512,6 +508,24 @@ export function AnswerExplorer({
           </Select>
         </label>
       ))}
+      footer={
+        loaded && (
+          <Button
+            onClick={() =>
+              onOpen({
+                study: studyId,
+                view: 'model',
+                model: loaded.basis.model_id,
+                revision: loaded.basis.model_revision_id,
+                approach: answer.approach_version_id,
+              })
+            }
+          >
+            Open model
+          </Button>
+        )
+      }
+    >
       {error && <p role="alert">{error}</p>}
       {!configuration ? (
         <p>No configuration is linked directly to this answer.</p>
@@ -532,6 +546,7 @@ export function AnswerExplorer({
               selection={selection}
               onSelect={setSelection}
               trace={{ nodes: new Set(), links: new Set() }}
+              highlightedPorts={new Set(activeAxis ? [key(activeAxis)] : [])}
               portContent={(instanceId, port) => {
                 const target = { instance_id: instanceId, port_id: port.port_id },
                   ref = key(target);
@@ -630,40 +645,56 @@ export function AnswerExplorer({
                       }
                     />
                     {axis && current !== null && (
-                      <ResponseCurve
-                        label={output.name}
-                        units={output.units}
-                        axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
-                        selected={current}
-                        points={
-                          joint && prediction
-                            ? prediction.vectors.slice(1).map((v, i) => ({
-                                x: v.find((p) => key(p.target) === key(axis.target))!.value,
-                                y: joint.values[i + 1]?.value ?? null,
-                              }))
-                            : fit
-                              ? fit.request.query_values.map((x, i) => ({
-                                  x,
-                                  y: estimated?.values[i] ?? null,
+                      <Disclosure
+                        open={
+                          loaded.basis.outputs.find((p) => p.target.instance_id === instanceId)
+                            ?.target.port_id === port.port_id
+                        }
+                      >
+                        <summary>{output.name} response</summary>
+                        <ResponseCurve
+                          label={output.name}
+                          units={output.units}
+                          axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
+                          selected={current}
+                          selectedResult={{
+                            value: result,
+                            state:
+                              jointValue?.kind === 'calculated' || calculated
+                                ? 'calculated'
+                                : 'estimated',
+                          }}
+                          points={
+                            joint && prediction
+                              ? prediction.vectors.slice(1).map((v, i) => ({
+                                  x: v.find((p) => key(p.target) === key(axis.target))!.value,
+                                  y: joint.values[i + 1]?.value ?? null,
                                 }))
-                              : []
-                        }
-                        calculated={
-                          joint && prediction
-                            ? prediction.vectors.slice(1).flatMap((v, i) => {
-                                const value = joint.values[i + 1];
-                                return value?.kind === 'calculated' && value.value !== null
-                                  ? [
-                                      {
-                                        x: v.find((p) => key(p.target) === key(axis.target))!.value,
-                                        y: value.value,
-                                      },
-                                    ]
-                                  : [];
-                              })
-                            : calculatedPoints
-                        }
-                      />
+                              : fit
+                                ? fit.request.query_values.map((x, i) => ({
+                                    x,
+                                    y: estimated?.values[i] ?? null,
+                                  }))
+                                : []
+                          }
+                          calculated={
+                            joint && prediction
+                              ? prediction.vectors.slice(1).flatMap((v, i) => {
+                                  const value = joint.values[i + 1];
+                                  return value?.kind === 'calculated' && value.value !== null
+                                    ? [
+                                        {
+                                          x: v.find((p) => key(p.target) === key(axis.target))!
+                                            .value,
+                                          y: value.value,
+                                        },
+                                      ]
+                                    : [];
+                                })
+                              : calculatedPoints
+                          }
+                        />
+                      </Disclosure>
                     )}
                     <ActionDialog
                       title={output.name + ' result basis'}
@@ -733,20 +764,8 @@ export function AnswerExplorer({
           ) : (
             <p>This older model requires its model view.</p>
           )}
-          <Button
-            onClick={() =>
-              onOpen({
-                study: studyId,
-                view: 'model',
-                model: loaded.basis.model_id,
-                revision: loaded.basis.model_revision_id,
-              })
-            }
-          >
-            Open model
-          </Button>
         </>
       )}
-    </Panel>
+    </AnswerExplorationPanel>
   );
 }

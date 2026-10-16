@@ -180,7 +180,8 @@ GROUPS = {
     'approach-ui-reading': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'approach-ui-method': ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'),
     'exploration-answer-ui': (
-        'deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'
+        'deployment/tests/approach_ui_fixture.py',
+        'ui/tests/approach.spec.ts',
     ),
     'approach-ui-demo': (
         'deployment/tests/approach_ui_fixture.py',
@@ -1277,7 +1278,14 @@ BROWSER_GROUPS = (
     | set(AE_BROWSER_GROUPS)
     | set(APPROACH_BROWSER_GROUPS)
     | set(UNITS_BROWSER_GROUPS)
-    | {'combined-static', 'findings-native', 'findings-native-read', 'exploration-ui'}
+    | {
+        'combined-static',
+        'findings-native',
+        'findings-native-read',
+        'exploration-ui',
+        'exploration-surrogates-native',
+        'exploration-fuel-surrogate',
+    }
     | {g for g, route in DOCUMENTS_ROUTES.items() if route['mode'] == 'browser'}
 )
 BROWSER_GROUPS = BROWSER_GROUPS | AGENT_BROWSER_GROUPS
@@ -1287,6 +1295,8 @@ FIXTURE_GROUPS = frozenset(
 )
 # Browser specs a group's fixture runs without listing them as targets.
 FIXTURE_BROWSER_SPECS = {
+    'exploration-surrogates-native': ('ui/tests/exploration-surrogates.spec.ts',),
+    'exploration-fuel-surrogate': ('ui/tests/exploration-many-inputs.spec.ts',),
     'units-native': ('ui/tests/unit-native-journey.spec.ts',),
     'exploration-ui': ('ui/tests/exploration.spec.ts',),
 }
@@ -1446,7 +1456,7 @@ def served_child_environment(scope, url, password):
     return {**fixture.clean_environment(scope), UI_BASE_URL: url, UI_PASSWORD_FILE: password}
 
 
-def run_served(group, targets):
+def run_served(group, targets, *, served_grep=None):
     """Run a served group's specs against the named installation; evidence stays in the scope."""
     require_environment(group)
     url, password = served_installation()
@@ -1462,6 +1472,7 @@ def run_served(group, targets):
         '--forbid-only',
         '--retries=0',
         '--reporter=json',
+        *(['--grep', served_grep] if served_grep is not None else []),
         *(spec.removeprefix('ui/') for spec in specs),
     ]
     started = time.monotonic()
@@ -1486,6 +1497,8 @@ def run_served(group, targets):
     )
     record = dict(
         group=group,
+        selection=served_grep,
+        full_group=served_grep is None,
         passed=passed,
         tests=stats.get('expected', 0) + stats.get('unexpected', 0),
         failures=stats.get('unexpected', 0),
@@ -1895,8 +1908,15 @@ def prepare_image_builder(scope):
 
 
 def run_group(
-    group, *, units_mixed_repair=False, jobs=QUALIFICATION_JOBS, exploration_ui_resume=None
+    group,
+    *,
+    units_mixed_repair=False,
+    jobs=QUALIFICATION_JOBS,
+    exploration_ui_resume=None,
+    served_grep=None,
 ):
+    if served_grep is not None and (group != 'ui-served' or not served_grep.strip()):
+        raise ValueError('--served-grep requires ui-served and a nonempty test title expression')
     validate_units_mixed_repair(group, units_mixed_repair)
     if group == 'qualification':
         return run_qualification(jobs)
@@ -1906,7 +1926,7 @@ def run_group(
         group, units_mixed_repair=units_mixed_repair
     )  # No allocation/import if missing/unknown.
     if group in SERVED_INSTALLATION_GROUPS:
-        return run_served(group, targets)
+        return run_served(group, targets, served_grep=served_grep)
     if group == 'ui-fidelity' and not (REPO / 'design-system/reference').is_dir():
         raise ValueError('reference absent: design-system/reference')
     if group == 'findings-native-guards':
@@ -2176,6 +2196,7 @@ def main():
         '--class', dest='group_class', choices=CLASSES, help='with --list: only this class'
     )
     parser.add_argument('--units-mixed-repair', action='store_true')
+    parser.add_argument('--served-grep')
     parser.add_argument(
         '--exploration-ui-resume', '--exploration-resume', dest='exploration_ui_resume'
     )
@@ -2241,6 +2262,7 @@ def main():
             units_mixed_repair=args.units_mixed_repair,
             jobs=QUALIFICATION_JOBS if args.jobs is None else args.jobs,
             exploration_ui_resume=args.exploration_ui_resume,
+            served_grep=args.served_grep,
         )
     except (ValueError, OSError, TypeError) as error:
         print('Check refused: ' + str(error), file=sys.stderr)

@@ -10,16 +10,28 @@ export function GraphCanvas({
 }: ViewProps) {
   const marker = useId().replaceAll(':', ''); const viewport = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1); const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [availableWidth, setAvailableWidth] = useState(720);
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setAvailableWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [projection.nodes.length]);
   const gesture = useRef<{ x: number; y: number; origin: typeof pan } | null>(null);
   const maxPorts = Math.max(1, ...projection.nodes.map(n => n.ports.length));
-  const columns = projection.nodes.length > 4 ? 3 : 2;
+  const columns = portContent ? 1 : projection.nodes.length > 4 ? 3 : 2;
   const token = (name: string) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
   const pitch = token('--space-12');
   const portHeight = portContent ? pitch * 5 : token('--control-floor');
-  const nodeWidth = pitch * (portContent ? 7 : 4) + token('--space-6');
+  const nodeWidth = portContent
+    ? Math.max(pitch * 8, availableWidth - pitch * 3)
+    : pitch * 4 + token('--space-6');
   const portCenter = token('--control-floor') * 1.5 + (portContent ? token('--space-2') : 0);
   const columnWidth = nodeWidth + pitch * 1.5, top = pitch, left = token('--space-6');
-  const row = portHeight * (maxPorts + 1) + pitch * 2, width = columns * columnWidth + left * 2, height = Math.max(pitch * 7, Math.ceil(projection.nodes.length / columns) * row + top);
+  const row = portContent ? pitch * 9 : portHeight * (maxPorts + 1) + pitch * 2;
+  const width = portContent ? nodeWidth + left * 2 + pitch * 2 : columns * columnWidth + left * 2;
+  const height = Math.max(pitch * 7, Math.ceil(projection.nodes.length / columns) * row + top);
   const positions = new Map(projection.nodes.map((n, i) => [n.instance.instance_id, { x: left + (i % columns) * columnWidth, y: top + Math.floor(i / columns) * row }]));
   function fit() { setZoom(1); setPan({ x: 0, y: 0 }); viewport.current?.scrollTo(0, 0); }
   function focus() {
@@ -44,9 +56,14 @@ export function GraphCanvas({
       <Button size="sm" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z - .25))}>Zoom out</Button>
       <span className="hf-mono" aria-label="Graph zoom" aria-live="polite">{Math.round(zoom * 100)}%</span>
       <Button size="sm" disabled={zoom >= 2.5} onClick={() => setZoom(z => Math.min(2.5, z + .25))}>Zoom in</Button>
-      <Button size="sm" onClick={fit}>Reset view</Button>
+      {!portContent && <><Button size="sm" onClick={fit}>Reset view</Button>
       <Button size="sm" disabled={selection.kind === 'none'} onClick={focus}>Focus selection</Button>
-      <ActionDialog title="How to read the graph" label="Help?" size="sm"><p>Arrows connect component outputs to inputs. Inputs without incoming connections need values in a configuration.</p><p>Drag the background to pan. With the diagram focused, use the arrow keys to pan. Reset view returns to 100%. Layout does not set numerical order.</p></ActionDialog>
+      <ActionDialog title="How to read the graph" label="Help?" size="sm">
+        <p>Arrows connect component outputs to inputs. Inputs without incoming connections
+          need values in a configuration.</p>
+        <p>Drag the background to pan. With the diagram focused, use the arrow keys to pan.
+          Reset view returns to 100%. Layout does not set numerical order.</p>
+      </ActionDialog></>}
     </div>
     {!projection.nodes.length ? <p>No components in this model.</p> : <div
       className={'graph-viewport' + (portContent ? ' hf-graph-exploration' : '')}
@@ -66,11 +83,22 @@ export function GraphCanvas({
               p => p.port_id === g.links[0].source_ref.port_id);
             const targetIndex = target.ports.findIndex(
               p => p.port_id === g.links[0].target_ref.port_id);
-            const y = from.y + portCenter + Math.max(0, sourceIndex) * portHeight;
-            const endY = to.y + portCenter + Math.max(0, targetIndex) * portHeight;
+            const y = from.y + portCenter +
+              (portContent ? 0 : Math.max(0, sourceIndex) * portHeight);
+            const endY = to.y + portCenter +
+              (portContent ? 0 : Math.max(0, targetIndex) * portHeight);
             const feedback = to.y < from.y || (to.y === from.y && to.x <= from.x); const lane = pitch / 2 + (i % 3) * pitch / 3;
             const vertical = to.y > from.y && to.x === from.x;
-            const d = vertical ? `M${x},${y} C${x + pitch * 2},${y} ${end + columnWidth},${endY} ${end + nodeWidth},${endY}` : feedback ? `M${x},${y} C${x + lane},${y - pitch * 2} ${end - lane},${endY - pitch * 2} ${end},${endY}` : `M${x},${y} C${x + pitch * 1.5},${y} ${end - pitch * 1.5},${endY} ${end},${endY}`;
+            const d = portContent
+              ? `M${x},${y} C${x + pitch * 2},${y} ${x + pitch * 2},${endY} ${x},${endY}`
+              : vertical
+                ? `M${x},${y} C${x + pitch * 2},${y} ` +
+                  `${end + columnWidth},${endY} ${end + nodeWidth},${endY}`
+                : feedback
+                  ? `M${x},${y} C${x + lane},${y - pitch * 2} ` +
+                    `${end - lane},${endY - pitch * 2} ${end},${endY}`
+                  : `M${x},${y} C${x + pitch * 1.5},${y} ` +
+                    `${end - pitch * 1.5},${endY} ${end},${endY}`;
             const symbols = g.links.map(l => projection.nodes.find(n => n.instance.instance_id === g.source)?.ports.find(p => p.port_id === l.source_ref.port_id)?.code_symbol ?? 'Missing port').join(', ');
             const active = groupSelected(g, selection), traced = g.links.some(l => trace.links.has(l.connection_id));
             return <g key={g.key} className={`graph-exchange ${active ? 'selected' : traced ? 'traced' : ''}`} role="button" tabIndex={0} aria-label={`Exchange ${g.links.length} links from ${projection.nodes.find(n => n.instance.instance_id === g.source)?.instance.name} to ${projection.nodes.find(n => n.instance.instance_id === g.target)?.instance.name}`} aria-pressed={active} data-group={g.key} onClick={() => onSelect(selectGroup(g))} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(selectGroup(g)); } }}>
@@ -79,7 +107,8 @@ export function GraphCanvas({
           })}
           {projection.nodes.map(({ instance, ports, incomplete }, index) => { const p = positions.get(instance.instance_id)!; const active = selectedInstances(selection, projection.groups).includes(instance.instance_id);
             return <g key={instance.instance_id} className={`diagram-node ${active ? 'selected' : trace.nodes.has(instance.instance_id) ? 'traced' : ''}`}>
-              <foreignObject x={p.x} y={p.y} width={nodeWidth} height={portHeight * (ports.length + 1) + pitch}>
+              <foreignObject x={p.x} y={p.y} width={nodeWidth}
+                height={portContent ? row - pitch / 2 : portHeight * (ports.length + 1) + pitch}>
                 <ModelNode name={instance.name} index={index + 1} instanceId={instance.instance_id}
                   title={instance.name + '\nInstance ' + instance.instance_id + '\nVersion ' + instance.definition_version_id}
                   selected={active} nameSelected={selection.kind === 'instance' && selection.instance_id === instance.instance_id}

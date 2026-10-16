@@ -62,6 +62,11 @@ function render(name, el) {
 const missingExploration = render('QuantityResult unavailable', h(F.QuantityResult, {
   value: null, units: 'm', state: 'unavailable',
 }));
+render('AnswerExplorationPanel', h(F.AnswerExplorationPanel, {
+  settings: h(F.Button, {}, 'Sample settings'), categories: 'Illustrative category',
+  footer: h(F.Button, {}, 'Open model'), children: 'Illustrative graph slot',
+}));
+render('InterpretationPanel', h(F.InterpretationPanel, {}, 'Illustrative saved prose'));
 check('Unavailable exploration output never becomes zero',
   missingExploration.includes('Not computed') && !missingExploration.includes('>0'));
 const explorationCurve = render('ResponseCurve gap', h(F.ResponseCurve, {
@@ -72,6 +77,19 @@ check('Unavailable curve intervals are not connected',
   !explorationCurve.includes('hf-response-curve__estimate'));
 check('Calculated curve points are distinct filled markers',
   explorationCurve.includes('hf-response-curve__calculated'));
+const selectedCurve = render('ResponseCurve selected API value', h(F.ResponseCurve, {
+  label: 'Illustrative response', axis: 'x (m)', units: 'm', selected: 0.3,
+  selectedResult: {value: 0.7, state: 'estimated'},
+  points: [{x:0,y:-1},{x:1,y:1}],
+}));
+check('Selected API output is marked between curve samples and zero is explicit',
+  selectedCurve.includes('hf-response-curve__cursor')
+  && selectedCurve.includes('aria-label="Zero"'));
+const countedProgress = render('Progress explicit sample count', h(F.Progress, {
+  label: 'Completed sample points', count: {completed: 3, total: 8},
+}));
+check('Only explicit work counts create determinate progress',
+  countedProgress.includes('value="3"') && countedProgress.includes('max="8"'));
 const declaredSlider = render('QuantitySlider declared integer range', h(F.QuantitySlider, {
   label: 'Count', units: '', value: 7, lower: 0, upper: 10, step: 1, onChange() {},
 }));

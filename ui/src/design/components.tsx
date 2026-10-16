@@ -21,7 +21,14 @@ import { formatNumber } from './numbers';
  *
  * This layer imports no CSS: main.tsx imports tokens.css and then foundry.css once.
  */
-import type { ButtonHTMLAttributes, Ref, ChangeEvent, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  Ref,
+  ChangeEvent,
+  KeyboardEvent,
+  ReactElement,
+  ReactNode,
+} from 'react';
 
 export type Tone = 'alarm' | 'warning' | 'advisory' | 'ok' | 'inert' | 'running';
 
@@ -35,7 +42,8 @@ function isBlank(value: unknown): boolean {
 
 /* ---- Independently authored glyphs (24-unit viewBox, currentColor) ---- */
 
-type GlyphName = 'lock' | 'back' | 'document' | 'iris' | 'computed' | 'measured' | 'sourced' | 'inferred';
+type GlyphName =
+  'lock' | 'back' | 'document' | 'iris' | 'computed' | 'measured' | 'sourced' | 'inferred';
 
 function Glyph({ name }: { name: GlyphName }): ReactElement {
   let body: ReactElement;
@@ -55,7 +63,13 @@ function Glyph({ name }: { name: GlyphName }): ReactElement {
     case 'sourced':
       body = (
         <>
-          <path d="M6 3h8l4 4v14H6z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" />
+          <path
+            d="M6 3h8l4 4v14H6z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="miter"
+          />
           <path d="M9 12h6M9 16h6" fill="none" stroke="currentColor" strokeWidth="2" />
         </>
       );
@@ -80,7 +94,17 @@ function Glyph({ name }: { name: GlyphName }): ReactElement {
       );
       break;
     case 'inferred':
-      body = <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2.5" />;
+      body = (
+        <circle
+          cx="12"
+          cy="12"
+          r="7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeDasharray="3 2.5"
+        />
+      );
       break;
   }
   return (
@@ -305,11 +329,16 @@ export function Tabs(p: TabsProps): ReactElement {
     if (next < 0) return;
     e.preventDefault();
     p.onChange?.(items[next].id);
-    const siblings = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    const siblings =
+      e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     siblings?.[next]?.focus();
   };
   return (
-    <div role={p.navigation ? "navigation" : "tablist"} aria-label={p.label} className={cx('hf-tabs', p.variant === 'segmented' && 'hf-tabs--segmented', p.className)}>
+    <div
+      role={p.navigation ? 'navigation' : 'tablist'}
+      aria-label={p.label}
+      className={cx('hf-tabs', p.variant === 'segmented' && 'hf-tabs--segmented', p.className)}
+    >
       {items.map((it, index) => {
         const sel = it.id === p.value;
         return (
@@ -317,9 +346,9 @@ export function Tabs(p: TabsProps): ReactElement {
             key={it.id}
             type="button"
             id={it.tabId}
-            role={p.navigation ? undefined : "tab"}
+            role={p.navigation ? undefined : 'tab'}
             aria-controls={p.navigation ? undefined : it.panelId}
-            aria-current={p.navigation && sel ? "page" : undefined}
+            aria-current={p.navigation && sel ? 'page' : undefined}
             className="hf-tab"
             aria-selected={p.navigation ? undefined : sel ? 'true' : 'false'}
             tabIndex={p.navigation || sel ? 0 : -1}
@@ -355,14 +384,20 @@ export interface PanelProps {
 export function Panel(p: PanelProps): ReactElement {
   const Heading = ('h' + (p.headingLevel ?? 2)) as 'h2' | 'h3' | 'h4';
   return (
-    <section ref={p.ref} id={p.id} hidden={p.hidden} className={cx('hf-panel', p.tone === 'sunken' && 'hf-panel--sunken', p.className)} aria-label={p.label}>
+    <section
+      ref={p.ref}
+      id={p.id}
+      hidden={p.hidden}
+      className={cx('hf-panel', p.tone === 'sunken' && 'hf-panel--sunken', p.className)}
+      aria-label={p.label}
+    >
       {p.title ? (
         <header className="hf-panel__head">
           <Heading className="hf-panel__title">{p.title}</Heading>
           {p.actions ? <div className="hf-panel__actions">{p.actions}</div> : null}
         </header>
       ) : null}
-      <div className={cx("hf-panel__body", p.bodyClassName)}>{p.children}</div>
+      <div className={cx('hf-panel__body', p.bodyClassName)}>{p.children}</div>
     </section>
   );
 }
@@ -532,13 +567,23 @@ export function SourceChip(p: SourceChipProps): ReactElement {
   );
   if (p.href) {
     return (
-      <a className={cx('hf-chip', p.className)} href={p.href} onClick={p.onClick} title={auth + ' source'}>
+      <a
+        className={cx('hf-chip', p.className)}
+        href={p.href}
+        onClick={p.onClick}
+        title={auth + ' source'}
+      >
         {content}
       </a>
     );
   }
   return (
-    <button type="button" className={cx('hf-chip', p.className)} onClick={p.onClick} title={auth + ' source'}>
+    <button
+      type="button"
+      className={cx('hf-chip', p.className)}
+      onClick={p.onClick}
+      title={auth + ' source'}
+    >
       {content}
     </button>
   );
@@ -570,9 +615,13 @@ export interface InferenceBlockProps {
 export function InferenceBlock(p: InferenceBlockProps): ReactElement {
   const kind = p.kind ?? 'Proposal';
   const st = PSTATE[p.status ?? 'proposed'];
-  const titleText = typeof p.title === 'string' || typeof p.title === 'number' ? String(p.title) : '';
+  const titleText =
+    typeof p.title === 'string' || typeof p.title === 'number' ? String(p.title) : '';
   return (
-    <section className={cx('hf-infer', p.className)} aria-label={titleText ? kind + ': ' + titleText : kind}>
+    <section
+      className={cx('hf-infer', p.className)}
+      aria-label={titleText ? kind + ': ' + titleText : kind}
+    >
       <header className="hf-infer__head">
         <span className="hf-infer__mark" aria-hidden="true">
           <Icon>
@@ -668,6 +717,37 @@ export interface ModelNodeProps {
 
 /** A component in the graph view: name, ports and definition version. */
 export function ModelNode(p: ModelNodeProps): ReactElement {
+  const exploring = p.ports?.some((port) => port.content);
+  const renderPort = (pt: ModelNodePort) => {
+    const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
+    const control = (
+      <Button
+        size="sm"
+        align="start"
+        className="hf-node__port"
+        data-port={pt.id}
+        title={pt.title}
+        aria-pressed={pt.selected ?? false}
+        onClick={pt.onSelect}
+      >
+        <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+        <span className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}>
+          {st === 'unassigned' ? <Mark tone="advisory" /> : null}
+          {PORT[st]}
+        </span>
+      </Button>
+    );
+    return (
+      <div
+        key={pt.id ?? pt.dir + pt.name}
+        className={pt.content ? 'hf-node__exploration-port' : undefined}
+        data-active={pt.selected || undefined}
+      >
+        {control}
+        {pt.content}
+      </div>
+    );
+  };
   return (
     <div
       className={cx('hf-node', p.status && 'hf-node--' + p.status, p.className)}
@@ -685,34 +765,56 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
         {p.index != null ? <span className="hf-node__idx">{p.index}</span> : null}
         <span className="hf-node__name">{p.name}</span>
       </Button>
-      {(p.ports ?? []).map((pt) => {
-        const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
-        const control = (
-          <Button
-            size="floor"
-            align="start"
-            key={pt.id ?? pt.dir + pt.name}
-            className="hf-node__port"
-            data-port={pt.id}
-            title={pt.title}
-            aria-pressed={pt.selected ?? false}
-            onClick={pt.onSelect}
-          >
-            <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
-            <span
-              className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}
+      {exploring ? (
+        <div className="hf-node__port-columns">
+          {(['in', 'out'] as const).map((dir) => (
+            <div
+              key={dir}
+              className="hf-node__port-column"
+              role="region"
+              aria-label={p.name + (dir === 'in' ? ' inputs' : ' outputs')}
+              tabIndex={0}
             >
-              {st === 'unassigned' ? <Mark tone="advisory" /> : null}
-              {PORT[st]}
-            </span>
-          </Button>
-        );
-        return pt.content ? (
-          <div key={pt.id ?? pt.dir + pt.name} className="hf-node__exploration-port">
-            {control}{pt.content}
-          </div>
-        ) : control;
-      })}
+              {(p.ports ?? []).filter((pt) => pt.dir === dir).map(renderPort)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        (p.ports ?? []).map((pt) => {
+          const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
+          const control = (
+            <Button
+              size="floor"
+              align="start"
+              key={pt.id ?? pt.dir + pt.name}
+              className="hf-node__port"
+              data-port={pt.id}
+              title={pt.title}
+              aria-pressed={pt.selected ?? false}
+              onClick={pt.onSelect}
+            >
+              <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+              <span
+                className={cx(
+                  'hf-node__state',
+                  st === 'unassigned' && 'hf-node__state--unassigned',
+                )}
+              >
+                {st === 'unassigned' ? <Mark tone="advisory" /> : null}
+                {PORT[st]}
+              </span>
+            </Button>
+          );
+          return pt.content ? (
+            <div key={pt.id ?? pt.dir + pt.name} className="hf-node__exploration-port">
+              {control}
+              {pt.content}
+            </div>
+          ) : (
+            control
+          );
+        })
+      )}
       {(p.definition || p.status) && (
         <div className="hf-node__foot">
           {p.definition}
@@ -752,48 +854,61 @@ export interface DataTableProps {
 export function DataTable(p: DataTableProps): ReactElement {
   const cols = p.columns ?? [];
   return (
-    <div className="hf-table-wrap" role={p.regionLabel ? "region" : undefined} aria-label={p.regionLabel} tabIndex={p.regionLabel ? 0 : undefined}>
-      <table aria-label={p.label} className={cx('hf-table', p.dense && 'hf-table--dense', p.className)}>
+    <div
+      className="hf-table-wrap"
+      role={p.regionLabel ? 'region' : undefined}
+      aria-label={p.regionLabel}
+      tabIndex={p.regionLabel ? 0 : undefined}
+    >
+      <table
+        aria-label={p.label}
+        className={cx('hf-table', p.dense && 'hf-table--dense', p.className)}
+      >
         {p.caption ? <caption className="hf-visually-hidden">{p.caption}</caption> : null}
-        {p.children ?? <><thead>
-          <tr>
-            {cols.map((c) => (
-              <th key={c.key} scope="col" className={c.numeric ? 'hf-th--num' : undefined}>
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {(p.rows ?? []).map((r, i) => (
-            <tr key={i} aria-selected={p.selected === i ? 'true' : undefined}>
-              {cols.map((c) => {
-                const v = r[c.key];
-                if (c.numeric && isBlank(v)) {
-                  return (
-                    <td key={c.key} className="missing">
-                      {c.missingText || 'not computed'}
-                    </td>
-                  );
-                }
-                return (
-                  <td key={c.key} className={c.numeric ? 'num' : c.unit ? 'unit' : undefined}>
-                    {v}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody></>}
+        {p.children ?? (
+          <>
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th key={c.key} scope="col" className={c.numeric ? 'hf-th--num' : undefined}>
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(p.rows ?? []).map((r, i) => (
+                <tr key={i} aria-selected={p.selected === i ? 'true' : undefined}>
+                  {cols.map((c) => {
+                    const v = r[c.key];
+                    if (c.numeric && isBlank(v)) {
+                      return (
+                        <td key={c.key} className="missing">
+                          {c.missingText || 'not computed'}
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={c.key} className={c.numeric ? 'num' : c.unit ? 'unit' : undefined}>
+                        {v}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </>
+        )}
       </table>
     </div>
   );
 }
 
-
 /** Storage and editability are separate from scientific outcome. */
-export function RecordState({ state }: {
-  state: 'draft' | 'changed' | 'saved' | 'new'
+export function RecordState({
+  state,
+}: {
+  state: 'draft' | 'changed' | 'saved' | 'new';
 }): ReactElement {
   const label = {
     draft: 'Saved draft',
@@ -801,7 +916,9 @@ export function RecordState({ state }: {
     saved: 'Saved version · read-only',
     new: 'New draft',
   }[state];
-  return <StatusTag className="hf-record-state" tone={state === 'changed' ? 'warning' : 'inert'}>
-    {label}
-  </StatusTag>;
+  return (
+    <StatusTag className="hf-record-state" tone={state === 'changed' ? 'warning' : 'inert'}>
+      {label}
+    </StatusTag>
+  );
 }

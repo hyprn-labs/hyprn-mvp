@@ -1,7 +1,8 @@
 import { quantityDefinitions } from './quantityDefinitions';
 import { unitLabel } from './unitLabels';
-import { DataTable, Panel, formatNumber } from './design';
-import { Button, TextInput, Select } from './design';
+import { DataTable, Panel, Button } from './design/components';
+import { TextInput, Select } from './design/primitives';
+import { formatNumber } from './design/numbers';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConfigurationRevision, PortRef, RunHistoryRead6, DefinitionChange } from './contract';
 import type { Projection, Snapshot } from './GraphView';

@@ -47,14 +47,32 @@ export { ActionIcon } from './primitives';
 export type { ActionIconName } from './primitives';
 export { CriterionRecord } from './primitives';
 export type { CriterionRecordProps } from './primitives';
-export { TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress } from './primitives';
+export {
+  TextInput,
+  TextArea,
+  Select,
+  Checkbox,
+  Disclosure,
+  DialogFrame,
+  SectionHeader,
+  ActionDialog,
+  DetailTabs,
+  FilePicker,
+  Progress,
+} from './primitives';
 
 export { GraphCanvas } from './graph';
 export { SourceSurface } from './source';
 export { formatNumber } from './numbers';
 
 export { BrandLogo } from './BrandLogo';
-export { QuantitySlider, QuantityResult, ResponseCurve } from './exploration';
+export {
+  AnswerExplorationPanel,
+  InterpretationPanel,
+  QuantitySlider,
+  QuantityResult,
+  ResponseCurve,
+} from './exploration';
 export {
   Assertion,
   AssertionList,

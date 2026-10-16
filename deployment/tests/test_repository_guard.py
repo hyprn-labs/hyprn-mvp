@@ -66,6 +66,10 @@ class GuardTests(unittest.TestCase):
                 'exploration-api',
                 'exploration-native',
                 'exploration-ui',
+                'exploration-answer-ui',
+                'exploration-numerics',
+                'exploration-surrogates-native',
+                'exploration-fuel-surrogate',
             },
         )
         for group in groups:
@@ -94,7 +98,10 @@ class GuardTests(unittest.TestCase):
         for group in runner.APPROACH_NATIVE_GROUPS:
             self.assertEqual(runner.GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON), fixture.APPROVED_PYTHON)
         for group, selector in runner.APPROACH_BROWSER_GROUPS.items():
-            self.assertTrue(selector.startswith('@approach-'))
+            if group == 'exploration-answer-ui':
+                self.assertEqual(selector, '@exploration-answer-basis')
+            else:
+                self.assertTrue(selector.startswith('@approach-'))
             self.assertEqual(
                 runner.GROUPS[group],
                 (
@@ -1308,6 +1315,18 @@ class BrowserSpecRegistryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     runner.run_group('ui-served')
                 allocate.assert_not_called(); spawned.assert_not_called()
+
+    def test_served_selection_cannot_narrow_qualification_or_other_groups(self):
+        for group, selection in [('qualification', 'one'), ('guard', 'one'), ('ui-served', '')]:
+            with self.subTest(group=group), patch.object(fixture, 'allocate_scope') as allocate:
+                with self.assertRaisesRegex(ValueError, 'served-grep'):
+                    runner.run_group(group, served_grep=selection)
+                allocate.assert_not_called()
+        with patch.object(runner, 'targets_for', return_value=['example.spec.ts']), \
+                patch.object(runner, 'run_served', return_value=0) as served:
+            self.assertEqual(runner.run_group('ui-served', served_grep='exact title'), 0)
+            served.assert_called_once_with(
+                'ui-served', ['example.spec.ts'], served_grep='exact title')
 
     def test_served_environment_adds_only_the_installation_variables(self):
         clean = fixture.clean_environment(self.scope)

@@ -1,8 +1,39 @@
-import { useId } from 'react';
-import { StatusTag } from './components';
-import { TextInput } from './primitives';
+import { useId, type ReactNode } from 'react';
+import { Panel, StatusTag } from './components';
+import { SectionHeader, TextInput } from './primitives';
 import { formatNumber } from './numbers';
 import { unitLabel } from '../unitLabels';
+
+export function AnswerExplorationPanel({
+  settings,
+  categories,
+  children,
+  footer,
+}: {
+  settings: ReactNode;
+  categories: ReactNode;
+  children: ReactNode;
+  footer: ReactNode;
+}) {
+  return (
+    <Panel label="Explore the answer">
+      <header className="hf-exploration-header">
+        <SectionHeader level={3} title="Explore the answer" actions={settings} />
+        <div className="hf-exploration-categories">{categories}</div>
+      </header>
+      {children}
+      <footer className="hf-exploration-footer">{footer}</footer>
+    </Panel>
+  );
+}
+
+export function InterpretationPanel({ children }: { children: ReactNode }) {
+  return (
+    <Panel label="Interpretation" title="Interpretation" headingLevel={3}>
+      {children}
+    </Panel>
+  );
+}
 
 /** Select returned query vectors only: drawing a line never evaluates a model. */
 export function QuantitySlider({
@@ -138,6 +169,7 @@ export function ResponseCurve({
   points,
   calculated = [],
   selected,
+  selectedResult,
 }: {
   label: string;
   axis: string;
@@ -145,32 +177,49 @@ export function ResponseCurve({
   points: { x: number; y: number | null }[];
   calculated?: { x: number; y: number }[];
   selected: number;
+  selectedResult?: { value: number | null; state: 'estimated' | 'calculated' };
 }) {
-  const available = [...points, ...calculated].filter(
+  const selectedPoint = selectedResult
+    ? selectedResult.value === null
+      ? undefined
+      : { x: selected, y: selectedResult.value }
+    : points.find((p) => p.x === selected && p.y !== null);
+  const selectedCalculated =
+    selectedResult?.state === 'calculated' || calculated.some((p) => p.x === selected);
+  const available = [...points, ...calculated, ...(selectedPoint ? [selectedPoint] : [])].filter(
     (p): p is { x: number; y: number } => p.y !== null,
   );
   if (!available.length) return <p>{axis} · Not computed</p>;
-  const xs = [...points, ...calculated].map((p) => p.x),
+  const xs = [...points, ...calculated, ...(selectedPoint ? [selectedPoint] : [])].map((p) => p.x),
     ys = available.map((p) => p.y);
   const lo = Math.min(...xs),
     hi = Math.max(...xs),
     bottom = Math.min(...ys),
     top = Math.max(...ys);
-  const x = (v: number) => 12 + ((v - lo) / (hi - lo || 1)) * 176;
-  const y = (v: number) => (top === bottom ? 38 : 66 - ((v - bottom) / (top - bottom)) * 56);
-  const selectedPoint = calculated.some((p) => p.x === selected)
-    ? undefined
-    : points.find((p) => p.x === selected && p.y !== null);
+  const x = (v: number) => 48 + ((v - lo) / (hi - lo || 1)) * 180;
+  const y = (v: number) => (top === bottom ? 44 : 76 - ((v - bottom) / (top - bottom)) * 64);
+  const tick = (v: number) => formatNumber(Number(v.toPrecision(3)));
   return (
     <figure className="hf-response-curve">
-      <svg viewBox="0 0 200 80" role="img" aria-label={label + ' response to ' + axis}>
+      <svg viewBox="0 0 240 100" role="img" aria-label={label + ' response to ' + axis}>
         <title>
           {label}:{' '}
           {available
             .map((p) => `${formatNumber(p.x)}: ${formatNumber(p.y)} ${unitLabel(units)}`)
             .join('; ')}
         </title>
-        <path className="hf-response-curve__axis" d="M12 10V66H188" />
+        <path className="hf-response-curve__axis" d="M48 12V76H228" />
+        {bottom < 0 && top > 0 && (
+          <path className="hf-response-curve__axis" d={`M48 ${y(0)}H228`} aria-label="Zero" />
+        )}
+        <text x="44" y={top === bottom ? '48' : '16'} textAnchor="end">
+          {tick(top)}
+        </text>
+        {top !== bottom && (
+          <text x="44" y="76" textAnchor="end">
+            {tick(bottom)}
+          </text>
+        )}
         {points
           .slice(1)
           .map(
@@ -195,16 +244,18 @@ export function ResponseCurve({
         ))}
         {selectedPoint?.y != null && (
           <circle
-            className="hf-response-curve__cursor"
+            className={
+              selectedCalculated ? 'hf-response-curve__calculated' : 'hf-response-curve__cursor'
+            }
             cx={x(selectedPoint.x)}
             cy={y(selectedPoint.y)}
             r="4"
           />
         )}
-        <text x="12" y="78">
+        <text x="48" y="94">
           {formatNumber(lo)}
         </text>
-        <text x="188" y="78" textAnchor="end">
+        <text x="228" y="94" textAnchor="end">
           {formatNumber(hi)}
         </text>
       </svg>

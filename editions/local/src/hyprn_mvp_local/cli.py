@@ -32,6 +32,8 @@ def parser():
     check.add_argument('--jobs', type=int, metavar='N',
                        help='with qualification: groups run at once (default 3; 1 runs them one after the other)')
     check.add_argument('--units-mixed-repair', action='store_true', help=argparse.SUPPRESS)
+    check.add_argument('--served-grep',
+                       help='with ui-served: matching test titles only; not full group acceptance')
     check.add_argument('--exploration-ui-resume', '--exploration-resume',
                        dest='exploration_ui_resume', help=argparse.SUPPRESS)
     return root
@@ -67,11 +69,15 @@ def dev_check(args):
         raise toolchain.ToolchainError('--class is valid only with --list', 2)
     if args.jobs is not None and args.group != 'qualification':
         raise toolchain.ToolchainError('--jobs is valid only with qualification', 2)
+    if args.served_grep is not None and args.group != 'ui-served':
+        raise toolchain.ToolchainError('--served-grep is valid only with ui-served', 2)
     runner = (['--list', *(['--class', args.group_class] if args.group_class else [])] if args.list
               else ['--group', args.group, *(['--units-mixed-repair'] if args.units_mixed_repair else []),
                     *(['--exploration-ui-resume', args.exploration_ui_resume]
                       if args.exploration_ui_resume else []),
                     *(['--jobs', str(args.jobs)] if args.jobs is not None else [])])
+    if args.served_grep is not None:
+        runner.extend(['--served-grep', args.served_grep])
     toolchain.provision('contract')
     interpreter = str(toolchain.provision('native'))
     paths = toolchain.local_paths()

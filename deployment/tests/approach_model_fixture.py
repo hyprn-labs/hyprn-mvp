@@ -76,6 +76,8 @@ def retain_failure(store,actor,sid,run_id,case,*,complete=False,uncertain=False)
     class RetainedFailure:
         def require_attestation(self):return True # Explicit test double, no runtime certification.
         def bundle_runtime(self):return runtime_fixture()
+        def launch_budgeted(self, bundle, request, wall_seconds):
+            return self.launch(bundle, request)
         def launch(self,bundle,request):
             if uncertain:raise OSError('Declared lost launch response; execution state unknown')
             self.record=dict(store_uuid=uid(),process_uuid=uid(),process_state='finished',exit_status=1,request=deepcopy(request),bundle=deepcopy(bundle),results=None,assessment=None,artifacts={},errors=[dict(code='missing_results',partial=True)])

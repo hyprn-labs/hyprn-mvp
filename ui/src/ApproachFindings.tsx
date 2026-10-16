@@ -25,6 +25,7 @@ import type {
 import { EvidenceRecordBody } from './EvidenceView';
 import {
   ResourceCard,
+  InterpretationPanel,
   ActionDialog,
   Button,
   DataTable,
@@ -70,167 +71,151 @@ function ScientificAnswer({
 }) {
   return (
     <div className="approach-answer-record">
-      <StatementActions
-        compact
-        actionLabel="Inspect answer basis"
-        group={{
-          owner: answer.answer_version_id,
-          version: answer.answer_version_id,
-          label: answer.case_id ? 'Case answer' : 'Study answer',
-          statements: [
-            { id: 'observations', kind: 'Observation', statement: answer.observations },
-            { id: 'interpretation', kind: 'Interpretation', statement: answer.interpretation },
-          ]
-            .filter((item) => item.statement.trim())
-            .map((item) => ({
-              ...item,
-              scope:
-                (answer.case_id ? 'Case answer' : 'Study answer') +
-                ' · Version ' +
-                answer.version_number,
-
-              limits: answer.qualifications.length ? (
-                <ul>
-                  {answer.qualifications.map((text, index) => (
-                    <li key={index}>{text}</li>
-                  ))}
-                </ul>
-              ) : undefined,
-              basisLabel: 'Basis for the whole answer',
-              sources: answer.basis.evidence_version_ids.map((id) => ({ id })),
-              actions: (
-                <>
-                  {answer.basis.run_ids.map((id) => (
-                    <Button
-                      key={id}
-                      size="sm"
-                      onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}
-                    >
-                      View basis run {id.slice(0, 8)}
-                    </Button>
-                  ))}
-                  {answer.basis.configuration_revision_ids.map((id) => (
-                    <Button
-                      key={id}
-                      size="sm"
-                      onClick={() =>
-                        onOpen({ study: studyId, view: 'configurations', configuration: id })
-                      }
-                    >
-                      View basis configuration {id.slice(0, 8)}
-                    </Button>
-                  ))}
-                  {answer.basis.case_answer_version_ids.map((id) => (
-                    <AnswerBasis
-                      key={id}
-                      kind="answer"
-                      id={id}
-                      api={api}
-                      studyId={studyId}
-                      onOpen={onOpen}
-                    />
-                  ))}
-                </>
-              ),
-            })),
-        }}
-      />
-
-      {!recordOnly && (
+      {!recordOnly && !answer.case_id && (
         <AnswerExplorer api={api} studyId={studyId} answer={answer} onOpen={onOpen} />
       )}
-      <h4>Observations</h4>
-      <p className="context-copy">{answer.observations}</p>
-      <h4>Interpretation</h4>
-      <p className="context-copy">{answer.interpretation}</p>
-      {!!answer.qualifications.length && (
-        <>
-          <h4>Qualifications</h4>
-          <ul>
-            {answer.qualifications.map((value, index) => (
-              <li key={index}>{value}</li>
-            ))}
-          </ul>
-        </>
-      )}
-      {!!answer.open_deliverables.length && (
-        <>
-          <h4>Still to answer</h4>
-          <ul>
-            {answer.open_deliverables.map((value, index) => (
-              <li key={index}>{value}</li>
-            ))}
-          </ul>
-        </>
-      )}
-      {!recordOnly && (
-        <>
-          {support}
-          {!!answer.basis.evidence_version_ids.length && (
-            <div className="answer-support">
-              <h4>Answer-wide sources</h4>
-              <div className="answer-source-actions">
-                {answer.basis.evidence_version_ids.map((id) => (
-                  <AnswerBasis
-                    key={id}
-                    kind="evidence"
-                    id={id}
-                    api={api}
-                    studyId={studyId}
-                    onOpen={onOpen}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-      <ActionDialog
-        title={answer.case_id ? 'Case answer record details' : 'Study answer record details'}
-        size="sm"
-        variant="quiet"
-      >
-        <dl className="answer-record-details">
-          <dt>Answer version</dt>
-          <dd>
-            {answer.version_number} · <code>{answer.answer_version_id}</code>
-          </dd>
-          <dt>Approach version</dt>
-          <dd>
-            <code>{answer.approach_version_id}</code>
-          </dd>
-          {answer.case_id && (
-            <>
-              <dt>Case</dt>
-              <dd>
-                <code>{answer.case_id}</code>
-              </dd>
-            </>
-          )}
-          <dt>Recorded by</dt>
-          <dd>{answer.created_by}</dd>
-          <dt>Recorded at</dt>
-          <dd>{answer.created_at}</dd>
-          <dt>Digest</dt>
-          <dd>
-            <code>{answer.digest}</code>
-          </dd>
-          {Object.entries(answer.basis).map(([kind, ids]) =>
-            ids.length ? (
-              <div key={kind}>
-                <dt>{kind.replaceAll('_', ' ')}</dt>
+      <InterpretationPanel>
+        <StatementActions
+          compact
+          actionLabel="Inspect answer basis"
+          group={{
+            owner: answer.answer_version_id,
+            version: answer.answer_version_id,
+            label: answer.case_id ? 'Case answer' : 'Study answer',
+            statements: [
+              {
+                id: answer.answer_version_id,
+                kind: 'Answer',
+                statement: [answer.observations, answer.interpretation]
+                  .filter((text) => text.trim())
+                  .join('\n\n'),
+              },
+            ]
+              .filter((item) => item.statement.trim())
+              .map((item) => ({
+                ...item,
+                scope:
+                  (answer.case_id ? 'Case answer' : 'Study answer') +
+                  ' · Version ' +
+                  answer.version_number,
+
+                limits: answer.qualifications.length ? (
+                  <ul>
+                    {answer.qualifications.map((text, index) => (
+                      <li key={index}>{text}</li>
+                    ))}
+                  </ul>
+                ) : undefined,
+                basisLabel: 'Basis for the whole answer',
+                sources: answer.basis.evidence_version_ids.map((id) => ({ id })),
+                actions: (
+                  <>
+                    {answer.basis.run_ids.map((id) => (
+                      <Button
+                        key={id}
+                        size="sm"
+                        onClick={() => onOpen({ study: studyId, view: 'runs', run: id })}
+                      >
+                        View basis run {id.slice(0, 8)}
+                      </Button>
+                    ))}
+                    {answer.basis.configuration_revision_ids.map((id) => (
+                      <Button
+                        key={id}
+                        size="sm"
+                        onClick={() =>
+                          onOpen({ study: studyId, view: 'configurations', configuration: id })
+                        }
+                      >
+                        View basis configuration {id.slice(0, 8)}
+                      </Button>
+                    ))}
+                    {answer.basis.case_answer_version_ids.map((id) => (
+                      <AnswerBasis
+                        key={id}
+                        kind="answer"
+                        id={id}
+                        api={api}
+                        studyId={studyId}
+                        onOpen={onOpen}
+                      />
+                    ))}
+                  </>
+                ),
+              })),
+          }}
+        />
+
+        <p className="context-copy">{answer.observations}</p>
+        <p className="context-copy">{answer.interpretation}</p>
+        {!!answer.qualifications.length && (
+          <>
+            <h4>Qualifications</h4>
+            <ul>
+              {answer.qualifications.map((value, index) => (
+                <li key={index}>{value}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        {!!answer.open_deliverables.length && (
+          <>
+            <h4>Still to answer</h4>
+            <ul>
+              {answer.open_deliverables.map((value, index) => (
+                <li key={index}>{value}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        {!recordOnly && answer.case_id && support}
+        <ActionDialog
+          title={answer.case_id ? 'Case answer record details' : 'Study answer record details'}
+          size="sm"
+          variant="quiet"
+        >
+          <dl className="answer-record-details">
+            <dt>Answer version</dt>
+            <dd>
+              {answer.version_number} · <code>{answer.answer_version_id}</code>
+            </dd>
+            <dt>Approach version</dt>
+            <dd>
+              <code>{answer.approach_version_id}</code>
+            </dd>
+            {answer.case_id && (
+              <>
+                <dt>Case</dt>
                 <dd>
-                  {ids.map((id) => (
-                    <p key={id}>
-                      <code>{id}</code>
-                    </p>
-                  ))}
+                  <code>{answer.case_id}</code>
                 </dd>
-              </div>
-            ) : null,
-          )}
-        </dl>
-      </ActionDialog>
+              </>
+            )}
+            <dt>Recorded by</dt>
+            <dd>{answer.created_by}</dd>
+            <dt>Recorded at</dt>
+            <dd>{answer.created_at}</dd>
+            <dt>Digest</dt>
+            <dd>
+              <code>{answer.digest}</code>
+            </dd>
+            {Object.entries(answer.basis).map(([kind, ids]) =>
+              ids.length ? (
+                <div key={kind}>
+                  <dt>{kind.replaceAll('_', ' ')}</dt>
+                  <dd>
+                    {ids.map((id) => (
+                      <p key={id}>
+                        <code>{id}</code>
+                      </p>
+                    ))}
+                  </dd>
+                </div>
+              ) : null,
+            )}
+          </dl>
+        </ActionDialog>
+      </InterpretationPanel>
     </div>
   );
 }
@@ -1783,18 +1768,17 @@ export function ApproachFindings({
         </Panel>
       )}
       {section !== 'cases' && (
-        <Panel
+        <div
           id={answerId}
           className="approach-section approach-study-answer"
-          label="Answer to the study question"
-          title="Answer to the study question"
-          headingLevel={3}
+          role="region"
+          aria-label="Answer to the study question"
         >
           {answerFor(null)}
           {answerState === 'error' && (
             <Button onClick={() => setAnswerReview((value) => value + 1)}>Retry answer read</Button>
           )}
-        </Panel>
+        </div>
       )}
     </section>
   );

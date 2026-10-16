@@ -12,7 +12,7 @@ import type {
   ExplorationSurrogate1,
   ExplorationWarmOperation1,
 } from './contract';
-import { Button, Disclosure, TextInput } from './design';
+import { Button, Disclosure, TextInput, Progress } from './design';
 import { unitLabel } from './unitLabels';
 
 type Operation = ExplorationSampleOperation1 | ExplorationSampleOperation2;
@@ -412,8 +412,20 @@ export function ExplorationSettings({
           <p role="status">
             Samples: {operation.state} · {operation.completed_count} completed ·{' '}
             {operation.failed_count} failed · {operation.attempted_count} attempted of{' '}
-            {operation.allocation.total_count}. {operation.reason}
+            {operation.allocation.total_count} · {operation.elapsed_seconds.toFixed(1)}
+            {' s elapsed. '}
+            {operation.reason}
           </p>
+          {['pending', 'designing', 'sampling'].includes(operation.state) && (
+            <Progress
+              label={'Sampling: ' + operation.state}
+              count={{
+                completed: operation.completed_count,
+                total: operation.allocation.total_count,
+              }}
+              message="Completed sample points; this is not an elapsed-time percentage."
+            />
+          )}
           <Button
             disabled={busy}
             onClick={() =>
@@ -456,6 +468,12 @@ export function ExplorationSettings({
             {' of '}
             {surrogate.total_groups} groups assessed. {surrogate.reason}
           </p>
+          {['pending', 'building'].includes(surrogate.state) && (
+            <Progress
+              label={'Estimate assessment: ' + surrogate.state}
+              count={{ completed: surrogate.completed_groups, total: surrogate.total_groups }}
+            />
+          )}
           <Button
             disabled={busy}
             onClick={() =>
@@ -511,6 +529,7 @@ export function ExplorationSettings({
           <p role="status">
             Fast predictions: {warm.state}. {warm.reason}
           </p>
+          {warm.state === 'pending' && <Progress label="Preparing fast predictions" />}
           <Button
             disabled={busy}
             onClick={() =>

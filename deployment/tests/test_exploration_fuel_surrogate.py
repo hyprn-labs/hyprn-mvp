@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import subprocess
 import time
+import shutil
 
 import live_fence
 from checks import (
@@ -125,6 +126,10 @@ def test_captured_joint_domain_with_independent_checks_and_retained_axis_support
     proof = dict(passed=False, human_acceptance=False)
     manifest_path = SCOPE.root / 'artifacts/fuel-surrogate-input.json'
     try:
+        if RESUME:
+            product = guard.scoped_path(SCOPE, 'artifacts/units-product-ui')
+            if product.exists():
+                shutil.rmtree(product)
         original_attestation = (
             (SCOPE.root / 'evidence/containment.json').read_bytes() if RESUME else None
         )
@@ -279,6 +284,27 @@ def test_captured_joint_domain_with_independent_checks_and_retained_axis_support
                     for v in output['values'][1:]
                 ), output
             queries.append(response)
+        env = guard.clean_environment(SCOPE)
+        env['HYPRN_MVP_UI_BASE_URL'] = j.url
+        env['HYPRN_MVP_UI_EVIDENCE_ROOT'] = str(SCOPE.root / 'evidence/many-inputs-browser')
+        with (SCOPE.root / 'evidence/many-inputs-browser.log').open('w') as output:
+            browser = subprocess.run(
+                [
+                    'node',
+                    str(REPO / 'ui/node_modules/playwright/cli.js'),
+                    'test',
+                    '--config',
+                    str(REPO / 'ui/playwright.config.ts'),
+                    'exploration-many-inputs.spec.ts',
+                    '--reporter=json',
+                ],
+                cwd=REPO / 'ui',
+                env=env,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+        assert browser.returncode == 0, 'Inspect many-inputs-browser.log'
         proof.update(passed=True, queries=queries, process_count=j.process_count())
         assert j.process_count() == 40
         if RESUME:

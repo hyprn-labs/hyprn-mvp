@@ -110,9 +110,15 @@ export function useLatestMethodLinks(
   api: HyprnMvpApi,
   studyId: string | undefined,
   snapshot: Snapshot | null | undefined,
+  approachVersionId?: string,
 ): MethodLinks {
   const [record, setRecord] = useState<
-    | { studyId: string; version: ApproachVersionRead2 | null; draft: ApproachContent | null }
+    | {
+        studyId: string;
+        approachVersionId?: string;
+        version: ApproachVersionRead2 | null;
+        draft: ApproachContent | null;
+      }
     | 'loading'
     | 'unavailable'
   >('loading');
@@ -123,16 +129,15 @@ export function useLatestMethodLinks(
     const read = api.fence({ studyId });
     void (async () => {
       try {
-        const state = await api.approach(studyId, read.signal);
-        const latest = state.latest_version;
-        const saved = latest
-          ? await api.approachVersion(studyId, latest.approach_version_id, read.signal)
-          : null;
+        const state = approachVersionId ? null : await api.approach(studyId, read.signal);
+        const versionId = approachVersionId ?? state?.latest_version?.approach_version_id;
+        const saved = versionId ? await api.approachVersion(studyId, versionId, read.signal) : null;
         if (read.valid())
           setRecord({
             studyId,
+            approachVersionId,
             version: saved?.version ?? null,
-            draft: state.draft?.content ?? null,
+            draft: state?.draft?.content ?? null,
           });
       } catch (error) {
         if (!read.signal.aborted) await api.readFailed(error, read);
@@ -145,10 +150,15 @@ export function useLatestMethodLinks(
       read.abort();
       read.done();
     };
-  }, [api, studyId, api.actor]);
+  }, [api, studyId, api.actor, approachVersionId]);
   if (!snapshot) return { kind: 'none' };
   if (record === 'loading') return { kind: 'loading' };
-  if (record === 'unavailable' || record.studyId !== studyId) return { kind: 'unavailable' };
+  if (
+    record === 'unavailable' ||
+    record.studyId !== studyId ||
+    record.approachVersionId !== approachVersionId
+  )
+    return { kind: 'unavailable' };
   if ('draft_revision' in snapshot && record.draft) {
     return { kind: 'loaded', links: methodLinks(record.draft, null, snapshot) };
   }

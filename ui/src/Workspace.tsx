@@ -139,7 +139,13 @@ export function Workspace() {
   const [createdStudies, setCreatedStudies] =
     useState<ReadonlyMap<string, AttributionEntry>>(emptyAttribution);
   useEffect(() => () => { generation.current++; approach.dispose(); }, [approach]);
-  useEffect(() => { if (view === 'overview' && study && returnToApproachEntry.current) { approachEntry.current?.focus(); returnToApproachEntry.current = false; } }, [view, study]);
+  useEffect(() => {
+    if (view !== 'overview' || !study || !returnToApproachEntry.current) return;
+    document.querySelector<HTMLButtonElement>(
+      '[aria-label="Workspace sections"] [aria-current="page"]',
+    )?.focus();
+    returnToApproachEntry.current = false;
+  }, [view, study]);
   const metadataDirty = !!study && (metadata.name !== study.name || metadata.description !== study.description || metadata.boundary !== study.boundary);
   // One ordered unsaved-changes list. Its order is the save and discard order; it also
   // drives the page dirty state, navigate(), the dialog and clearEditor. A view's editor
@@ -344,6 +350,7 @@ export function Workspace() {
       } else if (target.view === 'configurations' && !target.model) {
         const records = await api.configurations(sid); if (token !== generation.current) return; setConfigurations(records);
       } else {
+        if (target.view === 'model') setRequestedApproach(target.approach);
         const associations = await api.models(sid); if (token !== generation.current) return;
         setModels(associations.map(a => ({ model_id: a.model_id, name: a.model_id })));
         if (target.model) {
@@ -475,7 +482,12 @@ export function Workspace() {
   }
   // Why each component exists: the Models page reads the latest saved approach
   // version; configurations and runs read only the exact version retained with them.
-  const latestMethods = useLatestMethodLinks(api, view === 'model' ? study?.study_id : undefined, view === 'model' ? displayedSnapshot : null);
+  const latestMethods = useLatestMethodLinks(
+    api,
+    view === 'model' ? study?.study_id : undefined,
+    view === 'model' ? displayedSnapshot : null,
+    view === 'model' ? requestedApproach : undefined,
+  );
   const retainedHistory = view === 'runs' ? runInspection?.history : null;
   const methods = view === 'model' ? latestMethods : retainedMethodLinks(view === 'runs' ? retainedApproachVersion(retainedHistory?.configuration, retainedHistory && 'approach_closure' in retainedHistory ? retainedHistory.approach_closure : null)
     : view === 'configurations' && configuration ? retainedApproachVersion(configuration.configuration, 'approach_closure' in configuration ? configuration.approach_closure : null) : null, displayedSnapshot);

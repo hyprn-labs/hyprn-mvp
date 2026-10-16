@@ -1,4 +1,4 @@
-import { GraphCanvas } from './design';
+import { GraphCanvas } from './design/graph';
 import type { ReactNode } from 'react';
 import type { Connection, Instance, ModelDraftRead4, ModelRevisionRead4, PortRead3, PortRef } from './contract';
 import type { Selection } from './workspaceModel';

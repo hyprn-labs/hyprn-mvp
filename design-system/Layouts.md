@@ -16,6 +16,13 @@ Centred column of `home-max` (1080px). Heading "Studies" with the primary "New s
 
 ## Overview
 
+For a saved study answer, the current composition is exactly Study question,
+Explore the answer, then Interpretation / Still to answer. Preserve complete saved
+prose and qualifications. Methods are reached from Models and remain editable at
+their existing approach owner; an answer's Open model carries both exact model and
+approach versions. This supersedes the earlier Overview method/inventory placement
+below; retained approach and case readers keep their own full review composition.
+
 1. The full saved question leads, with Study details and its existing Edit study action.
 2. Generic answer exploration occupies the central working area; the integration owner supplies supported numerical behavior.
 3. Interpretation and still-to-answer content follow, retaining the whole answer's basis and exact related run/configuration/case-answer links. A displayed estimate is not a calculation or a finding of validity.

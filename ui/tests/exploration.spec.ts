@@ -103,6 +103,7 @@ test('all free inputs use declared controls and the complete vector fences every
   ).toHaveCount(0);
   await explorer.getByRole('button', { name: 'Sample settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Sample settings', exact: true });
+  expect(await dialog.locator('.hf-btn--primary').count()).toBeLessThanOrEqual(1);
   await expect(
     dialog.getByRole('button', { name: 'Calculate selected point', exact: true }),
   ).toBeEnabled();

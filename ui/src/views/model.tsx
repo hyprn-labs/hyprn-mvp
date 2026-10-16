@@ -104,6 +104,27 @@ function renderModel(ctx: ViewContext) {
   const unitsOf = revision ?? model;
   return (
     <>
+      <Button
+        variant="quiet"
+        disabled={busy || loading}
+        onClick={() =>
+          navigate(
+            () =>
+              void perform(async () => {
+                const version =
+                  ctx.requestedApproach ??
+                  (await api.approach(study.study_id)).latest_version?.approach_version_id;
+                await openLink({
+                  study: study.study_id,
+                  view: 'approach',
+                  approach: version,
+                });
+              }),
+          )
+        }
+      >
+        View modeling approach
+      </Button>
       {!selectedModel && !creatingModel && (
         <section className="models-page">
           <div className="page-heading">
@@ -413,7 +434,11 @@ function modelGuard({ portPasteSlot, editorSlot }: GuardContext) {
 export const modelView: ViewEntry<'model'> = {
   name: 'model',
   placement: { kind: 'tab', label: 'Models', position: 2 },
-  parseLink: resourceViewLink,
+  parseLink: (link, query) => {
+    if (link.approach && (!link.model || !link.revision))
+      throw new Error('A model method context requires a saved model version.');
+    resourceViewLink({ ...link, approach: undefined }, query);
+  },
   banner: modelBanner,
   render: renderModel,
   guard: modelGuard,

@@ -38,9 +38,21 @@ export function FilePicker({ label, ...props }: Omit<ComponentPropsWithRef<'inpu
   const input = useRef<HTMLInputElement>(null), [name, setName] = useState('No file selected');
   return <div className="hf-file-picker"><input {...props} ref={input} type="file" hidden tabIndex={-1} aria-label={label} onChange={event => { setName(event.target.files?.[0]?.name ?? 'No file selected'); props.onChange?.(event); }} /><Button disabled={props.disabled} onClick={() => input.current?.click()}>Choose file</Button><span aria-live="polite">{name}</span></div>;
 }
-/** Indeterminate progress only. No percentage is inferred from execution stages. */
-export function Progress({ label, message }: { label: string; message?: string }) {
-  return <section className="hf-progress"><p role="status">{label}</p><progress aria-label={label} />{message && <p className="hf-progress__message">{message}</p>}</section>;
+/** Only explicit work counts determine progress; stages never imply elapsed-time percentages. */
+export function Progress({ label, message, count }: {
+  label: string;
+  message?: string;
+  count?: { completed: number; total: number };
+}) {
+  const known = count && Number.isSafeInteger(count.completed) &&
+    Number.isSafeInteger(count.total) && count.total > 0 &&
+    count.completed >= 0 && count.completed <= count.total;
+  return <section className="hf-progress">
+    <p role="status">{label}</p>
+    <progress aria-label={label} value={known ? count.completed : undefined}
+      max={known ? count.total : undefined} />
+    {message && <p className="hf-progress__message">{message}</p>}
+  </section>;
 }
 export function TextArea({ className = '', ...props }: ComponentPropsWithRef<'textarea'>) {
   return <textarea {...props} className={'hf-input hf-textarea ' + className} />;

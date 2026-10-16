@@ -115,6 +115,6 @@ test('missing and failed outputs never become zero; explicit zero remains a real
   const draft = variableRows(snapshot, projection, { kind: 'configuration_draft', inputs: [{ target: { instance_id: 'a', port_id: 'in' }, value: '0', units: 'm', statement: 'Measured zero' }] });
   expect(draft[0].value).toBe('0'); expect(draft[1].value).toBe('Not computed');
   const rows = variableRows(snapshot, projection, { kind: 'run', history: { configuration: null, results: { outputs: [{ target: { instance_id: 'a', port_id: 'out' }, value: 0, units: 'm', availability: 'unavailable', reason: 'producer_failed' }] } } as any });
-  expect(rows[1].value).toBe('—'); expect(rows[1].availability).toBe('unavailable');
+  expect(rows[1].value).toBe('not computed'); expect(rows[1].availability).toBe('unavailable');
   expect(rows[1].provenance).toBe('Retained run output · Producer failed');
 });

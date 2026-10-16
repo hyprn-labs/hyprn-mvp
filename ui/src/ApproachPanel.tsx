@@ -185,7 +185,7 @@ export function ApproachReader({
           )}
           <StudyDetailsDialog ref={details} editor={detailsEditor} actions={detailsActions} />
           {presentation !== 'full' && findingsContent}
-          {presentation !== 'cases' && (
+          {presentation === 'full' && (
             <Panel
               className="approach-section"
               id={sectionId + '-methods'}

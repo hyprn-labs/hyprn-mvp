@@ -47,6 +47,8 @@ import {
   StatusTag,
   TextInput,
   QuantitySlider,
+  AnswerExplorationPanel,
+  InterpretationPanel,
   QuantityResult,
   ResponseCurve,
 } from '../src/design';
@@ -98,30 +100,39 @@ export function DesignSpecimen() {
       <ReadingStack>
         <ReadingSection
           aria-label="Answer exploration recipes"
-          data-components="QuantitySlider QuantityResult ResponseCurve"
+          data-components={
+            'QuantitySlider QuantityResult ResponseCurve AnswerExplorationPanel InterpretationPanel'
+          }
         >
-          <QuantitySlider
-            label="Illustrative input"
-            units="m"
-            values={[0, 1, 2]}
-            value={quantity}
-            onChange={setQuantity}
-          />
-          <QuantityResult value={0} units="m" state="calculated" />
-          <QuantityResult value={2} units="m" state="estimated" />
-          <QuantityResult value={null} units="m" state="unavailable" reason="No estimate" />
-          <ResponseCurve
-            label="Illustrative response"
-            axis="Input (m)"
-            units="m"
-            selected={1}
-            points={[
-              { x: 0, y: 0 },
-              { x: 1, y: 2 },
-              { x: 2, y: null },
-            ]}
-            calculated={[{ x: 0, y: 0 }]}
-          />
+          <AnswerExplorationPanel
+            settings={<Button>Sample settings</Button>}
+            categories={<span>Illustrative category</span>}
+            footer={<Button>Open model</Button>}
+          >
+            <QuantitySlider
+              label="Illustrative input"
+              units="m"
+              values={[0, 1, 2]}
+              value={quantity}
+              onChange={setQuantity}
+            />
+            <QuantityResult value={0} units="m" state="calculated" />
+            <QuantityResult value={2} units="m" state="estimated" />
+            <QuantityResult value={null} units="m" state="unavailable" reason="No estimate" />
+            <ResponseCurve
+              label="Illustrative response"
+              axis="Input (m)"
+              units="m"
+              selected={1}
+              points={[
+                { x: 0, y: 0 },
+                { x: 1, y: 2 },
+                { x: 2, y: null },
+              ]}
+              calculated={[{ x: 0, y: 0 }]}
+            />
+          </AnswerExplorationPanel>
+          <InterpretationPanel>Illustrative prose; no scientific result.</InterpretationPanel>
         </ReadingSection>
         <ReadingSection
           aria-label="Control recipes"
