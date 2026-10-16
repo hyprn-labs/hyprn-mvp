@@ -61,13 +61,38 @@ When comparing alternatives or exploring sensitivity helps answer the question,
 prepare the saved answer's exploration before presenting it. Declare justified
 ranges and exact category-to-configuration mappings for all free inputs, including
 units, discrete steps and genuinely equal covary controls. Keep source constraints
-and limitations explicit. Preview the original-evaluation and wall budgets; reserve
-independent check points before fitting. Use the public sampling tools to retain
+and limitations explicit. Use ranges stated in the brief or applicable evidence first.
+When absent, propose a physically plausible local interval around the baseline and
+record it as an agent-selected exploration assumption with its rationale, units and
+bounds; it is not an operating envelope or an uncertainty distribution. Never infer
+physical limits, positivity or integer steps from a symbol alone.
+
+For each slider presented as ready, begin with at least five distinct successful
+original-model points spanning its declared baseline slice, including endpoints and
+the baseline, plus disjoint independent checks for its surrogate. Reuse compatible
+originals. If a discrete interval has fewer than five admissible values, calculate
+all of them and report that exception. Five is a minimum starting design, not proof
+of accuracy or enough training for a multivariable fit. Budget joint samples as well
+when simultaneous changes matter. Refine only where required by the decision and
+observed error; do not relax targets just to populate a slider.
+
+Preview the original-evaluation and wall budgets; reserve independent check points
+before fitting. For seeded preparation, request the design first and calculate its
+returned training/check coordinates exactly; hand-picked grids cannot replace its
+partition. Keep a separate baseline run when the design does not include it.
+Use the public sampling tools to retain
 original calculations, then build and assess an immutable surrogate version and
 explicitly warm it. Query that existing version with the complete selected vector
 and optional active-axis curve; dragging a control must never launch originals or
 refit. Read back its per-output reasons, observed errors, coverage and artifact
-identities. Show unavailable regions honestly and preserve exact original values.
+identities. Present discrete selectable stops only for available calculated or assessed surrogate
+points on the exact current fixed-input slice. Distinguish the two kinds. Preserve
+unavailable gaps in plots; neither interpolate them in the client nor reuse a
+baseline slice after another input changes. Retain finite assessed query points
+through the public preparation records where supported, so a cold predictor does
+not erase already prepared results. Verify several slider transitions, category
+changes, and a cold/reopened session before calling exploration ready. Show
+unavailable regions honestly and preserve exact original values.
 For a useful high-dimensional baseline slice, budget baseline/axis support points
 as well as joint training and independent checks; a sparse enclosing box alone
 does not establish coverage. Use selected-point adoption to enrich the retained

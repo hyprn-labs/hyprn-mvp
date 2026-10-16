@@ -109,6 +109,18 @@ check('Missing range remains an actionable declaration gap',
   missingRange.includes('Declare a range in Sample settings.')
   && missingRange.includes('disabled'));
 
+const discreteSlider = render('QuantitySlider result-backed stops', h(F.QuantitySlider, {
+  label: 'Length', units: 'm', value: 7, stops: [
+    {value: 2, kind: 'calculated'}, {value: 7, kind: 'estimated'},
+    {value: 19, kind: 'calculated'},
+  ], lower: 2, upper: 19, onChange() {},
+}));
+check('Nonuniform prepared values use discrete indices and distinct markers',
+  discreteSlider.includes('max="2"') && discreteSlider.includes('step="1"')
+  && discreteSlider.includes('hf-slider-stop--calculated')
+  && discreteSlider.includes('hf-slider-stop--estimated')
+  && discreteSlider.includes('aria-valuetext="7 m"'));
+
 const expected = [
   'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',
   'SourceChip', 'InferenceBlock', 'RecordBar', 'ModelNode', 'DataTable', 'AttributionChip',

@@ -90,7 +90,7 @@ export function ExplorationSettings({
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [seed, setSeed] = useState('17'),
-    [training, setTraining] = useState('3'),
+    [training, setTraining] = useState('5'),
     [checks, setChecks] = useState('2');
   const [budget, setBudget] = useState('10'),
     [wall, setWall] = useState('3600'),

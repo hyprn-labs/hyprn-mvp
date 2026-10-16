@@ -730,10 +730,14 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
         aria-pressed={pt.selected ?? false}
         onClick={pt.onSelect}
       >
-        <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+        {pt.content ? (
+          <span>{pt.name}</span>
+        ) : (
+          <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+        )}
         <span className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}>
           {st === 'unassigned' ? <Mark tone="advisory" /> : null}
-          {PORT[st]}
+          {pt.content ? null : PORT[st]}
         </span>
       </Button>
     );
@@ -741,9 +745,10 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
       <div
         key={pt.id ?? pt.dir + pt.name}
         className={pt.content ? 'hf-node__exploration-port' : undefined}
+        data-quantity={pt.content ? pt.id : undefined}
         data-active={pt.selected || undefined}
       >
-        {control}
+        {pt.content && pt.dir === 'in' ? null : control}
         {pt.content}
       </div>
     );
@@ -796,7 +801,11 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
               aria-pressed={pt.selected ?? false}
               onClick={pt.onSelect}
             >
-              <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+              {pt.content ? (
+                <span>{pt.name}</span>
+              ) : (
+                <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+              )}
               <span
                 className={cx(
                   'hf-node__state',

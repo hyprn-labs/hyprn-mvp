@@ -25,7 +25,7 @@ test('all free inputs use declared controls and the complete vector fences every
   const explorer = await openExplorer(page, f, f.study_id);
   const dims = f.controls.fuel_design.request.combinations[0].dimensions;
   await expect(explorer.getByRole('slider')).toHaveCount(14, { timeout: 60000 });
-  await expect(explorer.getByText('Connected ·', { exact: false })).toHaveCount(5);
+  await expect(explorer.getByText('· Connected', { exact: false })).toHaveCount(5);
   await expect(explorer.getByText(f.initial_state ?? 'Calculated', { exact: true })).toHaveCount(
     11,
   );
@@ -33,7 +33,7 @@ test('all free inputs use declared controls and the complete vector fences every
   page.on('request', (r) => {
     if (r.url().includes('/api/1/') && r.method() !== 'GET') writes.push(r.url());
   });
-  const port = (id: string) => explorer.locator('[data-port="' + id + '"]').locator('..');
+  const port = (id: string) => explorer.locator('[data-quantity="' + id + '"]');
   const baseline = new Map(
     f.fit.basis.inputs
       .filter((p: any) => p.binding.kind === 'free')
@@ -43,22 +43,22 @@ test('all free inputs use declared controls and the complete vector fences every
     const row = port(d.target.port_id),
       slider = row.getByRole('slider'),
       entry = row.getByRole('spinbutton');
-    await expect(slider).toHaveAttribute('min', String(d.lower));
-    await expect(slider).toHaveAttribute('max', String(d.upper));
-    await expect(slider).toHaveAttribute('step', d.step === null ? 'any' : String(d.step));
-    await slider.scrollIntoViewIfNeeded();
-    await slider.focus();
-    await slider.press('Home');
-    await expect(slider).toBeFocused();
-    await expect(entry).toHaveValue(String(d.lower));
-    // Pointer interaction is on the native control, never a canvas drag.
-    const box = await slider.boundingBox();
-    if (!box) throw Error('Missing native range');
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width * 0.7, box.y + box.height / 2);
-    await page.mouse.up();
-    await expect(slider).toBeFocused();
+    await expect(slider).toHaveAttribute('min', '0');
+    await expect(slider).toHaveAttribute('step', '1');
+    const stops = row.locator('.hf-slider-stops span');
+    const count = await stops.count();
+    await expect(slider).toHaveAttribute('max', String(Math.max(0, count - 1)));
+    if (count < 2) {
+      await expect(slider).toBeDisabled();
+    } else {
+      await slider.scrollIntoViewIfNeeded();
+      await slider.focus();
+      await slider.press('Home');
+      await expect(slider).toBeFocused();
+      await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(0);
+      await slider.press('ArrowRight');
+      await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(0);
+    }
     await entry.fill(String(baseline.get(d.target.port_id)));
   }
   const axis = port(f.fit.request.axis.port_id);
@@ -69,7 +69,7 @@ test('all free inputs use declared controls and the complete vector fences every
   );
   await port(second.target.port_id).getByRole('spinbutton').fill(String(second.upper));
   await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(11);
-  await axis.getByRole('slider').focus();
+  await expect(axis.getByRole('slider')).toBeDisabled();
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(0);
   await expect(explorer.locator('.hf-response-curve__estimate')).toHaveCount(0);
   await port(second.target.port_id)
@@ -250,7 +250,7 @@ test('independent categories preserve common values and fence late loads', async
     ).toHaveCount(0);
   } else {
     expect(previewResult.status(), await previewResult.text()).toBe(200);
-    await expect(settings).toContainText('5 new calculations', { timeout: 60000 });
+    await expect(settings).toContainText('7 new calculations', { timeout: 60000 });
     await settings.getByRole('button', { name: 'Prepare samples', exact: true }).click();
     await expect(settings).toContainText('Samples: pending');
     await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
@@ -263,7 +263,7 @@ test('independent categories preserve common values and fence late loads', async
     await expect(
       settings.getByRole('button', { name: 'Reconcile sampling', exact: true }),
     ).toHaveCount(0);
-    await expect(settings).toContainText('5 total');
+    await expect(settings).toContainText('7 total');
     await expect(settings).not.toContainText('0 attempted');
   }
   await page.keyboard.press('Escape');
@@ -340,7 +340,7 @@ test('canonical graph keeps calculations in settings and predictions on selectio
     const index = f.fit.request.tolerances.indexOf(output);
     const numeric = f.fit.numerical.result.outputs[index].values[2];
     expect(numeric).not.toBeNull();
-    const port = explorer.locator('[data-port="' + output.target.port_id + '"]').locator('..');
+    const port = explorer.locator('[data-quantity="' + output.target.port_id + '"]');
     await expect(port.locator('.hf-quantity-result')).toContainText('Estimated');
     await expect(port.locator('.hf-quantity-result')).toHaveAttribute('title', String(numeric));
     await expect(port.locator('svg title')).toContainText('6.1');

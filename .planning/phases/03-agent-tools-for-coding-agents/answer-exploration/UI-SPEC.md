@@ -57,3 +57,16 @@ Select a result/point to inspect its calculated run or surrogate basis and valid
 - Settings includes adding the selected original-model point, ranges, budget, all-output tolerances and unmet-target behavior. No calculation action elsewhere on Overview.
 - Day/Control room, keyboard-only, genuine 200% zoom, touch targets, long labels, many ports, loading/access-loss/error cases. Stale response cannot overwrite a newer category/input vector. Drag preserves focus and graph position.
 - Update design specimens, smoke rendering and ownership checker fixtures so future screens must use these recipes. Automated evidence is separate from Guerric's acceptance.
+
+## User amendment — discrete available points (2026-10-16)
+
+The user's follow-up supersedes continuous slider traversal above. Controls step
+through exact calculated and assessed surrogate points on the current full-vector
+slice; markers distinguish these kinds. Arbitrary numeric entry stays explicit and
+may be unavailable, but a slider must not invite selection of fabricated estimates.
+Use compact input/value rows and simple higher-contrast directed connections as in
+the visual mockup. Scientific readiness is distinct from the control's appearance.
+The authoring skill prepares at least five originals across each presented baseline
+slice (or every admissible discrete value when fewer), plus independent checks and
+retained surrogate queries, with explicit brief-derived or agent-proposed ranges.
+This minimum does not assert multivariable coverage or weaken accuracy targets.

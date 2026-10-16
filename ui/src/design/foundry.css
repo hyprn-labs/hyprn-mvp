@@ -854,3 +854,30 @@ main { margin: 0 auto; max-width: var(--page-max); }
   .hf-settings-table td:first-child { display: block; }
   .hf-settings-table td:first-child::before { content: none; }
 }
+
+/* Discrete result-backed input controls. */
+.hf-quantity-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(calc(var(--space-12) * 2), 30%); gap: var(--space-2); align-items: center; }
+.hf-quantity-entry label { font-size: var(--type-small-size); line-height: var(--type-small-line); }
+.hf-discrete-track { position: relative; }
+.hf-slider-stops { position: absolute; top: 50%; transform: translateY(-50%); display: flex; justify-content: space-between; align-items: center; width: 100%; height: var(--space-3); pointer-events: none; }
+.hf-slider-stops span { width: var(--space-2); height: var(--space-2); border: 1px solid var(--ink); border-radius: var(--radius-full); }
+.hf-slider-stop--calculated { background: var(--ink); }
+.hf-slider-stop--estimated { background: var(--surface); }
+.hf-slider-caption { font-size: var(--type-small-size); line-height: var(--type-small-line); color: var(--ink-muted); }
+.hf-quantity-slider { gap: 0; }
+.hf-node__exploration-port { padding: var(--space-2) var(--space-3); }
+.hf-graph-exploration .graph-exchange path:not(.exchange-hit) { stroke: var(--ink-2); stroke-width: 2; }
+
+.hf-node--explorer { container-type: inline-size; }
+.hf-node--explorer .hf-node__port { min-height: var(--control-desk); }
+.hf-connected-input { margin: 0; font-size: var(--type-small-size); color: var(--ink-muted); }
+@container (max-width: 420px) {
+  .hf-node--explorer .hf-node__port-columns { display: block; }
+  .hf-node--explorer .hf-node__port-column + .hf-node__port-column { border-left: 0; border-top: 1px solid var(--line); }
+}
+.hf-discrete-track input[type="range"] { appearance: none; background: transparent; }
+.hf-discrete-track input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--line-strong); }
+.hf-discrete-track input[type="range"]::-webkit-slider-thumb { appearance: none; width: var(--space-4); height: var(--space-4); margin-top: calc(var(--space-2) * -1); border-radius: var(--radius-full); border: 2px solid var(--surface); background: var(--ink); }
+.hf-discrete-track input[type="range"]::-moz-range-track { height: 1px; background: var(--line-strong); }
+.hf-discrete-track input[type="range"]::-moz-range-thumb { width: var(--space-4); height: var(--space-4); border-radius: var(--radius-full); border: 2px solid var(--surface); background: var(--ink); }
+.hf-discrete-track input[type="range"]:disabled { opacity: .45; }

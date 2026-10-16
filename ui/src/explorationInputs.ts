@@ -153,3 +153,52 @@ export function sameInputVector(expected: QuantityInput[], actual: QuantityInput
     )
   );
 }
+
+export type ExplorationPoint = {
+  inputs: { target: PortRef; value: number; units: string }[];
+  outputs: {
+    target: PortRef;
+    value: number | null;
+    units: string;
+    kind: 'calculated' | 'estimated' | 'unavailable';
+    reason?: string | null;
+    run_id?: string | null;
+    preparation_id?: string;
+  }[];
+};
+
+/** Stops belong to this exact fixed-input slice, including explicit covary bindings. */
+export function availableStops(
+  points: ExplorationPoint[],
+  vector: SelectedInput[],
+  dimensions: Dimension[],
+  target: PortRef,
+  outputs: PortRef[],
+) {
+  const control = dimensions.find((d) => key(d.target) === key(target));
+  const available = new Map<number, 'calculated' | 'estimated'>();
+  for (const point of points) {
+    const value = point.inputs.find((v) => key(v.target) === key(target));
+    if (
+      !value ||
+      (control &&
+        (!validStep(value.value, control) ||
+          (control.lower !== null && value.value < control.lower) ||
+          (control.upper !== null && value.value > control.upper)))
+    )
+      continue;
+    const candidate = selectInput(vector, dimensions, target, value.value);
+    if (!sameInputVector(candidate as ExplorationPoint['inputs'], point.inputs)) continue;
+    const results = outputs.map((t) => point.outputs.find((o) => key(o.target) === key(t)));
+    if (
+      !results.length ||
+      results.some(
+        (o) => !o || o.kind === 'unavailable' || o.value === null || !Number.isFinite(o.value),
+      )
+    )
+      continue;
+    const kind = results.every((o) => o?.kind === 'calculated') ? 'calculated' : 'estimated';
+    if (available.get(value.value) !== 'calculated') available.set(value.value, kind);
+  }
+  return [...available].sort(([a], [b]) => a - b).map(([value, kind]) => ({ value, kind }));
+}

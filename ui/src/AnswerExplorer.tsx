@@ -37,6 +37,8 @@ import {
   carryCommon,
   completeVector,
   supportedCombination,
+  availableStops,
+  type ExplorationPoint,
   type Dimension,
   type SelectedInput,
 } from './explorationInputs';
@@ -113,6 +115,7 @@ export function AnswerExplorer({
     const token = ++generation.current,
       fence = api.fence({ studyId });
     setLoaded(null);
+    setPrediction(null);
     setError('');
     setFitIndex(0);
     setRunId('');
@@ -121,14 +124,50 @@ export function AnswerExplorer({
       api.explorationBasis(studyId, answer.answer_version_id, configuration, fence.signal),
       api.configuration(studyId, configuration, fence.signal),
       api.preparedExplorations(studyId, answer.answer_version_id, configuration, fence.signal),
+      api.explorationSamples(studyId, answer.answer_version_id, fence.signal),
     ])
-      .then(async ([basis, frozen, operations]) => {
+      .then(async ([basis, frozen, operations, samples]) => {
         const fits = operations.flatMap((op) =>
           op.state === 'complete' && op.result ? [op.result] : [],
         );
         if (fits.some((f) => f.basis.digest !== basis.digest))
           throw new Error('Prepared response does not match this answer basis.');
-        const runs = await Promise.all(basis.run_ids.map((id) => api.run(studyId, id)));
+        const ids = new Set([
+          ...basis.run_ids,
+          ...fits.flatMap((f) => f.samples.map((p) => p.run_id)),
+        ]);
+        const latest = samples.find((op) =>
+          op.request.combinations.some((c) => c.configuration_revision_id === configuration),
+        );
+        if (latest) {
+          const index = latest.request.combinations.findIndex(
+            (c) => c.configuration_revision_id === configuration,
+          );
+          const baseline = explorationInputVector(basis.inputs)!;
+          latest.points
+            .filter((p) => p.combination === index && p.state === 'recorded' && p.run_id)
+            .filter((p) =>
+              baseline.some((axis) => {
+                const value = p.inputs.find((i) => key(i.target) === key(axis.target))?.value;
+                return (
+                  value !== undefined &&
+                  sameInputVector(
+                    selectInput(
+                      baseline,
+                      dimensions,
+                      axis.target,
+                      value,
+                    ) as ExplorationPoint['inputs'],
+                    p.inputs,
+                  )
+                );
+              }),
+            )
+            .forEach((p) => ids.add(p.run_id!));
+        }
+        // Publish the answer basis before hydrating optional calculated overlays.
+        // Bounded reads avoid queueing a whole sample behind a single HTTP server.
+        const runs: PublicRunDetail[] = [];
         if (fence.valid() && token === generation.current) {
           setLoaded({ basis, frozen, fits, runs });
           const baseline = explorationInputVector(basis.inputs)!;
@@ -140,6 +179,14 @@ export function AnswerExplorer({
           carry.current = null;
           setActiveAxis(
             combo?.initial_axis ?? fits[0]?.request.axis ?? baseline[0]?.target ?? null,
+          );
+        }
+        for (const id of ids) {
+          if (!fence.valid()) break;
+          const run = await api.run(studyId, id);
+          if (!fence.valid()) break;
+          setLoaded((old) =>
+            old && old.basis.digest === basis.digest ? { ...old, runs: [...old.runs, run] } : old,
           );
         }
       })
@@ -172,7 +219,6 @@ export function AnswerExplorer({
     return () => fence.abort();
   }, [api, studyId, answer.answer_version_id, refresh]);
   useEffect(() => {
-    setPrediction(null);
     setPredictionError('');
     if (!surrogate || !vector || combinationIndex < 0) return;
     const fence = api.fence({ studyId });
@@ -199,7 +245,10 @@ export function AnswerExplorer({
         .catch(async (e) => {
           await api.readFailed(e, fence);
           if (fence.valid())
-            setPredictionError('Estimates unavailable. Prepare them in Sample settings.');
+            setPredictionError(
+              'Live estimates unavailable. Prepared points remain available; ' +
+                'prepare live predictions in Sample settings.',
+            );
         })
         .finally(fence.done);
     }, 20);
@@ -216,39 +265,75 @@ export function AnswerExplorer({
     activeAxis,
     refresh,
   ]);
-  const candidateFit = compatibleUnits
-    ? [loaded?.fits[fitIndex], ...(loaded?.fits ?? [])].find(
-        (f) => f && activeAxis && key(f.request.axis) === key(activeAxis),
-      )
-    : undefined;
-  // A one-axis preparation is usable only on its exact fixed-input slice.
-  const fit =
-    candidateFit &&
-    vector &&
-    candidateFit.query_inputs.some(
-      (query) =>
-        query.length === vector.length &&
-        query.every((p) =>
-          vector.some(
-            (v) =>
-              key(v.target) === key(p.target) &&
-              v.units === p.units &&
-              (key(p.target) === key(candidateFit.request.axis) || v.value === p.value),
-          ),
-        ),
-    )
-      ? candidateFit
+  const candidateFit =
+    compatibleUnits && activeAxis && vector
+      ? [loaded?.fits[fitIndex], ...(loaded?.fits ?? [])].find(
+          (f) =>
+            f &&
+            key(f.request.axis) === key(activeAxis) &&
+            f.query_inputs.some((q) =>
+              sameInputVector(
+                selectInput(
+                  vector,
+                  dimensions,
+                  activeAxis,
+                  q.find((v) => key(v.target) === key(activeAxis))!.value,
+                ) as ExplorationPoint['inputs'],
+                q,
+              ),
+            ),
+        )
       : undefined;
+  const fit = candidateFit;
+  const points: ExplorationPoint[] = [];
+  if (prediction)
+    prediction.vectors.forEach((inputs, i) =>
+      points.push({
+        inputs,
+        outputs: prediction.outputs.map((o) => ({
+          target: o.target,
+          units: o.units,
+          ...o.values[i],
+        })),
+      }),
+    );
+  for (const f of loaded?.fits ?? [])
+    f.query_inputs.forEach((inputs, i) =>
+      points.push({
+        inputs,
+        outputs: f.request.tolerances.map((t, n) => ({
+          target: t.target,
+          units: loaded?.basis.outputs.find((o) => key(o.target) === key(t.target))?.units ?? '',
+          value: f.numerical.result.outputs[n]?.values[i] ?? null,
+          kind: 'estimated',
+          preparation_id: f.identity,
+          reason: f.numerical.result.outputs[n]?.reason,
+        })),
+      }),
+    );
+  for (const run of loaded?.runs ?? []) {
+    if (
+      !run.history?.configuration ||
+      run.history.configuration.model_revision_id !== loaded?.basis.model_revision_id
+    )
+      continue;
+    points.push({
+      inputs: run.history.configuration.inputs,
+      outputs: (run.history.results?.outputs ?? []).map((o) => ({
+        target: o.target,
+        units: o.units,
+        value: o.availability === 'available' ? o.value : null,
+        kind: o.availability === 'available' ? 'calculated' : 'unavailable',
+        reason: o.reason,
+        run_id: run.run_id,
+      })),
+    });
+  }
+  const selectedPoints = vector ? points.filter((p) => sameInputVector(p.inputs, vector)) : [];
   const axis = loaded?.basis.inputs.find((p) => activeAxis && key(p.target) === key(activeAxis));
-  const baseline = axis?.binding.kind === 'free' ? axis.binding.assignment.value : null;
   const current = axis
     ? (selected.find((p) => key(p.target) === key(axis.target))?.value ?? null)
     : null;
-  const values = fit
-    ? [...new Set([...fit.request.query_values, ...(baseline === null ? [] : [baseline])])].sort(
-        (a, b) => a - b,
-      )
-    : [];
   // Only the same complete vector and exact model can provide calculated overlays.
   const matching = (run: PublicRunDetail) => {
     const c = run.history?.configuration;
@@ -260,7 +345,6 @@ export function AnswerExplorer({
     );
   };
   const calculated = loaded?.runs.find(matching);
-  const query = fit?.request.query_values.indexOf(current ?? NaN) ?? -1;
   const preparationCounts = fit
     ? `${fit.request.training_count} training calculations · ` +
       `${fit.request.check_count} independent checks.`
@@ -548,7 +632,10 @@ export function AnswerExplorer({
                 : 'Estimates need model-declared units. Saved quantities stay unchanged.'}
             </p>
           )}
-          {predictionError && <p role="status">{predictionError}</p>}
+          {predictionError && !fit && <p role="status">{predictionError}</p>}
+          <p className="hf-slider-caption">
+            Slider points: ● calculated · ○ estimated. Other inputs remain fixed.
+          </p>
           {snapshot ? (
             <GraphView
               projection={project(snapshot as Snapshot)}
@@ -562,12 +649,18 @@ export function AnswerExplorer({
                 const input = loaded.basis.inputs.find((p) => key(p.target) === ref);
                 if (input)
                   return input.binding.kind === 'connected' ? (
-                    <p>Connected · {unitLabel(input.units)}</p>
+                    <p className="hf-connected-input">{input.name} · Connected</p>
                   ) : (
                     <QuantitySlider
                       label={input.name}
                       units={savedInputQuantity(input)!.units}
-                      values={!design && fit && key(fit.request.axis) === ref ? values : undefined}
+                      stops={availableStops(
+                        points,
+                        selected,
+                        dimensions,
+                        target,
+                        loaded.basis.outputs.map((o) => o.target),
+                      )}
                       lower={dimensions.find((d) => key(d.target) === ref)?.lower}
                       upper={dimensions.find((d) => key(d.target) === ref)?.upper}
                       step={dimensions.find((d) => key(d.target) === ref)?.step}
@@ -587,9 +680,6 @@ export function AnswerExplorer({
                 if (!output) return null;
                 const index = fit?.request.tolerances.findIndex((t) => key(t.target) === ref) ?? -1;
                 const estimated = fit?.numerical.result.outputs[index];
-                const assessed =
-                  `${estimated?.evaluable_count ?? 0} of ` +
-                  `${estimated?.assessed_count ?? 0} independent checks evaluated.`;
                 const exact = calculated?.history?.results?.outputs.find(
                   (o) => key(o.target) === ref,
                 );
@@ -604,18 +694,20 @@ export function AnswerExplorer({
                           c.inputs.length !== vector.length
                         )
                           return [];
+                        const x = c.inputs.find((i) => key(i.target) === key(axis.target))?.value;
                         if (
-                          !vector.every((v) =>
-                            c.inputs.some(
-                              (i) =>
-                                key(i.target) === key(v.target) &&
-                                i.units === v.units &&
-                                (key(v.target) === key(axis.target) || i.value === v.value),
-                            ),
+                          x === undefined ||
+                          !sameInputVector(
+                            selectInput(
+                              vector,
+                              dimensions,
+                              axis.target,
+                              x,
+                            ) as ExplorationPoint['inputs'],
+                            c.inputs,
                           )
                         )
                           return [];
-                        const x = c.inputs.find((i) => key(i.target) === key(axis.target))?.value;
                         const output = run.history?.results?.outputs.find(
                           (o) => key(o.target) === ref,
                         );
@@ -625,32 +717,58 @@ export function AnswerExplorer({
                           ? [{ x, y: output.value }]
                           : [];
                       });
-                const joint = prediction?.outputs.find((o) => key(o.target) === ref);
-                const jointValue = joint?.values[0];
+                const matchingCurve =
+                  prediction &&
+                  vector &&
+                  activeAxis &&
+                  prediction.vectors.every((v) => {
+                    const coordinate = v.find((p) => key(p.target) === key(activeAxis))?.value;
+                    return (
+                      coordinate !== undefined &&
+                      sameInputVector(
+                        selectInput(
+                          vector,
+                          dimensions,
+                          activeAxis,
+                          coordinate,
+                        ) as ExplorationPoint['inputs'],
+                        v,
+                      )
+                    );
+                  });
+                const joint = matchingCurve
+                  ? prediction.outputs.find((o) => key(o.target) === ref)
+                  : undefined;
                 const jointGroup = surrogate?.groups[combinationIndex];
                 const jointAssessment = jointGroup?.outputs.find((o) => key(o.target) === ref);
-                const originalRun = jointValue?.run_id ?? calculated?.run_id;
-                const result = jointValue
-                  ? jointValue.value
-                  : calculated
-                    ? exact?.availability === 'available'
-                      ? exact.value
-                      : null
-                    : query >= 0
-                      ? (estimated?.values[query] ?? null)
-                      : null;
+                const candidates = selectedPoints.flatMap((p) =>
+                  p.outputs.filter((o) => key(o.target) === ref),
+                );
+                const selectedResult =
+                  candidates.find((o) => o.run_id && o.value !== null) ??
+                  candidates.find((o) => o.value !== null) ??
+                  candidates[0];
+                const resultFit = loaded.fits.find(
+                  (f) => f.identity === selectedResult?.preparation_id,
+                );
+                const resultMetric =
+                  resultFit?.numerical.result.outputs[
+                    resultFit.request.tolerances.findIndex((t) => key(t.target) === ref)
+                  ];
+                const originalRun = selectedResult?.run_id ?? calculated?.run_id;
+                const result = selectedResult?.value ?? null;
+                const resultKind =
+                  selectedResult?.kind === 'calculated' ? 'calculated' : 'estimated';
                 return (
                   <>
                     <QuantityResult
                       units={output.units}
                       value={result}
-                      state={
-                        jointValue?.kind === 'calculated' || calculated ? 'calculated' : 'estimated'
-                      }
+                      state={resultKind}
                       reason={explorationReason(
-                        jointValue
-                          ? jointValue.reason
-                          : predictionError || (calculated ? exact?.reason : estimated?.reason),
+                        selectedResult?.reason ||
+                          predictionError ||
+                          (calculated ? exact?.reason : estimated?.reason),
                       )}
                     />
                     {axis && current !== null && (
@@ -660,7 +778,7 @@ export function AnswerExplorer({
                             ?.target.port_id === port.port_id
                         }
                       >
-                        <summary>{output.name} response</summary>
+                        <summary aria-label={output.name + ' response'}>Response</summary>
                         <ResponseCurve
                           label={output.name}
                           units={output.units}
@@ -668,13 +786,12 @@ export function AnswerExplorer({
                           selected={current}
                           selectedResult={{
                             value: result,
-                            state:
-                              jointValue?.kind === 'calculated' || calculated
-                                ? 'calculated'
-                                : 'estimated',
+                            state: resultKind,
                           }}
                           points={
-                            joint && prediction
+                            joint &&
+                            prediction &&
+                            joint.values.some((v) => v.value !== null && v.kind === 'estimated')
                               ? prediction.vectors.slice(1).map((v, i) => ({
                                   x: v.find((p) => key(p.target) === key(axis.target))!.value,
                                   y: joint.values[i + 1]?.value ?? null,
@@ -687,7 +804,9 @@ export function AnswerExplorer({
                                 : []
                           }
                           calculated={
-                            joint && prediction
+                            joint &&
+                            prediction &&
+                            joint.values.some((v) => v.value !== null && v.kind === 'estimated')
                               ? prediction.vectors.slice(1).flatMap((v, i) => {
                                   const value = joint.values[i + 1];
                                   return value?.kind === 'calculated' && value.value !== null
@@ -716,7 +835,7 @@ export function AnswerExplorer({
                         >
                           Open calculated run
                         </Button>
-                      ) : jointGroup && jointAssessment ? (
+                      ) : jointGroup && jointAssessment && !resultFit ? (
                         <>
                           <p>
                             {jointAssessment.method ?? 'No eligible method'};{' '}
@@ -743,23 +862,25 @@ export function AnswerExplorer({
                             Data artifact SHA-256: <code>{jointGroup.artifact_sha256}</code>
                           </p>
                         </>
-                      ) : fit ? (
+                      ) : resultFit ? (
                         <>
                           <p>
-                            Estimated from {fit.samples.length} original-model samples; {assessed}
+                            Estimated from {resultFit.samples.length} original-model samples;{' '}
+                            {resultMetric?.evaluable_count ?? 0} of{' '}
+                            {resultMetric?.assessed_count ?? 0} independent checks evaluated.
                           </p>
                           <p>
                             Maximum observed absolute error:{' '}
-                            {estimated?.max_absolute_error == null
+                            {resultMetric?.max_absolute_error == null
                               ? 'not computed'
-                              : formatNumber(estimated.max_absolute_error)}{' '}
+                              : formatNumber(resultMetric.max_absolute_error)}{' '}
                             {unitLabel(output.units)}
                           </p>
                           <p>
-                            Response identity: <code>{fit.identity}</code>
+                            Response identity: <code>{resultFit.identity}</code>
                           </p>
                           <p>
-                            Result SHA-256: <code>{fit.numerical.result_sha256}</code>
+                            Result SHA-256: <code>{resultFit.numerical.result_sha256}</code>
                           </p>
                         </>
                       ) : (

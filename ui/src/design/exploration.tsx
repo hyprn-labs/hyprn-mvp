@@ -78,6 +78,7 @@ export function QuantitySlider({
   label,
   units,
   values,
+  stops,
   lower,
   upper,
   step,
@@ -88,6 +89,7 @@ export function QuantitySlider({
   label: string;
   units: string;
   values?: number[];
+  stops?: { value: number; kind: 'calculated' | 'estimated' }[];
   lower?: number | null;
   upper?: number | null;
   step?: number | null;
@@ -95,6 +97,7 @@ export function QuantitySlider({
   value: number | null;
   onChange: (value: number | null) => void;
 }) {
+  values = stops ? stops.map((p) => p.value) : values;
   const id = useId(),
     index = value === null ? -1 : (values?.indexOf(value) ?? -1);
   const declared = lower != null && upper != null;
@@ -109,47 +112,65 @@ export function QuantitySlider({
       onFocus={onFocus}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <label htmlFor={id}>
-        {label} · {unitLabel(units)}
-      </label>
-      <TextInput
-        id={id}
-        type="number"
-        step={step ?? 'any'}
-        value={value ?? ''}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          onChange(
-            Number.isFinite(next) && Math.abs(next) <= Number.MAX_SAFE_INTEGER ? next : null,
-          );
-        }}
-      />
-      <input
-        type="range"
-        aria-label={label + (values ? ' prepared points' : ' range')}
-        min={values ? 0 : (lower ?? 0)}
-        max={values ? Math.max(0, values.length - 1) : (upper ?? 0)}
-        step={values ? 1 : (step ?? 'any')}
-        value={values ? Math.max(0, index) : (value ?? lower ?? 0)}
-        disabled={values ? !values.length : !declared || outside || value === null}
-        aria-valuetext={
-          value === null ? 'unassigned' : formatNumber(value) + ' ' + unitLabel(units)
-        }
-        onChange={(event) =>
-          onChange(
-            values ? values[Number(event.currentTarget.value)] : event.currentTarget.valueAsNumber,
-          )
-        }
-      />
+      <div className="hf-quantity-entry">
+        <label htmlFor={id}>
+          {label} · {unitLabel(units)}
+        </label>
+        <TextInput
+          id={id}
+          type="number"
+          step={step ?? 'any'}
+          value={value ?? ''}
+          onChange={(event) => {
+            const next = event.currentTarget.valueAsNumber;
+            onChange(
+              Number.isFinite(next) && Math.abs(next) <= Number.MAX_SAFE_INTEGER ? next : null,
+            );
+          }}
+        />
+      </div>
+      <div className="hf-discrete-track">
+        <input
+          type="range"
+          aria-label={label + (values ? ' prepared points' : ' range')}
+          min={values ? 0 : (lower ?? 0)}
+          max={values ? Math.max(0, values.length - 1) : (upper ?? 0)}
+          step={values ? 1 : (step ?? 'any')}
+          value={values ? Math.max(0, index) : (value ?? lower ?? 0)}
+          disabled={values ? values.length < 2 : !declared || outside || value === null}
+          aria-valuetext={
+            value === null ? 'unassigned' : formatNumber(value) + ' ' + unitLabel(units)
+          }
+          onChange={(event) =>
+            onChange(
+              values
+                ? values[Number(event.currentTarget.value)]
+                : event.currentTarget.valueAsNumber,
+            )
+          }
+        />
+        {stops && (
+          <div className="hf-slider-stops" aria-hidden="true">
+            {stops.map((p) => (
+              <span key={p.value} className={'hf-slider-stop--' + p.kind} />
+            ))}
+          </div>
+        )}
+      </div>
+      {stops && stops.length < 2 && (
+        <span className="hf-slider-caption">More prepared points needed on this slice</span>
+      )}
       {(values ? index < 0 : !declared || outside || value === null) && (
         <span role="status">
           {value === null
             ? 'Unassigned'
-            : values
-              ? 'No prepared estimate at this value.'
-              : !declared
-                ? 'Declare a range in Sample settings.'
-                : 'Outside the declared range.'}
+            : outside
+              ? 'Outside the declared range.'
+              : values
+                ? 'No prepared estimate at this value.'
+                : !declared
+                  ? 'Declare a range in Sample settings.'
+                  : 'Outside the declared range.'}
         </span>
       )}
       {offStep && (
@@ -277,9 +298,9 @@ export function ResponseCurve({
                 />
               ),
           )}
-        {calculated.map((p) => (
+        {calculated.map((p, i) => (
           <circle
-            key={p.x}
+            key={p.x + ':' + i}
             className="hf-response-curve__calculated"
             cx={x(p.x)}
             cy={y(p.y)}

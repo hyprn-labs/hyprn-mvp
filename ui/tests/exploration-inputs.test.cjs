@@ -128,3 +128,65 @@ test('independent categories resolve supported tuples and clear specific overrid
   after[0].units = 'W';
   assert.equal(carryCommon(next, after, [{ target, value: 12, units: 'kW' }], before)[0].value, 12);
 });
+
+test('slider stops require complete outputs on the exact fixed-input slice', () => {
+  const { availableStops } = mod.exports;
+  const fixed = { instance_id: 'sink', port_id: 'temperature' };
+  const output = { instance_id: 'sink', port_id: 'rise' };
+  const vector = [
+    { target, value: 12, units: 'kW' },
+    { target: fixed, value: 20, units: 'K' },
+  ];
+  const dimensions = [{ target, lower: 10, upper: 15, step: null, covary_group: null }];
+  const point = (value, kind = 'estimated', result = 3) => ({
+    inputs: [{ ...vector[0], value }, vector[1]],
+    outputs: [{ target: output, value: result, units: 'K', kind }],
+  });
+  const wrongSlice = point(11);
+  wrongSlice.inputs[1] = { ...vector[1], value: 21 };
+  const wrongUnits = point(13);
+  wrongUnits.inputs[0].units = 'W';
+  const points = [
+    point(14),
+    point(12),
+    point(12, 'calculated'),
+    point(10, 'estimated', null),
+    point(16),
+    point(13, 'unavailable'),
+    wrongSlice,
+    wrongUnits,
+  ];
+  assert.deepEqual(availableStops(points, vector, dimensions, target, [output]), [
+    { value: 12, kind: 'calculated' },
+    { value: 14, kind: 'estimated' },
+  ]);
+  assert.deepEqual(availableStops(points, vector, dimensions, target, [output, fixed]), []);
+  assert.equal(vector[0].value, 12);
+});
+
+test('discrete stops respect steps and every declared covary coordinate', () => {
+  const { availableStops } = mod.exports;
+  const companion = { instance_id: 'other', port_id: 'heat' };
+  const out = { instance_id: 'other', port_id: 'result' };
+  const dimensions = [target, companion].map((target) => ({
+    target,
+    lower: 0,
+    upper: 20,
+    step: 1,
+    covary_group: 'heat',
+  }));
+  const vector = dimensions.map((d) => ({ target: d.target, value: 12, units: 'kW' }));
+  const point = (a, b) => ({
+    inputs: [
+      { ...vector[0], value: a },
+      { ...vector[1], value: b },
+    ],
+    outputs: [{ target: out, value: 1, units: 'K', kind: 'calculated' }],
+  });
+  assert.deepEqual(
+    availableStops([point(13, 13), point(14, 12), point(13.5, 13.5)], vector, dimensions, target, [
+      out,
+    ]),
+    [{ value: 13, kind: 'calculated' }],
+  );
+});
