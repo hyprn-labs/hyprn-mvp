@@ -745,6 +745,7 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
       <div
         key={pt.id ?? pt.dir + pt.name}
         className={pt.content ? 'hf-node__exploration-port' : undefined}
+        data-direction={pt.content ? pt.dir : undefined}
         data-quantity={pt.content ? pt.id : undefined}
         data-active={pt.selected || undefined}
       >

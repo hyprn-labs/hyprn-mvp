@@ -887,3 +887,18 @@ main { margin: 0 auto; max-width: var(--page-max); }
 .hf-discrete-track input[type="range"]::-moz-range-track { height: 1px; background: var(--line-strong); }
 .hf-discrete-track input[type="range"]::-moz-range-thumb { width: var(--space-4); height: var(--space-4); border-radius: var(--radius-full); border: 2px solid var(--surface); background: var(--slider-basis); box-sizing: border-box; position: relative; z-index: 1; }
 .hf-discrete-track input[type="range"]:disabled { opacity: .45; }
+
+
+/* Independent input controls and response plots have distinct working columns. */
+.hf-node--explorer .hf-node__port-columns { gap: var(--space-6); padding: var(--space-3); background: var(--surface-sunken); }
+.hf-node--explorer .hf-node__port-column { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.hf-node--explorer .hf-node__exploration-port[data-direction="out"] { gap: var(--space-3); padding: var(--space-4); }
+.hf-node--explorer .hf-node__exploration-port[data-direction="out"] > .hf-node__port { font-weight: var(--type-body-strong-weight); padding-inline: 0; border-bottom: 0; }
+.hf-quantity-result { display: grid; justify-items: start; gap: var(--space-2); }
+.hf-quantity-result > .hf-mono { font-size: var(--type-readout-size); line-height: var(--type-readout-line); }
+.hf-result-unit { color: var(--ink-muted); }
+.hf-response-curve figcaption { text-align: center; margin-top: var(--space-2); }
+.hf-output-actions { display: flex; justify-content: flex-end; padding-top: var(--space-2); border-top: 1px solid var(--line); }
+.hf-node .hf-output-actions > .hf-btn { width: auto; border-bottom: 0; }
+.hf-slider-stops .hf-slider-stop--unavailable { background: var(--surface); border-color: var(--ink-muted); border-radius: var(--radius-mark); }
+.hf-exploration-gap { padding: var(--space-3); background: var(--surface-sunken); border-left: 2px solid var(--line-strong); }

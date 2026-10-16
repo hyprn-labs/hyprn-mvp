@@ -31,7 +31,8 @@ test('all free inputs use declared controls and the complete vector fences every
   );
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (r.url().includes('/api/1/') && r.method() !== 'GET') writes.push(r.url());
+    if (r.url().includes('/api/1/') && r.method() !== 'GET' && !r.url().endsWith('/predictions'))
+      writes.push(r.url());
   });
   const port = (id: string) => explorer.locator('[data-quantity="' + id + '"]');
   const baseline = new Map(
@@ -64,15 +65,12 @@ test('all free inputs use declared controls and the complete vector fences every
   const axis = port(f.fit.request.axis.port_id);
   await axis.getByRole('spinbutton').fill('6.1');
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(11);
-  await explorer
-    .getByRole('combobox', { name: 'Input changes', exact: true })
-    .selectOption('combined');
   const second = dims.find(
     (d: any) => d.target.port_id !== f.fit.request.axis.port_id && !d.covary_group,
   );
   await port(second.target.port_id).getByRole('spinbutton').fill(String(second.upper));
   await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(11);
-  await expect(axis.getByRole('slider')).toBeDisabled();
+  await expect(axis.getByRole('slider')).toBeEnabled();
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(0);
   await expect(explorer.locator('.hf-response-curve__estimate')).toHaveCount(0);
   await port(second.target.port_id)
@@ -107,17 +105,23 @@ test('all free inputs use declared controls and the complete vector fences every
     11,
   );
   await axis.getByRole('spinbutton').fill('6.1');
-  await explorer
-    .getByRole('combobox', { name: 'Input changes', exact: true })
-    .selectOption('single');
-  await expect(axis.getByRole('spinbutton')).toHaveValue(
-    String(baseline.get(f.fit.request.axis.port_id)),
-  );
+  const plotAxis = explorer.getByRole('combobox', { name: 'Plot against', exact: true });
+  const originalAxis = await plotAxis.inputValue();
+  const nextAxis = second.target.instance_id + '/' + second.target.port_id;
+  await plotAxis.selectOption(nextAxis);
+  await expect(axis.getByRole('spinbutton')).toHaveValue('6.1');
   await port(second.target.port_id).getByRole('spinbutton').fill(String(second.upper));
-  await axis.getByRole('spinbutton').fill('6.1');
+  await expect(plotAxis).toHaveValue(nextAxis);
+  await expect(axis.getByRole('spinbutton')).toHaveValue('6.1');
+  await axis.getByRole('slider').press('Home');
   await expect(port(second.target.port_id).getByRole('spinbutton')).toHaveValue(
-    String(baseline.get(second.target.port_id)),
+    String(second.upper),
   );
+  await expect(plotAxis).toHaveValue(nextAxis);
+  await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(11);
+  await explorer.getByRole('button', { name: 'Reset inputs', exact: true }).click();
+  await plotAxis.selectOption(originalAxis);
+  await axis.getByRole('spinbutton').fill('6.1');
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(11);
   expect(writes).toEqual([]);
   await expect(
@@ -185,7 +189,8 @@ test('independent categories preserve common values and fence late loads', async
     explorer.getByRole('spinbutton', { name: name + ' · Dimensionless', exact: true });
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (r.url().includes('/api/1/') && r.method() !== 'GET') writes.push(r.url());
+    if (r.url().includes('/api/1/') && r.method() !== 'GET' && !r.url().endsWith('/predictions'))
+      writes.push(r.url());
   });
   for (const [m, r, mv, rv] of [
     ['a', 'low', '2', '3'],
@@ -198,9 +203,6 @@ test('independent categories preserve common values and fence late loads', async
     await expect(entry('material_factor')).toHaveValue(mv, { timeout: 60000 });
     await expect(entry('regime_factor')).toHaveValue(rv);
   }
-  await explorer
-    .getByRole('combobox', { name: 'Input changes', exact: true })
-    .selectOption('combined');
   await entry('x').fill('2');
   await entry('y').fill('3');
   await entry('material_factor').fill('9');
@@ -344,7 +346,8 @@ test('canonical graph keeps calculations in settings and predictions on selectio
   const slider = explorer.getByRole('slider', { name: axis.name + ' prepared points' });
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (r.url().includes('/api/1/') && r.method() !== 'GET') writes.push(r.url());
+    if (r.url().includes('/api/1/') && r.method() !== 'GET' && !r.url().endsWith('/predictions'))
+      writes.push(r.url());
   });
   await slider.focus();
   await slider.press('End');
@@ -435,7 +438,8 @@ test('retained graph exposes real response curves without another calculation', 
   });
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (r.url().includes('/api/1/') && r.method() !== 'GET') writes.push(r.url());
+    if (r.url().includes('/api/1/') && r.method() !== 'GET' && !r.url().endsWith('/predictions'))
+      writes.push(r.url());
   });
   await explorer.getByRole('slider').press('End');
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(11);

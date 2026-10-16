@@ -90,7 +90,7 @@ const singlePoint = render('ResponseCurve single point', h(F.ResponseCurve, {
   points: [{x:0,y:null},{x:2,y:null}], calculated: [{x:1,y:4}],
 }));
 check('One available result does not imply a response curve',
-  !singlePoint.includes('<svg') && singlePoint.includes('One sample'));
+  !singlePoint.includes('<svg') && singlePoint.includes('No curve for this input combination.'));
 const countedProgress = render('Progress explicit sample count', h(F.Progress, {
   label: 'Completed sample points', count: {completed: 3, total: 8},
 }));

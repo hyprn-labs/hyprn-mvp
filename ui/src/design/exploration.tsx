@@ -89,7 +89,7 @@ export function QuantitySlider({
   label: string;
   units: string;
   values?: number[];
-  stops?: { value: number; kind: 'calculated' | 'estimated' }[];
+  stops?: { value: number; kind: 'calculated' | 'estimated' | 'unavailable' }[];
   lower?: number | null;
   upper?: number | null;
   step?: number | null;
@@ -209,7 +209,8 @@ export function QuantityResult({
     >
       {value !== null && (
         <span className="hf-mono">
-          {(state === 'estimated' ? '≈ ' : '') + formatNumber(value)} {unitLabel(units)}
+          {(state === 'estimated' ? '≈ ' : '') + formatNumber(value)}{' '}
+          <span className="hf-result-unit">{unitLabel(units)}</span>
         </span>
       )}
       {value === null ? (
@@ -259,11 +260,7 @@ export function ResponseCurve({
     bottom = Math.min(...ys),
     top = Math.max(...ys);
   if (new Set(available.map((p) => p.x)).size < 2)
-    return (
-      <p className="hf-response-note">
-        One sample · {axis} = {formatNumber(available[0].x)}
-      </p>
-    );
+    return <p className="hf-response-note">No curve for this input combination.</p>;
   const x = (v: number) => 48 + ((v - lo) / (hi - lo || 1)) * 180;
   const y = (v: number) => (top === bottom ? 44 : 76 - ((v - bottom) / (top - bottom)) * 64);
   const tick = (v: number) => formatNumber(Number(v.toPrecision(3)));
@@ -327,7 +324,7 @@ export function ResponseCurve({
           {formatNumber(hi)}
         </text>
       </svg>
-      <figcaption>{axis}</figcaption>
+      <figcaption>X: {axis}</figcaption>
     </figure>
   );
 }

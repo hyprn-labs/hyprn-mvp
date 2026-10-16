@@ -190,3 +190,44 @@ test('discrete stops respect steps and every declared covary coordinate', () => 
     [{ value: 13, kind: 'calculated' }],
   );
 });
+
+test('independent selections retain coordinates without borrowing another slice result', () => {
+  const { selectableStops, selectInput } = mod.exports;
+  const other = { instance_id: 'coolant', port_id: 'flow' };
+  const out = { instance_id: 'coolant', port_id: 'rise' };
+  const baseline = [
+    { target, value: 12, units: 'kW' },
+    { target: other, value: 0.3, units: 'kg/s' },
+  ];
+  const dimensions = [
+    { target, lower: 10, upper: 15, step: null, covary_group: null },
+    { target: other, lower: 0.2, upper: 0.4, step: null, covary_group: null },
+  ];
+  const points = [10, 12, 15].map((value) => ({
+    inputs: [{ ...baseline[0], value }, baseline[1]],
+    outputs: [{ target: out, value: value / 1.26, units: 'K', kind: 'calculated' }],
+  }));
+  const selected = selectInput(
+    selectInput(baseline, dimensions, target, 15),
+    dimensions,
+    other,
+    0.25,
+  );
+  assert.deepEqual(
+    selected.map((p) => p.value),
+    [15, 0.25],
+  );
+  assert.deepEqual(
+    selectableStops(points, selected, dimensions, target, [out]),
+    [10, 12, 15].map((value) => ({ value, kind: 'unavailable' })),
+  );
+  const restored = selectInput(selected, dimensions, other, 0.3);
+  assert.deepEqual(
+    selectableStops(points, restored, dimensions, target, [out]),
+    [10, 12, 15].map((value) => ({ value, kind: 'calculated' })),
+  );
+  assert.deepEqual(
+    baseline.map((p) => p.value),
+    [12, 0.3],
+  );
+});

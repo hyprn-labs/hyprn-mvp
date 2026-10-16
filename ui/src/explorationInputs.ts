@@ -202,3 +202,34 @@ export function availableStops(
   }
   return [...available].sort(([a], [b]) => a - b).map(([value, kind]) => ({ value, kind }));
 }
+
+/** Keep every prepared coordinate selectable; its basis belongs to the current full vector. */
+export function selectableStops(
+  points: ExplorationPoint[],
+  vector: SelectedInput[],
+  dimensions: Dimension[],
+  target: PortRef,
+  outputs: PortRef[],
+): { value: number; kind: 'calculated' | 'estimated' | 'unavailable' }[] {
+  const available = new Map(
+    availableStops(points, vector, dimensions, target, outputs).map((p) => [p.value, p.kind]),
+  );
+  const control = dimensions.find((d) => key(d.target) === key(target));
+  const units = vector.find((p) => key(p.target) === key(target))?.units;
+  const values = new Set<number>();
+  for (const point of points) {
+    const input = point.inputs.find((p) => key(p.target) === key(target));
+    if (!input || input.units !== units || !Number.isFinite(input.value)) continue;
+    if (
+      control &&
+      (!validStep(input.value, control) ||
+        (control.lower !== null && input.value < control.lower) ||
+        (control.upper !== null && input.value > control.upper))
+    )
+      continue;
+    values.add(input.value);
+  }
+  return [...values]
+    .sort((a, b) => a - b)
+    .map((value) => ({ value, kind: available.get(value) ?? 'unavailable' }));
+}

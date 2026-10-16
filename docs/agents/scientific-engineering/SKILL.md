@@ -85,8 +85,10 @@ original calculations, then build and assess an immutable surrogate version and
 explicitly warm it. Query that existing version with the complete selected vector
 and optional active-axis curve; dragging a control must never launch originals or
 refit. Read back its per-output reasons, observed errors, coverage and artifact
-identities. Present discrete selectable stops only for available calculated or
-assessed surrogate points on the exact current fixed-input slice. Distinguish the two kinds. Preserve
+identities. Label a discrete stop calculated or estimated only when its result is
+available for the complete selected vector. Other prepared coordinates can stay
+selectable with an explicit no-result state; their coordinate alone supplies no
+result. Preserve
 unavailable gaps in plots; neither interpolate them in the client nor reuse a
 baseline slice after another input changes. Retain finite assessed query points
 through the public preparation records where supported, so a cold predictor does
@@ -100,8 +102,11 @@ original results in sample/tolerance order; preserve their run links. Match reus
 originals by numerical full-vector equality, exact units and model/numerical pins,
 not JSON spelling (`4` and `4.0` are the same coordinate). Use lightweight run status
 while waiting; read full histories only when needed. Single-input curves assess a
-baseline slice; use the visible one-input-at-a-time mode for them. Combined input
-changes need separately assessed joint coverage, never stitched single-axis curves.
+baseline slice. The UI preserves other selected inputs and chooses the plot axis
+separately; selecting an axis must not reset inputs. To inspect a baseline slice,
+explicitly reset the other inputs. Combined changes need separately assessed joint
+coverage, never stitched single-axis curves. Keep declared linked-input bindings
+intact and make their effect on a plotted slice explicit.
 Verify several slider transitions, category changes, and a cold/reopened session before calling exploration ready. Show
 unavailable regions honestly and preserve exact original values.
 For a useful high-dimensional baseline slice, budget baseline/axis support points

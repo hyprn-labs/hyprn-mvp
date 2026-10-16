@@ -38,7 +38,7 @@ import {
   carryCommon,
   completeVector,
   supportedCombination,
-  availableStops,
+  selectableStops,
   type ExplorationPoint,
   type Dimension,
   type SelectedInput,
@@ -71,7 +71,6 @@ export function AnswerExplorer({
   const [loaded, setLoaded] = useState<Loaded | null>(null),
     [error, setError] = useState('');
   const [fitIndex, setFitIndex] = useState(0);
-  const [inputMode, setInputMode] = useState('single');
   const [design, setDesign] = useState<ExplorationDesign1 | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [selected, setSelected] = useState<SelectedInput[]>([]);
@@ -233,7 +232,7 @@ export function AnswerExplorer({
   }, [api, studyId, answer.answer_version_id, refresh]);
   useEffect(() => {
     setPredictionError('');
-    if (inputMode === 'single' || !surrogate || !vector || combinationIndex < 0) return;
+    if (!loaded || !surrogate || !vector || combinationIndex < 0) return;
     const fence = api.fence({ studyId });
     const token = crypto.randomUUID();
     // Immediate local control update; only the last settled selection is sent.
@@ -275,7 +274,7 @@ export function AnswerExplorer({
     surrogate?.surrogate_version_id,
     combinationIndex,
     vectorSignature,
-    inputMode,
+    loaded?.basis.digest,
     activeAxis,
     refresh,
   ]);
@@ -508,6 +507,7 @@ export function AnswerExplorer({
     }
     carry.current = { vector: selected, dimensions };
     setLoaded(null);
+    setPrediction(null);
     setCategories(next);
     setConfiguration(mapped.configuration_revision_id);
   }
@@ -608,23 +608,26 @@ export function AnswerExplorer({
       }
       categories={
         <>
-          <label>
-            Input changes
-            <Select
-              value={inputMode}
-              onChange={(e) => {
-                setInputMode(e.target.value);
-                setPrediction(null);
-                generation.current++;
-                if (e.target.value === 'single' && loaded) {
-                  setSelected(explorationInputVector(loaded.basis.inputs)!);
-                }
-              }}
-            >
-              <option value="single">One input at a time</option>
-              <option value="combined">Combined inputs</option>
-            </Select>
-          </label>
+          {loaded && (
+            <label>
+              Plot against
+              <Select
+                value={activeAxis ? key(activeAxis) : ''}
+                onChange={(e) => {
+                  const input = loaded.basis.inputs.find((p) => key(p.target) === e.target.value);
+                  if (input) setActiveAxis(input.target);
+                }}
+              >
+                {loaded.basis.inputs
+                  .filter((p) => p.binding.kind === 'free')
+                  .map((p) => (
+                    <option key={key(p.target)} value={key(p.target)}>
+                      {p.name} · {p.instance_name}
+                    </option>
+                  ))}
+              </Select>
+            </label>
+          )}
           {design?.request.category_dimensions.map((d, i) => (
             <label key={d.name}>
               {d.name}
@@ -692,14 +695,13 @@ export function AnswerExplorer({
         <p role="status">Loading answer basis…</p>
       ) : (
         <>
-          {!fit && !surrogate && (
+          {!loaded.fits.length && !surrogate && (
             <p>
               {compatibleUnits
                 ? 'No prepared estimates. Calculated results remain available.'
                 : 'Estimates need model-declared units. Saved quantities stay unchanged.'}
             </p>
           )}
-          {predictionError && !fit && <p role="status">{predictionError}</p>}
           <p className="hf-slider-caption">
             <span className="hf-result-basis hf-result-basis--calculated">
               <span aria-hidden="true">●</span> calculated
@@ -709,10 +711,39 @@ export function AnswerExplorer({
               <span aria-hidden="true">○</span> estimated
             </span>
             {' · '}
-            {inputMode === 'single'
-              ? 'Changing sliders restores other saved inputs. Linked inputs move together.'
-              : 'Other inputs stay selected. Estimates need coverage for all selected inputs.'}
+            <span className="hf-result-basis hf-result-basis--unavailable">
+              <span aria-hidden="true">□</span> no result
+            </span>
           </p>
+          <p className="hf-slider-caption">
+            Plots vary the chosen input; other inputs keep their selected values.
+          </p>
+          {axis && dimensions.find((d) => key(d.target) === key(axis.target))?.covary_group && (
+            <p className="hf-slider-caption">
+              Linked inputs vary together:{' '}
+              {loaded.basis.inputs
+                .filter((p) => {
+                  const group = dimensions.find(
+                    (d) => key(d.target) === key(axis.target),
+                  )?.covary_group;
+                  return (
+                    key(p.target) !== key(axis.target) &&
+                    dimensions.some(
+                      (d) => key(d.target) === key(p.target) && d.covary_group === group,
+                    )
+                  );
+                })
+                .map((p) => p.name + ' · ' + p.instance_name)
+                .join(', ')}
+              .
+            </p>
+          )}
+          {vector && !selectedPoints.some((p) => p.outputs.some((o) => o.value !== null)) && (
+            <p role="status" className="hf-exploration-gap">
+              {predictionError ||
+                'This input combination has no available results. Use Sample settings to calculate it or prepare more samples.'}
+            </p>
+          )}
           {snapshot ? (
             <GraphView
               projection={project(snapshot as Snapshot)}
@@ -731,11 +762,9 @@ export function AnswerExplorer({
                     <QuantitySlider
                       label={input.name}
                       units={savedInputQuantity(input)!.units}
-                      stops={availableStops(
+                      stops={selectableStops(
                         points,
-                        inputMode === 'single'
-                          ? explorationInputVector(loaded.basis.inputs)!
-                          : selected,
+                        selected,
                         dimensions,
                         target,
                         loaded.basis.outputs.map((o) => o.target),
@@ -744,23 +773,9 @@ export function AnswerExplorer({
                       upper={dimensions.find((d) => key(d.target) === ref)?.upper}
                       step={dimensions.find((d) => key(d.target) === ref)?.step}
                       value={selected.find((p) => key(p.target) === ref)?.value ?? null}
-                      onFocus={() => {
-                        if (!activeAxis || key(activeAxis) !== ref) generation.current++;
-                        setActiveAxis(target);
-                      }}
                       onChange={(value) => {
                         generation.current++;
-                        setActiveAxis(target);
-                        setSelected((old) =>
-                          selectInput(
-                            inputMode === 'single'
-                              ? explorationInputVector(loaded.basis.inputs)!
-                              : old,
-                            dimensions,
-                            target,
-                            value,
-                          ),
-                        );
+                        setSelected((old) => selectInput(old, dimensions, target, value));
                       }}
                     />
                   );
@@ -843,9 +858,7 @@ export function AnswerExplorer({
                       value={result}
                       state={resultKind}
                       reason={explorationReason(
-                        selectedResult?.reason ||
-                          predictionError ||
-                          (calculated ? exact?.reason : estimated?.reason),
+                        selectedResult?.reason || (calculated ? exact?.reason : null),
                       )}
                     />
                     {axis && current !== null && (
@@ -892,69 +905,74 @@ export function AnswerExplorer({
                         }
                       />
                     )}
-                    <ActionDialog
-                      title={output.name + ' result basis'}
-                      label="Result basis"
-                      size="sm"
-                    >
-                      {originalRun ? (
-                        <Button
-                          onClick={() => onOpen({ study: studyId, view: 'runs', run: originalRun })}
-                        >
-                          Open calculated run
-                        </Button>
-                      ) : jointGroup && jointAssessment && !resultFit ? (
-                        <>
-                          <p>
-                            {jointAssessment.method ?? 'No eligible method'};{' '}
-                            {jointAssessment.metrics?.evaluable_count ?? 0} of{' '}
-                            {jointAssessment.metrics?.assessed_count ?? 0} independent checks
-                            evaluated.
-                          </p>
-                          <p>
-                            Maximum observed absolute error:{' '}
-                            {jointAssessment.metrics?.max_absolute_error == null
-                              ? 'not computed'
-                              : formatNumber(jointAssessment.metrics.max_absolute_error)}{' '}
-                            {unitLabel(output.units)}. These checks do not establish a universal
-                            error bound or physical validity.
-                          </p>
-                          <p>
-                            {explorationReason(jointAssessment.reason) ??
-                              'Observed targets met within the prepared domain.'}
-                          </p>
-                          <p>
-                            Surrogate version: <code>{surrogate?.surrogate_version_id}</code>
-                          </p>
-                          <p>
-                            Data artifact SHA-256: <code>{jointGroup.artifact_sha256}</code>
-                          </p>
-                        </>
-                      ) : resultFit ? (
-                        <>
-                          <p>
-                            Estimated from {resultFit.samples.length} original-model samples;{' '}
-                            {resultMetric?.evaluable_count ?? 0} of{' '}
-                            {resultMetric?.assessed_count ?? 0} independent checks evaluated.
-                          </p>
-                          <p>
-                            Maximum observed absolute error:{' '}
-                            {resultMetric?.max_absolute_error == null
-                              ? 'not computed'
-                              : formatNumber(resultMetric.max_absolute_error)}{' '}
-                            {unitLabel(output.units)}
-                          </p>
-                          <p>
-                            Response identity: <code>{resultFit.identity}</code>
-                          </p>
-                          <p>
-                            Result SHA-256: <code>{resultFit.numerical.result_sha256}</code>
-                          </p>
-                        </>
-                      ) : (
-                        <p>No estimate is available.</p>
-                      )}
-                    </ActionDialog>
+                    <div className="hf-output-actions">
+                      <ActionDialog
+                        variant="quiet"
+                        title={output.name + ' result basis'}
+                        label="Result basis"
+                        size="sm"
+                      >
+                        {originalRun ? (
+                          <Button
+                            onClick={() =>
+                              onOpen({ study: studyId, view: 'runs', run: originalRun })
+                            }
+                          >
+                            Open calculated run
+                          </Button>
+                        ) : jointGroup && jointAssessment && !resultFit ? (
+                          <>
+                            <p>
+                              {jointAssessment.method ?? 'No eligible method'};{' '}
+                              {jointAssessment.metrics?.evaluable_count ?? 0} of{' '}
+                              {jointAssessment.metrics?.assessed_count ?? 0} independent checks
+                              evaluated.
+                            </p>
+                            <p>
+                              Maximum observed absolute error:{' '}
+                              {jointAssessment.metrics?.max_absolute_error == null
+                                ? 'not computed'
+                                : formatNumber(jointAssessment.metrics.max_absolute_error)}{' '}
+                              {unitLabel(output.units)}. These checks do not establish a universal
+                              error bound or physical validity.
+                            </p>
+                            <p>
+                              {explorationReason(jointAssessment.reason) ??
+                                'Observed targets met within the prepared domain.'}
+                            </p>
+                            <p>
+                              Surrogate version: <code>{surrogate?.surrogate_version_id}</code>
+                            </p>
+                            <p>
+                              Data artifact SHA-256: <code>{jointGroup.artifact_sha256}</code>
+                            </p>
+                          </>
+                        ) : resultFit ? (
+                          <>
+                            <p>
+                              Estimated from {resultFit.samples.length} original-model samples;{' '}
+                              {resultMetric?.evaluable_count ?? 0} of{' '}
+                              {resultMetric?.assessed_count ?? 0} independent checks evaluated.
+                            </p>
+                            <p>
+                              Maximum observed absolute error:{' '}
+                              {resultMetric?.max_absolute_error == null
+                                ? 'not computed'
+                                : formatNumber(resultMetric.max_absolute_error)}{' '}
+                              {unitLabel(output.units)}
+                            </p>
+                            <p>
+                              Response identity: <code>{resultFit.identity}</code>
+                            </p>
+                            <p>
+                              Result SHA-256: <code>{resultFit.numerical.result_sha256}</code>
+                            </p>
+                          </>
+                        ) : (
+                          <p>No estimate is available.</p>
+                        )}
+                      </ActionDialog>
+                    </div>
                   </>
                 );
               }}
