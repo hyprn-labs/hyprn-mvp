@@ -257,10 +257,7 @@ export function AnswerExplorer({
         .catch(async (e) => {
           await api.readFailed(e, fence);
           if (fence.valid())
-            setPredictionError(
-              'Live estimates unavailable. Prepared points remain available; ' +
-                'prepare live predictions in Sample settings.',
-            );
+            setPredictionError('Live estimates unavailable. ' + message(e));
         })
         .finally(fence.done);
     }, 20);
