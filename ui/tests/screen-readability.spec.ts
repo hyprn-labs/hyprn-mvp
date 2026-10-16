@@ -49,6 +49,66 @@ test('display precision never turns small nonzero values into zero', () => {
     expect(formatNumber(value)).toBe(expected);
   expect(formatNumber(NaN)).toBe('not computed');
 });
+test('Fit model contains complete readable nodes and wheel input scrolls the page', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 878 });
+  const state = await harness(page);
+  const definition = state.model.definitions[0];
+  state.model.definitions = [14, 9, 7].map((count, n) => ({
+    ...definition,
+    definition_version_id: `many-${n}`,
+    ports: Array.from({ length: count }, (_, i) => ({
+      ...definition.ports[0],
+      port_id: `quantity-${i}`,
+      code_symbol: i === 0 ? 'propulsion_adjustment' : `quantity_${i}`,
+      direction: i === count - 1 ? 'output' as const : 'input' as const,
+    })),
+  }));
+  state.model.instances.forEach((instance, n) => {
+    instance.definition_version_id = `many-${n}`;
+    instance.name = ['Cruise propulsion adjustment', 'Aircraft mission fuel requirement', 'Tank and storage feasibility'][n];
+  });
+  state.model.connections = [0, 1].map(n => ({ connection_id: `flow-${n}`,
+    source_ref: { instance_id: state.model.instances[n].instance_id, port_id: `quantity-${[13, 8][n]}` },
+    target_ref: { instance_id: state.model.instances[n + 1].instance_id, port_id: 'quantity-0' },
+  }));
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+  const viewport = page.getByRole('region', { name: 'Directed component diagram' });
+  const fit = page.getByRole('button', { name: 'Fit model', exact: true });
+  await fit.click();
+  async function contained() {
+    const frame = (await viewport.boundingBox())!;
+    for (const node of await viewport.locator('.hf-node').all()) {
+      const box = (await node.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(frame.x);
+      expect(box.y).toBeGreaterThanOrEqual(frame.y);
+      expect(box.x + box.width).toBeLessThanOrEqual(frame.x + frame.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
+    }
+  }
+  await contained();
+  expect(await viewport.locator('.hf-node__name,.hf-node__port code').evaluateAll(elements =>
+    elements.every(e => e.scrollWidth <= e.clientWidth + 1 && getComputedStyle(e).textOverflow !== 'ellipsis'),
+  )).toBe(true);
+  expect(Number((await page.getByLabel('Graph zoom', { exact: true }).textContent())!.replace('%', ''))).toBeGreaterThanOrEqual(85);
+  await viewport.locator('[data-instance="a"]').click();
+  await expect(page.locator('.canvas-footer')).toContainText('Cruise propulsion adjustment');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await viewport.focus();
+  await page.keyboard.press('ArrowRight');
+  await fit.click();
+  await contained();
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await fit.click();
+  await contained();
+  await viewport.hover();
+  const before = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 500);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  expect(await viewport.evaluate(e => e.scrollTop)).toBe(0);
+  await page.getByRole('button', { name: 'Jump to Quantities', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Quantities', exact: true })).toBeFocused();
+  expect(state.writes).toEqual([]);
+});
 test('Model actions stay direct and quantity search reveals distant targets', async ({ page }) => {
   const state = await harness(page);
   referenceModel(state);
