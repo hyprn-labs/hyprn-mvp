@@ -30,6 +30,10 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
     const page = context.pages()[0] ?? await context.newPage(); fixturePage = page;
     await guardOrigin(page);
     const state = await harness(page); runFixture(state);
+    (state.model.definitions[0] as any).quantity_definitions = [{
+      port_id: state.model.definitions[0].ports[0].port_id,
+      statement: 'Explicit quantity meaning retained in the model and readable at browser zoom.',
+    }];
     for (const input of state.detail.history.configuration.inputs) input.provenance.evidence_version_ids = [];
     state.configurations = [{ configuration: state.detail.history.configuration, model_snapshot: state.detail.history.model_snapshot }];
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -137,12 +141,11 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
         await control.scrollIntoViewIfNeeded();
         await check('details-' + name.toLowerCase().replace(' ', '-') + '-' + theme, control);
         if (name === 'Edit quantities') {
-          // Quantities table at genuine 200%: Unit (column 5) stays on one readable line;
-          // the definition (column 4) wraps inside its own cell.
+          // Quantities at genuine 200%: Unit stays on one readable line;
+          // the definition wraps inside its own cell.
           const ports = page.getByRole('table', { name: 'Quantities', exact: true });
           await expect(ports.locator('thead th')).toHaveText([
             'Quantity',
-            'Component',
             'Direction',
             'Definition',
             'Unit',
@@ -161,7 +164,7 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
                   cellRight: e.getBoundingClientRect().right,
                 };
               };
-              return { definition: cell(3), units: cell(4) };
+              return { definition: cell(2), units: cell(3) };
             }),
           );
           expect(rows.length).toBeGreaterThan(0);

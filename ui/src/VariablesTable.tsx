@@ -337,6 +337,8 @@ export function QuantitiesTable({
           : a.instance.name.localeCompare(b.instance.name)) || a.key.localeCompare(b.key)) *
         (descending ? -1 : 1),
     );
+  const showComponent = scope.length !== 1;
+  const showDefinition = visible.some((row) => row.definition !== null);
   function order(next: typeof sort) {
     setDescending(sort === next ? !descending : false);
     setSort(next);
@@ -347,7 +349,11 @@ export function QuantitiesTable({
         Input
         <span className="quantity-flow">
           {row.incoming.length
-            ? row.incoming.map((c) => 'from ' + endpoint(c.source_ref)).join(', ')
+            ? row.incoming.map((c) => (
+                <span className="quantity-flow" key={c.connection_id}>
+                  from {endpoint(c.source_ref)}
+                </span>
+              ))
             : 'set in configuration'}
         </span>
       </>
@@ -356,7 +362,11 @@ export function QuantitiesTable({
         Output
         <span className="quantity-flow">
           {row.outgoing.length
-            ? row.outgoing.map((c) => 'to ' + endpoint(c.target_ref)).join(', ')
+            ? row.outgoing.map((c) => (
+                <span className="quantity-flow" key={c.connection_id}>
+                  to {endpoint(c.target_ref)}
+                </span>
+              ))
             : 'model result'}
         </span>
       </>
@@ -395,8 +405,10 @@ export function QuantitiesTable({
               aria-label="Component filter"
               value={scope.length === 1 ? scope[0] : ''}
               onChange={(e) => {
-                if (e.target.value) onSelect({ kind: 'instance', instance_id: e.target.value });
-                else setShowAll(true);
+                if (e.target.value) {
+                  setShowAll(false);
+                  onSelect({ kind: 'instance', instance_id: e.target.value });
+                } else setShowAll(true);
               }}
             >
               <option value="">All components</option>
@@ -435,6 +447,18 @@ export function QuantitiesTable({
         <p className="context-line" aria-live="polite">
           Showing {visible.length} of {rows.length} quantities{scopeName && ' · ' + scopeName}
         </p>
+        {!showComponent && (
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => onSelect({ kind: 'instance', instance_id: scope[0] })}
+          >
+            Inspect component {scopeName}
+          </Button>
+        )}
+        {!!visible.length && !showDefinition && (
+          <p className="context-line">No quantity definitions provided.</p>
+        )}
         <div
           ref={scroll}
           className="table-scroll variables-scroll quantities-scroll"
@@ -455,18 +479,20 @@ export function QuantitiesTable({
                     Quantity
                   </Button>
                 </th>
-                <th
-                  scope="col"
-                  aria-sort={
-                    sort === 'component' ? (descending ? 'descending' : 'ascending') : 'none'
-                  }
-                >
-                  <Button variant="quiet" size="sm" onClick={() => order('component')}>
-                    Component
-                  </Button>
-                </th>
+                {showComponent && (
+                  <th
+                    scope="col"
+                    aria-sort={
+                      sort === 'component' ? (descending ? 'descending' : 'ascending') : 'none'
+                    }
+                  >
+                    <Button variant="quiet" size="sm" onClick={() => order('component')}>
+                      Component
+                    </Button>
+                  </th>
+                )}
                 <th scope="col">Direction</th>
-                <th scope="col">Definition</th>
+                {showDefinition && <th scope="col">Definition</th>}
                 <th scope="col">Unit</th>
                 {hasValues && (
                   <>
@@ -493,20 +519,26 @@ export function QuantitiesTable({
                         <span className="variable-description">{row.port.name}</span>
                       )}
                     </th>
-                    <td>
-                      <Button
-                        variant="quiet"
-                        size="sm"
-                        aria-label={`Inspect component ${instanceName(row.instance.instance_id)}`}
-                        onClick={() =>
-                          onSelect({ kind: 'instance', instance_id: row.instance.instance_id })
-                        }
-                      >
-                        {instanceName(row.instance.instance_id)}
-                      </Button>
-                    </td>
+                    {showComponent && (
+                      <td>
+                        <Button
+                          variant="quiet"
+                          size="sm"
+                          aria-label={`Inspect component ${instanceName(row.instance.instance_id)}`}
+                          onClick={() =>
+                            onSelect({ kind: 'instance', instance_id: row.instance.instance_id })
+                          }
+                        >
+                          {instanceName(row.instance.instance_id)}
+                        </Button>
+                      </td>
+                    )}
                     <td className="quantity-direction">{flow(row)}</td>
-                    <td>{row.definition ?? <span className="context-line">No definition</span>}</td>
+                    {showDefinition && (
+                      <td className="quantity-definition">
+                        {row.definition ?? <span className="context-line">No definition</span>}
+                      </td>
+                    )}
                     <td className="unit">{unitLabel(row.port.units)}</td>
                     {hasValues && (
                       <>
@@ -540,7 +572,12 @@ export function QuantitiesTable({
               })}
               {!visible.length && (
                 <tr>
-                  <td colSpan={hasValues ? 7 : 5} className="quantities-empty">
+                  <td
+                    colSpan={
+                      3 + Number(showComponent) + Number(showDefinition) + (hasValues ? 2 : 0)
+                    }
+                    className="quantities-empty"
+                  >
                     No quantities match these filters.
                   </td>
                 </tr>

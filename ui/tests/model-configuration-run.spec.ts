@@ -45,7 +45,7 @@ test('model quantities inspect their component; tables, XDSM and portability sta
   await expect(page.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('table', { name: 'Quantities', exact: true }).getByRole('columnheader'),
-  ).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
+  ).toHaveText(['Quantity', 'Direction', 'Unit']);
   await expect(page.locator('[data-variable]')).toHaveCount(3);
   await expect(page.locator('[data-variable][aria-selected="true"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
@@ -270,20 +270,22 @@ test('saved configuration remains identical after a run and permits another expl
 test('long source symbols preserve case and leave port units readable', async ({ page }) => {
   const state = await harness(page); referenceModel(state);
   state.model.definitions[0].ports[0].code_symbol = 'future_hydrogen_price';
-  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   (state.model.definitions[0] as any).quantity_definitions = [{ port_id: state.model.definitions[0].ports[0].port_id, statement: 'Projected delivered hydrogen price for the long-term operating horizon, including transport and storage' }];
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   // The 350px inspector ports table is gone by construction; the quantities table keeps units readable.
   await expect(details(page).locator('table')).toHaveCount(0);
   const table = page.getByRole('table', { name: 'Quantities', exact: true });
-  await expect(table.locator('thead th')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
+  await expect(table.locator('thead th')).toHaveText(['Quantity', 'Direction', 'Definition', 'Unit']);
+  await expect(table.getByText('No definition', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('No quantity definitions provided.', { exact: true })).toHaveCount(0);
   for (const width of [1440, 720, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    // Units (column 5) stay on one line inside their own cell; they are never overlapped.
-    const cells = await table.locator('tbody td:nth-child(5)').evaluateAll(es => es.map(e => { const r = document.createRange(); r.selectNodeContents(e); return { text: e.textContent, lines: r.getClientRects().length, fits: e.scrollWidth <= e.clientWidth }; }));
+    // Units stay on one line inside their own cell; they are never overlapped.
+    const cells = await table.locator('tbody td.unit').evaluateAll(es => es.map(e => { const r = document.createRange(); r.selectNodeContents(e); return { text: e.textContent, lines: r.getClientRects().length, fits: e.scrollWidth <= e.clientWidth }; }));
     expect(cells.length).toBeGreaterThan(0);
     expect(cells.every(c => c.lines === 1 && c.fits), JSON.stringify(cells)).toBe(true);
-    // The definition (column 4) wraps inside its own cell instead of overflowing onto Unit.
-    const definitions = await table.locator('tbody td:nth-child(4)').evaluateAll(es => es.map(e => { const r = document.createRange(); r.selectNodeContents(e); const text = r.getBoundingClientRect(), cell = e.getBoundingClientRect(); return { fits: e.scrollWidth <= e.clientWidth, inside: text.right <= cell.right + 1, lines: r.getClientRects().length }; }));
+    // Definitions wrap inside their own cells instead of overflowing onto Unit.
+    const definitions = await table.locator('tbody td.quantity-definition').evaluateAll(es => es.map(e => { const r = document.createRange(); r.selectNodeContents(e); const text = r.getBoundingClientRect(), cell = e.getBoundingClientRect(); return { fits: e.scrollWidth <= e.clientWidth, inside: text.right <= cell.right + 1, lines: r.getClientRects().length }; }));
     expect(definitions.every(c => c.fits && c.inside), JSON.stringify(definitions)).toBe(true);
     // In its fixed-width column the long definition must wrap rather than overflow.
     if (width === 1440) expect(definitions.some(c => c.lines > 1)).toBe(true);
@@ -314,7 +316,7 @@ test('run Model tab and saved configuration View model version reuse the canonic
   await page.getByRole('tab', { name: 'Model', exact: true }).click();
   const view = page.getByRole('tabpanel', { name: 'Model', exact: true }).getByRole('region', { name: 'Model view', exact: true });
   const table = view.getByRole('table', { name: 'Quantities', exact: true }), inspector = view.getByRole('region', { name: 'Selection inspector', exact: true });
-  await expect(table.getByRole('columnheader')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit', 'Value', 'Provenance']);
+  await expect(table.getByRole('columnheader')).toHaveText(['Quantity', 'Component', 'Direction', 'Unit', 'Value', 'Provenance']);
   await expect(view.getByRole('tab', { name: 'Graph', exact: true })).toBeVisible(); await expect(view.getByRole('tab', { name: 'XDSM', exact: true })).toBeVisible();
   await expect(inspector.getByRole('heading', { name: 'Model', exact: true })).toBeVisible();
   await expect(inspector).toContainText('Model versions saved in this older format have no assumptions.');
@@ -362,7 +364,7 @@ test('run Model tab and saved configuration View model version reuse the canonic
   await page.getByRole('button', { name: 'View model version', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Model version ' + run.history.configuration.model_revision_id.slice(0, 8), exact: true });
   const configured = dialog.getByRole('region', { name: 'Model view', exact: true }).getByRole('table', { name: 'Quantities', exact: true });
-  await expect(configured.getByRole('columnheader')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit', 'Value', 'Provenance']);
+  await expect(configured.getByRole('columnheader')).toHaveText(['Quantity', 'Component', 'Direction', 'Unit', 'Value', 'Provenance']);
   if (await dialog.getByRole('button', { name: 'Show all quantities', exact: true }).isVisible()) await dialog.getByRole('button', { name: 'Show all quantities', exact: true }).click();
   await expect(configured.locator('[data-variable="a/x"] .numeric-value')).toHaveText('0');
   await expect(configured.locator('[data-variable="b/y"] td.missing')).toHaveText('computed when run');

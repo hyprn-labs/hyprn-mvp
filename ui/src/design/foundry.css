@@ -912,3 +912,6 @@ main { margin: 0 auto; max-width: var(--page-max); }
 .hf-node .hf-output-actions > .hf-btn { width: auto; border-bottom: 0; }
 .hf-slider-stops .hf-slider-stop--unavailable { background: var(--surface); border-color: var(--ink-muted); border-radius: var(--radius-mark); }
 .hf-exploration-gap { padding: var(--space-3); background: var(--surface-sunken); border-left: 2px solid var(--line-strong); }
+
+.model-view .hf-view-toolbar{padding-block:var(--space-1)}
+.model-creation .hf-btn{flex-shrink:0;overflow-wrap:normal;word-break:normal}

@@ -90,13 +90,17 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
   await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   const viewport = page.getByRole('region', { name: 'Directed component diagram' });
   const fit = page.getByRole('button', { name: 'Fit model', exact: true });
-  await expect.poll(async () => {
-    const bounds = await viewport.locator('.hf-node').evaluateAll(nodes => nodes.map(node => {
-      const box = node.getBoundingClientRect();
-      return { top: box.top, bottom: box.bottom };
-    }));
-    return bounds.length === 3 && bounds.every(box => box.top >= 0 && box.bottom <= 878);
-  }).toBe(true);
+  await expect
+    .poll(async () => {
+      const bounds = await viewport.locator('.hf-node').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const box = node.getBoundingClientRect();
+          return { top: box.top, bottom: box.bottom };
+        }),
+      );
+      return bounds.length === 3 && bounds.every((box) => box.top >= 0 && box.bottom <= 878);
+    })
+    .toBe(true);
   const footer = (await page.locator('.canvas-footer').boundingBox())!;
   expect(footer.y + footer.height).toBeLessThanOrEqual(878);
   await fit.click();
@@ -162,6 +166,9 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
   await page.setViewportSize({ width: 1440, height: 1000 });
   await fit.click();
   await contained();
+  expect(
+    Number((await page.getByLabel('Graph zoom', { exact: true }).textContent())!.replace('%', '')),
+  ).toBeGreaterThanOrEqual(75);
   await capture(page, 'model-fit');
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await fit.click();
@@ -196,12 +203,58 @@ for (const count of [0, 1])
       expect(box.width).toBeGreaterThan(200);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.getByRole('button', { name: 'Fit model', exact: true }).click();
+      const addComponent = page.getByRole('button', { name: '＋ Component', exact: true });
+      expect(
+        await addComponent.evaluate((button) => {
+          const range = document.createRange();
+          range.selectNodeContents(button);
+          return (
+            range.getBoundingClientRect().height <=
+            parseFloat(getComputedStyle(button).lineHeight) + 1
+          );
+        }),
+      ).toBe(true);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
     }
     expect(state.writes).toEqual([]);
   });
+test('Quantity columns retain useful context without repeating empty definitions or one owner', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  referenceModel(state);
+  state.model.definitions.forEach((definition) => {
+    (definition as any).quantity_definitions = [];
+  });
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+  const table = page.getByRole('table', { name: 'Quantities', exact: true });
+  await page.getByRole('button', { name: 'Show all quantities', exact: true }).click();
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Quantity',
+    'Component',
+    'Direction',
+    'Unit',
+  ]);
+  await expect(page.getByText('No quantity definitions provided.', { exact: true })).toHaveCount(1);
+  await page.getByLabel('Component filter', { exact: true }).selectOption('a');
+  await expect(table.getByRole('columnheader')).toHaveText(['Quantity', 'Direction', 'Unit']);
+  await page
+    .getByRole('button', { name: 'Inspect component Linear response', exact: true })
+    .click();
+  await expect(
+    details(page).getByRole('heading', { name: 'Linear response', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show all quantities', exact: true }).click();
+  await expect(table.getByRole('columnheader', { name: 'Component', exact: true })).toBeVisible();
+  await page.getByLabel('Find a quantity', { exact: true }).fill('does_not_exist');
+  await expect(
+    table.getByText('No quantities match these filters.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('No quantity definitions provided.', { exact: true })).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
 test('Model actions stay direct and quantity search reveals distant targets', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 934 });
   const state = await harness(page);

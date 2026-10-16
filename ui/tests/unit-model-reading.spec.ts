@@ -88,8 +88,8 @@ for(const schema of ['1','2','3']) test('@units-reading exact schema '+schema+' 
 async function portTableReadable(page:Page) {
   const table=page.getByRole('table',{name:'Quantities',exact:true});
   await expect(page.getByRole('region',{name:'Selection inspector',exact:true}).locator('table')).toHaveCount(0);
-  await expect(table.locator('thead th').nth(3)).toHaveText('Definition');await expect(table.locator('thead th').nth(4)).toHaveText('Unit');
-  const rows=await table.evaluate(t=>[...t.querySelectorAll('tbody tr')].map(tr=>{const cell=(n:number)=>{const e=tr.children[n] as HTMLElement,r=document.createRange();r.selectNodeContents(e);return {text:e.textContent,lines:r.getClientRects().length,fits:e.scrollWidth<=e.clientWidth,textRight:r.getBoundingClientRect().right,cellRight:e.getBoundingClientRect().right};};return {definition:cell(3),units:cell(4)};}));
+  await expect(table.getByRole('columnheader',{name:'Definition',exact:true})).toBeVisible();await expect(table.getByRole('columnheader',{name:'Unit',exact:true})).toBeVisible();
+  const rows=await table.evaluate(t=>[...t.querySelectorAll('tbody tr')].map(tr=>{const cell=(selector:string)=>{const e=tr.querySelector(selector) as HTMLElement,r=document.createRange();r.selectNodeContents(e);return {text:e.textContent,lines:r.getClientRects().length,fits:e.scrollWidth<=e.clientWidth,textRight:r.getBoundingClientRect().right,cellRight:e.getBoundingClientRect().right};};return {definition:cell('.quantity-definition'),units:cell('.unit')};}));
   expect(rows.length).toBeGreaterThan(0);
   for(const row of rows){expect(row.units.lines,JSON.stringify(row)).toBe(1);expect(row.units.fits,JSON.stringify(row)).toBe(true);expect(row.definition.fits,JSON.stringify(row)).toBe(true);expect(row.definition.textRight,JSON.stringify(row)).toBeLessThanOrEqual(row.definition.cellRight+1);}
   return rows;

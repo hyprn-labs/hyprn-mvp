@@ -22,6 +22,8 @@ files_modified:
   - ui/src/views/model.tsx
   - ui/src/styles.css
   - ui/tests/screen-readability.spec.ts
+  - ui/tests/foundry-zoom.spec.ts
+  - ui/tests/unit-model-reading.spec.ts
   - ui/tests/model-configuration-run.spec.ts
   - ui/tests/record-labels.spec.ts
   - .planning/phases/03-agent-tools-for-coding-agents/model-workspace/1-CHECKPOINT.md
@@ -98,6 +100,8 @@ Repair the model inspection journey requested by the user: first graph sizing, a
     Expand useful model width and reduce redundant vertical chrome through the existing workbench/shared recipes. Scope model layout changes so other pages are unaffected unless an intentional shared improvement is covered by their tests. Remove competing overflow containers around the graph; use ordinary document scrolling for reaching Quantities, a single intentional graph pan surface, and a visible Quantities shortcut that scrolls/focuses its existing section. Keep its wide data in its existing named local scroll region. On narrow screens stack Details after the graph with all controls reachable. Update footer guidance to match current selection.
 
     Simplify Details in SelectionInspector, the ModelEditor authoring slot and Foundry styling: one component heading, compact actions associated with that component, one clearly scoped shared-method notice, flowing Purpose/Basis and reasoning/Calculation logic content, and a Python function disclosure followed by Method record. Keep complete authored prose, evidence, assumptions, all existing edit actions, source hash checks, focus restoration and exact method-version context. Reduce repeated borders, nested cards and navigation chrome without removing the useful section jump behavior for long content. ModelMethodDetails behavior is reused; change its callers/layout only unless a concrete required behavior cannot otherwise be preserved.
+
+    Follow-up browser findings: keep the three-component graph and footer within the initial 1920 by 878 document viewport through compact navigation and controls; prefer three desktop columns from 720px canvas width for readable fit at 1440. Wrap creation buttons as whole controls on narrow screens. In Quantities, omit repeated Component cells for a single-component scope while retaining an owner action; omit Definition only when all visible definitions are absent, using one honest notice for nonempty results. Keep mixed definitions, empty results and scientific value states.
 
     Make version controls read Current draft and human-readable saved-version labels derived from existing record fields; retain exact option values, distinguish saved versions reliably and keep complete identities in Model record details. Retain the shared Saved draft / Unsaved changes / Saved version read-only states. Place a concise explanation by Save model version that this creates a saved read-only version; do not imply an automatic publication, alter current dirty/save guards or fabricate version dates/numbers. Preserve configuration creation and all model actions, and show editing/publication controls only in their existing valid lifecycle context. Adjust affected tests for the intentional labels while keeping behavioral assertions.
 

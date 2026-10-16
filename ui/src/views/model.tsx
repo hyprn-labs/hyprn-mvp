@@ -102,29 +102,33 @@ function renderModel(ctx: ViewContext) {
   const { setResourceActions, setModelActionHost, approachHandoff, setApproachHandoff } = ctx;
   const { modelVersions, guards, currentModel, setRevisions, setNotice } = ctx;
   const unitsOf = revision ?? model;
+  const approachLink = (
+    <Button
+      variant="link"
+      size="sm"
+      disabled={busy || loading}
+      onClick={() =>
+        navigate(
+          () =>
+            void perform(async () => {
+              const version =
+                ctx.requestedApproach ??
+                (await api.approach(study.study_id)).latest_version?.approach_version_id;
+              await openLink({
+                study: study.study_id,
+                view: 'approach',
+                approach: version,
+              });
+            }),
+        )
+      }
+    >
+      View modeling approach
+    </Button>
+  );
   return (
     <>
-      <Button
-        variant="quiet"
-        disabled={busy || loading}
-        onClick={() =>
-          navigate(
-            () =>
-              void perform(async () => {
-                const version =
-                  ctx.requestedApproach ??
-                  (await api.approach(study.study_id)).latest_version?.approach_version_id;
-                await openLink({
-                  study: study.study_id,
-                  view: 'approach',
-                  approach: version,
-                });
-              }),
-          )
-        }
-      >
-        View modeling approach
-      </Button>
+      {!selectedModel && approachLink}
       {!selectedModel && !creatingModel && (
         <section className="models-page">
           <div className="page-heading">
@@ -167,15 +171,19 @@ function renderModel(ctx: ViewContext) {
       {selectedModel && (
         <div className="model-heading">
           <div>
-            <Button
-              variant="link"
-              aria-label="All models"
-              onClick={() =>
-                navigate(() => void openLink({ study: study.study_id, view: 'model' }))
-              }
-            >
-              ← All models
-            </Button>
+            <nav className="model-navigation" aria-label="Model navigation">
+              <Button
+                variant="link"
+                size="sm"
+                aria-label="All models"
+                onClick={() =>
+                  navigate(() => void openLink({ study: study.study_id, view: 'model' }))
+                }
+              >
+                ← All models
+              </Button>
+              {approachLink}
+            </nav>
             <h2>
               {revision
                 ? `Model version ${revision.model_revision_id.slice(0, 8)}`

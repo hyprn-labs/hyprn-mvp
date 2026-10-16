@@ -88,7 +88,9 @@ export function GraphCanvas({
         Math.min(
           projection.nodes.length,
           3,
-          Math.floor((availableWidth - pitch) / (pitch * 5 + pitch)),
+          availableWidth >= pitch * 15
+            ? 3
+            : Math.floor((availableWidth - pitch) / (pitch * 5 + pitch)),
         ),
       );
   const portHeight = portContent ? pitch * 5 : token('--row-dense');
