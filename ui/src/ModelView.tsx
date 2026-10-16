@@ -4,7 +4,7 @@ import type { EvidenceSnapshot, PortRead3 } from './contract';
 import { GraphView, project, type Node, type RevealTarget, type Snapshot } from './GraphView';
 import { XdsmView } from './XdsmView';
 import { QuantitiesTable, type PortPasteAction, type VariableContext } from './VariablesTable';
-import { SelectionInspector } from './SelectionInspector';
+import { SelectionInspector, modelSummary } from './SelectionInspector';
 import type { MethodLink, MethodLinks } from './modelMethods';
 import type { EditorGuard, Selection } from './workspaceModel';
 
@@ -12,7 +12,10 @@ import type { EditorGuard, Selection } from './workspaceModel';
 export type ModelFocus = { instances: Set<string>; ports: Set<string>; links: Set<string> };
 /** Draft authoring (Models page, current draft): the model editor renders its actions into the
  * canvas toolbar host and its editable Details (model or component) into the details host. */
-export type ModelAuthoring = (hosts: { toolbar: HTMLDivElement | null; details: HTMLDivElement | null }) => ReactNode;
+export type ModelAuthoring = (hosts: {
+  toolbar: HTMLDivElement | null;
+  details: HTMLDivElement | null;
+}) => ReactNode;
 
 /**
  * The canonical model view: Graph | XDSM on top in a bounded
@@ -21,40 +24,94 @@ export type ModelAuthoring = (hosts: { toolbar: HTMLDivElement | null; details: 
  * Model, configuration "View model version" and approach "Open model version". It reads the
  * snapshot it is given and never fetches or substitutes another model.
  */
-export function ModelView({ snapshot, selection, onSelect, values = { kind: 'model' }, evidence = [], authoring, onPastePorts, onPasteHandle, methods = { kind: 'none' }, onOpenStep, focus, idPrefix = '' }: {
-  snapshot: Snapshot; selection: Selection; onSelect: (selection: Selection) => void; values?: VariableContext; evidence?: EvidenceSnapshot[];
-  authoring?: ModelAuthoring; onPastePorts?: PortPasteAction; onPasteHandle?: (handle: EditorGuard) => void;
-  methods?: MethodLinks; onOpenStep?: (link: MethodLink) => void; focus?: ModelFocus;
+export function ModelView({
+  snapshot,
+  selection,
+  onSelect,
+  values = { kind: 'model' },
+  evidence = [],
+  authoring,
+  onPastePorts,
+  onPasteHandle,
+  methods = { kind: 'none' },
+  onOpenStep,
+  focus,
+  idPrefix = '',
+}: {
+  snapshot: Snapshot;
+  selection: Selection;
+  onSelect: (selection: Selection) => void;
+  values?: VariableContext;
+  evidence?: EvidenceSnapshot[];
+  authoring?: ModelAuthoring;
+  onPastePorts?: PortPasteAction;
+  onPasteHandle?: (handle: EditorGuard) => void;
+  methods?: MethodLinks;
+  onOpenStep?: (link: MethodLink) => void;
+  focus?: ModelFocus;
   /** Distinguishes element IDs when a second view is open in a dialog. */
   idPrefix?: string;
 }) {
   const views = ['Graph', 'XDSM'] as const;
-  const [view, setView] = useState<typeof views[number]>('Graph');
+  const [view, setView] = useState<(typeof views)[number]>('Graph');
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [authoringHost, setAuthoringHost] = useState<HTMLDivElement | null>(null);
   const [search, setSearch] = useState('');
-  useEffect(() => { if (selection.kind !== 'none') setDetailsOpen(true); }, [selection]);
+  useEffect(() => {
+    if (selection.kind !== 'none') setDetailsOpen(true);
+  }, [selection]);
   const [pendingReveal, setPendingReveal] = useState<RevealTarget | undefined>();
   const [reveal, setReveal] = useState<RevealTarget | undefined>();
   const searchRequest = useRef(0);
   useEffect(() => {
-    if (!pendingReveal || !('instance_id' in selection) || selection.instance_id !== pendingReveal.instance_id) return;
-    setReveal(pendingReveal); setPendingReveal(undefined); setSearch('');
+    if (
+      !pendingReveal ||
+      !('instance_id' in selection) ||
+      selection.instance_id !== pendingReveal.instance_id
+    )
+      return;
+    setReveal(pendingReveal);
+    setPendingReveal(undefined);
+    setSearch('');
   }, [selection, pendingReveal]);
   function revealSearch(instance_id: string, port_id?: string) {
     setPendingReveal({ instance_id, port_id, request: ++searchRequest.current });
-    onSelect({ kind: 'instance', instance_id });
+    onSelect(
+      port_id ? { kind: 'variable', instance_id, port_id } : { kind: 'instance', instance_id },
+    );
   }
   const projection = useMemo(() => project(snapshot), [snapshot]);
-  const trace = { nodes: focus?.instances ?? new Set<string>(), links: focus?.links ?? new Set<string>() };
+  const trace = {
+    nodes: focus?.instances ?? new Set<string>(),
+    links: focus?.links ?? new Set<string>(),
+  };
   const needle = search.trim().toLocaleLowerCase();
-  const findings: Array<{ node: Node; port: PortRead3 | undefined }> = needle ? projection.nodes.flatMap(n => [
-    ...(`${n.instance.name} ${n.instance.instance_id}`.toLocaleLowerCase().includes(needle) ? [{ node: n, port: undefined }] : []),
-    ...n.ports.filter(p => `${p.name} ${p.code_symbol}`.toLocaleLowerCase().includes(needle)).map(port => ({ node: n, port }))]) : [];
+  const findings: Array<{ node: Node; port: PortRead3 | undefined }> = needle
+    ? projection.nodes.flatMap((n) => [
+        ...(`${n.instance.name} ${n.instance.instance_id}`.toLocaleLowerCase().includes(needle)
+          ? [{ node: n, port: undefined }]
+          : []),
+        ...n.ports
+          .filter((p) => `${p.name} ${p.code_symbol}`.toLocaleLowerCase().includes(needle))
+          .map((port) => ({ node: n, port })),
+      ])
+    : [];
   const [detailsHost, setDetailsHost] = useState<HTMLDivElement | null>(null);
+  const root = useRef<HTMLElement>(null);
+  const selectedNode =
+    'instance_id' in selection
+      ? projection.nodes.find((n) => n.instance.instance_id === selection.instance_id)
+      : undefined;
+  const selectionMessage =
+    selection.kind === 'none'
+      ? 'Select a component to inspect its source and method'
+      : selectedNode
+        ? selectedNode.instance.name +
+          (selection.kind === 'variable' ? ' · quantity selected' : ' · component selected')
+        : 'Connection selected · inspect endpoint mappings in Details';
   const id = (name: string) => idPrefix + name;
   return (
-    <section className="connected-views model-view" aria-label="Model view">
+    <section ref={root} className="connected-views model-view" aria-label="Model view">
       <div className="connected-toolbar">
         <Tabs
           variant="segmented"
@@ -69,6 +126,22 @@ export function ModelView({ snapshot, selection, onSelect, values = { kind: 'mod
           }))}
         />
         <div className="panel-toggles">
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => {
+              const heading = root.current?.querySelector<HTMLElement>(
+                '.quantities-panel .hf-panel__title',
+              );
+              if (heading) {
+                heading.tabIndex = -1;
+                heading.focus({ preventScroll: true });
+                heading.scrollIntoView({ block: 'start' });
+              }
+            }}
+          >
+            Jump to Quantities
+          </Button>
           {selection.kind !== 'none' && (
             <Button variant="quiet" size="sm" onClick={() => onSelect({ kind: 'none' })}>
               Clear selection
@@ -151,13 +224,8 @@ export function ModelView({ snapshot, selection, onSelect, values = { kind: 'mod
             />
           </div>
           <div className="canvas-footer">
-            <span>
-              {projection.nodes.length}{' '}
-              {projection.nodes.length === 1 ? 'component' : 'components'}{' '}
-              · {snapshot.connections.length}{' '}
-              {snapshot.connections.length === 1 ? 'connection' : 'connections'}
-            </span>
-            <span>Select a component to inspect its source and method</span>
+            <span>{modelSummary(snapshot)}</span>
+            <span>{selectionMessage}</span>
           </div>
         </Panel>
         <div id={id('model-details')} className="connected-inspector" hidden={!detailsOpen}>

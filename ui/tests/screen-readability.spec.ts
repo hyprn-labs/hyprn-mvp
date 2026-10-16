@@ -49,7 +49,9 @@ test('display precision never turns small nonzero values into zero', () => {
     expect(formatNumber(value)).toBe(expected);
   expect(formatNumber(NaN)).toBe('not computed');
 });
-test('Fit model contains complete readable nodes and wheel input scrolls the page', async ({ page }) => {
+test('Fit model contains complete readable nodes and wheel input scrolls the page', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1920, height: 878 });
   const state = await harness(page);
   const definition = state.model.definitions[0];
@@ -60,24 +62,39 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
       ...definition.ports[0],
       port_id: `quantity-${i}`,
       code_symbol: i === 0 ? 'propulsion_adjustment' : `quantity_${i}`,
-      direction: i === count - 1 ? 'output' as const : 'input' as const,
+      direction: i === count - 1 ? ('output' as const) : ('input' as const),
     })),
   }));
   state.model.instances.forEach((instance, n) => {
     instance.definition_version_id = `many-${n}`;
-    instance.name = ['Cruise propulsion adjustment', 'Aircraft mission fuel requirement', 'Tank and storage feasibility'][n];
+    instance.name = [
+      'Cruise propulsion adjustment',
+      'Aircraft mission fuel requirement',
+      'Tank and storage feasibility',
+    ][n];
   });
-  state.model.connections = [0, 1].map(n => ({ connection_id: `flow-${n}`,
-    source_ref: { instance_id: state.model.instances[n].instance_id, port_id: `quantity-${[13, 8][n]}` },
+  state.model.connections = [0, 1].map((n) => ({
+    connection_id: `flow-${n}`,
+    source_ref: {
+      instance_id: state.model.instances[n].instance_id,
+      port_id: `quantity-${[13, 8][n]}`,
+    },
     target_ref: { instance_id: state.model.instances[n + 1].instance_id, port_id: 'quantity-0' },
   }));
+  state.model.connections.push({
+    connection_id: 'bypass',
+    source_ref: { instance_id: 'a', port_id: 'quantity-13' },
+    target_ref: { instance_id: 'c', port_id: 'quantity-1' },
+  });
   await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   const viewport = page.getByRole('region', { name: 'Directed component diagram' });
   const fit = page.getByRole('button', { name: 'Fit model', exact: true });
   await fit.click();
   async function contained() {
     const frame = (await viewport.boundingBox())!;
-    for (const node of await viewport.locator('.hf-node').all()) {
+    for (const node of await viewport
+      .locator('.hf-node, .graph-exchange path:not(.exchange-hit), .graph-exchange text')
+      .all()) {
       const box = (await node.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(frame.x);
       expect(box.y).toBeGreaterThanOrEqual(frame.y);
@@ -86,17 +103,56 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
     }
   }
   await contained();
-  expect(await viewport.locator('.hf-node__name,.hf-node__port code').evaluateAll(elements =>
-    elements.every(e => e.scrollWidth <= e.clientWidth + 1 && getComputedStyle(e).textOverflow !== 'ellipsis'),
-  )).toBe(true);
-  expect(Number((await page.getByLabel('Graph zoom', { exact: true }).textContent())!.replace('%', ''))).toBeGreaterThanOrEqual(85);
+  expect(
+    await viewport.locator('[data-group="a:c"] path:not(.exchange-hit)').evaluate((path) => {
+      const curve = path as SVGPathElement;
+      const middle = document
+        .querySelector('.connected-graph [data-instance="b"]')!
+        .closest('.hf-node')!
+        .getBoundingClientRect();
+      const matrix = curve.getScreenCTM()!;
+      for (let i = 0; i <= 100; i++) {
+        const point = curve
+          .getPointAtLength((curve.getTotalLength() * i) / 100)
+          .matrixTransform(matrix);
+        if (
+          point.x > middle.left &&
+          point.x < middle.right &&
+          point.y > middle.top &&
+          point.y < middle.bottom
+        )
+          return false;
+      }
+      return true;
+    }),
+  ).toBe(true);
+  expect(
+    await viewport
+      .locator('.hf-node__name,.hf-node__port code')
+      .evaluateAll((elements) =>
+        elements.every(
+          (e) =>
+            e.scrollWidth <= e.clientWidth + 1 && getComputedStyle(e).textOverflow !== 'ellipsis',
+        ),
+      ),
+  ).toBe(true);
+  expect(
+    Number((await page.getByLabel('Graph zoom', { exact: true }).textContent())!.replace('%', '')),
+  ).toBeGreaterThanOrEqual(85);
   await viewport.locator('[data-instance="a"]').click();
   await expect(page.locator('.canvas-footer')).toContainText('Cruise propulsion adjustment');
+  await expect(page.locator('.quantities-table [aria-selected="true"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await viewport.focus();
   await page.keyboard.press('ArrowRight');
+  await page.getByRole('button', { name: 'Focus selection', exact: true }).click();
+  await expect(viewport.locator('[data-instance="a"]')).toHaveAttribute('aria-pressed', 'true');
   await fit.click();
   await contained();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await fit.click();
+  await contained();
+  await capture(page, 'model-fit');
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await fit.click();
   await contained();
@@ -104,12 +160,40 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
   const before = await page.evaluate(() => window.scrollY);
   await page.mouse.wheel(0, 500);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
-  expect(await viewport.evaluate(e => e.scrollTop)).toBe(0);
+  expect(await viewport.evaluate((e) => e.scrollTop)).toBe(0);
   await page.getByRole('button', { name: 'Jump to Quantities', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Quantities', exact: true })).toBeFocused();
   expect(state.writes).toEqual([]);
 });
+for (const count of [0, 1])
+  test(`A model with ${count} components has finite graph geometry`, async ({ page }) => {
+    const state = await harness(page);
+    state.model.instances = state.model.instances.slice(0, count);
+    state.model.connections = [];
+    await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+    await page.getByRole('button', { name: 'Fit model', exact: true }).click();
+    if (!count)
+      await expect(
+        page
+          .getByRole('tabpanel', { name: 'Graph', exact: true })
+          .getByText('No components in this model.', { exact: true }),
+      ).toBeVisible();
+    else {
+      const node = page.locator('.connected-graph .hf-node');
+      await expect(node).toBeVisible();
+      const box = (await node.boundingBox())!;
+      expect(Object.values(box).every(Number.isFinite)).toBe(true);
+      expect(box.width).toBeGreaterThan(200);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole('button', { name: 'Fit model', exact: true }).click();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    }
+    expect(state.writes).toEqual([]);
+  });
 test('Model actions stay direct and quantity search reveals distant targets', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 934 });
   const state = await harness(page);
   referenceModel(state);
   for (let i = 0; i < 16; i++)
@@ -125,6 +209,7 @@ test('Model actions stay direct and quantity search reveals distant targets', as
     'arrow keys',
   );
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
   const search = page.getByRole('searchbox', { name: 'Search loaded model', exact: true });
   await search.fill('Remote component 15');
   await page
@@ -193,6 +278,14 @@ test('Search preserves drafts and saved model identity', async ({ page }) => {
   await page.locator('.connected-graph [data-instance="a"]').click();
   await openSource(page);
   await page.getByLabel('Python source', { exact: true }).fill("outputs['u'] = 7\n");
+  await page.getByRole('searchbox', { name: 'Search loaded model' }).fill('x');
+  await page
+    .getByRole('region', { name: 'Loaded model search results' })
+    .getByRole('button', { name: 'Linear response · x (x)', exact: true })
+    .click();
+  await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).not.toBeVisible();
+  await expect(page.locator('[data-variable="a/x"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Python source', { exact: true })).toHaveValue("outputs['u'] = 7\n");
   await page.getByRole('searchbox', { name: 'Search loaded model' }).fill('Squared response');
   await page
     .getByRole('region', { name: 'Loaded model search results' })
@@ -210,6 +303,9 @@ test('Search preserves drafts and saved model identity', async ({ page }) => {
     .getByRole('button', { name: 'Discard changes', exact: true })
     .click();
   await expect(page.locator('.model-heading > div > h2')).toHaveText('Model version 30000000');
+  await expect(page.getByRole('button', { name: 'Save model version', exact: true })).toHaveCount(
+    0,
+  );
   expect(state.writes).toEqual([]);
 });
 test('Run outcomes retain exact values and diagnostics', async ({ page }) => {

@@ -202,8 +202,22 @@ h1,h2,h3,p{margin:0}p,li,dd,h1,h2,h3{overflow-wrap:anywhere}p+p{margin-top:var(-
 /* Canonical model view: Graph | XDSM and Details in a bounded workbench, the quantities
    table below at full width in its own scroll region; Details stack Method context · Why this method ·
    Assumptions (no ports table, no incoming/outgoing lists). */
-.model-view{display:flex;flex-direction:column;gap:var(--space-4)}
+.model-view{display:flex;flex-direction:column;gap:var(--space-3);container-type:inline-size}
 .model-view>.connected-toolbar{margin:0}
+/* The model uses the available workspace and one document scroll journey. */
+main:has(.model-region){max-width:none}
+.model-view .connected-workbench{height:auto;align-items:start}
+.model-view .connected-main,.model-view .connected-inspector{overflow:visible;max-height:none}
+.model-view .canvas-body>[role=tabpanel]{overflow:visible;flex:none}
+.model-view .graph-viewport{height:clamp(calc(var(--space-12) * 10),60vh,calc(var(--space-12) * 15));flex:none;overflow:hidden;touch-action:pan-y;cursor:grab}
+.model-view .graph-viewport:active{cursor:grabbing}
+.model-view .connected-graph{margin:0;overflow:hidden}
+.model-view .canvas-toolbar,.model-view .canvas-footer{padding:var(--space-2) var(--space-3)}
+.model-view .canvas-footer{align-items:start;font-size:var(--type-small-size)}
+.model-save-version{display:flex;flex-direction:column;gap:var(--space-1);max-width:var(--panel-inspector)}
+.model-save-version small{font-size:var(--type-small-size)}
+.model-version-controls{align-items:start}
+@container(max-width:1100px){.model-view .connected-workbench{grid-template-columns:minmax(0,1fr)}.model-view .connected-inspector{grid-row:2}}
 .quantities-panel .hf-panel__head{flex-wrap:wrap;gap:var(--space-3)}
 .quantities-panel .variables-view{padding:0}
 .quantities-panel .variable-filters{margin-bottom:var(--space-3)}

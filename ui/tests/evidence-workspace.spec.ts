@@ -45,7 +45,7 @@ test('model header groups secondary actions and connections occur in Ports only'
   ).toHaveCount(0);
   expect(
     await page.getByLabel('Model version', { exact: true }).locator('option').allTextContents(),
-  ).toEqual(['draft-r1 (draft)', '30000000 (read-only)']);
+  ).toEqual(['Current draft', 'Saved version · ID 30000000']);
   await header.getByRole('button', { name: 'Model actions', exact: true }).click();
   const menu = page.getByRole('dialog', { name: 'Model actions', exact: true });
   for (const name of ['Rename model', 'Reload model', 'Import', 'Export model and data'])

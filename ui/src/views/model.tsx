@@ -210,32 +210,33 @@ function renderModel(ctx: ViewContext) {
                 );
               }}
             >
-              <option value="draft">
-                {model?.draft_revision?.slice(0, 8) ?? 'Current'} (draft)
-              </option>
+              <option value="draft">Current draft</option>
               {revisions.map((r) => (
                 <option key={r.model_revision_id} value={r.model_revision_id}>
-                  {r.model_revision_id.slice(0, 8)} (read-only)
+                  Saved version · ID {r.model_revision_id.slice(0, 8)}
                 </option>
               ))}
             </Select>
-            {model && (
-              <Button
-                variant="primary"
-                disabled={busy || !!api.pending}
-                onClick={() =>
-                  void perform(() =>
-                    modelVersions.saveVersion(study.study_id, model.model_id, {
-                      guards,
-                      onModel: currentModel,
-                      onRevisions: setRevisions,
-                      onNotice: setNotice,
-                    }),
-                  )
-                }
-              >
-                Save model version
-              </Button>
+            {model && !revision && (
+              <div className="model-save-version">
+                <Button
+                  variant="primary"
+                  disabled={busy || !!api.pending}
+                  onClick={() =>
+                    void perform(() =>
+                      modelVersions.saveVersion(study.study_id, model.model_id, {
+                        guards,
+                        onModel: currentModel,
+                        onRevisions: setRevisions,
+                        onNotice: setNotice,
+                      }),
+                    )
+                  }
+                >
+                  Save model version
+                </Button>
+                <small>Creates a read-only version of this draft.</small>
+              </div>
             )}
             <Button
               disabled={busy || !!api.pending}

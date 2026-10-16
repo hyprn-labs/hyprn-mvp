@@ -207,7 +207,7 @@ test('Models list, separate creation and exact read-only version navigation', as
   await expect(page.getByLabel('Model version', { exact: true })).toHaveValue(version);
   // Naming since fce14ed (as pinned in evidence-workspace.spec.ts): "<id8> (read-only)".
   await expect(page.getByLabel('Model version').locator('option:checked')).toHaveText(
-    '30000000 (read-only)',
+    'Saved version · ID 30000000',
   );
   // Export lives under Model actions (resource header actions); the exact read-only version
   // offers its package download ("Download portable model record", formerly "Export exact model package").

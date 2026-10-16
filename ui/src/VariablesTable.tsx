@@ -364,7 +364,7 @@ export function QuantitiesTable({
       <>Residual</>
     );
   const highlighted = (row: VariableRow) =>
-    selectionHas(row, selection) ||
+    (selection.kind !== 'instance' && selectionHas(row, selection)) ||
     (!selectedInstance &&
       focused.length < projection.nodes.length &&
       focused.includes(row.instance.instance_id));

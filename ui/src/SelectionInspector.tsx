@@ -277,7 +277,10 @@ export function ComponentWhatWhy({
         <section key={link.key}>
           {links.length > 1 && <h4>{link.step.title || 'Untitled method'}</h4>}
           {link.instanceIds.length > 1 && (
-            <p className="context-line">Shared method · {link.step.title}</p>
+            <p className="context-line">
+              {`Shared method · ${link.step.title}. ` +
+                `This explanation covers ${link.instanceIds.length} components.`}
+            </p>
           )}
           {onEditStep && (
             <div className="method-edit-actions">

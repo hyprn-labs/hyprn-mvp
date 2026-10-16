@@ -41,13 +41,13 @@ test('model quantities inspect their component; tables, XDSM and portability sta
   await expect(page.getByText('Source and composition', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Show Variables below diagram')).toHaveCount(0);
   await capture(page, 'model');
-  // The quantities table is below the canvas; a selected component scopes and highlights its rows.
+  // Component scope does not imply every quantity is individually selected.
   await expect(page.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('table', { name: 'Quantities', exact: true }).getByRole('columnheader'),
   ).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
   await expect(page.locator('[data-variable]')).toHaveCount(3);
-  await expect(page.locator('[data-variable][aria-selected="true"]')).toHaveCount(3);
+  await expect(page.locator('[data-variable][aria-selected="true"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
   await expect(details(page).getByRole('heading', { name: 'Model', exact: true })).toBeVisible();
   await expect(page.locator('[data-variable][aria-selected]')).toHaveCount(0);

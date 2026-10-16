@@ -475,9 +475,9 @@ export function Workspace() {
   const variableContext: VariableContext = view === 'runs' && runInspection?.history ? { kind: 'run', history: runInspection.history } : view === 'configurations' ? configuration ? { kind: 'configuration', configuration: configuration.configuration } : configInspection?.saved && !configInspection.dirty ? { kind: 'configuration', configuration: configInspection.saved.configuration } : { kind: 'configuration_draft', inputs: configInspection?.inputs ?? [] } : { kind: 'model' };
   const frozenEvidence = view === 'runs' ? runInspection?.history?.evidence ?? [] : view === 'configurations' ? configuration?.configuration.evidence_snapshots ?? configInspection?.evidence ?? [] : evidence;
   function select(value: Selection) {
-    if (value.kind === 'variable') value = { kind: 'instance', instance_id: value.instance_id };
     const currentOwner = selection.kind === 'instance' || selection.kind === 'variable' ? selection.instance_id : '';
-    const nextOwner = value.kind === 'instance' ? value.instance_id : '';
+    const nextOwner =
+      value.kind === 'instance' || value.kind === 'variable' ? value.instance_id : '';
     if (currentOwner === nextOwner) setSelection(value); else navigate(() => setSelection(value));
   }
   // Why each component exists: the Models page reads the latest saved approach

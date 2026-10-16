@@ -7,11 +7,16 @@ depends_on: []
 autonomous: true
 requirements: [UI-01, UI-02, UI-03]
 files_modified:
+  - deployment/tests/test_style_ratchet.py
   - design-system/Layouts.md
   - ui/src/design/graph.tsx
   - ui/src/design/foundry.css
   - ui/src/design/components.tsx
   - ui/src/ModelView.tsx
+  - ui/src/VariablesTable.tsx
+  - ui/src/Workspace.tsx
+  - ui/tests/evidence-workspace.spec.ts
+  - ui/tests/study-navigation.spec.ts
   - ui/src/SelectionInspector.tsx
   - ui/src/ModelEditor.tsx
   - ui/src/views/model.tsx
@@ -134,6 +139,8 @@ combined-static owns design, ownership, tokens, contract wiring, tooling, smoke,
 | CONTEXT | Existing scientific, exact-pin, source-verification, CSP and scratch isolation guarantees | Task 1 retained behavior and verification |
 
 Discovery: Level 0, existing React/design-system/public API patterns, no external integration or dependency. Original Phase 3 agent-platform requirements remain under their existing owners; this local UI repair does not claim their delivery.
+
+Execution scope amendment: truthful quantity selection required the existing VariablesTable row state and Workspace.select owner guard; their narrow fixes and affected version-label assertions in evidence-workspace/study-navigation are included. The style-ratchet test now prints its complete failure diff (maxDiff=None) so unrelated violations can be distinguished without changing its baseline. The existing check runner's unmodified Playwright JSON and assertion output are the RED evidence for this visual task; no reporting adapter or runner change is required.
 
 <output>
 Create .planning/phases/03-agent-tools-for-coding-agents/model-workspace/1-CHECKPOINT.md. Parent records integration/browser evidence alongside it; do not update ROADMAP or STATE from this task.

@@ -74,6 +74,8 @@ SEED = {
 class TreeTests(unittest.TestCase):
     """The committed tree passes the ratchet with exclusions read from their owners."""
 
+    maxDiff = None
+
     @classmethod
     def setUpClass(cls):
         cls.tool = ratchet.tools()

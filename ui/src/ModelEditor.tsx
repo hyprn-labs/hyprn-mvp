@@ -938,6 +938,7 @@ export function ModelEditor({
             <p>Select a component to inspect its code and quantities.</p>
           ) : (
             <fieldset disabled={blocked}>
+              <h3 className="component-detail-title">{componentLabel}</h3>
               <SectionHeader
                 title={<span className="sr-only">Component actions</span>}
                 actions={
@@ -1076,7 +1077,6 @@ export function ModelEditor({
                   </>
                 }
               />
-              <h3 className="component-detail-title">{componentLabel}</h3>
               {explain(
                 selected,
                 <div className="component-source">
