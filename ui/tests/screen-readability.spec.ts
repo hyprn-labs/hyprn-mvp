@@ -20,6 +20,24 @@ test.beforeEach(async ({ page }) => {
   await guardOrigin(page);
 });
 test.afterAll(stopFixture);
+test('Individual connections lead to full-width component readers and quantity editing', async ({ page }) => {
+  await harness(page);
+  await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
+  const graph = page.getByRole('region', { name: 'Directed component diagram' });
+  const connection = graph.locator('[data-connection]').first();
+  await expect(connection).toBeVisible();
+  await connection.focus();
+  await page.keyboard.press('Enter');
+  await expect(connection).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tab', { name: 'Model explanation', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagram', exact: true }).click();
+  await graph.locator('[data-instance="a"]').click();
+  await page.getByRole('tab', { name: 'Python', exact: true }).click();
+  await expect(page.getByLabel('Python source', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Quantities', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit quantity details', exact: true }).first().click();
+  await expect(page.getByLabel('Quantity definition (optional)', { exact: true })).toBeFocused();
+});
 /** The component's draft source is in the Selection inspector's "Edit source" disclosure. */
 async function openSource(page: Page) {
   const source = details(page).locator('details.component-source');
