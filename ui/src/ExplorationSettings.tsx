@@ -14,6 +14,7 @@ import type {
 } from './contract';
 import { Button, Disclosure, TextInput, Progress } from './design';
 import { unitLabel } from './unitLabels';
+import { explorationReason } from './explorationInputs';
 
 type Operation = ExplorationSampleOperation1 | ExplorationSampleOperation2;
 const key = (p: { instance_id: string; port_id: string }) => p.instance_id + '/' + p.port_id;
@@ -414,7 +415,7 @@ export function ExplorationSettings({
             {operation.failed_count} failed · {operation.attempted_count} attempted of{' '}
             {operation.allocation.total_count} · {operation.elapsed_seconds.toFixed(1)}
             {' s elapsed. '}
-            {operation.reason}
+            {explorationReason(operation.reason)}
           </p>
           {['pending', 'designing', 'sampling'].includes(operation.state) && (
             <Progress
@@ -466,7 +467,7 @@ export function ExplorationSettings({
           <p role="status">
             Estimates: {surrogate.state} · {surrogate.completed_groups}
             {' of '}
-            {surrogate.total_groups} groups assessed. {surrogate.reason}
+            {surrogate.total_groups} groups assessed. {explorationReason(surrogate.reason)}
           </p>
           {['pending', 'building'].includes(surrogate.state) && (
             <Progress
@@ -517,7 +518,8 @@ export function ExplorationSettings({
               .filter((o) => o.reason)
               .map((o) => (
                 <p key={g.identity + key(o.target)} role="status">
-                  Not computed: {o.reason}. {o.metrics?.assessed_count ?? 0} independent checks
+                  Not computed: {explorationReason(o.reason)}.{' '}
+                  {o.metrics?.assessed_count ?? 0} independent checks
                   assessed.
                 </p>
               )),
@@ -527,7 +529,7 @@ export function ExplorationSettings({
       {warm && (
         <>
           <p role="status">
-            Fast predictions: {warm.state}. {warm.reason}
+            Fast predictions: {warm.state}. {explorationReason(warm.reason)}
           </p>
           {warm.state === 'pending' && <Progress label="Preparing fast predictions" />}
           <Button

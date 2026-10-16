@@ -29,6 +29,7 @@ import type { Selection, WorkspaceLink } from './workspaceModel';
 import { useAccessLoss } from './accessLoss';
 import {
   explorationInputVector,
+  explorationReason,
   preparedInputUnitsMatch,
   savedInputQuantity,
   sameInputVector,
@@ -638,11 +639,11 @@ export function AnswerExplorer({
                       state={
                         jointValue?.kind === 'calculated' || calculated ? 'calculated' : 'estimated'
                       }
-                      reason={
+                      reason={explorationReason(
                         jointValue
                           ? jointValue.reason
-                          : predictionError || (calculated ? exact?.reason : estimated?.reason)
-                      }
+                          : predictionError || (calculated ? exact?.reason : estimated?.reason),
+                      )}
                     />
                     {axis && current !== null && (
                       <Disclosure
@@ -724,7 +725,7 @@ export function AnswerExplorer({
                             error bound or physical validity.
                           </p>
                           <p>
-                            {jointAssessment.reason ??
+                            {explorationReason(jointAssessment.reason) ??
                               'Observed targets met within the prepared domain.'}
                           </p>
                           <p>

@@ -148,12 +148,11 @@ export function QuantityResult({
         unitLabel(units)
       }
     >
-      <span className="hf-mono">
-        {value === null
-          ? 'not computed'
-          : (state === 'estimated' ? '≈ ' : '') + formatNumber(value)}{' '}
-        {unitLabel(units)}
-      </span>
+      {value !== null && (
+        <span className="hf-mono">
+          {(state === 'estimated' ? '≈ ' : '') + formatNumber(value)} {unitLabel(units)}
+        </span>
+      )}
       <StatusTag tone={value === null ? 'advisory' : state === 'calculated' ? 'ok' : 'inert'}>
         {label}
       </StatusTag>

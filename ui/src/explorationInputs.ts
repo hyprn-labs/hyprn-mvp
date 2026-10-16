@@ -4,6 +4,23 @@ import type { ExplorationDesignRequest1 } from './contract';
 export type Dimension = ExplorationDesignRequest1['combinations'][number]['dimensions'][number];
 export type SelectedInput = { target: PortRef; value: number | null; units: string };
 
+export function explorationReason(reason?: string | null): string | null {
+  if (!reason) return null;
+  const labels: Record<string, string> = {
+    observed_tolerance_unmet: 'Accuracy target not met',
+    outside_sampled_coverage: 'Outside sampled coverage',
+    outside_bounds: 'Outside the declared range',
+    incomplete_samples: 'Some required calculations are missing',
+    underfunded_design: 'More calculated samples are needed',
+    underfunded_or_failed_fits: 'Too few samples or fitting failed',
+    fit_failed: 'Fitting failed',
+    original_unavailable: 'The original calculation has no result',
+    nonfinite_prediction: 'The estimate is not a finite number',
+    numerical_unavailable: 'The calculation service is unavailable',
+  };
+  return labels[reason] ?? reason.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
 export function selectInput(
   vector: SelectedInput[],
   dimensions: Dimension[],
