@@ -849,7 +849,7 @@ main { margin: 0 auto; max-width: var(--page-max); }
   .hf-settings-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .hf-settings-table tbody, .hf-settings-table tr { display: block; }
   .hf-settings-table tr { padding: var(--space-3); border-bottom: 1px solid var(--line); }
-  .hf-settings-table td { display: grid; grid-template-columns: 40% minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border: 0; }
+  .hf-settings-table td { height: auto; display: grid; grid-template-columns: 40% minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border: 0; }
   .hf-settings-table td::before { content: attr(data-label); color: var(--ink-muted); font-size: var(--type-small-size); }
   .hf-settings-table td:first-child { display: block; }
   .hf-settings-table td:first-child::before { content: none; }
