@@ -518,9 +518,8 @@ export function ExplorationSettings({
               .filter((o) => o.reason)
               .map((o) => (
                 <p key={g.identity + key(o.target)} role="status">
-                  Not computed: {explorationReason(o.reason)}.{' '}
-                  {o.metrics?.assessed_count ?? 0} independent checks
-                  assessed.
+                  Not computed: {explorationReason(o.reason)}. {o.metrics?.assessed_count ?? 0}{' '}
+                  independent checks assessed.
                 </p>
               )),
           )}
