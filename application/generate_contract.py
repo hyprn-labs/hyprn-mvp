@@ -371,12 +371,12 @@ for path,methods in spec["paths"].items():
                 'partitions are retained. Cancellation stops future evaluations; an in-flight '
                 'bounded scalar run is reconciled by its existing receipt.')
         elif '/exploration-requests' in path:
-            schema=ref('ExplorationOperation1')
+            schema={'anyOf':[ref('ExplorationOperation1'),ref('ExplorationOperation2')]}
             if method == 'get' and path.endswith('/exploration-requests'):
                 schema={'type': 'array', 'maxItems': 20, 'items': schema}
             if method == 'post':
                 status='202'
-                op['requestBody']['content']['application/json']['schema']=ref('ExplorationRequest1')
+                op['requestBody']['content']['application/json']['schema']={'anyOf':[ref('ExplorationRequest1'),ref('ExplorationRequest2')]}
             op['description']=(
                 'Bounded data-only slice design or assessed prediction from exact retained '
                 'scalar runs. Poll the operation; an uncertain outcome is never redispatched.')

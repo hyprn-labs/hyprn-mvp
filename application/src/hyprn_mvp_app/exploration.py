@@ -4,6 +4,7 @@ This projection never chooses a current model, executes source, converts units o
 infers ranges/co-variation from equal names. Numerical operations are separate.
 """
 
+from copy import deepcopy
 import json
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -199,6 +200,35 @@ DEFINITIONS = {
         )
     ),
 }
+# Linked slices are explicit declarations, never inferred from equal input names.
+# Keep the original wire definitions unchanged for retained preparations.
+for _kind in ('Request', 'Prediction', 'Operation'):
+    _new = deepcopy(DEFINITIONS['Exploration' + _kind + '1'])
+    _new['properties']['schema_version'] = dict(const='2')
+    if _kind == 'Request':
+        _new['properties']['varying_targets'] = dict(
+            type='array', items=_ref('PortRef'), minItems=1, maxItems=32, uniqueItems=True
+        )
+        _new['required'].append('varying_targets')
+    elif _kind == 'Prediction':
+        _new['properties']['request'] = _ref('ExplorationRequest2')
+        _new['properties']['sample_outputs'] = dict(
+            type='array',
+            maxItems=32,
+            items=dict(type='array', maxItems=32, items=dict(anyOf=[_NUMBER, dict(type='null')])),
+        )
+        _new['required'].append('sample_outputs')
+    else:
+        _new['properties']['result'] = dict(
+            anyOf=[_ref('ExplorationPrediction2'), dict(type='null')]
+        )
+    DEFINITIONS['Exploration' + _kind + '2'] = _new
+
+
+def public_shape(kind, value):
+    return 'Exploration' + kind + ('2' if value.get('schema_version') == '2' else '1')
+
+
 _VALIDATOR = Draft202012Validator(
     {'$defs': definitions() | DEFINITIONS, **DEFINITIONS['ExplorationBasis1']},
     format_checker=FormatChecker(),
@@ -333,7 +363,7 @@ class Explorations:
         return result
 
     def submit(self, actor, sid, request):
-        validate_public('ExplorationRequest1', request)
+        validate_public(public_shape('Request', request), request)
         if any(type(request[k]) is not int for k in ('seed', 'training_count', 'check_count')):
             raise DomainError('invalid_request', 400)
         previous = self.store.replay(actor, sid, 'exploration', request['command_id'], request)
@@ -345,10 +375,20 @@ class Explorations:
         baseline = self.configurations.read(actor, sid, request['configuration_revision_id'])
         free = {_key(p['target']): p for p in basis['inputs'] if p['binding']['kind'] == 'free'}
         axis = _key(request['axis'])
+        varying = {_key(t) for t in request.get('varying_targets', [request['axis']])}
         if (
             axis not in free
+            or axis not in varying
+            or not varying <= set(free)
             or request['lower'] >= request['upper']
             or not request['rationale'].strip()
+        ):
+            raise DomainError('invalid_request', 400)
+        if any(
+            free[k]['units'] != free[axis]['units']
+            or free[k]['binding']['assignment']['value']
+            != free[axis]['binding']['assignment']['value']
+            for k in varying
         ):
             raise DomainError('invalid_request', 400)
         if any(not request['lower'] <= v <= request['upper'] for v in request['query_values']):
@@ -390,7 +430,8 @@ class Explorations:
             values = {_key(i['target']): i for i in config['inputs']}
             if set(values) != set(free) or any(
                 values[k]['units'] != p['units']
-                or (k != axis and values[k]['value'] != p['binding']['assignment']['value'])
+                or (k not in varying and values[k]['value'] != p['binding']['assignment']['value'])
+                or (k in varying and values[k]['value'] != values[axis]['value'])
                 for k, p in free.items()
             ):
                 raise DomainError('invalid_request', 400)
@@ -435,7 +476,7 @@ class Explorations:
             method=request['method'],
         )
         prepared = dict(
-            schema_version='1',
+            schema_version=request['schema_version'],
             basis=basis,
             request=request,
             identity=identity,
@@ -445,13 +486,16 @@ class Explorations:
                     dict(
                         target=p['target'],
                         units=p['units'],
-                        value=value if key == axis else p['binding']['assignment']['value'],
+                        value=value if key in varying else p['binding']['assignment']['value'],
                     )
                     for key, p in free.items()
                 ]
                 for value in request['query_values']
             ],
         )
+
+        if request['schema_version'] == '2':
+            prepared['sample_outputs'] = [row['y'] for row in rows]
 
         def accept(db):
             history.recheck(db, actor, sid, tokens)
@@ -465,7 +509,7 @@ class Explorations:
             ):
                 raise DomainError('limit_exceeded', 429)
             return dict(
-                schema_version='1',
+                schema_version=request['schema_version'],
                 request_id=request['command_id'],
                 selection_token=request['selection_token'],
                 state='pending',
@@ -486,7 +530,7 @@ class Explorations:
     def status(self, actor, sid, request_id):
         receipt = self.store.receipt(actor, sid, 'exploration', request_id)
         result = receipt['result']
-        validate_public('ExplorationOperation1', result)
+        validate_public(public_shape('Operation', result), result)
         return result
 
     def prepared_page(self, actor, sid, answer, configuration, cursor=None):
@@ -506,7 +550,7 @@ class Explorations:
             ).fetchall()
         items = [json.loads(row['result']) for row in rows[:20]]
         for item in items:
-            validate_public('ExplorationOperation1', item)
+            validate_public(public_shape('Operation', item), item)
         return items, rows[19]['command_id'] if len(rows) > 20 else None
 
     def process_one(self, native):
@@ -568,7 +612,7 @@ class Explorations:
                 ):
                     raise ValueError('Unavailable estimate must stay null with reason')
             prediction = dict(prepared, numerical=numerical)
-            validate_public('ExplorationPrediction1', prediction)
+            validate_public(public_shape('Prediction', prediction), prediction)
             result = dict(result, state='complete', result=prediction)
             state = 'committed'
         except (ValueError, RuntimeError, OSError, DomainError):

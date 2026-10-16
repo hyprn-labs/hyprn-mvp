@@ -64,6 +64,9 @@ test('all free inputs use declared controls and the complete vector fences every
   const axis = port(f.fit.request.axis.port_id);
   await axis.getByRole('spinbutton').fill('6.1');
   await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(11);
+  await explorer
+    .getByRole('combobox', { name: 'Input changes', exact: true })
+    .selectOption('combined');
   const second = dims.find(
     (d: any) => d.target.port_id !== f.fit.request.axis.port_id && !d.covary_group,
   );
@@ -104,6 +107,18 @@ test('all free inputs use declared controls and the complete vector fences every
     11,
   );
   await axis.getByRole('spinbutton').fill('6.1');
+  await explorer
+    .getByRole('combobox', { name: 'Input changes', exact: true })
+    .selectOption('single');
+  await expect(axis.getByRole('spinbutton')).toHaveValue(
+    String(baseline.get(f.fit.request.axis.port_id)),
+  );
+  await port(second.target.port_id).getByRole('spinbutton').fill(String(second.upper));
+  await axis.getByRole('spinbutton').fill('6.1');
+  await expect(port(second.target.port_id).getByRole('spinbutton')).toHaveValue(
+    String(baseline.get(second.target.port_id)),
+  );
+  await expect(explorer.getByText('Estimated', { exact: true })).toHaveCount(11);
   expect(writes).toEqual([]);
   await expect(
     explorer.getByRole('button', { name: 'Calculate selected point', exact: true }),
@@ -183,6 +198,9 @@ test('independent categories preserve common values and fence late loads', async
     await expect(entry('material_factor')).toHaveValue(mv, { timeout: 60000 });
     await expect(entry('regime_factor')).toHaveValue(rv);
   }
+  await explorer
+    .getByRole('combobox', { name: 'Input changes', exact: true })
+    .selectOption('combined');
   await entry('x').fill('2');
   await entry('y').fill('3');
   await entry('material_factor').fill('9');

@@ -4,6 +4,7 @@ import type {
   ConfigurationRequest4,
   ExplorationBasis1,
   ExplorationPrediction1,
+  ExplorationPrediction2,
   FrozenConfigurationRead7,
   PortRef,
   PublicRunDetail,
@@ -49,7 +50,7 @@ const key = (ref: PortRef) => ref.instance_id + '/' + ref.port_id;
 type Loaded = {
   basis: ExplorationBasis1;
   frozen: FrozenConfigurationRead7;
-  fits: ExplorationPrediction1[];
+  fits: (ExplorationPrediction1 | ExplorationPrediction2)[];
   runs: PublicRunDetail[];
 };
 
@@ -71,6 +72,7 @@ export function AnswerExplorer({
   const [loaded, setLoaded] = useState<Loaded | null>(null),
     [error, setError] = useState('');
   const [fitIndex, setFitIndex] = useState(0);
+  const [inputMode, setInputMode] = useState('single');
   const [design, setDesign] = useState<ExplorationDesign1 | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [selected, setSelected] = useState<SelectedInput[]>([]);
@@ -131,11 +133,18 @@ export function AnswerExplorer({
         const fits = operations.flatMap((op) =>
           op.state === 'complete' && op.result ? [op.result] : [],
         );
+        // Refinements retain earlier attempts; prefer the preparation that assessed
+        // more outputs, so an earlier failed method cannot mask a usable curve.
+        fits.sort(
+          (a, b) =>
+            b.numerical.result.outputs.filter((o) => o.target_met).length -
+            a.numerical.result.outputs.filter((o) => o.target_met).length,
+        );
         if (fits.some((f) => f.basis.digest !== basis.digest))
           throw new Error('Prepared response does not match this answer basis.');
         const ids = new Set([
           ...basis.run_ids,
-          ...fits.flatMap((f) => f.samples.map((p) => p.run_id)),
+          ...fits.flatMap((f) => (f.schema_version === '1' ? f.samples.map((p) => p.run_id) : [])),
         ]);
         const latest = samples.find((op) =>
           op.request.combinations.some((c) => c.configuration_revision_id === configuration),
@@ -166,6 +175,10 @@ export function AnswerExplorer({
             )
             .forEach((p) => ids.add(p.run_id!));
         }
+        // V2 carries checked original outputs alongside their exact run identities.
+        // Avoid re-reading full native histories already represented by those points.
+        for (const f of fits)
+          if (f.schema_version === '2') for (const sample of f.samples) ids.delete(sample.run_id);
         // Publish the answer basis before hydrating optional calculated overlays.
         // Bounded reads avoid queueing a whole sample behind a single HTTP server.
         const runs: PublicRunDetail[] = [];
@@ -221,7 +234,7 @@ export function AnswerExplorer({
   }, [api, studyId, answer.answer_version_id, refresh]);
   useEffect(() => {
     setPredictionError('');
-    if (!surrogate || !vector || combinationIndex < 0) return;
+    if (inputMode === 'single' || !surrogate || !vector || combinationIndex < 0) return;
     const fence = api.fence({ studyId });
     const token = crypto.randomUUID();
     // Immediate local control update; only the last settled selection is sent.
@@ -263,6 +276,7 @@ export function AnswerExplorer({
     surrogate?.surrogate_version_id,
     combinationIndex,
     vectorSignature,
+    inputMode,
     activeAxis,
     refresh,
   ]);
@@ -271,7 +285,9 @@ export function AnswerExplorer({
       ? [loaded?.fits[fitIndex], ...(loaded?.fits ?? [])].find(
           (f) =>
             f &&
-            key(f.request.axis) === key(activeAxis) &&
+            (f.request.schema_version === '2' ? f.request.varying_targets : [f.request.axis]).some(
+              (t) => key(t) === key(activeAxis),
+            ) &&
             f.query_inputs.some((q) =>
               sameInputVector(
                 selectInput(
@@ -312,6 +328,21 @@ export function AnswerExplorer({
         })),
       }),
     );
+  for (const f of loaded?.fits ?? []) {
+    if (f.schema_version !== '2') continue;
+    f.samples.forEach((sample, i) =>
+      points.push({
+        inputs: sample.inputs,
+        outputs: f.request.tolerances.map((t, n) => ({
+          target: t.target,
+          units: loaded?.basis.outputs.find((o) => key(o.target) === key(t.target))?.units ?? '',
+          value: f.sample_outputs[i]?.[n] ?? null,
+          kind: f.sample_outputs[i]?.[n] == null ? 'unavailable' : 'calculated',
+          run_id: sample.run_id,
+        })),
+      }),
+    );
+  }
   for (const run of loaded?.runs ?? []) {
     if (
       !run.history?.configuration ||
@@ -534,6 +565,8 @@ export function AnswerExplorer({
               >
                 {loaded.fits.map((f, i) => (
                   <option key={f.identity} value={i}>
+                    {loaded.basis.inputs.find((p) => key(p.target) === key(f.request.axis))?.name}
+                    {' · '}
                     {f.request.method === 'kriging' ? 'Kriging' : 'Response surface'} ·{' '}
                     {f.request.lower}–{f.request.upper}
                   </option>
@@ -574,33 +607,57 @@ export function AnswerExplorer({
           {error && <p role="alert">{error}</p>}
         </ActionDialog>
       }
-      categories={design?.request.category_dimensions.map((d, i) => (
-        <label key={d.name}>
-          {d.name}
-          <Select value={categories[i] ?? ''} onChange={(e) => changeCategory(i, e.target.value)}>
-            {d.values.map((v) => (
-              <option
-                key={v}
-                value={v}
-                disabled={
-                  !supportedCombination(
-                    design.request.combinations,
-                    categories.map((old, n) => (n === i ? v : old)),
-                  )
+      categories={
+        <>
+          <label>
+            Input changes
+            <Select
+              value={inputMode}
+              onChange={(e) => {
+                setInputMode(e.target.value);
+                setPrediction(null);
+                generation.current++;
+                if (e.target.value === 'single' && loaded) {
+                  setSelected(explorationInputVector(loaded.basis.inputs)!);
                 }
+              }}
+            >
+              <option value="single">One input at a time</option>
+              <option value="combined">Combined inputs</option>
+            </Select>
+          </label>
+          {design?.request.category_dimensions.map((d, i) => (
+            <label key={d.name}>
+              {d.name}
+              <Select
+                value={categories[i] ?? ''}
+                onChange={(e) => changeCategory(i, e.target.value)}
               >
-                {v}
-                {!supportedCombination(
-                  design.request.combinations,
-                  categories.map((old, n) => (n === i ? v : old)),
-                )
-                  ? ' — unsupported combination'
-                  : ''}
-              </option>
-            ))}
-          </Select>
-        </label>
-      ))}
+                {d.values.map((v) => (
+                  <option
+                    key={v}
+                    value={v}
+                    disabled={
+                      !supportedCombination(
+                        design.request.combinations,
+                        categories.map((old, n) => (n === i ? v : old)),
+                      )
+                    }
+                  >
+                    {v}
+                    {!supportedCombination(
+                      design.request.combinations,
+                      categories.map((old, n) => (n === i ? v : old)),
+                    )
+                      ? ' — unsupported combination'
+                      : ''}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ))}
+        </>
+      }
       footer={
         loaded && (
           <ActionGroup>
@@ -645,7 +702,10 @@ export function AnswerExplorer({
           )}
           {predictionError && !fit && <p role="status">{predictionError}</p>}
           <p className="hf-slider-caption">
-            Slider points: ● calculated · ○ estimated. Other inputs remain fixed.
+            Slider points: ● calculated · ○ estimated.{' '}
+            {inputMode === 'single'
+              ? 'Changing sliders restores other saved inputs. Linked inputs move together.'
+              : 'Other inputs stay selected. Estimates need coverage for all selected inputs.'}
           </p>
           {snapshot ? (
             <GraphView
@@ -667,7 +727,9 @@ export function AnswerExplorer({
                       units={savedInputQuantity(input)!.units}
                       stops={availableStops(
                         points,
-                        selected,
+                        inputMode === 'single'
+                          ? explorationInputVector(loaded.basis.inputs)!
+                          : selected,
                         dimensions,
                         target,
                         loaded.basis.outputs.map((o) => o.target),
@@ -683,7 +745,16 @@ export function AnswerExplorer({
                       onChange={(value) => {
                         generation.current++;
                         setActiveAxis(target);
-                        setSelected((old) => selectInput(old, dimensions, target, value));
+                        setSelected((old) =>
+                          selectInput(
+                            inputMode === 'single'
+                              ? explorationInputVector(loaded.basis.inputs)!
+                              : old,
+                            dimensions,
+                            target,
+                            value,
+                          ),
+                        );
                       }}
                     />
                   );
@@ -697,34 +768,23 @@ export function AnswerExplorer({
                 const calculatedPoints =
                   !axis || !vector
                     ? []
-                    : loaded.runs.flatMap((run) => {
-                        const c = run.history?.configuration;
-                        if (
-                          !c ||
-                          c.model_revision_id !== loaded.basis.model_revision_id ||
-                          c.inputs.length !== vector.length
-                        )
-                          return [];
-                        const x = c.inputs.find((i) => key(i.target) === key(axis.target))?.value;
-                        if (
-                          x === undefined ||
-                          !sameInputVector(
+                    : points.flatMap((point) => {
+                        const x = point.inputs.find(
+                          (p) => key(p.target) === key(axis.target),
+                        )?.value;
+                        const output = point.outputs.find((o) => key(o.target) === ref);
+                        return x !== undefined &&
+                          output?.kind === 'calculated' &&
+                          output.value !== null &&
+                          sameInputVector(
                             selectInput(
                               vector,
                               dimensions,
                               axis.target,
                               x,
                             ) as ExplorationPoint['inputs'],
-                            c.inputs,
+                            point.inputs,
                           )
-                        )
-                          return [];
-                        const output = run.history?.results?.outputs.find(
-                          (o) => key(o.target) === ref,
-                        );
-                        return x !== undefined &&
-                          output?.availability === 'available' &&
-                          output.value !== null
                           ? [{ x, y: output.value }]
                           : [];
                       });

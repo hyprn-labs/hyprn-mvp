@@ -121,6 +121,12 @@ check('Nonuniform prepared values use discrete indices and distinct markers',
   && discreteSlider.includes('hf-slider-stop--estimated')
   && discreteSlider.includes('aria-valuetext="7 m"'));
 
+const finiteSlider = render('QuantitySlider finite discrete domain', h(F.QuantitySlider, {
+  label: 'Count', units: '', value: 2, lower: 1, upper: 3, step: 1, onChange() {},
+}));
+check('A small discrete domain explains its actual size without inventing points',
+  finiteSlider.includes('Discrete interval: 3 admissible values.'));
+
 const expected = [
   'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',
   'SourceChip', 'InferenceBlock', 'RecordBar', 'ModelNode', 'DataTable', 'AttributionChip',

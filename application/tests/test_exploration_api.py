@@ -406,3 +406,41 @@ def test_corrupt_or_incomplete_frozen_basis_never_projects_defaults(basis_env, c
     assert response.status_code == 409, response.text
     assert response.json()['error']['code'] == 'corrupt_retained_record'
     assert not e['canary'].exists()
+
+
+def test_linked_slice_requires_explicit_compatible_occurrences(basis_env, generated):
+    e = basis_env
+    request = design_request(e)
+    path = '/api/1/studies/' + e['sid'] + '/exploration-requests'
+    refs = [i['target'] for i in e['frozen']['configuration']['inputs']]
+    linked = dict(request, schema_version='2', varying_targets=refs)
+    # Equal labels do not authorize linking unequal baseline values.
+    assert e['client'].post(path, json=linked).status_code == 400
+    e['frozen']['configuration']['inputs'][1]['value'] = 0
+    rewrite(e)
+    linked = dict(design_request(e), schema_version='2', varying_targets=refs)
+    reply = e['client'].post(path, json=linked)
+    assert reply.status_code == 202, reply.text
+    assert_http(generated, '/studies/{study_id}/exploration-requests', 'post', reply)
+    assert reply.json()['data']['schema_version'] == '2'
+    receipt = e['store'].receipt(e['actor'], e['sid'], 'exploration', linked['command_id'])
+    prepared = receipt['request']['prepared']
+    assert [[v['value'] for v in row] for row in prepared['query_inputs']] == [[0, 0], [1, 1]]
+    assert receipt['request']['numerical']['bounds'] == [[0, 2]]
+    assert not e['canary'].exists()
+    for targets in (
+        [],
+        [refs[1]],
+        [refs[0], refs[0]],
+        [refs[0], dict(instance_id=uid(), port_id=uid())],
+    ):
+        bad = dict(linked, command_id=uid(), varying_targets=targets)
+        assert e['client'].post(path, json=bad).status_code == 400
+    # A historical single-input request still holds the other occurrence fixed.
+    legacy = design_request(e)
+    assert e['client'].post(path, json=legacy).status_code == 202
+    old = e['store'].receipt(e['actor'], e['sid'], 'exploration', legacy['command_id'])
+    assert [[v['value'] for v in row] for row in old['request']['prepared']['query_inputs']] == [
+        [0, 0],
+        [1, 0],
+    ]

@@ -85,13 +85,24 @@ original calculations, then build and assess an immutable surrogate version and
 explicitly warm it. Query that existing version with the complete selected vector
 and optional active-axis curve; dragging a control must never launch originals or
 refit. Read back its per-output reasons, observed errors, coverage and artifact
-identities. Present discrete selectable stops only for available calculated or assessed surrogate
-points on the exact current fixed-input slice. Distinguish the two kinds. Preserve
+identities. Present discrete selectable stops only for available calculated or
+assessed surrogate points on the exact current fixed-input slice. Distinguish the two kinds. Preserve
 unavailable gaps in plots; neither interpolate them in the client nor reuse a
 baseline slice after another input changes. Retain finite assessed query points
 through the public preparation records where supported, so a cold predictor does
-not erase already prepared results. Verify several slider transitions, category
-changes, and a cold/reopened session before calling exploration ready. Show
+not erase already prepared results.
+
+Check coverage for **every** declared input in **every** category, including explicit
+linked-input groups; completing the initially selected axis is not completion.
+Use slice request format 2's `varying_targets` for an explicitly declared equal-value
+linked group, and keep every other assignment fixed. Its `sample_outputs` carry
+original results in sample/tolerance order; preserve their run links. Match reused
+originals by numerical full-vector equality, exact units and model/numerical pins,
+not JSON spelling (`4` and `4.0` are the same coordinate). Use lightweight run status
+while waiting; read full histories only when needed. Single-input curves assess a
+baseline slice; use the visible one-input-at-a-time mode for them. Combined input
+changes need separately assessed joint coverage, never stitched single-axis curves.
+Verify several slider transitions, category changes, and a cold/reopened session before calling exploration ready. Show
 unavailable regions honestly and preserve exact original values.
 For a useful high-dimensional baseline slice, budget baseline/axis support points
 as well as joint training and independent checks; a sparse enclosing box alone

@@ -101,6 +101,7 @@ export function QuantitySlider({
   const id = useId(),
     index = value === null ? -1 : (values?.indexOf(value) ?? -1);
   const declared = lower != null && upper != null;
+  const admissibleCount = declared && step ? Math.round((upper - lower) / step) + 1 : null;
   const outside = declared && value !== null && (value < lower || value > upper);
   const coordinate = declared && value !== null && step ? (value - lower) / step : 0;
   const offStep =
@@ -157,6 +158,11 @@ export function QuantitySlider({
           </div>
         )}
       </div>
+      {admissibleCount !== null && admissibleCount < 5 && (
+        <span className="hf-slider-caption">
+          Discrete interval: {admissibleCount} admissible values.
+        </span>
+      )}
       {stops && stops.length < 2 && (
         <span className="hf-slider-caption">More prepared points needed on this slice</span>
       )}

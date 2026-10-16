@@ -70,3 +70,20 @@ The authoring skill prepares at least five originals across each presented basel
 slice (or every admissible discrete value when fewer), plus independent checks and
 retained surrogate queries, with explicit brief-derived or agent-proposed ranges.
 This minimum does not assert multivariable coverage or weaken accuracy targets.
+
+
+### All-input curves amendment
+
+The owner explicitly requires every input, not only the initially selected axis.
+Prepare each declared independent continuous input and each explicitly linked group
+for every supported category, with at least five original points and disjoint
+surrogate checks; a finite domain with fewer than five values exposes all values.
+
+Default to an explicitly labelled **One input at a time** mode for baseline slices.
+Moving a slider restores other inputs to saved values and moves declared linked
+inputs together. Explain that rule next to the calculated/estimated marker legend.
+**Combined inputs** preserves selections and requires complete-vector coverage;
+never stitch independent slice estimates. Single-input interaction uses saved
+preparations without requiring a warm joint predictor. Every plotted calculated
+marker keeps its original run link; compact responses may avoid full history reads.
+The API, markers and interaction rules contain no study-specific quantity names.

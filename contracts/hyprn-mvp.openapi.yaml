@@ -13085,7 +13085,14 @@
                       "type": "array",
                       "maxItems": 20,
                       "items": {
-                        "$ref": "#/components/schemas/ExplorationOperation1"
+                        "anyOf": [
+                          {
+                            "$ref": "#/components/schemas/ExplorationOperation1"
+                          },
+                          {
+                            "$ref": "#/components/schemas/ExplorationOperation2"
+                          }
+                        ]
                       }
                     },
                     "next_cursor": {
@@ -13149,7 +13156,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ExplorationRequest1"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ExplorationRequest1"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExplorationRequest2"
+                  }
+                ]
               }
             }
           }
@@ -13270,7 +13284,14 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ExplorationOperation1"
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ExplorationOperation1"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ExplorationOperation2"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -13427,7 +13448,14 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ExplorationOperation1"
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ExplorationOperation1"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ExplorationOperation2"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -63836,6 +63864,349 @@
           "outputs",
           "run_ids",
           "digest"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationRequest2": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "2"
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "selection_token": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "operation": {
+            "enum": [
+              "design",
+              "fit_predict"
+            ]
+          },
+          "answer_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "configuration_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "axis": {
+            "$ref": "#/components/schemas/PortRef"
+          },
+          "lower": {
+            "type": "number",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "upper": {
+            "type": "number",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "training_count": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 16
+          },
+          "check_count": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 16
+          },
+          "method": {
+            "enum": [
+              "response_surface",
+              "kriging"
+            ]
+          },
+          "training_run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 16
+          },
+          "check_run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "uniqueItems": true,
+            "maxItems": 16
+          },
+          "query_values": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "minItems": 1,
+            "maxItems": 33
+          },
+          "tolerances": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "$ref": "#/components/schemas/PortRef"
+                },
+                "absolute": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "relative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "target",
+                "absolute",
+                "relative"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "varying_targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortRef"
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "schema_version",
+          "command_id",
+          "selection_token",
+          "operation",
+          "answer_version_id",
+          "configuration_revision_id",
+          "axis",
+          "lower",
+          "upper",
+          "seed",
+          "training_count",
+          "check_count",
+          "method",
+          "training_run_ids",
+          "check_run_ids",
+          "query_values",
+          "tolerances",
+          "rationale",
+          "varying_targets"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationPrediction2": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "2"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ExplorationBasis1"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ExplorationRequest2"
+          },
+          "identity": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "query_inputs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 33,
+            "items": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/components/schemas/PortRef"
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "target",
+                  "value",
+                  "units"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "samples": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "run_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^[0-9a-f-]{36}$"
+                },
+                "configuration_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "bundle_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "results_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "runtime": {
+                  "$ref": "#/components/schemas/ExplorationRuntime1"
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Input"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ResolvedInput2"
+                      }
+                    ]
+                  },
+                  "maxItems": 1000
+                }
+              },
+              "required": [
+                "run_id",
+                "configuration_digest",
+                "bundle_digest",
+                "results_digest",
+                "runtime",
+                "inputs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "numerical": {
+            "$ref": "#/components/schemas/ExplorationNumerical1"
+          },
+          "sample_outputs": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "basis",
+          "request",
+          "identity",
+          "query_inputs",
+          "samples",
+          "numerical",
+          "sample_outputs"
+        ],
+        "additionalProperties": false
+      },
+      "ExplorationOperation2": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "2"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "selection_token": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "complete",
+              "uncertain"
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplorationPrediction2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "request_id",
+          "selection_token",
+          "state",
+          "result"
         ],
         "additionalProperties": false
       },

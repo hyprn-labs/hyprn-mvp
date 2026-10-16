@@ -224,3 +224,21 @@ binds both the numerical design and transformed points. Repeated vectors after
 mapping fail before any scalar launch. Training and independent checks never share
 a mapped vector. Insufficient finite grids and missing ranges are refused before
 design generation. No unit conversion or numerical model runs in the browser.
+
+## Prepared linked-input slices
+
+Exploration request format 2 adds explicit `varying_targets` to the existing
+seeded one-dimensional design/fit operation. It includes the selected `axis` and
+only free occurrences with equal baseline values and identical model units.
+Every listed assignment follows the selected coordinate; every other assignment
+must match the frozen baseline. Equal names never establish this relationship.
+The restricted numerical operation and exact training/check partition are unchanged.
+
+Prediction format 2 includes `sample_outputs`, ordered by `samples` then request
+`tolerances`, projected from the checked retained original results. Null remains
+unavailable. The existing sample run IDs and result digests identify each original;
+this compact projection avoids hydrating a full native history per plotted marker.
+Format 1 requests and saved responses remain unchanged. Public preparation reads
+admit both formats. Single-input interaction returns other inputs to the saved
+baseline explicitly; combined-input interaction still requires complete-vector
+coverage and never combines independent slice estimates.

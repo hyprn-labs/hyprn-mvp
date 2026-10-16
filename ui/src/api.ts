@@ -388,7 +388,9 @@ export class HyprnMvpApi {
   )).data;
   preparedExplorations = (
     sid: string, answer: string, configuration: string, signal?: AbortSignal,
-  ) => this.list<import('./contract').ExplorationOperation1>(
+  ) => this.list<
+    import('./contract').ExplorationOperation1 | import('./contract').ExplorationOperation2
+  >(
     `/studies/${sid}/exploration-requests?` +
     new URLSearchParams({ answer_version_id: answer, configuration_revision_id: configuration }),
     signal,
