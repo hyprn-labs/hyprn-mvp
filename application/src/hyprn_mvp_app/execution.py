@@ -5,6 +5,7 @@ The frozen bundle contract (assembly and every admission check) lives in
 Candidate bytes remain inert here.
 """
 import base64
+from collections import OrderedDict
 from datetime import datetime, timezone
 import json
 from .contracts import DomainError, canonical, check_digest, uid
@@ -22,7 +23,12 @@ from .execution_bundle import (MAX_FILES, executable_digest, frozen_version, mod
                                validate_scientific_snapshot, validate_unit_catalog, verify_files)
 
 class StaticPreparation:
-    def __init__(self,model):self.model=model
+    def __init__(self,model):
+        self.model=model
+        # Inert bytes only: never cache authority, manifests, validation or results.
+        # The dispatcher serializes calls; eviction/restart simply downloads again.
+        self._files=OrderedDict()
+        self._file_bytes=0
     def __call__(self,actor,sid,command,frozen):
         from uuid import UUID,uuid5
         validate_frozen_configuration(frozen)
@@ -48,14 +54,32 @@ class StaticPreparation:
         for item in prepared['files']:
             path=safe_path(item['path'])
             if path in files:raise ValueError('Duplicate prepared file')
-            _,response=self.model.call(actor,sid,'GET',f"/preparations/{prepared['preparation_id']}/files/{item['file_id']}",
-                response_schema='ByteFileResponse',resources=[mid])
-            raw=base64.b64decode(response['data']['bytes'],validate=True)
+            key=(actor,sid,item['sha256'],item['size'],item['media_type'])
+            raw=self._files.get(key)
+            if raw is None:
+                file_path=f"/preparations/{prepared['preparation_id']}/files/{item['file_id']}"
+                _,response=self.model.call(actor,sid,'GET',file_path,
+                    response_schema='ByteFileResponse',resources=[mid])
+                raw=base64.b64decode(response['data']['bytes'],validate=True)
+                if (response['data']['sha256']!=item['sha256']
+                        or response['data']['media_type']!=item['media_type']):
+                    raise ValueError('Prepared file mismatch')
             total+=len(raw)
-            if total>MAX_BYTES or response['data']['sha256']!=item['sha256'] or response['data']['media_type']!=item['media_type']:
+            if total>MAX_BYTES:
                 raise ValueError('Prepared file mismatch')
             files[path]=raw
         validate_preparation(prepared,files,frozen)
+        # Populate only after complete hash, size, model and input-binding validation.
+        for item in prepared['files']:
+            key=(actor,sid,item['sha256'],item['size'],item['media_type'])
+            raw=files[item['path']]
+            if key not in self._files:
+                self._files[key]=raw
+                self._file_bytes+=len(raw)
+            self._files.move_to_end(key)
+            while self._file_bytes>MAX_BYTES or len(self._files)>MAX_FILES:
+                _,removed=self._files.popitem(last=False)
+                self._file_bytes-=len(removed)
         return prepared,files
 
 class Submissions:

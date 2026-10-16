@@ -830,3 +830,102 @@ def test_current_prior_run_closure_freezes_and_reexecutes_with_exact_protocol(ca
     assert bundle['manifest']['input_schema_version'] == '9'
     validate_retained_bundle(bundle, request, frozen)
     assert json.loads(bundle['files']['approach/closure.json']) == closure
+
+
+class PreparationFiles:
+    """Exact retained bytes behind a counted, independently authorized preparation."""
+    def __init__(self, case):
+        self.case = case
+        self.downloads = 0
+        self.preparations = 0
+        self.refuse = False
+
+    def call(self, actor, sid, method, path, *args, **kwargs):
+        if self.refuse:
+            raise DomainError('resource_not_found', 404)
+        if method == 'POST':
+            self.preparations += 1
+            return 200, dict(data=deepcopy(self.case['prepared']))
+        self.downloads += 1
+        item = next(f for f in self.case['prepared']['files'] if path.endswith(f['file_id']))
+        return 200, dict(data=dict(
+            bytes=base64.b64encode(self.case['files'][item['path']]).decode(),
+            sha256=item['sha256'], media_type=item['media_type'],
+        ))
+
+
+def test_repeated_preparation_reuses_only_verified_bytes():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    first = prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    # New preparations retain fresh authority and bindings, even for identical content.
+    second = prepare(actor, sid, uid(), case['frozen'])
+    assert first == second
+    assert remote.preparations == 2
+    assert remote.downloads == count
+    remote.refuse = True
+    with pytest.raises(DomainError):
+        prepare(actor, sid, uid(), case['frozen'])
+
+
+def test_preparation_cache_is_scoped_and_revalidates_manifest():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    prepare(uid(), sid, uid(), case['frozen'])
+    assert remote.downloads == count * 2
+    remote.case['prepared']['configuration_digest'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+
+
+def test_failed_preparation_does_not_populate_byte_cache():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    good = deepcopy(case['prepared'])
+    case['prepared']['configuration_digest'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    case['prepared'] = good
+    prepare(actor, sid, uid(), case['frozen'])
+    assert remote.downloads == count * 2
+
+
+def test_preparation_cache_eviction_only_causes_redownload(monkeypatch):
+    import hyprn_mvp_app.execution as execution
+
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    monkeypatch.setattr(execution, 'MAX_FILES', 3)
+    first = prepare(actor, sid, uid(), case['frozen'])
+    assert len(prepare._files) <= 3
+    count = remote.downloads
+    assert prepare(actor, sid, uid(), case['frozen']) == first
+    assert remote.downloads > count
+    assert len(prepare._files) <= 3
+    assert prepare._file_bytes == sum(map(len, prepare._files.values()))
+
+
+def test_changed_prepared_file_cannot_hit_old_hash_cache():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    item = case['prepared']['files'][0]
+    item['sha256'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+    assert remote.downloads > count
