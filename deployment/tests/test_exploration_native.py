@@ -733,3 +733,106 @@ def test_real_scalar_samples_assessed_predictions_and_retained_identity():
             json.dumps(proof, indent=2)
         )
         j.close()
+
+
+def test_public_independent_runs_cross_batched_dispatch_and_retain_exact_results():
+    import combined_fixture
+    import dispatch_runtime
+
+    journey = UnitsJourney(SCOPE, BACKEND)
+    try:
+        journey.start()
+        body, _ = joint_fixture(journey)
+        calls = []
+        original = journey.native.launch_batch
+
+        def traced(items):
+            calls.append(len(items))
+            return original(items)
+
+        journey.native.launch_batch = traced
+        runs = [
+            journey.request(
+                'POST',
+                'runs',
+                dict(
+                    command_id=uid(),
+                    configuration_revision_id=c['configuration_revision_id'],
+                    execution_budget=dict(wall_seconds=60),
+                ),
+                202,
+            )
+            for c in body['combinations']
+        ]
+        started = time.monotonic()
+        command = [
+            guard.APPROVED_CONTRACT_PYTHON,
+            '-B',
+            combined_fixture.__file__,
+            'dispatch',
+            '--once',
+        ]
+        with (SCOPE.root / 'evidence/batch-public-dispatch.log').open('wb') as log:
+            status = dispatch_runtime.bridge_child(
+                journey.native, command, env=guard.clean_environment(SCOPE), cwd=REPO, stderr=log
+            )
+        elapsed = time.monotonic() - started
+        assert status == 0
+        assert calls == [2]
+        for run, expected in zip(runs, (6, 35), strict=True):
+            record = journey.request('GET', 'runs/' + run['run_id'])
+            assert record['state'] == 'recorded' and record['exit_status'] == 0
+            assert record['history']['errors'] == []
+            assert [o['value'] for o in record['history']['results']['outputs']] == [expected]
+        measurements = dict(cold_batch_seconds=elapsed)
+        for mode in ('warm_batch', 'sequential'):
+            pending = [
+                journey.request(
+                    'POST',
+                    'runs',
+                    dict(
+                        command_id=uid(),
+                        configuration_revision_id=c['configuration_revision_id'],
+                        execution_budget=dict(wall_seconds=60),
+                    ),
+                    202,
+                )
+                for c in body['combinations']
+            ]
+            started = time.monotonic()
+            commands = (
+                [command]
+                if mode == 'warm_batch'
+                else [command[:-1] + ['--run-id', run['run_id']] for run in pending]
+            )
+            for invocation in commands:
+                with (SCOPE.root / ('evidence/batch-' + mode + '.log')).open('ab') as log:
+                    assert (
+                        dispatch_runtime.bridge_child(
+                            journey.native,
+                            invocation,
+                            env=guard.clean_environment(SCOPE),
+                            cwd=REPO,
+                            stderr=log,
+                        )
+                        == 0
+                    )
+            measurements[mode + '_seconds'] = time.monotonic() - started
+            for run, expected in zip(pending, (6, 35), strict=True):
+                record = journey.request('GET', 'runs/' + run['run_id'])
+                assert record['state'] == 'recorded' and record['exit_status'] == 0
+                assert record['history']['errors'] == []
+                assert [o['value'] for o in record['history']['results']['outputs']] == [expected]
+        (SCOPE.root / 'evidence/batch-public-timing.json').write_text(
+            json.dumps(
+                dict(
+                    measurements,
+                    seconds_per_point=measurements['warm_batch_seconds'] / 2,
+                    runs=[r['run_id'] for r in runs],
+                    outputs=[6, 35],
+                    batch_sizes=calls,
+                )
+            )
+        )
+    finally:
+        journey.close()

@@ -524,67 +524,105 @@ class NativeExecution:
         return self.launch(bundle, request, wall_seconds=wall_seconds)
 
     def launch(self, bundle, request, *, wall_seconds=EXECUTION_WALL_DEFAULT):
-        wall_seconds = execution_wall_seconds(wall_seconds)
-        if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9'):
-            raise ValueError('Unsupported bundle version; create a new run command')
-        if (
-            set(request) != REQUEST_KEYS
-            or request['bundle_digest'] != bundle['manifest']['bundle_digest']
-            or request['run_id'] != bundle['manifest']['run_id']
-        ):
-            raise ValueError('Immutable request mismatch')
-        self.require_attestation()
-        launcher.verify_execution_bundle(bundle, request, self.bundle_runtime())
-        if self.matches(request):
-            raise RuntimeError('Existing native request cannot be launched again')
-        from aiida.manage import get_manager
-        from aiida.engine.utils import instantiate_process
+        return self.launch_batch([
+            dict(bundle=bundle, request=request, wall_seconds=wall_seconds)
+        ])[0]['record']
 
+    def launch_batch(self, items):
+        """AiiDA runs at most two independent CalcJobs in one owned runner.
+
+        Each CalcJob retains its own exact bundle and launches a fresh restricted
+        container. No candidate interpreter or writable filesystem is reused.
+        Unknown replies are reconciled per original request, never relaunched.
+        """
+        import asyncio
+        import signal
+        from aiida.manage import get_manager
+        from aiida.engine.utils import instantiate_process, loop_scope
+        from hyprn_mvp_app.contracts import BATCH_RUN_LIMIT
+
+        if not isinstance(items, list) or not 1 <= len(items) <= BATCH_RUN_LIMIT:
+            raise ValueError('Bounded independent run batch required')
+        self.require_attestation()
+        runtime = self.bundle_runtime()
+        seen = set()
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {'bundle', 'request', 'wall_seconds'}:
+                raise ValueError('Closed independent run required')
+            bundle, request = item['bundle'], item['request']
+            execution_wall_seconds(item['wall_seconds'])
+            if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9'):
+                raise ValueError('Unsupported bundle version; create a new run command')
+            if (set(request) != REQUEST_KEYS
+                    or request['bundle_digest'] != bundle['manifest']['bundle_digest']
+                    or request['run_id'] != bundle['manifest']['run_id']
+                    or request['run_id'] in seen):
+                raise ValueError('Immutable independent request mismatch')
+            seen.add(request['run_id'])
+            launcher.verify_execution_bundle(bundle, request, runtime)
+            if self.matches(request):
+                raise RuntimeError('Existing native request cannot be launched again')
         if self.backend is not get_manager().get_profile_storage():
             raise ValueError('Runner backend differs from explicit native backend')
         code = orm.load_code('hyprn-mvp-scalar')
         if self.root != launcher.ROOT:
             launcher.fixture_runtime_root(self.root)
-            if (
-                Path(code.filepath_executable) != self.root / 'launch-worker'
-                or code.computer.hostname != 'localhost'
-                or not code.computer.get_workdir().startswith(str(self.root / 'tmp') + '/')
-            ):
+            if (Path(code.filepath_executable) != self.root / 'launch-worker'
+                    or code.computer.hostname != 'localhost'
+                    or not code.computer.get_workdir().startswith(str(self.root / 'tmp') + '/')):
                 raise ValueError('Installed code differs from isolated runtime')
-        retained = orm.FolderData(backend=self.backend)
-        for path, raw in {
-            **bundle['files'],
-            'manifest.json': canonical(bundle['manifest']),
-        }.items():
-            retained.base.repository.put_object_from_filelike(io.BytesIO(raw), path)
-        self.fault('before_node')
         runner = get_manager().create_runner(communicator=None)
-        process = None
+        processes = []
+        previous_signals = {}
         try:
-            launcher.verify_execution_bundle(bundle, request, self.bundle_runtime())
-            upstream = self._upstream_results(bundle)
-            process = instantiate_process(
-                runner,
-                ScalarCalculation,
-                code=code,
-                frozen_bundle=retained,
-                request=orm.Dict(dict=request, backend=self.backend),
-                wall_seconds=orm.Int(wall_seconds, backend=self.backend),
-                upstream_results=upstream,
-                metadata={
-                    'disable_cache': True,
-                    'options': {'max_wallclock_seconds': wall_seconds + 60},
-                },
-            )
-            self.fault('after_node')
-            self.fault('before_continuation')
-            runner.run_get_node(process)
-            self.fault('after_continuation')
-            result = self.inspect(process.node.uuid)
-            self.fault('before_response')
-            return result
+            with loop_scope(runner.loop):
+                for item in items:
+                    bundle, request = item['bundle'], item['request']
+                    retained = orm.FolderData(backend=self.backend)
+                    for path, raw in {
+                        **bundle['files'], 'manifest.json': canonical(bundle['manifest'])
+                    }.items():
+                        retained.base.repository.put_object_from_filelike(io.BytesIO(raw), path)
+                    self.fault('before_node')
+                    process = instantiate_process(
+                        runner, ScalarCalculation, code=code, frozen_bundle=retained,
+                        request=orm.Dict(dict=request, backend=self.backend),
+                        wall_seconds=orm.Int(item['wall_seconds'], backend=self.backend),
+                        upstream_results=self._upstream_results(bundle),
+                        metadata={
+                            'disable_cache': True,
+                            'options': {'max_wallclock_seconds': item['wall_seconds'] + 60},
+                        },
+                    )
+                    processes.append(process)
+                    self.fault('after_node')
+                # Source/policy changes while retaining inputs still refuse execution.
+                self.require_attestation()
+                self.fault('before_continuation')
+
+                def interrupt(_number, _frame):
+                    for process in processes:
+                        if not process.has_terminated() and not process.is_killing:
+                            process.kill(msg_text='Owned runner interrupted')
+
+                for number in (signal.SIGINT, signal.SIGTERM):
+                    previous_signals[number] = signal.signal(number, interrupt)
+                outcomes = runner.run_until_complete(asyncio.gather(
+                    *(p.step_until_terminated() for p in processes), return_exceptions=True
+                ))
+                if any(isinstance(outcome, BaseException) for outcome in outcomes):
+                    raise RuntimeError('Native batch interrupted; reconcile original requests')
+                self.fault('after_continuation')
+                records = [
+                    dict(request=item['request'], record=self.inspect(process.node.uuid))
+                    for item, process in zip(items, processes, strict=True)
+                ]
+                self.fault('before_response')
+                return records
         finally:
-            if process is not None:
+            for number, handler in previous_signals.items():
+                signal.signal(number, handler)
+            for process in processes:
                 process.close()
             runner.close()
 

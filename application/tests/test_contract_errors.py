@@ -334,3 +334,62 @@ def test_model_preview_names_unsupported_unit_inside_versioned_edit(client):
     assert fields[0]['path'] == '/edits/0/ports/0/units/expression'
     assert fields[0]['message'].startswith('Must be one of:')
     assert SECRET not in response.text
+
+
+def test_repeated_valid_snapshot_avoids_rewalking_schema_and_rejects_mutation(monkeypatch):
+    from jsonschema import Draft202012Validator
+
+    class Counted:
+        def __init__(self):
+            self.calls = 0
+            self.validator = Draft202012Validator({'type': 'array', 'items': {'type': 'number'}})
+
+        def iter_errors(self, value):
+            self.calls += 1
+            return self.validator.iter_errors(value)
+
+    compiled = Counted()
+    monkeypatch.setattr(contracts, 'validator', lambda _: compiled)
+    value = [1.0, 2.0, 3.0]
+    assert validate('snapshot-test', value) is value
+    assert validate('snapshot-test', list(value)) == value
+    assert compiled.calls == 1
+    with pytest.raises(DomainError):
+        validate('snapshot-test', tuple(value))
+    value[1] = True
+    with pytest.raises(DomainError):
+        validate('snapshot-test', value)
+    value[1] = float('nan')
+    with pytest.raises(DomainError):
+        validate('snapshot-test', value)
+    replacement = Counted()
+    monkeypatch.setattr(contracts, 'validator', lambda _: replacement)
+    validate('snapshot-test', [1.0, 2.0, 3.0])
+    assert replacement.calls == 1
+
+
+def test_validation_cache_is_bounded_and_does_not_cache_invalid_values(monkeypatch):
+    from jsonschema import Draft202012Validator
+
+    class Counted:
+        def __init__(self):
+            self.calls = 0
+            self.validator = Draft202012Validator({'type': 'string'})
+
+        def iter_errors(self, value):
+            self.calls += 1
+            return self.validator.iter_errors(value)
+
+    compiled = Counted()
+    monkeypatch.setattr(contracts, 'validator', lambda _: compiled)
+    monkeypatch.setattr(contracts, '_VALIDATED_MAX_BYTES', 32)
+    monkeypatch.setattr(contracts, '_VALIDATED_MAX_ITEMS', 2)
+    for value in ('first', 'second', 'third', 'first'):
+        validate('bounded-test', value)
+    assert compiled.calls == 4
+    assert contracts._VALIDATED_BYTES <= 32
+    assert len(contracts._VALIDATED) <= 2
+    for _ in range(2):
+        with pytest.raises(DomainError):
+            validate('bounded-test', False)
+    assert compiled.calls == 6

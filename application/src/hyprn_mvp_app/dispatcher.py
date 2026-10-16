@@ -70,6 +70,7 @@ BRIDGE_ARITIES = {
     'bundle_runtime': 0,
     'launch': 2,
     'launch_budgeted': 3,
+    'launch_batch': 1,
     'matches': 1,
     'inspect': 1,
     'read_record': 2,
@@ -129,6 +130,16 @@ def bridge_request(method, values, *, read_only=False, exports_only=False):
         not isinstance(values[0], dict) or len(raw) > 1048576
     ):
         raise ValueError('Bounded exploration data required')
+    if method == 'launch_batch':
+        from .contracts import BATCH_RUN_LIMIT, execution_wall_seconds
+
+        items = values[0]
+        if not isinstance(items, list) or not 1 <= len(items) <= BATCH_RUN_LIMIT:
+            raise ValueError('Bounded independent run batch required')
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {'bundle', 'request', 'wall_seconds'}:
+                raise ValueError('Closed independent run required')
+            execution_wall_seconds(item['wall_seconds'])
     if method == 'launch_budgeted':
         from .contracts import execution_wall_seconds
 
@@ -344,6 +355,11 @@ class NativeBridge:
     def launch_budgeted(self, bundle, request, wall_seconds):
         return self.call('launch_budgeted', encode_files(bundle), request, wall_seconds)
 
+    def launch_batch(self, items):
+        return self.call('launch_batch', [
+            dict(item, bundle=encode_files(item['bundle'])) for item in items
+        ])
+
     def matches(self, request):
         return self.call('matches', request)
 
@@ -513,8 +529,13 @@ def main():
                 # still performs its own current attestation check.
                 if args.with_exports and store.execution_observation()['status'] != 'ready':
                     runs = []
-                for run in runs:
-                    service.dispatch(run, prepare_only=args.prepare_only)
+                if args.run_id:
+                    for run in runs:
+                        service.dispatch(run, prepare_only=args.prepare_only)
+                else:
+                    from .contracts import BATCH_RUN_LIMIT
+                    for start in range(0, len(runs), BATCH_RUN_LIMIT):
+                        service.dispatch_batch(runs[start:start + BATCH_RUN_LIMIT])
             except sqlite3.OperationalError as error:
                 contended += 1
                 if transient_lock_error(error) and contended >= STALL_ITERATIONS:

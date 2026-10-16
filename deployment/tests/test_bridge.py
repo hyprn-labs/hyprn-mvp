@@ -284,3 +284,58 @@ def test_archive_mode_and_arity_match_both_ends(monkeypatch,capsys):
     monkeypatch.setattr(dispatcher,'MAX_MESSAGE',32)
     with pytest.raises(ValueError):dispatcher.NativeBridge(exports_only=True).archive_record({'schema_version':'1','padding':'x'*64})
     assert capsys.readouterr().out==''
+
+
+from test_submission import submission, accepted
+
+
+@pytest.mark.parametrize('failure', [None, 'lost_reply', 'reordered'])
+def test_batch_keeps_individual_receipts_and_never_redispatches(submission, failure):
+    service, _, actor, sid, _, native = submission
+    runs = [accepted(submission), accepted(submission)]
+    identities = [r['run_id'] for r in runs]
+
+    def launch_batch(items):
+        records = [dict(request=i['request'], record=native.launch(i['bundle'], i['request']))
+                   for i in items]
+        if failure == 'lost_reply':
+            raise TimeoutError('reply lost after native nodes exist')
+        return records[::-1] if failure == 'reordered' else records
+
+    native.launch_batch = launch_batch
+    service.dispatch_batch(identities)
+    assert native.launches == 2
+    expected = 'uncertain' if failure else 'recorded'
+    assert [service.read(actor, sid, rid)['state'] for rid in identities] == [expected] * 2
+    # The next attempt performs exact per-request lookup, including uncertain rows.
+    service.dispatch_batch(identities)
+    assert native.launches == 2
+    assert [service.read(actor, sid, rid)['state'] for rid in identities] == ['recorded'] * 2
+    assert len({r['run_id'] for r in runs}) == 2
+
+
+def test_batch_rechecks_authority_after_all_claims(submission):
+    service, store, actor, sid, _, native = submission
+    runs = [accepted(submission), accepted(submission)]
+    count = 0
+
+    def revoke(point):
+        nonlocal count
+        if point == 'after_claim':
+            count += 1
+            if count == 2:
+                with store.connection(write=True) as db:
+                    db.execute('DELETE FROM memberships WHERE study_id=? AND actor_id=?',
+                               (sid, actor))
+
+    service.fault = revoke
+    native.launch_batch = lambda _: pytest.fail('revoked batch crossed native boundary')
+    service.dispatch_batch([r['run_id'] for r in runs])
+    assert native.launches == 0
+
+
+@pytest.mark.parametrize('items', [[], [None], [{}, {}, {}]])
+def test_batch_frame_refuses_invalid_inventory_before_io(items, monkeypatch, capsys):
+    with pytest.raises(ValueError):
+        dispatcher.NativeBridge().call('launch_batch', items)
+    assert capsys.readouterr().out == ''

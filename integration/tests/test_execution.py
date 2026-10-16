@@ -360,3 +360,41 @@ def test_generated_symbol_view_inplace_write_is_explicitly_unavailable(execution
     downstream=next(o for o in record['results']['outputs'] if o['target']==case['targets']['square']['y'])
     assert downstream['availability']=='unavailable' and downstream['value'] is None
     assert not downstream['assigned'] and not downstream['producer_completed']
+
+
+@pytest.mark.integration
+def test_native_batch_retains_independent_results_and_separate_workers(execution_runtime):
+    import time
+    from aiida import orm
+
+    selected = execution_runtime.bundle_runtime()
+    items = []
+    for multiplier in (2, 3):
+        case = current_fixture('chain', multiplier)
+        bundle = assemble(case, selected)
+        request = dict(run_id=bundle['manifest']['run_id'],
+                       scope=case['frozen']['configuration']['study_id'], command_id=uid(),
+                       payload_digest=digest({'multiplier': multiplier}),
+                       bundle_digest=bundle['manifest']['bundle_digest'])
+        items.append(dict(bundle=bundle, request=request, wall_seconds=60))
+    started = time.monotonic()
+    records = execution_runtime.launch_batch(items)
+    elapsed = time.monotonic() - started
+    worker_ids = []
+    for item, row, expected in zip(items, records, ([7, 49], [9, 81]), strict=True):
+        assert row['request'] == item['request']
+        record = row['record']
+        assert record['exit_status'] == 0
+        assert sorted(o['value'] for o in record['results']['outputs']) == expected
+        assert execution_runtime.matches(item['request']) == [record['process_uuid']]
+        assert execution_runtime.retained_bundle(record['process_uuid']) == item['bundle']
+        node = orm.load_node(record['process_uuid'])
+        raw = json.loads(node.outputs.retrieved.base.repository.get_object_content('result.json'))
+        worker_ids.append(raw['id'])
+    assert len(set(worker_ids)) == 2
+    with pytest.raises(RuntimeError, match='Existing native'):
+        execution_runtime.launch_batch(items)
+    timing = dict(batch_seconds=elapsed, seconds_per_point=elapsed / 2,
+                  independent_workers=worker_ids)
+    (execution_runtime.root / 'evidence/batch-timing.json').write_text(json.dumps(timing))
+    print(json.dumps(timing))

@@ -55,6 +55,10 @@ def native_call(native, method, values, *, read_only=False, exports_only=False, 
         return True
     if method == 'bundle_runtime':
         return encode_files(native.bundle_runtime())
+    if method == 'launch_batch':
+        return native.launch_batch([
+            dict(item, bundle=decode_files(item['bundle'])) for item in values[0]
+        ])
     if method == 'launch_budgeted':
         return native.launch_budgeted(decode_files(values[0]), values[1], values[2])
     if method == 'launch':

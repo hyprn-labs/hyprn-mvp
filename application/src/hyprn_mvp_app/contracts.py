@@ -25,6 +25,9 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
+from collections import OrderedDict
+from threading import Lock
+
 import rfc8785
 from jsonschema import Draft202012Validator, FormatChecker, validators
 from jsonschema.exceptions import best_match, ValidationError
@@ -33,6 +36,7 @@ from jsonschema.exceptions import best_match, ValidationError
 # Execution budgets are operational bounds, never physical model defaults.
 EXECUTION_WALL_DEFAULT = 300
 EXECUTION_WALL_MAX = 3600
+BATCH_RUN_LIMIT = 2
 
 
 def execution_wall_seconds(value):
@@ -311,16 +315,61 @@ def validate_execution(name, value):
     return value
 
 
+# Only successful pure schema checks are reusable. Authority, signatures, runtime
+# admission and semantic checks remain with their owners on every operation.
+_VALIDATED = OrderedDict()
+_VALIDATED_LOCK = Lock()
+_VALIDATED_BYTES = 0
+_VALIDATED_MAX_BYTES = 16 * 1024 * 1024
+_VALIDATED_MAX_ITEM = 1024 * 1024
+_VALIDATED_MAX_ITEMS = 256
+
+
+def _json_types(value):
+    # Canonical JSON deliberately accepts tuples; JSON Schema does not treat them
+    # as arrays. Only ordinary decoded JSON values share a validation cache key.
+    if type(value) is dict:
+        return all(type(k) is str and _json_types(v) for k, v in value.items())
+    if type(value) is list:
+        return all(_json_types(v) for v in value)
+    return type(value) in (str, int, float, bool, type(None))
+
+
 def _violations(validator, value):
     """Field diagnostics for ``value``: encoding first, then the schema ``validator()``."""
     try:
-        canonical(value)
+        raw = canonical(value)
     except (ValueError, UnicodeError, RecursionError):
         return [encoding_issue(value)]
+    compiled = validator()
+    cacheable = len(raw) <= _VALIDATED_MAX_ITEM and _json_types(value)
+    if cacheable:
+        # Retain exact JSON types and validate the snapshot used as the key.
+        raw = json.dumps(value, sort_keys=True, ensure_ascii=True,
+                         allow_nan=False, separators=(',', ':')).encode()
+        cacheable = len(raw) <= _VALIDATED_MAX_ITEM
+    key = (id(compiled), raw)
+    if cacheable:
+        with _VALIDATED_LOCK:
+            if _VALIDATED.get(key) is compiled:
+                _VALIDATED.move_to_end(key)
+                return []
     try:
-        return diagnostics(validator().iter_errors(value))
+        errors = diagnostics(compiled.iter_errors(json.loads(raw) if cacheable else value))
     except RecursionError:
         return [issue((), 'Value is nested too deeply.')]
+    if cacheable and not errors:
+        global _VALIDATED_BYTES
+        with _VALIDATED_LOCK:
+            if key not in _VALIDATED:
+                _VALIDATED[key] = compiled
+                _VALIDATED_BYTES += len(raw)
+            _VALIDATED.move_to_end(key)
+            while (_VALIDATED_BYTES > _VALIDATED_MAX_BYTES
+                   or len(_VALIDATED) > _VALIDATED_MAX_ITEMS):
+                (_, removed), _ = _VALIDATED.popitem(last=False)
+                _VALIDATED_BYTES -= len(removed)
+    return errors
 
 
 def pointer(parts):

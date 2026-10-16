@@ -462,6 +462,9 @@ GROUPS = {
     # failed record retained by the real run listed just before it. Not selected:
     # test_history_read.py::test_actual_schema1_remains_data_only_and_byte_identical, which needs a
     # historical schema1 native record that no fresh scope can contain.
+    'execution-batch': (
+        'deployment/tests/test_exploration_native.py::test_public_independent_runs_cross_batched_dispatch_and_retain_exact_results',
+    ),
     'native-execution': (
         'integration/tests/test_native_parser.py',
         'integration/tests/test_profile_identity.py',
@@ -1113,6 +1116,7 @@ GROUP_INTERPRETERS.update(
 NATIVE_PYTEST_GROUPS = frozenset(
     {
         'native-execution',
+        'execution-batch',
         'native-a',
         'native-b',
         'combined-security',

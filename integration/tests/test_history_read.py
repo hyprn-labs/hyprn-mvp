@@ -41,7 +41,10 @@ def test_actual_retained_failed_record_exact_results_and_artifacts(retained_nati
     record=native.read_record(request,association)
     assert record['request']==request and record['results']==node.outputs.results.get_dict()
     assert record['assessment']==node.outputs.assessment.get_dict()
-    assert record['bundle']['manifest']['schema_version']=='2' and not record['errors']
+    retained_manifest = json.loads(
+        node.inputs.frozen_bundle.base.repository.get_object_content('manifest.json')
+    )
+    assert record['bundle']['manifest'] == retained_manifest and not record['errors']
     outputs=record['results']['outputs']
     assert sorted(o['value'] for o in outputs if o['availability']=='available')==[7]
     assert [o['value'] for o in outputs if o['availability']=='unavailable']==[None]
@@ -49,7 +52,7 @@ def test_actual_retained_failed_record_exact_results_and_artifacts(retained_nati
     assert decode_record(encode_record(record))==record
     assert orm.QueryBuilder().append(orm.CalcJobNode).count()==count
     assert node.outputs.retrieved.base.repository.get_object_content('result.json',mode='rb')==before
-    evidence('schema2-failure',record,count)
+    evidence('retained-failure',record,count)
 
 
 @pytest.mark.parametrize('field',['store_uuid','process_uuid','run_id','scope','command_id','payload_digest','bundle_digest','extra'])
