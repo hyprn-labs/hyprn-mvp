@@ -159,9 +159,37 @@ export function CriterionRecord({ number, target, comparison, threshold, units, 
 }
 
 /** Closing hides rather than unmounts children, preserving the owning controller's draft. */
-export function ActionDialog({ title, label = title, children, disabled = false, actionHost, completionKey, size, triggerLabel, variant, width = 'default' }: { variant?: ButtonProps['variant']; width?: 'default' | 'workspace'; size?: 'sm' | 'desk'; triggerLabel?: string; title: string; label?: string; children: ReactNode; disabled?: boolean; actionHost?: HTMLElement | null; completionKey?: number }) {
-  const dialog = useRef<HTMLDialogElement>(null), invoker = useRef<HTMLElement | null>(null), id = useId();
-  useEffect(() => { if (completionKey) dialog.current?.close(); }, [completionKey]);
+export function ActionDialog({
+  title,
+  label = title,
+  children,
+  disabled = false,
+  actionHost,
+  completionKey,
+  size,
+  triggerLabel,
+  variant,
+  width = 'default',
+  closeLabel = 'Done',
+}: {
+  closeLabel?: string;
+  variant?: ButtonProps['variant'];
+  width?: 'default' | 'workspace';
+  size?: 'sm' | 'desk';
+  triggerLabel?: string;
+  title: string;
+  label?: string;
+  children: ReactNode;
+  disabled?: boolean;
+  actionHost?: HTMLElement | null;
+  completionKey?: number;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null),
+    invoker = useRef<HTMLElement | null>(null),
+    id = useId();
+  useEffect(() => {
+    if (completionKey) dialog.current?.close();
+  }, [completionKey]);
   const trigger = (
     <Button
       variant={variant}
@@ -179,12 +207,38 @@ export function ActionDialog({ title, label = title, children, disabled = false,
     </Button>
   );
   // Native close normally restores focus; its delayed event must not steal a later selection.
-  return <>{actionHost ? createPortal(trigger, actionHost) : trigger}
-    <DialogFrame ref={dialog} aria-labelledby={id} className={'action-dialog' + (width === 'workspace' ? ' hf-dialog--workspace' : '')} onClose={() => { const active = document.activeElement; if (invoker.current?.isConnected && (active === document.body || !active || dialog.current?.contains(active))) invoker.current.focus(); }}>
-      <div className="dialog-heading"><h2 id={id}>{title}</h2><Button variant="quiet" icon={<ActionIcon name="close" />} aria-label={'Close ' + title} onClick={() => dialog.current?.close()} /></div>
-      <div className="dialog-body">{children}</div>
-      <div className="dialog-footer"><Button onClick={() => dialog.current?.close()}>Done</Button></div>
-    </DialogFrame></>;
+  return (
+    <>
+      {actionHost ? createPortal(trigger, actionHost) : trigger}
+      <DialogFrame
+        ref={dialog}
+        aria-labelledby={id}
+        className={'action-dialog' + (width === 'workspace' ? ' hf-dialog--workspace' : '')}
+        onClose={() => {
+          const active = document.activeElement;
+          if (
+            invoker.current?.isConnected &&
+            (active === document.body || !active || dialog.current?.contains(active))
+          )
+            invoker.current.focus();
+        }}
+      >
+        <div className="dialog-heading">
+          <h2 id={id}>{title}</h2>
+          <Button
+            variant="quiet"
+            icon={<ActionIcon name="close" />}
+            aria-label={'Close ' + title}
+            onClick={() => dialog.current?.close()}
+          />
+        </div>
+        <div className="dialog-body">{children}</div>
+        <div className="dialog-footer">
+          <Button onClick={() => dialog.current?.close()}>{closeLabel}</Button>
+        </div>
+      </DialogFrame>
+    </>
+  );
 }
 export function DetailTabs({ ports, source, assumptions }: { ports: ReactNode; source: ReactNode; assumptions: ReactNode }) {
   const [tab, setTab] = useState('0'), id = useId();

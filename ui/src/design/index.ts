@@ -69,6 +69,7 @@ export { BrandLogo } from './BrandLogo';
 export {
   AnswerExplorationPanel,
   InterpretationPanel,
+  AnswerProse,
   QuantitySlider,
   QuantityResult,
   ResponseCurve,

@@ -766,14 +766,17 @@ export function ModelNode(p: ModelNodeProps): ReactElement {
         <span className="hf-node__name">{p.name}</span>
       </Button>
       {exploring ? (
-        <div className="hf-node__port-columns">
+        <div
+          className="hf-node__port-columns"
+          role="region"
+          aria-label={p.name + ' quantities'}
+          tabIndex={0}
+        >
           {(['in', 'out'] as const).map((dir) => (
             <div
               key={dir}
               className="hf-node__port-column"
-              role="region"
               aria-label={p.name + (dir === 'in' ? ' inputs' : ' outputs')}
-              tabIndex={0}
             >
               {(p.ports ?? []).filter((pt) => pt.dir === dir).map(renderPort)}
             </div>
@@ -889,7 +892,11 @@ export function DataTable(p: DataTableProps): ReactElement {
                       );
                     }
                     return (
-                      <td key={c.key} className={c.numeric ? 'num' : c.unit ? 'unit' : undefined}>
+                      <td
+                        key={c.key}
+                        data-label={typeof c.label === 'string' ? c.label : undefined}
+                        className={c.numeric ? 'num' : c.unit ? 'unit' : undefined}
+                      >
                         {v}
                       </td>
                     );

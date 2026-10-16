@@ -260,8 +260,11 @@ test('independent categories preserve common values and fence late loads', async
     await expect(settings).toContainText('Samples: pending');
     await settings.getByRole('button', { name: 'Cancel sampling', exact: true }).click();
     await expect(settings).toContainText('Samples: cancelled');
-    await settings.getByRole('button', { name: 'Reconcile sampling', exact: true }).click();
-    await expect(settings).toContainText('0 attempted of 5');
+    await expect(
+      settings.getByRole('button', { name: 'Reconcile sampling', exact: true }),
+    ).toHaveCount(0);
+    await expect(settings).toContainText('5 total');
+    await expect(settings).not.toContainText('0 attempted');
   }
   await page.keyboard.press('Escape');
   await writeFile(

@@ -85,6 +85,12 @@ const selectedCurve = render('ResponseCurve selected API value', h(F.ResponseCur
 check('Selected API output is marked between curve samples and zero is explicit',
   selectedCurve.includes('hf-response-curve__cursor')
   && selectedCurve.includes('aria-label="Zero"'));
+const singlePoint = render('ResponseCurve single point', h(F.ResponseCurve, {
+  label: 'Illustrative response', axis: 'x (m)', units: 'm', selected: 1,
+  points: [{x:0,y:null},{x:2,y:null}], calculated: [{x:1,y:4}],
+}));
+check('One available result does not imply a response curve',
+  !singlePoint.includes('<svg') && singlePoint.includes('One available point'));
 const countedProgress = render('Progress explicit sample count', h(F.Progress, {
   label: 'Completed sample points', count: {completed: 3, total: 8},
 }));
@@ -273,7 +279,7 @@ for (const tone of ['alarm', 'warning', 'advisory', 'ok', 'inert', 'running']) {
     rows: [{ name: 'u', v: 0, unit: '1' }, { name: 'y', v: null, unit: '1' }, { name: 'w', v: '', unit: '1' }],
     selected: 0,
   }));
-  check('DataTable 0 is a value, blanks are "not computed"', html.includes('<td class="num">0</td>') && (html.match(/class="missing">not computed/g) || []).length === 2, html);
+  check('DataTable 0 is a value, blanks are "not computed"', /<td\b[^>]*class="num"[^>]*>0<\/td>/.test(html) && (html.match(/class="missing">not computed/g) || []).length === 2, html);
   check('DataTable caption hidden by class and numeric header aligned by class', html.includes('<caption class="hf-visually-hidden">') && html.includes('class="hf-th--num"'), html);
 }
 

@@ -399,7 +399,12 @@ export function AnswerExplorer({
   return (
     <AnswerExplorationPanel
       settings={
-        <ActionDialog title="Sample settings" label="Sample settings">
+        <ActionDialog
+          title="Sample settings"
+          label="Sample settings"
+          closeLabel="Close"
+          width="workspace"
+        >
           {loaded && (
             <ExplorationSettings
               api={api}
@@ -431,7 +436,7 @@ export function AnswerExplorer({
               </Select>
             </label>
           )}
-          {loaded && (
+          {!!loaded?.fits.length && (
             <label>
               Prepared response
               <Select
@@ -459,9 +464,11 @@ export function AnswerExplorer({
               <p>Observed agreement with the model is not physical validation.</p>
             </>
           )}
-          <Button disabled={busy} onClick={() => setRefresh((n) => n + 1)}>
-            Refresh preparations
-          </Button>
+          {!!loaded?.fits.length && (
+            <Button disabled={busy} onClick={() => setRefresh((n) => n + 1)}>
+              Refresh preparations
+            </Button>
+          )}
           <Button
             variant="secondary"
             disabled={!loaded || !vector || busy || !!api.pending}
@@ -541,6 +548,7 @@ export function AnswerExplorer({
                 : 'Estimates need model-declared units. Saved quantities stay unchanged.'}
             </p>
           )}
+          {predictionError && <p role="status">{predictionError}</p>}
           {snapshot ? (
             <GraphView
               projection={project(snapshot as Snapshot)}

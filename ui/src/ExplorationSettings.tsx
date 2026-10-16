@@ -12,7 +12,17 @@ import type {
   ExplorationSurrogate1,
   ExplorationWarmOperation1,
 } from './contract';
-import { Button, Disclosure, TextInput, Progress } from './design';
+import {
+  Button,
+  Disclosure,
+  TextInput,
+  TextArea,
+  Progress,
+  DataTable,
+  ActionGroup,
+  ReadingSection,
+  StatusTag,
+} from './design';
 import { unitLabel } from './unitLabels';
 import { explorationReason } from './explorationInputs';
 
@@ -234,18 +244,40 @@ export function ExplorationSettings({
       <p>Sampling scope: {combo.categories.join(' · ') || 'This configuration'}</p>
       <Disclosure open>
         <summary>Input ranges and steps</summary>
-        {combo.dimensions.map((d) => {
-          const name =
-            basis.inputs.find((p) => key(p.target) === key(d.target))?.name ?? d.target.port_id;
-          return (
-            <fieldset key={key(d.target)}>
-              <legend>
-                {name} · {unitLabel(d.units)}
-              </legend>
-              {(['lower', 'upper', 'step'] as const).map((field) => (
-                <label key={field}>
-                  {name} {field}
+        <p>Blank step allows continuous selection. Linked inputs move together.</p>
+        <DataTable
+          label="Input ranges and steps"
+          className="hf-settings-table"
+          columns={[
+            { key: 'quantity', label: 'Input' },
+            { key: 'lower', label: 'Minimum' },
+            { key: 'upper', label: 'Maximum' },
+            { key: 'step', label: 'Step' },
+          ]}
+          rows={combo.dimensions.map((d) => {
+            const input = basis.inputs.find((p) => key(p.target) === key(d.target));
+            const name = input?.name ?? d.target.port_id;
+            const linked = combo.dimensions
+              .filter((p) => p !== d && d.covary_group && p.covary_group === d.covary_group)
+              .map(
+                (p) =>
+                  basis.inputs.find((v) => key(v.target) === key(p.target))?.name ??
+                  p.target.port_id,
+              );
+            return {
+              quantity: (
+                <>
+                  <strong>{name}</strong>
+                  <div>{input?.instance_name}</div>
+                  <div>{unitLabel(d.units)}</div>
+                  {linked.length > 0 && <small>Linked with {linked.join(', ')}</small>}
+                </>
+              ),
+              ...Object.fromEntries(
+                (['lower', 'upper', 'step'] as const).map((field) => [
+                  field,
                   <TextInput
+                    aria-label={name + ' ' + field}
                     type="number"
                     step="any"
                     value={d[field] ?? ''}
@@ -266,16 +298,15 @@ export function ExplorationSettings({
                         ),
                       });
                     }}
-                  />
-                </label>
-              ))}
-              {d.covary_group && <p>Linked selection: {d.covary_group}</p>}
-            </fieldset>
-          );
-        })}
+                  />,
+                ]),
+              ),
+            };
+          })}
+        />
         <label>
           Design rationale
-          <TextInput
+          <TextArea
             value={draft.rationale}
             onChange={(e) => {
               invalidate();
@@ -301,39 +332,59 @@ export function ExplorationSettings({
       </Disclosure>
       <Disclosure>
         <summary>Sampling budget and error targets</summary>
-        {(
-          [
-            ['Seed', seed, setSeed],
-            ['Training calculations', training, setTraining],
-            ['Independent checks', checks, setChecks],
-            ['Maximum additional evaluations', budget, setBudget],
-            ['Wall budget seconds', wall, setWall],
-            ['Per-calculation seconds', pointWall, setPointWall],
-          ] as const
-        ).map(([label, value, setter]) => (
-          <label key={label}>
-            {label}
-            <TextInput
-              type="number"
-              step="1"
-              value={value}
-              onChange={(e) => {
-                invalidate();
-                setter(e.target.value);
-              }}
-            />
-          </label>
-        ))}
-        <p>Concurrency: 1</p>
-        {tolerances.map((t, index) => (
-          <fieldset key={key(t.target)}>
-            <legend>
-              {basis.outputs[index].name} error target · {unitLabel(basis.outputs[index].units)}
-            </legend>
-            {(['absolute', 'relative'] as const).map((field) => (
-              <label key={field}>
-                {basis.outputs[index].name} {field} error
+        <p>
+          Proposed next sampling request. These settings do not describe the recorded samples or
+          assessment below.
+        </p>
+        <div className="hf-sampling-budget">
+          {(
+            [
+              ['Seed', seed, setSeed],
+              ['Training calculations', training, setTraining],
+              ['Independent checks', checks, setChecks],
+              ['Maximum additional evaluations', budget, setBudget],
+              ['Total time limit (seconds)', wall, setWall],
+              ['Time limit per calculation (seconds)', pointWall, setPointWall],
+            ] as const
+          ).map(([label, value, setter]) => (
+            <label key={label}>
+              {label}
+              <TextInput
+                type="number"
+                step="1"
+                value={value}
+                onChange={(e) => {
+                  invalidate();
+                  setter(e.target.value);
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        <p>
+          Absolute targets use the output unit; relative targets are fractions (0.01 = 1%). Both
+          must be explicit, including zero.
+        </p>
+        <DataTable
+          label="Output error targets"
+          className="hf-settings-table"
+          columns={[
+            { key: 'quantity', label: 'Output' },
+            { key: 'absolute', label: 'Absolute error' },
+            { key: 'relative', label: 'Relative error' },
+          ]}
+          rows={tolerances.map((t, index) => ({
+            quantity: (
+              <>
+                <strong>{basis.outputs[index].name}</strong>
+                <div>{unitLabel(basis.outputs[index].units)}</div>
+              </>
+            ),
+            ...Object.fromEntries(
+              (['absolute', 'relative'] as const).map((field) => [
+                field,
                 <TextInput
+                  aria-label={basis.outputs[index].name + ' ' + field + ' error'}
                   type="number"
                   step="any"
                   value={t[field]}
@@ -343,11 +394,11 @@ export function ExplorationSettings({
                       tolerances.map((v) => (v === t ? { ...v, [field]: e.target.value } : v)),
                     );
                   }}
-                />
-              </label>
-            ))}
-          </fieldset>
-        ))}
+                />,
+              ]),
+            ),
+          }))}
+        />
         <Button
           disabled={busy || !!api.pending}
           onClick={() =>
@@ -389,32 +440,40 @@ export function ExplorationSettings({
         )}
       </Disclosure>
       {operation && (
-        <>
-          <Button
-            disabled={
-              busy || !design || !['complete', 'limited', 'cancelled'].includes(operation.state)
-            }
-            onClick={() =>
-              void action(async () => {
-                if (!design) return;
-                setSurrogate(
-                  await api.buildExplorationSurrogate(studyId, {
-                    schema_version: '1',
-                    command_id: crypto.randomUUID(),
-                    design_id: design.design_id,
-                    sample_operation_id: operation.operation_id,
-                  }),
-                );
-              })
-            }
-          >
-            Build and assess estimates
-          </Button>
+        <ReadingSection aria-label="Recorded samples">
+          <h3>Recorded samples</h3>
+          <ActionGroup>
+            <Button
+              disabled={
+                busy || !design || !['complete', 'limited', 'cancelled'].includes(operation.state)
+              }
+              onClick={() =>
+                void action(async () => {
+                  if (!design) return;
+                  setSurrogate(
+                    await api.buildExplorationSurrogate(studyId, {
+                      schema_version: '1',
+                      command_id: crypto.randomUUID(),
+                      design_id: design.design_id,
+                      sample_operation_id: operation.operation_id,
+                    }),
+                  );
+                })
+              }
+            >
+              Build and assess estimates
+            </Button>
+          </ActionGroup>
           <p role="status">
             Samples: {operation.state} · {operation.completed_count} completed ·{' '}
-            {operation.failed_count} failed · {operation.attempted_count} attempted of{' '}
-            {operation.allocation.total_count} · {operation.elapsed_seconds.toFixed(1)}
-            {' s elapsed. '}
+            {operation.failed_count} failed · {operation.allocation.total_count} total.
+            {operation.attempted_count > 0 && (
+              <>
+                {' '}
+                {operation.attempted_count} attempted in this operation ·{' '}
+                {operation.elapsed_seconds.toFixed(1)} s elapsed.
+              </>
+            )}{' '}
             {explorationReason(operation.reason)}
           </p>
           {['pending', 'designing', 'sampling'].includes(operation.state) && (
@@ -427,45 +486,58 @@ export function ExplorationSettings({
               message="Completed sample points; this is not an elapsed-time percentage."
             />
           )}
-          <Button
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                const op = await api.readExplorationSamples(studyId, operation.operation_id);
-                setOperations([op, ...operations.slice(1)]);
-              })
-            }
-          >
-            Read sampling progress
-          </Button>
-          {(['cancel', 'reconcile', 'resume'] as const).map((kind) => (
+          <ActionGroup>
             <Button
-              key={kind}
-              disabled={busy || !!api.pending}
+              disabled={busy}
               onClick={() =>
                 void action(async () => {
-                  const op = await api.controlExplorationSamples(
-                    studyId,
-                    operation.operation_id,
-                    kind,
-                  );
+                  const op = await api.readExplorationSamples(studyId, operation.operation_id);
                   setOperations([op, ...operations.slice(1)]);
                 })
               }
             >
-              {kind === 'cancel'
-                ? 'Cancel sampling'
-                : kind === 'resume'
-                  ? 'Resume sampling'
-                  : 'Reconcile sampling'}
+              Read sampling progress
             </Button>
-          ))}
-        </>
+            {(['cancel', 'reconcile', 'resume'] as const)
+              .filter((kind) =>
+                kind === 'cancel'
+                  ? ['pending', 'designing', 'sampling', 'uncertain'].includes(operation.state)
+                  : kind === 'resume'
+                    ? ['cancelled', 'limited'].includes(operation.state) &&
+                      (!!operation.design_digest || !operation.reason)
+                    : ['uncertain', 'cancelled'].includes(operation.state) &&
+                      !!operation.design_digest,
+              )
+              .map((kind) => (
+                <Button
+                  key={kind}
+                  disabled={busy || !!api.pending}
+                  onClick={() =>
+                    void action(async () => {
+                      const op = await api.controlExplorationSamples(
+                        studyId,
+                        operation.operation_id,
+                        kind,
+                      );
+                      setOperations([op, ...operations.slice(1)]);
+                    })
+                  }
+                >
+                  {kind === 'cancel'
+                    ? 'Cancel sampling'
+                    : kind === 'resume'
+                      ? 'Resume sampling'
+                      : 'Reconcile sampling'}
+                </Button>
+              ))}
+          </ActionGroup>
+        </ReadingSection>
       )}
       {surrogate && (
-        <>
+        <ReadingSection aria-label="Recorded assessment">
+          <h3>Recorded assessment</h3>
           <p role="status">
-            Estimates: {surrogate.state} · {surrogate.completed_groups}
+            Assessment process: {surrogate.state} · {surrogate.completed_groups}
             {' of '}
             {surrogate.total_groups} groups assessed. {explorationReason(surrogate.reason)}
           </p>
@@ -475,55 +547,99 @@ export function ExplorationSettings({
               count={{ completed: surrogate.completed_groups, total: surrogate.total_groups }}
             />
           )}
-          <Button
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                setSurrogate(
-                  await api.readExplorationSurrogate(studyId, surrogate.surrogate_version_id),
-                );
-              })
-            }
-          >
-            Refresh assessment
-          </Button>
-          {['pending', 'building'].includes(surrogate.state) && (
+          <ActionGroup>
             <Button
               disabled={busy}
               onClick={() =>
                 void action(async () => {
                   setSurrogate(
-                    await api.cancelExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                    await api.readExplorationSurrogate(studyId, surrogate.surrogate_version_id),
                   );
                 })
               }
             >
-              Cancel assessment
+              Refresh assessment
             </Button>
-          )}
-          <Button
-            disabled={busy || !['ready', 'assessed'].includes(surrogate.state)}
-            onClick={() =>
-              void action(async () => {
-                setWarm(
-                  await api.warmExplorationSurrogate(studyId, surrogate.surrogate_version_id),
-                );
-              })
-            }
-          >
-            Prepare fast predictions
-          </Button>
-          {surrogate.groups.flatMap((g) =>
-            g.outputs
-              .filter((o) => o.reason)
-              .map((o) => (
-                <p key={g.identity + key(o.target)} role="status">
-                  Not computed: {explorationReason(o.reason)}. {o.metrics?.assessed_count ?? 0}{' '}
-                  independent checks assessed.
-                </p>
-              )),
-          )}
-        </>
+            {['pending', 'building'].includes(surrogate.state) && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void action(async () => {
+                    setSurrogate(
+                      await api.cancelExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                    );
+                  })
+                }
+              >
+                Cancel assessment
+              </Button>
+            )}
+            <Button
+              disabled={busy || !['ready', 'assessed'].includes(surrogate.state)}
+              onClick={() =>
+                void action(async () => {
+                  setWarm(
+                    await api.warmExplorationSurrogate(studyId, surrogate.surrogate_version_id),
+                  );
+                })
+              }
+            >
+              Prepare fast predictions
+            </Button>
+          </ActionGroup>
+          <p>
+            Completion describes the assessment process. Each output must meet its error target
+            before it can be estimated.
+          </p>
+          {surrogate.groups.map((g) => {
+            const sampled = operations.find(
+              (op) => op.operation_id === surrogate.sample_operation_id,
+            )?.request.combinations[g.combination];
+            const group = design?.request.combinations.find(
+              (c) => c.configuration_revision_id === sampled?.configuration_revision_id,
+            );
+            const sameModel = group?.model_revision_id === basis.model_revision_id;
+            return (
+              <Disclosure
+                key={g.identity}
+                open={group?.configuration_revision_id === basis.configuration_revision_id}
+              >
+                <summary>
+                  {group?.categories.join(' · ') || 'Configuration ' + (g.combination + 1)} ·{' '}
+                  {g.outputs.filter((o) => !o.reason && o.metrics?.target_met).length} of{' '}
+                  {g.outputs.length} outputs meet targets
+                </summary>
+                <DataTable
+                  label={'Assessment for ' + (group?.categories.join(' · ') || g.combination + 1)}
+                  columns={[
+                    { key: 'quantity', label: 'Output' },
+                    { key: 'state', label: 'Assessment' },
+                    { key: 'checks', label: 'Checks', numeric: true },
+                  ]}
+                  rows={g.outputs.map((o) => ({
+                    quantity: (
+                      <>
+                        {(sameModel &&
+                          basis.outputs.find((v) => key(v.target) === key(o.target))?.name) ||
+                          o.target.port_id}
+                        <div>{unitLabel(o.units)}</div>
+                      </>
+                    ),
+                    state: (
+                      <>
+                        <StatusTag tone={!o.reason && o.metrics?.target_met ? 'ok' : 'advisory'}>
+                          {!o.reason && o.metrics?.target_met ? 'Target met' : 'Not eligible'}
+                        </StatusTag>
+                        {o.reason && <p>{explorationReason(o.reason)}</p>}
+                      </>
+                    ),
+                    checks: o.metrics?.assessed_count ?? 0,
+                  }))}
+                />
+              </Disclosure>
+            );
+          })}
+        </ReadingSection>
       )}
       {warm && (
         <>

@@ -553,7 +553,9 @@ test('@exploration-answer-basis hydrates exact cited records and keeps full case
       ...body,
       command_id: crypto.randomUUID(),
       case_id: null,
-      interpretation: 'Exact earlier basis remains cited.',
+      interpretation:
+        'Exact earlier basis remains cited.\n\n' +
+        '- First preserved finding.\n- Second preserved finding.',
       basis: {
         configuration_revision_ids: [],
         run_ids: [],
@@ -579,6 +581,12 @@ test('@exploration-answer-basis hydrates exact cited records and keeps full case
     '/ui/?workspace#' + new URLSearchParams({ v: '1', study: data.sid, view: 'overview' }),
   );
   await expect(page.getByText('Exact earlier basis remains cited.', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'First preserved finding.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'Second preserved finding.' }),
+  ).toBeVisible();
   const prefix = '/api/1/studies/' + data.sid;
   await expect.poll(() => reads.includes(prefix + '/answers/' + pins.first)).toBe(true);
   await expect

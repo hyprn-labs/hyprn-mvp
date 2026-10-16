@@ -26,6 +26,7 @@ import { EvidenceRecordBody } from './EvidenceView';
 import {
   ResourceCard,
   InterpretationPanel,
+  AnswerProse,
   ActionDialog,
   Button,
   DataTable,
@@ -146,8 +147,8 @@ function ScientificAnswer({
           }}
         />
 
-        <p className="context-copy">{answer.observations}</p>
-        <p className="context-copy">{answer.interpretation}</p>
+        <AnswerProse text={answer.observations} />
+        <AnswerProse text={answer.interpretation} />
         {!!answer.qualifications.length && (
           <>
             <h4>Qualifications</h4>

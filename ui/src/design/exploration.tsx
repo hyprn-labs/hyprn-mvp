@@ -30,8 +30,46 @@ export function AnswerExplorationPanel({
 export function InterpretationPanel({ children }: { children: ReactNode }) {
   return (
     <Panel label="Interpretation" title="Interpretation" headingLevel={3}>
+      <p className="hf-response-note">
+        Saved answer. Changing exploration inputs does not revise its observations, interpretation
+        or qualifications.
+      </p>
       {children}
     </Panel>
+  );
+}
+
+/** Plain saved text: preserve paragraphs and simple lists without interpreting HTML. */
+export function AnswerProse({ text }: { text: string }) {
+  const blocks: { list: boolean; lines: string[] }[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) {
+      blocks.push({ list: false, lines: [] });
+      continue;
+    }
+    const bullet = /^\s*[-*]\s+(.+)$/.exec(line);
+    const list = !!bullet;
+    const last = blocks.at(-1);
+    if (!last || last.list !== list || !last.lines.length)
+      blocks.push({ list, lines: [bullet?.[1] ?? line] });
+    else last.lines.push(bullet?.[1] ?? line);
+  }
+  return (
+    <div className="hf-answer-prose">
+      {blocks
+        .filter((b) => b.lines.length)
+        .map((b, i) =>
+          b.list ? (
+            <ul key={i}>
+              {b.lines.map((line, n) => (
+                <li key={n}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p key={i}>{b.lines.join('\n')}</p>
+          ),
+        )}
+    </div>
   );
 }
 
@@ -195,6 +233,13 @@ export function ResponseCurve({
     hi = Math.max(...xs),
     bottom = Math.min(...ys),
     top = Math.max(...ys);
+  if (new Set(available.map((p) => p.x)).size < 2)
+    return (
+      <p className="hf-response-note">
+        One available point at {axis} = {formatNumber(available[0].x)}. A response curve needs
+        results at multiple input values.
+      </p>
+    );
   const x = (v: number) => 48 + ((v - lo) / (hi - lo || 1)) * 180;
   const y = (v: number) => (top === bottom ? 44 : 76 - ((v - bottom) / (top - bottom)) * 64);
   const tick = (v: number) => formatNumber(Number(v.toPrecision(3)));
@@ -259,7 +304,7 @@ export function ResponseCurve({
         </text>
       </svg>
       <figcaption>
-        {axis} · {label} ({unitLabel(units)}) · {formatNumber(bottom)}–{formatNumber(top)}
+        {axis} → {label} ({unitLabel(units)})
       </figcaption>
     </figure>
   );
