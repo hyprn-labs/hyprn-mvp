@@ -279,7 +279,9 @@ for (const tone of ['alarm', 'warning', 'advisory', 'ok', 'inert', 'running']) {
     rows: [{ name: 'u', v: 0, unit: '1' }, { name: 'y', v: null, unit: '1' }, { name: 'w', v: '', unit: '1' }],
     selected: 0,
   }));
-  check('DataTable 0 is a value, blanks are "not computed"', /<td\b[^>]*class="num"[^>]*>0<\/td>/.test(html) && (html.match(/class="missing">not computed/g) || []).length === 2, html);
+  check('DataTable 0 is a value, blanks are "not computed"',
+    /<td\b[^>]*class="num"[^>]*>0<\/td>/.test(html)
+    && (html.match(/class="missing">not computed/g) || []).length === 2, html);
   check('DataTable caption hidden by class and numeric header aligned by class', html.includes('<caption class="hf-visually-hidden">') && html.includes('class="hf-th--num"'), html);
 }
 
