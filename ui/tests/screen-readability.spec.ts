@@ -220,7 +220,7 @@ for (const count of [0, 1])
     }
     expect(state.writes).toEqual([]);
   });
-test('Quantity columns retain useful context without repeating empty definitions or one owner', async ({
+test('Quantity columns omit repeated owners and empty definitions', async ({
   page,
 }) => {
   const state = await harness(page);

@@ -82,16 +82,34 @@ for(const schema of ['1','2','3']) test('@units-reading exact schema '+schema+' 
   await expect(inspector.getByRole('button',{name:'Receiver · incoming · m/s',exact:true})).toBeVisible();
   expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('revision')).toBe(f.before.model_revision_id);
 });
-// Quantities table (Quantity, Component, Direction, Definition, Unit): the 350px inspector
-// ports table is gone by construction; units stay on one readable line in their own column and
-// the definition wraps per word inside its own cell.
-async function portTableReadable(page:Page) {
-  const table=page.getByRole('table',{name:'Quantities',exact:true});
-  await expect(page.getByRole('region',{name:'Selection inspector',exact:true}).locator('table')).toHaveCount(0);
-  await expect(table.getByRole('columnheader',{name:'Definition',exact:true})).toBeVisible();await expect(table.getByRole('columnheader',{name:'Unit',exact:true})).toBeVisible();
-  const rows=await table.evaluate(t=>[...t.querySelectorAll('tbody tr')].map(tr=>{const cell=(selector:string)=>{const e=tr.querySelector(selector) as HTMLElement,r=document.createRange();r.selectNodeContents(e);return {text:e.textContent,lines:r.getClientRects().length,fits:e.scrollWidth<=e.clientWidth,textRight:r.getBoundingClientRect().right,cellRight:e.getBoundingClientRect().right};};return {definition:cell('.quantity-definition'),units:cell('.unit')};}));
-  expect(rows.length).toBeGreaterThan(0);
-  for(const row of rows){expect(row.units.lines,JSON.stringify(row)).toBe(1);expect(row.units.fits,JSON.stringify(row)).toBe(true);expect(row.definition.fits,JSON.stringify(row)).toBe(true);expect(row.definition.textRight,JSON.stringify(row)).toBeLessThanOrEqual(row.definition.cellRight+1);}
+// This legacy fixture has no quantity definitions. Keep the honest notice and readable units.
+async function portTableReadable(page: Page) {
+  const table = page.getByRole('table', { name: 'Quantities', exact: true });
+  const inspector = page.getByRole('region', { name: 'Selection inspector', exact: true });
+  await expect(inspector.locator('table')).toHaveCount(0);
+  await expect(table.getByRole('columnheader', { name: 'Definition', exact: true })).toHaveCount(0);
+  await expect(page.getByText('No quantity definitions provided.', { exact: true })).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: 'Unit', exact: true })).toBeVisible();
+  const rows = await table.locator('tbody td.unit').evaluateAll(cells => cells.map(cell => {
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    return {
+      text: cell.textContent,
+      lines: range.getClientRects().length,
+      fits: cell.scrollWidth <= cell.clientWidth,
+      textRight: range.getBoundingClientRect().right,
+      cellRight: cell.getBoundingClientRect().right,
+    };
+  }));
+  expect(rows.length).toBe(4);
+  expect(rows.map(row => row.text).sort()).toEqual([
+    'Dimensionless', 'Not specified', 'm/s', 'm/s',
+  ]);
+  for (const row of rows) {
+    expect(row.lines, JSON.stringify(row)).toBe(1);
+    expect(row.fits, JSON.stringify(row)).toBe(true);
+    expect(row.textRight, JSON.stringify(row)).toBeLessThanOrEqual(row.cellRight + 1);
+  }
   return rows;
 }
 async function approachPicker(page:Page,f:ReaderFixture) {
@@ -111,12 +129,15 @@ test('@units-reading approach references resolve occurrence through exact defini
   for(const label of labels) await dialog.getByRole('checkbox',{name:label,exact:true}).check();
   await expect(dialog).not.toContainText('old_flow');await expect(dialog).not.toContainText('[object Object]');
   await dialog.getByRole('button',{name:'Apply step',exact:true}).click();
-  // The step names its exact references in one implementation line and opens its model
-  // version in the canonical view, where the referenced quantities keep their exact units.
+  // The linked model dialog identifies its exact saved version and preserves quantity units.
   const detail=page.getByRole('region',{name:'Selected method step',exact:true});
-  await expect(detail).toContainText('Implemented in Model version '+f.before.model_revision_id.slice(0,8)+' · 4 inputs · 1 output');
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();
-  const inspector=page.getByRole('dialog',{name:'Model version '+f.before.model_revision_id.slice(0,8),exact:true});
+  await detail.getByRole('button', { name: 'View model details', exact: true }).click();
+  const inspector = page.getByRole('dialog', {
+    name: 'Model version ' + f.before.model_revision_id.slice(0, 8), exact: true,
+  });
+  await expect(inspector).toContainText(
+    'version ' + f.before.model_revision_id.slice(0, 8) + ' · read-only · linked to this approach',
+  );
   await expect(inspector).toContainText('Not specified');await expect(inspector).toContainText('Dimensionless');await expect(inspector).toContainText('m/s');
   await page.keyboard.press('Escape');
 });
@@ -175,7 +196,14 @@ test('@units-reading light dark narrow and genuine 200 percent keyboard evidence
       for(const theme of ['light','dark']) {
         await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
         await page.getByRole('tab',{name:'Graph',exact:true}).click();
-        const port=page.locator('#panel-Graph .hf-node__port[title^="unknown · "]');await port.focus();await page.keyboard.press('Enter');await expect(page.locator('#panel-Graph [data-instance="'+f.producer_id+'"]')).toHaveAttribute('aria-pressed','true');
+        const port = page.locator('#panel-Graph .hf-node__port[title^="unknown · "]');
+        await port.focus();
+        await page.keyboard.press('Enter');
+        await expect(port).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('#panel-Graph .hf-node__port[aria-pressed="true"]'))
+          .toHaveCount(1);
+        await expect(page.locator('#panel-Graph [data-instance="' + f.producer_id + '"]'))
+          .toHaveAttribute('aria-pressed', 'false');
         await page.getByRole('tab',{name:'Graph',exact:true}).scrollIntoViewIfNeeded();await capture('reader-graph-'+size+'-'+theme);
         await inspectXdsm(page,'unknown','Not specified');await capture('reader-xdsm-'+size+'-'+theme);
         await page.getByRole('region',{name:'Selection inspector',exact:true}).scrollIntoViewIfNeeded();geometry.push({name:'port-table-'+size+'-'+theme,rows:await portTableReadable(page)});await capture('reader-inspector-'+size+'-'+theme);
@@ -213,11 +241,11 @@ test('@units-reading light dark narrow and genuine 200 percent keyboard evidence
 test('@units-reading preview preserves before and after unit meanings',async({page})=>{
   await seeded(page);
   await page.getByLabel('Model version',{exact:true}).selectOption('draft');
-  await page.getByRole('button',{name:'Edit ports',exact:true}).click();
-  const ports=page.getByRole('dialog',{name:'Edit ports',exact:true});
-  await ports.getByLabel('Port 1 units',{exact:true}).selectOption('dimensionless');
-  await ports.getByLabel('Port 2 units',{exact:true}).selectOption('physical');
-  await ports.getByLabel('Port 2 units spelling',{exact:true}).fill('J/kg');
+  await page.getByRole('button',{name:'Edit quantities',exact:true}).click();
+  const ports=page.getByRole('dialog',{name:'Edit quantities',exact:true});
+  await ports.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');
+  await ports.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');
+  await ports.getByLabel('Quantity 2 units spelling',{exact:true}).fill('J/kg');
   await page.keyboard.press('Escape');await page.getByRole('button',{name:'Save component',exact:true}).click();
   const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});
   const row=preview.getByRole('row').filter({hasText:'Energy law · ports'});
