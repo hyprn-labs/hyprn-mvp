@@ -54,6 +54,7 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
 }) => {
   await page.setViewportSize({ width: 1920, height: 878 });
   const state = await harness(page);
+  state.model.name = 'Hydrogen storage mass and tank volume feasibility';
   const definition = state.model.definitions[0];
   state.model.definitions = [14, 9, 7].map((count, n) => ({
     ...definition,
@@ -89,6 +90,15 @@ test('Fit model contains complete readable nodes and wheel input scrolls the pag
   await login(page, `#v=1&study=${sid}&model=${mid}&view=model`);
   const viewport = page.getByRole('region', { name: 'Directed component diagram' });
   const fit = page.getByRole('button', { name: 'Fit model', exact: true });
+  await expect.poll(async () => {
+    const bounds = await viewport.locator('.hf-node').evaluateAll(nodes => nodes.map(node => {
+      const box = node.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    }));
+    return bounds.length === 3 && bounds.every(box => box.top >= 0 && box.bottom <= 878);
+  }).toBe(true);
+  const footer = (await page.locator('.canvas-footer').boundingBox())!;
+  expect(footer.y + footer.height).toBeLessThanOrEqual(878);
   await fit.click();
   async function contained() {
     const frame = (await viewport.boundingBox())!;
