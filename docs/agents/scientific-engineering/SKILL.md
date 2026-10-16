@@ -11,7 +11,7 @@ answer connects that observation to the question through justified physics,
 checks, applicable evidence and explicit limitations. An unresolved or conditional
 answer can be scientifically sound. It is not completion of an unmet objective.
 
-This is the repository-owned skill for HYPRN MVP, called HYPRN by the user.
+This is the repository-owned scientific engineering skill for HYPRN.
 It grants no execution or write authority. The installed agent receives the essential
 rules through `get_playbook`; its authoritative text is
 [playbook.py](../../../application/src/hyprn_mvp_app/agent_tools/playbook.py), rendered

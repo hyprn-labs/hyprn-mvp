@@ -3,7 +3,7 @@ import json
 import re
 import subprocess
 
-PROJECT = re.compile(r'hyprn|hyprn|whatsopt|modeling_policy\.rb|modeling_contract\.rb|'
+PROJECT = re.compile(r'hyprn|whatsopt|modeling_policy\.rb|modeling_contract\.rb|'
                      r'modeling\.schema\.json|build_engine\.py|origin-instrument\.rb|'
                      r'upstream/engine-packaging|COPY application /app/application|'
                      r'COPY contracts /app/contracts|COPY ui-dist /app/ui', re.I)
