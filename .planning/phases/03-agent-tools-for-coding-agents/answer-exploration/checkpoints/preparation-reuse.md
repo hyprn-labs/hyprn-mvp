@@ -17,6 +17,10 @@ Owner authorization: reduce repeated preparation overhead as the next step; safe
 
 Profiling/timing wrappers and comparison records are external scratch artifacts (`hyprn-all-sliders`). No profiling code was added to the product. The temporary dispatcher wrapper records wall timings only; cProfile was removed before the subsequent run measurements.
 
+## Committed acceptance
+
+Implementation commit `e1ce5ff`: `./hyprn-mvp dev check units-bundle` returned 126 passed in 49.94 s (scope `d5333be2-11b8-4eb9-80dd-a8d2b4bf95b9`); `./hyprn-mvp dev check style-ratchet` returned 33 passed (scope `12024f35-0a9d-4643-ac52-534c2e85ef66`). Both exited 0. This later checkpoint update changes evidence text only. The preparation client had reached 70/150 new originals and 14/30 additional fits, all completed fits meeting 11/11 targets; remaining computations were running, not declared complete.
+
 ## Recovery and remaining work
 
 The client stopped between receipt polls. Its accepted last run completed successfully and was reconciled by its saved run ID, bringing the retained new-original count to 58. The saved manifest was preserved before pause; successful samples were not resubmitted. One additional controlled same-configuration run was explicitly used for the equivalence check. The unchanged attested runtime permits continued reuse of earlier exact samples.
