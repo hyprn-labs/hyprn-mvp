@@ -898,3 +898,83 @@ test('Rendered shell chrome retains text and control contrast in both themes', a
     ),
   );
 });
+
+test('exploration cards fit unequal quantities without internal scroll at 25–100 percent', async ({
+  page,
+}) => {
+  await harness(page);
+  await login(page);
+  await page.goto(new URL('/ui/?specimen', page.url()).href);
+  const graph = page.getByRole('region', { name: 'Unequal exploration columns', exact: true });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      for (const zoom of [100, 75, 50, 25]) {
+        await expect(graph.getByLabel('Graph zoom', { exact: true })).toHaveText(zoom + '%');
+        await expect
+          .poll(() =>
+            graph.locator('.hf-node--explorer').evaluateAll((nodes) =>
+              nodes.every((node) => {
+                const columns = [...node.querySelectorAll<HTMLElement>('.hf-node__port-column')];
+                return (
+                  columns[0].clientHeight === columns[1].clientHeight &&
+                  columns.every(
+                    (c) =>
+                      c.scrollHeight <= c.clientHeight + 1 && c.scrollWidth <= c.clientWidth + 1,
+                  ) &&
+                  Math.abs(
+                    Number(node.parentElement!.getAttribute('height')) -
+                      (node as HTMLElement).offsetHeight,
+                  ) <= 1
+                );
+              }),
+            ),
+          )
+          .toBe(true);
+        const rows = await graph
+          .locator('.hf-node__port-column:first-child')
+          .evaluateAll((cols) =>
+            cols.map((c) => [...c.children].map((row) => row.getBoundingClientRect().height)),
+          );
+        for (const heights of rows)
+          expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+        await expect(graph.locator('.hf-response-curve')).toHaveCount(5);
+        await expect(graph.locator('summary')).toHaveCount(0);
+        const palette = await graph.evaluate((el) => ({
+          stop: getComputedStyle(el.querySelector('.hf-slider-stop--estimated')!).borderColor,
+          line: getComputedStyle(el.querySelector('.hf-response-curve__estimate')!).stroke,
+          calculatedStop: getComputedStyle(el.querySelector('.hf-slider-stop--calculated')!)
+            .backgroundColor,
+          calculatedPoint: getComputedStyle(el.querySelector('.hf-response-curve__calculated')!)
+            .fill,
+        }));
+        expect(palette.stop).toBe(palette.line);
+        expect(palette.calculatedStop).toBe(palette.calculatedPoint);
+        if (zoom !== 25) await graph.getByRole('button', { name: 'Zoom out', exact: true }).click();
+      }
+      await expect(graph.getByRole('button', { name: 'Zoom out', exact: true })).toBeDisabled();
+      const slider = graph.getByRole('slider').first();
+      await slider.press('Home');
+      await expect(slider).toHaveAttribute('aria-valuetext', '0 m');
+      await slider.press('ArrowRight');
+      await expect(slider).toHaveAttribute('aria-valuetext', '1 m');
+      const stops = await graph
+        .locator('.hf-discrete-track')
+        .first()
+        .evaluate((el) => {
+          const range = el.querySelector('input')!.getBoundingClientRect();
+          const dots = [...el.querySelectorAll('.hf-slider-stops span')].map((d) =>
+            d.getBoundingClientRect(),
+          );
+          return {
+            start: dots[0].x + dots[0].width / 2 - range.x,
+            end: range.right - dots.at(-1)!.x - dots.at(-1)!.width / 2,
+          };
+        });
+      expect(Math.abs(stops.start - stops.end)).toBeLessThan(1);
+      for (let i = 0; i < 3; i++)
+        await graph.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    }
+  }
+});

@@ -1,5 +1,5 @@
 import { unitLabel } from '../unitLabels';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useId, useRef, useState } from 'react';
 import { Button, ModelNode } from './components';
 import { ActionDialog } from './primitives';
 import {
@@ -33,6 +33,30 @@ export function GraphCanvas({
     observer.observe(element);
     return () => observer.disconnect();
   }, [projection.nodes.length]);
+  const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
+  useLayoutEffect(() => {
+    if (!portContent || !viewport.current) return;
+    const observer = new ResizeObserver((entries) => {
+      setNodeHeights((previous) => {
+        const next = { ...previous };
+        let changed = false;
+        for (const entry of entries) {
+          const element = entry.target as HTMLElement;
+          const id = element.querySelector<HTMLElement>('[data-instance]')?.dataset.instance;
+          const height = Math.ceil(element.offsetHeight);
+          if (id && next[id] !== height) {
+            next[id] = height;
+            changed = true;
+          }
+        }
+        return changed ? next : previous;
+      });
+    });
+    viewport.current
+      .querySelectorAll('.hf-node--explorer')
+      .forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [portContent, projection.nodes.length]);
   const gesture = useRef<{ x: number; y: number; origin: typeof pan } | null>(null);
   const maxPorts = Math.max(1, ...projection.nodes.map((n) => n.ports.length));
   const columns = portContent ? 1 : projection.nodes.length > 4 ? 3 : 2;
@@ -41,7 +65,7 @@ export function GraphCanvas({
   const pitch = token('--space-12');
   const portHeight = portContent ? pitch * 5 : token('--control-floor');
   const nodeWidth = portContent
-    ? Math.max(pitch * 5, (availableWidth - pitch * 2 - (columns - 1) * pitch) / columns)
+    ? Math.max(pitch * 13, (availableWidth - pitch * 2 - (columns - 1) * pitch) / columns)
     : pitch * 4 + token('--space-6');
   const portCenter = token('--control-floor') * 1.5 + (portContent ? token('--space-2') : 0);
   const columnWidth = nodeWidth + (portContent ? pitch : pitch * 1.5),
@@ -49,12 +73,18 @@ export function GraphCanvas({
     left = token('--space-6');
   const row = portContent ? pitch * 10 : portHeight * (maxPorts + 1) + pitch * 2;
   const width = columns * columnWidth + left * 2;
-  const height = Math.max(pitch * 7, Math.ceil(projection.nodes.length / columns) * row + top);
-  const positions = new Map(
-    projection.nodes.map((n, i) => [
-      n.instance.instance_id,
-      { x: left + (i % columns) * columnWidth, y: top + Math.floor(i / columns) * row },
-    ]),
+  const positions = new Map<string, { x: number; y: number }>();
+  let nextTop = top;
+  projection.nodes.forEach((n, i) => {
+    positions.set(n.instance.instance_id, {
+      x: left + (i % columns) * columnWidth,
+      y: portContent ? nextTop : top + Math.floor(i / columns) * row,
+    });
+    if (portContent) nextTop += (nodeHeights[n.instance.instance_id] ?? pitch * 8) + pitch * 1.5;
+  });
+  const height = Math.max(
+    pitch * 7,
+    portContent ? nextTop : Math.ceil(projection.nodes.length / columns) * row + top,
   );
   function fit() {
     setZoom(1);
@@ -105,8 +135,8 @@ export function GraphCanvas({
       <div className="hf-view-toolbar" role="group" aria-label="Graph view controls">
         <Button
           size="sm"
-          disabled={zoom <= 1}
-          onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+          disabled={zoom <= 0.25}
+          onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
         >
           Zoom out
         </Button>
@@ -223,7 +253,11 @@ export function GraphCanvas({
                 const feedback = to.y < from.y || (to.y === from.y && to.x <= from.x);
                 const lane = pitch / 2 + ((i % 3) * pitch) / 3;
                 const vertical = to.y > from.y && to.x === from.x;
-                const adjacent = portContent && vertical && to.y - from.y === row;
+                const sourceHeight = nodeHeights[g.source] ?? pitch * 8;
+                const adjacent =
+                  portContent &&
+                  vertical &&
+                  Math.abs(to.y - from.y - sourceHeight - pitch * 1.5) < 1;
                 const labelX = adjacent
                   ? from.x + nodeWidth / 2 + pitch / 2
                   : vertical
@@ -232,10 +266,10 @@ export function GraphCanvas({
                       : x + pitch * 1.5
                     : (x + end) / 2;
                 const labelY = adjacent
-                  ? (from.y + pitch * 8 + to.y) / 2
+                  ? (from.y + sourceHeight + to.y) / 2
                   : (y + endY) / 2 - pitch / 4;
                 const d = adjacent
-                  ? `M${from.x + nodeWidth / 2},${from.y + pitch * 8} V${to.y}`
+                  ? `M${from.x + nodeWidth / 2},${from.y + sourceHeight} V${to.y}`
                   : portContent
                     ? to.y === from.y && to.x > from.x
                       ? to.x - from.x <= columnWidth + 1
@@ -322,12 +356,16 @@ export function GraphCanvas({
                       x={p.x}
                       y={p.y}
                       width={nodeWidth}
-                      height={portContent ? pitch * 8.5 : portHeight * (ports.length + 1) + pitch}
+                      height={
+                        portContent
+                          ? (nodeHeights[instance.instance_id] ?? pitch * 8)
+                          : portHeight * (ports.length + 1) + pitch
+                      }
                     >
                       <ModelNode
                         className={portContent ? 'hf-node--explorer' : undefined}
                         name={instance.name}
-                        index={index + 1}
+                        index={portContent ? undefined : index + 1}
                         instanceId={instance.instance_id}
                         title={
                           instance.name +

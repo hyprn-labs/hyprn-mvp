@@ -48,3 +48,9 @@ Use measured counts ("1 of 2 components evaluated", "9 of 50 iterations") or an 
 Use the noninteractive `RecordState` beside or below the entity title. It describes storage/editability, never scientific success. `New draft`, `Saved draft`, and `Saved version · read-only` use the neutral ring and inert colour; `Unsaved changes` uses the warning triangle and warning colour. Run history uses `Saved run · read-only` with the shared record lock; execution and criteria retain their separate scientific tags.
 
 Record metadata uses compact quiet buttons at the owning card: `Model record details`, `Configuration record details`, `Run record details`, `Case record details`, `Case answer record details`, `Study answer record details`, `Approach record details`, and `Evidence record details`. `Method record` follows the Python function. A case is identified by both its case ID and approach version; an answer is a different versioned record. Do not repeat parent record controls inside child prose.
+
+## Answer exploration (owner-approved visual amendment, 2026-10-16)
+
+Calculated samples use solid circles in neutral black ink (`plot-calculated`, light ink in dark mode). Estimated samples use orange outlined marks and dashed curves (`plot-estimated`). Apply this same pair to slider stops, selected points, curves and result basis labels; keep words and shapes so colour is never the only distinction. This narrow use supersedes the former logo-only orange restriction. Neither basis implies validity.
+
+Component cards show inputs on the left and outputs with visible response plots on the right. Columns share their natural height; input rows divide it evenly. All content stays visible without an internal scrollbar. When input minimum sizes need more room, the card grows rather than clipping controls. The graph supports 25–250% zoom, including on narrow screens.

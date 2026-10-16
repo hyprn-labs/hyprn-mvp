@@ -90,7 +90,7 @@ const singlePoint = render('ResponseCurve single point', h(F.ResponseCurve, {
   points: [{x:0,y:null},{x:2,y:null}], calculated: [{x:1,y:4}],
 }));
 check('One available result does not imply a response curve',
-  !singlePoint.includes('<svg') && singlePoint.includes('One available point'));
+  !singlePoint.includes('<svg') && singlePoint.includes('One sample'));
 const countedProgress = render('Progress explicit sample count', h(F.Progress, {
   label: 'Completed sample points', count: {completed: 3, total: 8},
 }));
@@ -124,8 +124,8 @@ check('Nonuniform prepared values use discrete indices and distinct markers',
 const finiteSlider = render('QuantitySlider finite discrete domain', h(F.QuantitySlider, {
   label: 'Count', units: '', value: 2, lower: 1, upper: 3, step: 1, onChange() {},
 }));
-check('A small discrete domain explains its actual size without inventing points',
-  finiteSlider.includes('Discrete interval: 3 admissible values.'));
+check('A small discrete domain retains exact bounds without invented points',
+  finiteSlider.includes('min="1"') && finiteSlider.includes('max="3"') && finiteSlider.includes('step="1"'));
 
 const expected = [
   'BrandLogo', 'Button', 'Field', 'Tabs', 'Panel', 'StatusTag', 'Readout', 'Ledger',

@@ -40,7 +40,12 @@ for (const theme of ['light', 'dark']) {
       ]) {
         pairs.push([text, ground, 4.5]);
       }
-      pairs.push(['focus', ground, 3], ['line-strong', ground, 3]);
+      pairs.push(
+        ['focus', ground, 3],
+        ['line-strong', ground, 3],
+        ['plot-calculated', ground, 3],
+        ['plot-estimated', ground, 3],
+      );
     }
     for (const role of ['alarm', 'warning', 'advisory', 'ok', 'trace', 'ai']) {
       pairs.push([role, `${role}-soft`, 4.5]);

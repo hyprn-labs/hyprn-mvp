@@ -101,7 +101,6 @@ export function QuantitySlider({
   const id = useId(),
     index = value === null ? -1 : (values?.indexOf(value) ?? -1);
   const declared = lower != null && upper != null;
-  const admissibleCount = declared && step ? Math.round((upper - lower) / step) + 1 : null;
   const outside = declared && value !== null && (value < lower || value > upper);
   const coordinate = declared && value !== null && step ? (value - lower) / step : 0;
   const offStep =
@@ -114,11 +113,10 @@ export function QuantitySlider({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="hf-quantity-entry">
-        <label htmlFor={id}>
-          {label} · {unitLabel(units)}
-        </label>
+        <label htmlFor={id}>{label}</label>
         <TextInput
           id={id}
+          aria-label={label + ' · ' + unitLabel(units)}
           type="number"
           step={step ?? 'any'}
           value={value ?? ''}
@@ -129,8 +127,11 @@ export function QuantitySlider({
             );
           }}
         />
+        <span className="hf-quantity-unit">{unitLabel(units)}</span>
       </div>
-      <div className="hf-discrete-track">
+      <div
+        className={'hf-discrete-track hf-discrete-track--' + (stops?.[index]?.kind ?? 'unassigned')}
+      >
         <input
           type="range"
           aria-label={label + (values ? ' prepared points' : ' range')}
@@ -158,14 +159,7 @@ export function QuantitySlider({
           </div>
         )}
       </div>
-      {admissibleCount !== null && admissibleCount < 5 && (
-        <span className="hf-slider-caption">
-          Discrete interval: {admissibleCount} admissible values.
-        </span>
-      )}
-      {stops && stops.length < 2 && (
-        <span className="hf-slider-caption">More prepared points needed on this slice</span>
-      )}
+      {stops && stops.length < 2 && <span className="hf-slider-caption">More samples needed</span>}
       {(values ? index < 0 : !declared || outside || value === null) && (
         <span role="status">
           {value === null
@@ -218,9 +212,13 @@ export function QuantityResult({
           {(state === 'estimated' ? '≈ ' : '') + formatNumber(value)} {unitLabel(units)}
         </span>
       )}
-      <StatusTag tone={value === null ? 'advisory' : state === 'calculated' ? 'ok' : 'inert'}>
-        {label}
-      </StatusTag>
+      {value === null ? (
+        <StatusTag tone="advisory">{label}</StatusTag>
+      ) : (
+        <span className={'hf-result-basis hf-result-basis--' + state}>
+          <span aria-hidden="true">{state === 'calculated' ? '●' : '○'}</span> <span>{label}</span>
+        </span>
+      )}
       {value === null && reason && <span>{reason}</span>}
     </div>
   );
@@ -263,8 +261,7 @@ export function ResponseCurve({
   if (new Set(available.map((p) => p.x)).size < 2)
     return (
       <p className="hf-response-note">
-        One available point at {axis} = {formatNumber(available[0].x)}. A response curve needs
-        results at multiple input values.
+        One sample · {axis} = {formatNumber(available[0].x)}
       </p>
     );
   const x = (v: number) => 48 + ((v - lo) / (hi - lo || 1)) * 180;
@@ -330,9 +327,7 @@ export function ResponseCurve({
           {formatNumber(hi)}
         </text>
       </svg>
-      <figcaption>
-        {axis} → {label} ({unitLabel(units)})
-      </figcaption>
+      <figcaption>{axis}</figcaption>
     </figure>
   );
 }

@@ -49,9 +49,11 @@ import {
   QuantitySlider,
   AnswerExplorationPanel,
   InterpretationPanel,
+  AnswerProse,
   QuantityResult,
   ResponseCurve,
 } from '../src/design';
+import type { Projection } from '../src/GraphView';
 import { EvidenceRecordBody } from '../src/EvidenceView';
 import type { EvidenceSnapshot } from '../src/api';
 
@@ -67,6 +69,34 @@ const source = (index: number): EvidenceSnapshot =>
     source_refs: [],
     resource_scope: { scope_version: '1', kind: 'study', study_id: 'specimen' },
   }) as EvidenceSnapshot;
+
+const explorationProjection: Projection = {
+  nodes: [
+    [2, 4],
+    [7, 1],
+  ].map(([inputs, outputs], index) => ({
+    instance: {
+      instance_id: 'layout-' + index,
+      definition_version_id: 'definition-' + index,
+      name: 'Unequal quantities ' + index,
+    },
+    incomplete: false,
+    ports: Array.from({ length: inputs + outputs }, (_, i) => ({
+      port_id: 'quantity-' + i,
+      definition_version_id: 'definition-' + index,
+      direction: i < inputs ? ('input' as const) : ('output' as const),
+      name:
+        i === 0
+          ? 'An intentionally long engineering quantity label that must wrap without clipping'
+          : 'Quantity ' + i,
+      code_symbol: 'q' + i,
+      value_type: 'real_scalar' as const,
+      units: 'm',
+    })),
+  })),
+  groups: [],
+  invalid: [],
+};
 
 /** Test-only reference surface: no product route, persistence or substitute API. */
 export function DesignSpecimen() {
@@ -101,7 +131,7 @@ export function DesignSpecimen() {
         <ReadingSection
           aria-label="Answer exploration recipes"
           data-components={
-            'QuantitySlider QuantityResult ResponseCurve AnswerExplorationPanel InterpretationPanel'
+            'QuantitySlider QuantityResult ResponseCurve AnswerExplorationPanel InterpretationPanel AnswerProse'
           }
         >
           <AnswerExplorationPanel
@@ -132,7 +162,60 @@ export function DesignSpecimen() {
               calculated={[{ x: 0, y: 0 }]}
             />
           </AnswerExplorationPanel>
-          <InterpretationPanel>Illustrative prose; no scientific result.</InterpretationPanel>
+          <section aria-label="Unequal exploration columns">
+            <GraphCanvas
+              projection={explorationProjection}
+              selection={{ kind: 'none' }}
+              onSelect={() => {}}
+              trace={{ nodes: new Set(), links: new Set() }}
+              portContent={(_, port) =>
+                port.direction === 'input' ? (
+                  <QuantitySlider
+                    label={port.name}
+                    units="m"
+                    value={quantity}
+                    onChange={setQuantity}
+                    stops={[
+                      { value: 0, kind: 'calculated' },
+                      { value: 1, kind: 'estimated' },
+                      { value: 2, kind: 'calculated' },
+                      { value: 3, kind: 'estimated' },
+                      { value: 4, kind: 'calculated' },
+                    ]}
+                  />
+                ) : (
+                  <>
+                    <QuantityResult
+                      value={quantity}
+                      units="m"
+                      state={quantity === 1 || quantity === 3 ? 'estimated' : 'calculated'}
+                    />
+                    <ResponseCurve
+                      label={port.name}
+                      axis="Input (m)"
+                      units="m"
+                      selected={quantity ?? 0}
+                      points={[
+                        { x: 0, y: 0 },
+                        { x: 1, y: 1 },
+                        { x: 2, y: 2 },
+                        { x: 3, y: 3 },
+                        { x: 4, y: 4 },
+                      ]}
+                      calculated={[
+                        { x: 0, y: 0 },
+                        { x: 2, y: 2 },
+                        { x: 4, y: 4 },
+                      ]}
+                    />
+                  </>
+                )
+              }
+            />
+          </section>
+          <InterpretationPanel>
+            <AnswerProse text="Illustrative prose; no scientific result." />
+          </InterpretationPanel>
         </ReadingSection>
         <ReadingSection
           aria-label="Control recipes"

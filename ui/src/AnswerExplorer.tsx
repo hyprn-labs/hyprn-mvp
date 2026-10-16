@@ -16,7 +16,6 @@ import type {
 import { GraphView, project, type Snapshot } from './GraphView';
 import {
   ActionDialog,
-  Disclosure,
   Button,
   ActionGroup,
   AnswerExplorationPanel,
@@ -702,7 +701,14 @@ export function AnswerExplorer({
           )}
           {predictionError && !fit && <p role="status">{predictionError}</p>}
           <p className="hf-slider-caption">
-            Slider points: ● calculated · ○ estimated.{' '}
+            <span className="hf-result-basis hf-result-basis--calculated">
+              <span aria-hidden="true">●</span> calculated
+            </span>
+            {' · '}
+            <span className="hf-result-basis hf-result-basis--estimated">
+              <span aria-hidden="true">○</span> estimated
+            </span>
+            {' · '}
             {inputMode === 'single'
               ? 'Changing sliders restores other saved inputs. Linked inputs move together.'
               : 'Other inputs stay selected. Estimates need coverage for all selected inputs.'}
@@ -843,57 +849,48 @@ export function AnswerExplorer({
                       )}
                     />
                     {axis && current !== null && (
-                      <Disclosure
-                        open={
-                          loaded.basis.outputs.find((p) => p.target.instance_id === instanceId)
-                            ?.target.port_id === port.port_id
-                        }
-                      >
-                        <summary aria-label={output.name + ' response'}>Response</summary>
-                        <ResponseCurve
-                          label={output.name}
-                          units={output.units}
-                          axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
-                          selected={current}
-                          selectedResult={{
-                            value: result,
-                            state: resultKind,
-                          }}
-                          points={
-                            joint &&
-                            prediction &&
-                            joint.values.some((v) => v.value !== null && v.kind === 'estimated')
-                              ? prediction.vectors.slice(1).map((v, i) => ({
-                                  x: v.find((p) => key(p.target) === key(axis.target))!.value,
-                                  y: joint.values[i + 1]?.value ?? null,
+                      <ResponseCurve
+                        label={output.name}
+                        units={output.units}
+                        axis={axis.name + ' (' + unitLabel(axis.units) + ')'}
+                        selected={current}
+                        selectedResult={{
+                          value: result,
+                          state: resultKind,
+                        }}
+                        points={
+                          joint &&
+                          prediction &&
+                          joint.values.some((v) => v.value !== null && v.kind === 'estimated')
+                            ? prediction.vectors.slice(1).map((v, i) => ({
+                                x: v.find((p) => key(p.target) === key(axis.target))!.value,
+                                y: joint.values[i + 1]?.value ?? null,
+                              }))
+                            : fit
+                              ? fit.request.query_values.map((x, i) => ({
+                                  x,
+                                  y: estimated?.values[i] ?? null,
                                 }))
-                              : fit
-                                ? fit.request.query_values.map((x, i) => ({
-                                    x,
-                                    y: estimated?.values[i] ?? null,
-                                  }))
-                                : []
-                          }
-                          calculated={
-                            joint &&
-                            prediction &&
-                            joint.values.some((v) => v.value !== null && v.kind === 'estimated')
-                              ? prediction.vectors.slice(1).flatMap((v, i) => {
-                                  const value = joint.values[i + 1];
-                                  return value?.kind === 'calculated' && value.value !== null
-                                    ? [
-                                        {
-                                          x: v.find((p) => key(p.target) === key(axis.target))!
-                                            .value,
-                                          y: value.value,
-                                        },
-                                      ]
-                                    : [];
-                                })
-                              : calculatedPoints
-                          }
-                        />
-                      </Disclosure>
+                              : []
+                        }
+                        calculated={
+                          joint &&
+                          prediction &&
+                          joint.values.some((v) => v.value !== null && v.kind === 'estimated')
+                            ? prediction.vectors.slice(1).flatMap((v, i) => {
+                                const value = joint.values[i + 1];
+                                return value?.kind === 'calculated' && value.value !== null
+                                  ? [
+                                      {
+                                        x: v.find((p) => key(p.target) === key(axis.target))!.value,
+                                        y: value.value,
+                                      },
+                                    ]
+                                  : [];
+                              })
+                            : calculatedPoints
+                        }
+                      />
                     )}
                     <ActionDialog
                       title={output.name + ' result basis'}

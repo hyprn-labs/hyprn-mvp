@@ -93,6 +93,8 @@
   color-scheme: light;
   --brand-ink: #111820;
   --brand-signal: #e03a10;
+  --plot-calculated: #111820;
+  --plot-estimated: #e03a10;
   --brand-ground: #fbfcfd;
   --syntax-keyword: #111820;
   --syntax-string: #35414b;
@@ -143,6 +145,8 @@
   color-scheme: dark;
   --brand-ink: #111820;
   --brand-signal: #e03a10;
+  --plot-calculated: #e8edf2;
+  --plot-estimated: #ff855f;
   --brand-ground: #fbfcfd;
   --syntax-keyword: #e8edf2;
   --syntax-string: #c3ccd5;
@@ -194,6 +198,8 @@
     color-scheme: dark;
     --brand-ink: #111820;
     --brand-signal: #e03a10;
+    --plot-calculated: #e8edf2;
+    --plot-estimated: #ff855f;
     --brand-ground: #fbfcfd;
     --syntax-keyword: #e8edf2;
     --syntax-string: #c3ccd5;
