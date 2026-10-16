@@ -11,7 +11,7 @@ uses the explicitly configured development scratch root, while the normal
 check environment resolves the OS temporary root. Supplying the verified
 existing demo scratch root corrected that mismatch; no guard was bypassed.
 
-## Live scientific preparation — in progress
+## Live scientific preparation — completed with unmet estimate targets
 
 Only public named tools author exploration for the selected study
 `50e423fd-a709-4e21-9381-0b09022b4115`, saved answer
@@ -28,20 +28,37 @@ separate checks assess each output. Targets remain absolute 1e-6 in output
 units plus 1% relative error. Estimates missing those targets remain unavailable.
 Baseline/axis support does not establish full-domain physical validity.
 
-Design `d2f37d8f-6116-440e-9c1c-eaf6f3a34460`; sample operation
-`affa1be8-769a-4fe9-8632-f3071c5a5a19`. Last observed snapshot: 16/48 joint points, 0 failed.
-The preparation process persists command IDs before writes and returned IDs
-after acceptance; uncertain submissions stop for reconciliation. It subsequently
-adopts exact support runs, builds, warms and verifies baseline queries. Do not
-submit a duplicate operation when resuming.
+Design `d2f37d8f-6116-440e-9c1c-eaf6f3a34460`; initial sample operation
+`affa1be8-769a-4fe9-8632-f3071c5a5a19` completed 48/48 with zero failures.
+All 72 support points were calculated and adopted; final retained operation is
+`0836d5c7-1034-4e41-98b5-f8ef9b21be7f` (120 original calculations).
+
+Build request `91469065-79e7-4143-8535-b6684354bc2e` exceeded the client's
+120-second response wait. The client stopped without retry. On resumption,
+the demo processes were absent; the same preserved store/runtime was restarted
+as a detached process after confirming no listener or competing dispatcher.
+Public `get_command` confirmed the original build committed and was ready for
+all three categories. No calculation or build was resubmitted. The recovered
+version was explicitly warmed and baseline full-vector predictions verified:
+all eleven outputs are Calculated at each of the three retained baselines.
+The verification process exited zero.
+
+The wide Mach 4–8 numerical assessment is insufficient for a useful full-range
+estimate demonstration: only 2/11 kerosene, 3/11 methane and 0/11 hydrogen outputs
+meet the unchanged declared targets. Other estimates correctly remain unavailable;
+exact original values remain available. A ready computation artifact is not
+scientific acceptance or completion of the intended useful exploration journey.
+Next numerical work must improve the generic fitting/design strategy or explicitly
+narrow the assessed domain, reusing these originals; never loosen targets to hide
+failure. Slow synchronous build admission/receipt creation also remains friction.
 
 Owner-host evidence is in `/private/tmp/hyprn-explorer-demo`: recovery backup,
-worker proof, `preparation.json`, `progress.json`, `preparation.log`, and the
-public-tool preparation client. The demo uses the retained f7145c6a scope
-identified by its readiness record; no fixture test ran against this installation.
+worker proof, `preparation.json`, `preparation.log`, `build-receipt.json`,
+`reconciled-builds.json`, `resolved-build-request.json` and `server-parent.json`.
+The completion timestamp includes the unattended interval before reconciliation
+and is not an active computation duration. No fixture test ran against this installation.
 
-Live UI inspection is pending sign-in. The focused isolated acceptance in
-[3.V5-integrated.md](3.V5-integrated.md) remains valid; live preparation, human
-acceptance and full release qualification are not claimed complete. Next owner:
-main agent reconciles the saved operation/process, inspects the completed
-assessment, verifies the live view, then records final deployment evidence.
+The live tab remains signed out; final live visual inspection is unverified.
+The focused isolated acceptance in [3.V5-integrated.md](3.V5-integrated.md) remains
+valid. Main agent owns remaining numerical usability and visual verification;
+human acceptance and full release qualification are not claimed.
