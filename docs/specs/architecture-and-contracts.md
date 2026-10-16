@@ -341,6 +341,15 @@ The surrogate owner reads retained original records, checks their model/source, 
 
 Every group records the original-sample runtime separately from the surrogate-computation runtime. A new computation runtime does not rewrite the runtime of historical original runs. The trusted executor may select a separately attested numerical runtime root through the existing location guards; public callers cannot supply one, and original launches remain bound to their original execution root. An authorized public artifact reader returns canonical JSON bytes, length and SHA-256. The trusted adapter addresses OpenMDAO's lack of a common serialization API by copying a closed, version-pinned set of finite numeric state fields with fixed shape checks; it never loads pickle, executable code, arbitrary classes, paths or callbacks. Public OpenMDAO `predict` performs every prediction. A changed OpenMDAO version requires a new qualified adapter and execution attestation.
 
+Kriging fitting compares three deterministic candidates: OpenMDAO's default SLSQP
+start, and SLSQP and L-BFGS-B with initial kernel theta 0.01. This avoids a flat
+likelihood at the default short correlation length in many-input designs. The
+version-pinned `_minimize` injection changes only the initial vector; OpenMDAO
+owns the likelihood, optimization, trained state and predictions. The reserved
+selection point chooses the best candidate within the method; its comparison
+entry reports that candidate. The remaining independent checks alone determine
+publication. Fitting never changes error targets or the sampled-coverage gate.
+
 Prediction accepts an existing version, full mapped vector and optional batched active-axis curve. It neither trains nor launches candidate code. The execution bridge owns one bounded private stdio query lane alongside its single original-execution lane; there is no new network listener or scheduler. Explicit Settings preparation warms at most eight immutable groups in one restricted child, bounded to 4,096 requests and 900 seconds. Restart or expiry requires another explicit warm action. Permissions and exact group identities are checked for every request; caches are owned by the local execution bridge, never supplied by a client. Pending interaction requests coalesce by actor and study, have a two-second deadline and cannot publish a stale selection token.
 
 Prediction eligibility includes declared bounds, stepped/covary mapping, the convex support of actual training vectors, and per-output completeness and observed target outcomes. A failed or missing original output makes that output ineligible throughout its group; no curve fills the failed gap. At the exact same full vector, retained original results take precedence, including an unavailable original result. Numeric estimates are never relabeled as original calculations.

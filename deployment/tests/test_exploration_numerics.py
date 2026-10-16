@@ -205,6 +205,29 @@ def test_joint_state_reuse_and_bounded_warm_latency():
         )['values']
         assert restored == forward
         proof['kriging_restart_values'] = restored
+        # A dominant nonlinear coordinate plus weak joint contributions must
+        # not collapse to a constant predictor in a many-input fit.
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+
+        def row(index):
+            x = [((index * prime) % 101) / 100 for prime in primes]
+            return dict(x=x, y=[10 + 9 * x[0] ** 2 + 0.01 * sum(x[1:])])
+
+        joint = dict(
+            bounds=[[0, 1]] * len(primes),
+            training=[row(i) for i in range(1, 41)],
+            checks=[row(i) for i in range(61, 67)],
+            tolerances=[[1e-6, 0.01]],
+        )
+        joint_artifact = j.native.explore(
+            dict(schema_version='3', operation='build', identity=digest(joint), payload=joint)
+        )['result']['artifact']
+        joint_output = joint_artifact['outputs'][0]
+        assert joint_output['method'] == 'kriging'
+        assert joint_output['metrics']['assessed_count'] == 5
+        assert joint_output['metrics']['target_met'], joint_output
+        assert len(joint_output['comparisons']) == 2
+        proof['many_input_assessment'] = joint_output
         proof['passed'] = True
     finally:
         if session is not None:

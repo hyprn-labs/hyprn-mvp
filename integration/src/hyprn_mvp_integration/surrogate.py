@@ -232,19 +232,45 @@ def build(payload):
             )
             continue
         candidates = []
-        for method in ('response_surface', 'kriging'):
+        # A short initial correlation can leave a many-input likelihood flat.
+        # Compare bounded, deterministic OpenMDAO fits using
+        # only the reserved selection point, never the assessment partition.
+        for method, optimizer, initial_theta in (
+            ('response_surface', None, None),
+            ('kriging', 'SLSQP', None),
+            ('kriging', 'SLSQP', 0.01),
+            ('kriging', 'L-BFGS-B', 0.01),
+        ):
             minimum = (
                 (len(lo) + 1) * (len(lo) + 2) // 2 if method == 'response_surface' else len(lo) + 1
             )
             if len(training) < minimum:
-                output['comparisons'].append(
-                    dict(method=method, reason='underfunded_design', error=None)
-                )
+                if not any(c['method'] == method for c in output['comparisons']):
+                    output['comparisons'].append(
+                        dict(method=method, reason='underfunded_design', error=None)
+                    )
                 continue
             problem = om.Problem(reports=False)
             try:
+                class JointKriging(om.KrigingSurrogate):
+                    def __init__(self):
+                        super().__init__()
+                        minimize = self._minimize
+
+                        def initialized(objective, start, **kwargs):
+                            if initial_theta is not None:
+                                start = np.full_like(start, np.log(initial_theta))
+                            return minimize(objective, start, **kwargs)
+
+                        # Version-pinned optimizer injection; OpenMDAO still
+                        # owns likelihood, fitting, state and prediction.
+                        self._minimize = initialized
+
+                    def train(self, inputs, outputs):
+                        return super().train(inputs, outputs, method=optimizer)
+
                 surrogate = (
-                    om.ResponseSurface() if method == 'response_surface' else om.KrigingSurrogate()
+                    om.ResponseSurface() if method == 'response_surface' else JointKriging()
                 )
                 component = om.MetaModelUnStructuredComp()
                 for dim in range(len(lo)):
@@ -264,10 +290,20 @@ def build(payload):
                 error = abs(predicted - selection[0]['y'][index])
                 if not finite(predicted) or not finite(error):
                     raise ValueError('Nonfinite selection prediction')
-                output['comparisons'].append(dict(method=method, reason=None, error=error))
+                comparison = dict(method=method, reason=None, error=error)
+                previous = next(
+                    (c for c in output['comparisons'] if c['method'] == method), None
+                )
+                if previous is None:
+                    output['comparisons'].append(comparison)
+                elif previous['error'] is None or error < previous['error']:
+                    previous.update(comparison)
                 candidates.append((error, method, state))
             except (ValueError, RuntimeError, np.linalg.LinAlgError):
-                output['comparisons'].append(dict(method=method, reason='fit_failed', error=None))
+                if not any(c['method'] == method for c in output['comparisons']):
+                    output['comparisons'].append(
+                        dict(method=method, reason='fit_failed', error=None)
+                    )
             finally:
                 problem.cleanup()
         if not candidates:
