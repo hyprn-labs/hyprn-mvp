@@ -17,6 +17,7 @@ import {
   ActionDialog,
   Disclosure,
   Button,
+  ActionGroup,
   AnswerExplorationPanel,
   QuantityResult,
   QuantitySlider,
@@ -602,19 +603,29 @@ export function AnswerExplorer({
       ))}
       footer={
         loaded && (
-          <Button
-            onClick={() =>
-              onOpen({
-                study: studyId,
-                view: 'model',
-                model: loaded.basis.model_id,
-                revision: loaded.basis.model_revision_id,
-                approach: answer.approach_version_id,
-              })
-            }
-          >
-            Open model
-          </Button>
+          <ActionGroup>
+            <Button
+              onClick={() => {
+                generation.current++;
+                setSelected(explorationInputVector(loaded.basis.inputs)!);
+              }}
+            >
+              Reset inputs
+            </Button>
+            <Button
+              onClick={() =>
+                onOpen({
+                  study: studyId,
+                  view: 'model',
+                  model: loaded.basis.model_id,
+                  revision: loaded.basis.model_revision_id,
+                  approach: answer.approach_version_id,
+                })
+              }
+            >
+              Open model
+            </Button>
+          </ActionGroup>
         )
       }
     >

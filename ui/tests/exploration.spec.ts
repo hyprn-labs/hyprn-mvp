@@ -96,6 +96,13 @@ test('all free inputs use declared controls and the complete vector fences every
   await expect(axis.getByRole('spinbutton')).toHaveValue('7');
   await axis.getByRole('spinbutton').fill('');
   await expect(explorer.getByText('Not computed', { exact: true })).toHaveCount(11);
+  await explorer.getByRole('button', { name: 'Reset inputs', exact: true }).click();
+  await expect(axis.getByRole('spinbutton')).toHaveValue(
+    String(baseline.get(f.fit.request.axis.port_id)),
+  );
+  await expect(explorer.getByText(f.initial_state ?? 'Calculated', { exact: true })).toHaveCount(
+    11,
+  );
   await axis.getByRole('spinbutton').fill('6.1');
   expect(writes).toEqual([]);
   await expect(
