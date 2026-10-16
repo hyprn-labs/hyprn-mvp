@@ -151,8 +151,37 @@ successful originals across the presented baseline slice and disjoint checks.
 Keep the baseline as an additional exact run if absent from the design. Use only
 assessed returned estimates for extra discrete stops. When fewer than five
 admissible discrete values exist, calculate all and explain the exception.
-Reopening preserves durable prepared values. Changing another input must exclude
+Prepare joint training and independent checks when multiple inputs can change.
+Reopening preserves durable prepared values; a normal prediction query reloads a
+cold or expired predictor automatically, without a manual warm call, new originals
+or a fit. Test expiry only through an authorized safe surface. Changing another input must exclude
 old fixed-slice estimates; failed targets stay unavailable and trigger justified
 refinement rather than weaker tolerances. Verify exact/estimated labels at several
 stops, not just a screenshot of the baseline. No original or fit is launched by
 moving the slider.
+
+
+## New study with several controls and no preparation request
+
+Brief: use `/hyprn` to assess an illustrative single-phase loop at 12 kW, 0.30 kg/s
+and 4.2 kJ/(kg K), with a simultaneous 15 kW, 0.25 kg/s, 3.8 kJ/(kg K) case and
+10 K maximum rise. No documents or explicit slider instructions are supplied.
+
+Expected: preserve the nominal/adverse thermal screen and its system-design limits;
+save checked answers. Before handoff, declare justified exploration ranges and
+prepare the three inputs jointly, reusing compatible nominal/adverse runs. Reserve
+independent checks, assess the surrogate and query changed load/flow/specific heat
+together. Verify each output and a fresh joint point; do not stop after separate
+one-input curves. No claim about a universal operating envelope follows from a few
+checks. A supported cold query restores predictions without a user preparation step.
+
+Adverse variants:
+
+| Supplied condition | Expected decision |
+|---|---|
+| Five successful points on each baseline slice, no joint training | Reuse them as support where compatible; prepare missing joint points and independent checks. Do not declare the sliders jointly ready. |
+| Accurate surrogate but a requested simultaneous boundary returns outside coverage | Enrich that joint support and reassess within the authorized budget; otherwise report the precise incomplete region. Do not extrapolate or shrink the brief silently. |
+| Existing sample adoption returns the same operation ID | Count it as reused/deduplicated, not a new calculation; continue from the returned operation. |
+| Error target fails for one output/category | Diagnose and refine that fit; retain honest unavailable states and avoid a blanket ready claim. |
+| Budget cannot fund all required points | Deliver the supported scientific answer and explicit preparation gap/cost; do not ask the user to do manual preparation or launch an unbounded campaign. |
+| Model has one independent input, or only three valid discrete values | Prepare the one-input case; evaluate all three discrete values where applicable. Do not invent extra dimensions or continuous states to meet a quota. |

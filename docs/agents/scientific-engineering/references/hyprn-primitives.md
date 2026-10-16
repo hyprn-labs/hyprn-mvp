@@ -117,6 +117,10 @@ This sequence follows actual dependencies; it is not a demand for redundant save
 8. Save case answers, then the study answer selecting their exact versions. Read them
    back; inspect the public UI when requested or relevant and accessible. An API-only
    request does not require browser inspection.
+9. Prepare the saved numerical answer's interactive domain before handoff, following
+   [Joint answer exploration](joint-exploration.md). Save joint samples and assessed
+   surrogate versions, then verify complete-vector predictions; reopening uses
+   automatic prediction renewal, not new sampling or a manual user preparation.
 
 A changed coefficient generally needs a new configuration; changed equations need
 a new model version and corresponding configurations. A changed explanation may

@@ -52,75 +52,31 @@ session does not have.
    linked records. Correct contradictions at their owners. Verify API persistence;
    inspect the reader UI when requested or relevant and accessible. An API-only task
    needs no browser scan, and API readback does not establish visual acceptance.
+7. **Prepare interactive results:** for a new numerical study, automatically prepare
+   and verify joint sampling and assessed surrogates for its declared controls before
+   handoff. Reuse compatible calculations and stay within the authorized budget.
+   Follow [Joint answer exploration](references/joint-exploration.md); do not leave
+   preparation to the user or claim readiness from one-input curves alone.
 
 Scale this loop to the requested decision. Continue an existing study from its actual
 state rather than restarting all steps. Use detailed references when their subject
 is relevant. Do not create a second plan schema or a completion score.
 
-When comparing alternatives or exploring sensitivity helps answer the question,
-prepare the saved answer's exploration before presenting it. Declare justified
-ranges and exact category-to-configuration mappings for all free inputs, including
-units, discrete steps and genuinely equal covary controls. Keep source constraints
-and limitations explicit. Use ranges stated in the brief or applicable evidence first.
-When absent, propose a physically plausible local interval around the baseline and
-record it as an agent-selected exploration assumption with its rationale, units and
-bounds; it is not an operating envelope or an uncertainty distribution. Never infer
-physical limits, positivity or integer steps from a symbol alone.
+## Deliver prepared exploration
 
-For each slider presented as ready, begin with at least five distinct successful
-original-model points spanning its declared baseline slice, including endpoints and
-the baseline, plus disjoint independent checks for its surrogate. Reuse compatible
-originals. If a discrete interval has fewer than five admissible values, calculate
-all of them and report that exception. Five is a minimum starting design, not proof
-of accuracy or enough training for a multivariable fit. Budget joint samples as well
-when simultaneous changes matter. Refine only where required by the decision and
-observed error; do not relax targets just to populate a slider.
+Read [Joint answer exploration](references/joint-exploration.md) when authoring a
+new numerical study or revising its answer basis, model or ranges. Prepare all
+independent sliders jointly by default, with justified ranges, reusable originals,
+baseline support, disjoint checks and an assessed immutable surrogate. Verify
+multi-input predictions in every category before calling the study ready. A saved
+answer with only baseline slices is not a completed interactive study.
 
-Preview the original-evaluation and wall budgets; reserve independent check points
-before fitting. For seeded preparation, request the design first and calculate its
-returned training/check coordinates exactly; hand-picked grids cannot replace its
-partition. Keep a separate baseline run when the design does not include it.
-Use the public sampling tools to retain
-original calculations, then build and assess an immutable surrogate version and
-explicitly warm it. Query that existing version with the complete selected vector
-and optional active-axis curve; dragging a control must never launch originals or
-refit. Read back its per-output reasons, observed errors, coverage and artifact
-identities. Label a discrete stop calculated or estimated only when its result is
-available for the complete selected vector. Other prepared coordinates can stay
-selectable with an explicit no-result state; their coordinate alone supplies no
-result. Preserve
-unavailable gaps in plots; neither interpolate them in the client nor reuse a
-baseline slice after another input changes. Retain finite assessed query points
-through the public preparation records where supported, so a cold predictor does
-not erase already prepared results.
-
-Check coverage for **every** declared input in **every** category, including explicit
-linked-input groups; completing the initially selected axis is not completion.
-Use slice request format 2's `varying_targets` for an explicitly declared equal-value
-linked group, and keep every other assignment fixed. Its `sample_outputs` carry
-original results in sample/tolerance order; preserve their run links. Match reused
-originals by numerical full-vector equality, exact units and model/numerical pins,
-not JSON spelling (`4` and `4.0` are the same coordinate). Use lightweight run status
-while waiting; read full histories only when needed. Single-input curves assess a
-baseline slice. The UI preserves other selected inputs and chooses the plot axis
-separately; selecting an axis must not reset inputs. To inspect a baseline slice,
-explicitly reset the other inputs. Combined changes need separately assessed joint
-coverage, never stitched single-axis curves. Keep declared linked-input bindings
-intact and make their effect on a plotted slice explicit.
-Verify several slider transitions, category changes, and a cold/reopened session before calling exploration ready. Show
-unavailable regions honestly and preserve exact original values.
-For a useful high-dimensional baseline slice, budget baseline/axis support points
-as well as joint training and independent checks; a sparse enclosing box alone
-does not establish coverage. Use selected-point adoption to enrich the retained
-sampling basis before an explicit rebuild. Refinement adds only missing originals;
-the prior immutable version remains the reference until a new version is ready.
-
-These metamodel checks assess agreement with the original calculation on retained
-check points. They do not validate physics, source applicability, convergence,
-feasibility or the scientific answer. Keep original execution and surrogate
-computation runtime identities separate. After an executor restart, explicitly
-prepare fast predictions again; never imply that a cold interaction is ready.
-An exploration is unnecessary when it adds no decision value to the requested study.
+Prediction renewal is automatic in current HYPRN: a cold or expired process reloads
+the saved surrogate without sampling or fitting. Verify the normal prediction path;
+do not prescribe manual warm-up as part of the user's workflow. Unsupported regions
+remain explicit. Respect explicit requests to omit exploration, studies with no
+variable numerical inputs, and unavailable permissions/capabilities; report an
+incomplete preparation rather than fabricating coverage or silently changing scope.
 
 ## Start with the decision and available means
 
