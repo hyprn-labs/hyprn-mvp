@@ -1204,6 +1204,12 @@ GROUPS['upstream'] = ('deployment/tests/test_upstream_acquisition.py',)
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | UPSTREAM_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | UPSTREAM_PYTEST_GROUPS
 
+STORAGE_GROUPS = frozenset({'check-storage', 'check-storage-native'})
+GROUPS['check-storage'] = ('deployment/tests/test_check_storage.py',)
+GROUPS['check-storage-native'] = ('deployment/tests/test_check_storage_native.py',)
+PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | STORAGE_GROUPS
+CHILD_GROUPS = CHILD_GROUPS | STORAGE_GROUPS
+
 # Agent browser groups: the agent screens on the in-browser agent double, which is layered over
 # the foundry double. Closed specs, reviewed application interpreter, scope-bound build and
 # evidence; never a served installation, and no pytest collection or native import.
@@ -1256,7 +1262,7 @@ UI_PASSWORD_FILE = 'HYPRN_MVP_UI_PASSWORD_FILE'
 OPT_IN_GROUPS = SERVED_INSTALLATION_GROUPS | {'ui-fidelity'}
 # Native groups need the container engine for the attested worker or the modeling image.
 DOCKER_GROUPS = (
-    {'release-container'}
+    {'release-container', 'check-storage-native'}
     | NATIVE_BACKEND_GROUPS
     | MODELING_PYTEST_GROUPS
     | {
@@ -2020,7 +2026,7 @@ def run_group(
     )
     if (
         not exploration_ui_resume
-        and group in {'ui-a', 'release-container'} | NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS
+        and group in {'ui-a', 'release-container', 'check-storage-native'} | NATIVE_BACKEND_GROUPS | MODELING_PYTEST_GROUPS
     ):
         prepare_image_builder(scope)
     env = fixture.clean_environment(scope)
@@ -2195,6 +2201,8 @@ def main():
     parser.add_argument(
         '--class', dest='group_class', choices=CLASSES, help='with --list: only this class'
     )
+    parser.add_argument('--storage-child', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--keep-scope', action='store_true', help='retain disposable scopes for 24 hours within the storage budget')
     parser.add_argument('--units-mixed-repair', action='store_true')
     parser.add_argument('--served-grep')
     parser.add_argument(
@@ -2257,6 +2265,14 @@ def main():
             fixture.scoped_path(scope, 'evidence/snapshots')
             print(json.dumps({'root': str(scope.root), 'url': scope.url}))
             return 0
+        import check_storage
+        if args.storage_child and not os.environ.get(check_storage.SESSION):
+            raise ValueError('Managed check child requires its supervisor')
+        if args.group != 'qualification' and not args.storage_child:
+            return check_storage.supervise(
+                [sys.executable, '-I', '-B', str(Path(__file__).resolve()), *sys.argv[1:], '--storage-child'],
+                docker='docker' in group_needs(args.group), keep=args.keep_scope,
+            )
         return run_group(
             args.group,
             units_mixed_repair=args.units_mixed_repair,
@@ -2264,7 +2280,7 @@ def main():
             exploration_ui_resume=args.exploration_ui_resume,
             served_grep=args.served_grep,
         )
-    except (ValueError, OSError, TypeError) as error:
+    except (ValueError, OSError, TypeError, subprocess.SubprocessError) as error:
         print('Check refused: ' + str(error), file=sys.stderr)
         return 2
 

@@ -130,6 +130,7 @@ TEST_FIXTURES_ROOT = 'HYPRN_MVP_TEST_FIXTURES_ROOT'
 UPSTREAM_CACHE = 'HYPRN_MVP_UPSTREAM_CACHE'
 EVIDENCE_ROOT = 'HYPRN_MVP_EVIDENCE_ROOT'
 SCRATCH_ROOT = 'HYPRN_MVP_SCRATCH_ROOT'
+CHECK_SESSION = 'HYPRN_MVP_CHECK_SESSION'
 LIVE_ROOTS = 'HYPRN_MVP_LIVE_ROOTS'
 PORT = 'HYPRN_MVP_PORT'
 DOCKER_SOCKET = 'HYPRN_MVP_DOCKER_SOCKET'
@@ -141,7 +142,7 @@ MODELING_SOURCE_IMAGE = 'HYPRN_MVP_MODELING_SOURCE_IMAGE'
 # Location variables a scoped test child receives unchanged when they are set
 # (scoped_fixture.clean_environment); the scratch root is always passed, resolved.
 SCOPED_PASS_THROUGH = (DATA_ROOT, TOOLS_DIR, NATIVE_PYTHON, NATIVE_INVENTORY, CONTRACT_PYTHON, TEST_FIXTURES_ROOT,
-                       UPSTREAM_CACHE, EVIDENCE_ROOT, CHROMIUM)
+                       UPSTREAM_CACHE, EVIDENCE_ROOT, CHROMIUM, CHECK_SESSION)
 # Value variables (not locations) a scoped test child receives, validated, when they are set.
 SCOPED_VALUES = (LIVE_PORTS, LIVE_NAMES, ENGINE_IMAGE, MODELING_SOURCE_IMAGE)
 
@@ -478,3 +479,8 @@ def docker_socket():
     if not host.startswith('unix://'):
         raise LocationUnset('Docker endpoint is not a local unix socket; set ' + DOCKER_SOCKET)
     return absolute(host.removeprefix('unix://'), 'Docker socket')
+
+
+def check_storage_root():
+    """Supervisor records and bounded diagnostics, separate from disposable scopes."""
+    return scratch_root() / ".hyprn-checks"

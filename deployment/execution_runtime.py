@@ -179,13 +179,8 @@ def build_worker(*, root=None, engine=None, no_cache=False):
     if base['Id'] != engine:
         raise ValueError('Dependency image identity mismatch')
     worker = REPO / 'integration/src/hyprn_mvp_integration/worker.py'
-    # A scoped build carries its test scope label, so each scope's image is its own
-    # and is found by it.
-    labels = (
-        ['--label', 'org.hyprn-mvp.test-scope=' + root.name.removeprefix(local_paths.SCOPE_PREFIX)]
-        if isolated
-        else []
-    )
+    # Runtime/store ownership remains scoped; an immutable image is identified only
+    # by its exact inputs. Test UUIDs must not invalidate identical build outputs.
     build_args = [
         '--build-arg',
         'WORKER_SHA256=' + sha(worker),
@@ -200,54 +195,69 @@ def build_worker(*, root=None, engine=None, no_cache=False):
         exploration=sha(worker.with_name('exploration.py')),
         surrogate=sha(worker.with_name('surrogate.py')),
         package=sha(worker.with_name('__init__.py')),
-        labels=labels,
     )
     # Image tags are hyprn-mvp-<role>:<first 16 hex of the build-input digest>.
     worker_tag = (
         'hyprn-mvp-worker:'
         + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
     )
-    with tempfile.TemporaryDirectory(prefix='worker-build-', dir=root) as temp:
-        temp = Path(temp)
-        for source, name in [
-            (worker, 'worker.py'),
-            (worker.with_name('results.py'), 'results.py'),
-            (worker.with_name('exploration.py'), 'exploration.py'),
-            (worker.with_name('surrogate.py'), 'surrogate.py'),
-            (worker.with_name('__init__.py'), '__init__.py'),
-            (REPO / 'deployment/worker.Dockerfile', 'Dockerfile'),
-        ]:
-            shutil.copyfile(source, temp / name)
-            # COPY keeps the context mode: the unprivileged worker user must read the sources
-            # whatever the builder's umask (the entry point runs with umask 077).
-            (temp / name).chmod(0o444)
-        with base_reference(engine) as reference:
-            result = subprocess.run(
-                [
-                    'docker',
-                    'build',
-                    '--network=none',
-                    '--pull=false',
-                    *(['--no-cache'] if no_cache else []),
-                    *labels,
-                    *build_args,
-                    '--build-arg',
-                    'ENGINE_IMAGE=' + reference,
-                    '-t',
-                    worker_tag,
-                    str(temp),
-                ],
-                text=True,
-                capture_output=True,
-                env=launcher().docker_environment(),
-            )
-        log_path = root / 'evidence/worker-build.log'
-        if log_path.exists():
-            (root / 'evidence' / ('worker-build-' + sha(log_path) + '.log')).write_bytes(
-                log_path.read_bytes()
-            )
-        log_path.write_text(result.stdout + '\n' + result.stderr)
-        result.check_returncode()
+    input_digest = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+    reused = False
+    if not no_cache:
+        cached = subprocess.run(['docker', 'image', 'inspect', worker_tag],
+                                text=True, capture_output=True, env=launcher().docker_environment())
+        if cached.returncode == 0:
+            candidate = json.loads(cached.stdout)[0]
+            labels = candidate.get('Config', {}).get('Labels') or {}
+            reused = (labels.get('org.hyprn-mvp.worker-inputs') == input_digest
+                      and labels.get('org.hyprn-mvp.worker_sha256') == inputs['worker']
+                      and labels.get('org.hyprn-mvp.results_sha256') == inputs['results'])
+    if reused:
+        (root / 'evidence/worker-build.log').write_text(
+            'Reused exact worker build inputs ' + input_digest + '\n')
+    else:
+        with tempfile.TemporaryDirectory(prefix='worker-build-', dir=root) as temp:
+            temp = Path(temp)
+            for source, name in [
+                (worker, 'worker.py'),
+                (worker.with_name('results.py'), 'results.py'),
+                (worker.with_name('exploration.py'), 'exploration.py'),
+                (worker.with_name('surrogate.py'), 'surrogate.py'),
+                (worker.with_name('__init__.py'), '__init__.py'),
+                (REPO / 'deployment/worker.Dockerfile', 'Dockerfile'),
+            ]:
+                shutil.copyfile(source, temp / name)
+                # COPY keeps the context mode: the unprivileged worker user must read the sources
+                # whatever the builder's umask (the entry point runs with umask 077).
+                (temp / name).chmod(0o444)
+            with base_reference(engine) as reference:
+                result = subprocess.run(
+                    [
+                        'docker',
+                        'build',
+                        '--network=none',
+                        '--pull=false',
+                        *(['--no-cache'] if no_cache else []),
+                        '--label',
+                        'org.hyprn-mvp.worker-inputs=' + input_digest,
+                        *build_args,
+                        '--build-arg',
+                        'ENGINE_IMAGE=' + reference,
+                        '-t',
+                        worker_tag,
+                        str(temp),
+                    ],
+                    text=True,
+                    capture_output=True,
+                    env=launcher().docker_environment(),
+                )
+            log_path = root / 'evidence/worker-build.log'
+            if log_path.exists():
+                (root / 'evidence' / ('worker-build-' + sha(log_path) + '.log')).write_bytes(
+                    log_path.read_bytes()
+                )
+            log_path.write_text(result.stdout + '\n' + result.stderr)
+            result.check_returncode()
     image = run('docker', 'image', 'inspect', worker_tag, '--format', '{{.Id}}')
     run('docker', 'tag', image, 'hyprn-mvp-worker:built-' + image.removeprefix('sha256:'))
     python_version = run(

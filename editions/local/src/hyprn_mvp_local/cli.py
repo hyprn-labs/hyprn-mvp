@@ -31,6 +31,7 @@ def parser():
     check.add_argument('--class', dest='group_class', choices=('must-pass', 'opt-in'), help='with --list: only this class')
     check.add_argument('--jobs', type=int, metavar='N',
                        help='with qualification: groups run at once (default 3; 1 runs them one after the other)')
+    check.add_argument('--keep-scope', action='store_true', help='retain test scopes for 24 hours within the storage budget')
     check.add_argument('--units-mixed-repair', action='store_true', help=argparse.SUPPRESS)
     check.add_argument('--served-grep',
                        help='with ui-served: matching test titles only; not full group acceptance')
@@ -76,6 +77,10 @@ def dev_check(args):
                     *(['--exploration-ui-resume', args.exploration_ui_resume]
                       if args.exploration_ui_resume else []),
                     *(['--jobs', str(args.jobs)] if args.jobs is not None else [])])
+    if args.keep_scope:
+        if args.list or args.group == 'qualification':
+            raise toolchain.ToolchainError('--keep-scope requires one check group', 2)
+        runner.append('--keep-scope')
     if args.served_grep is not None:
         runner.extend(['--served-grep', args.served_grep])
     toolchain.provision('contract')

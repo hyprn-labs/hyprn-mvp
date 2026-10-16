@@ -246,7 +246,11 @@ def test_units_attestation_source_change_during_build_never_publishes_runtime(mo
         return ''
     monkeypatch.setattr(worker,'run',command)
     monkeypatch.setattr(worker, 'build_engine', lambda *a, **kw: {'image': worker.ENGINE})
-    monkeypatch.setattr(worker.subprocess,'run',lambda *a,**kw:CompletedProcess(a[0],0,'synthetic build',''))
+    def build_or_probe(*args, **kwargs):
+        if args[0][:3] == ['docker', 'image', 'inspect']:
+            return CompletedProcess(args[0], 1, '', 'cache miss')
+        return CompletedProcess(args[0], 0, 'synthetic build', '')
+    monkeypatch.setattr(worker.subprocess, 'run', build_or_probe)
     with pytest.raises(RuntimeError,match='source changed during worker build'):
         worker.build_worker(root=scope.root)
     assert not (scope.root/'runtime.json').exists()
@@ -315,11 +319,16 @@ def test_units_attestation_imports_the_worker_package_as_the_worker_user(atteste
 
 def test_units_attestation_refuses_a_worker_that_cannot_read_its_own_code(attested, monkeypatch):
     """Package files only root can read (a umask-077 build without explicit modes) pass every
-    resource canary; the worker-user import probe alone refuses them. Runs last: it retags the
-    scope's worker image, then restores the scope's runtime and attestation records."""
+    resource canary; the worker-user import probe alone refuses them. The forced
+    fault build restores the shared image tags and scoped records afterwards."""
     scope, _, evidence = attested
     records = [scope.root / 'runtime.json', scope.root / 'evidence/containment.json']
     before = [path.read_bytes() for path in records]
+    original_image = json.loads(before[0])['worker_image']
+    original_tags = json.loads(worker.run('docker', 'image', 'inspect', original_image))[0]['RepoTags']
+    engine_build = worker.build_engine(scope.root)
+    monkeypatch.setattr(worker, 'build_engine', lambda *args, **kwargs: engine_build)
+    broken_image = None
 
     class RootOnly(type(Path())):
         def chmod(self, mode, *args, **kwargs):
@@ -327,7 +336,7 @@ def test_units_attestation_refuses_a_worker_that_cannot_read_its_own_code(attest
 
     monkeypatch.setattr(worker, 'Path', RootOnly)
     try:
-        worker.build_worker(root=scope.root)
+        broken_image = worker.build_worker(root=scope.root, no_cache=True)['worker_image']
         with pytest.raises(RuntimeError, match='Containment failed'):
             launcher.attest(root=scope.root)
         failed = json.loads(records[1].read_bytes())
@@ -337,6 +346,12 @@ def test_units_attestation_refuses_a_worker_that_cannot_read_its_own_code(attest
         assert 'PermissionError' in cases['worker_import']['output']
         assert all(cases[name]['exit_code'] == 0 for name in ('access', 'file_bound', 'pids'))
     finally:
+        for tag in original_tags:
+            worker.run('docker', 'tag', original_image, tag)
+        if broken_image and broken_image != original_image:
+            tags = json.loads(worker.run('docker', 'image', 'inspect', broken_image))[0]['RepoTags'] or []
+            for tag in tags:
+                worker.run('docker', 'image', 'rm', '--no-prune', tag)
         for path, raw in zip(records, before):
             path.write_bytes(raw)
     assert launcher.require_attestation(root=scope.root) == evidence
