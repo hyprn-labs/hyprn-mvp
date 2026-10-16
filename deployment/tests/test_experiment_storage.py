@@ -31,6 +31,8 @@ def test_repeated_backups_expire_without_removing_code_or_unknown_files(experime
     (root / 'serve.py').write_text('print("demo")')
     (root / 'package.json').write_text('{"type":"module"}')
     (root / 'unrecognized').write_text('retain')
+    (root / 'serve.py.bak').write_text('source backup')
+    (root / 'source.zip').write_bytes(b'source archive')
     baseline = storage.snapshot(root)['bytes']
     for _ in range(3):
         (root / 'backup.sqlite').write_bytes(b'x'*131072)

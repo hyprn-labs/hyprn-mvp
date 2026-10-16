@@ -17,7 +17,7 @@ import local_paths
 
 DAY = 86400
 DATA = {'.sqlite', '.sqlite3', '.db', '.log', '.csv', '.parquet', '.npy', '.npz',
-        '.h5', '.hdf5', '.zip', '.tar', '.gz', '.bak', '.backup', '.png', '.jpg', '.webm'}
+        '.h5', '.hdf5', '.png', '.jpg', '.webm'}
 SOURCE_DIRS = {'.git', 'source', 'src', 'authoring-source', 'authoring-baseline',
                'configuration-baseline', 'node_modules', '.venv'}
 

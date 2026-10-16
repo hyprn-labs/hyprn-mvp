@@ -119,8 +119,8 @@ the enrolled experiment. External processes can race observation; use filesystem
 quotas for a strict cloud capacity limit.
 
 Only recognized disposable data formats (SQLite/databases and sidecars, logs,
-tabular/array data, backup archives and rendered media) are removed. Repositories,
-source subtrees, links, hard links and unknown formats remain. A `package.json`
+tabular/array data and rendered media) are removed. Repositories,
+source subtrees, links, hard links, archives and unknown formats remain. A `package.json`
 file is preserved without protecting gigabytes of sibling databases. Empty folder
 scaffolding remains, so enrolled locations remain usable. Source and scientific
 execution/attestation rules are unchanged. Enrollment is an explicit declaration
