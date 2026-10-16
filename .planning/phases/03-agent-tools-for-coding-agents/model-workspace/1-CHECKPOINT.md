@@ -93,3 +93,39 @@ No new dependencies, backend/API contracts, candidate-code execution or trust-bo
 Implementation and RED commits exist; explicit-file staging preserved unrelated work, and neither task commit deleted tracked files. Required checkpoint exists. Focused UI checks passed on the final source tree; style failure and pending parent/browser work are explicitly retained above.
 
 The checkpoint's first commit attempt was refused by the repository term hook because it included private machine paths. Those paths were removed; environment variable names and external evidence preserve reproducibility without committing machine configuration.
+
+
+## Live-review follow-up
+
+The parent independently passed the initial committed static (9), reading (26), navigation (9) and Foundry navigation (8) checks and inspected the live page. That inspection found document-viewport clipping, a less readable two-column fit at 1440, fragmented creation buttons at 390 and redundant quantity columns. These findings reopened the same task; the earlier handoff is superseded by this follow-up.
+
+- RED commit `6857943` asserts the complete graph and footer in the initial 1920 by 878 document viewport before any button can auto-scroll the page. `header-red.log`: 25 passed, 1 expected failure, 0 skipped/flaky; scope `db54a378-385b-4b91-8dda-7154148b7ef8`, archived session `be8199ba-c31b-40c4-980a-5b7ea1668882`.
+- Model navigation shares one compact row; the version controls fit without an extra menu row. Graph controls use less vertical padding. The graph's font and viewport height are unchanged.
+- Three model columns become available from 720px canvas width. Browser assertions cover at least 75% fit scale at 1440, complete initial desktop viewport containment, and whole creation-button text at 390.
+- A single-component quantity scope omits repeated Component cells and retains an Inspect component action. All-empty definitions become one notice for nonempty results; mixed definitions retain their column and individual missing states. Destinations occupy separate lines. Empty results retain the empty-table message. Selecting the same component after Show all now restores that explicit scope.
+- `header-reading.log`: 25 passed, 2 failed. Nodes fit, but footer bottom was 901.8px; selector width was reduced to prevent the actions menu wrapping. The new table test's initial all-components assumption was corrected to explicitly choose Show all.
+- `header-reading-final.log`: 26 passed, 1 failed. Desktop/footer/narrow/scale assertions passed. The new Show all to same-component regression exposed the scope-state bug, fixed in the component filter handler.
+- `header-reading-green.log`: 27 passed, 0 failed/skipped/flaky, 25.45 s; archived session `fdec84ae-7335-43dd-9d5c-3d9dc3335792`, released scope `3e2a862b-a2ec-4de9-8dd1-d95382f2562c`.
+
+Follow-up commands use the same reviewed environment and isolated runner as above. Parent owns the committed-tree `units-ui-reading` run after its existing assertions were updated from fixed column positions to semantic Definition/Unit cells; this executor has not claimed that group passed. Parent also owns final live refresh and product-owner acceptance remains separate. No unrelated source changes were staged; ROADMAP and untracked research/spec work remain untouched.
+
+- `header-foundry.log`: 7 passed, 1 failed, 0 skipped/flaky. Genuine 200% zoom and mixed-definition coverage passed. Saved-run/configuration table assertions still required the intentionally omitted empty Definition column; corrected those expectations without changing product behavior.
+- Concurrent explorer/surrogate work appeared during the final follow-up: application surrogate source/tests, exploration numerical tests, architecture contract prose, integration launcher, UI smoke, AnswerExplorer, API and exploration design code. These are outside this executor's ownership and excluded from its commits. Parent must qualify the exact integrated tree, or isolate its committed build; focused source hashes in runner reports identify what each group consumed.
+
+
+### Follow-up final identity and checks
+
+Implementation commit: `dd1ad1a` (`fix(03-model-workspace): fit desktop canvas and simplify quantity context`). It includes only the ten explicit owned implementation/test/plan paths. The RED commit is `6857943`. No tracked files were deleted. This later section supersedes the initial delivery identity above.
+
+| Command | Result | Log under `/private/tmp/hyprn-model-ui-evidence/` | Archived session |
+|---|---|---|---|
+| `./hyprn-mvp dev check combined-static --keep-scope` | 9 passed, 0 failed, 6.11 s | `header-static.log` | `693d13aa-0595-4423-b055-7cce0e16a265` |
+| `./hyprn-mvp dev check combined-static --keep-scope` | 9 passed, 0 failed, 5.92 s | `header-static-final.log` | `0fa8aae8-723e-48da-a5a3-18a452eddc7b` |
+| `./hyprn-mvp dev check ui-reading` | 27 passed, 0 failed/skipped/flaky, 25.45 s | `header-reading-green.log` | `fdec84ae-7335-43dd-9d5c-3d9dc3335792` |
+| `./hyprn-mvp dev check foundry-nav` | 8 passed, 0 failed/skipped/flaky, 27.35 s | `header-foundry-green.log` | `80aa86e8-043e-4543-b539-56e3a1e9ee32` |
+
+The final passing Foundry scope `d3e40777-f756-421e-b8be-ccc630ed53c6` was released after evidence archival. All follow-up browser scopes were likewise released. Static scopes `770da308-05dd-4b57-a570-b8952076464d` and `9ed3cf3a-e5a7-4084-9b13-214653c8a046` remain intentionally retained under the runner's disposable retention policy, with production output at each scope's `artifacts/ui` for comparison. They are **superseded**: the latest static build predates the small component-filter correction (`setShowAll(false)` when choosing a specific component). It must not be represented as the final delivery build.
+
+Per the parent's instruction after concurrent source changes appeared, the executor did not repeat static checks against a moving unrelated tree. Parent will create an isolated checkout of `dd1ad1a`, rerun affected acceptance including `units-ui-reading`, and build/refresh that exact committed tree. No passing final static/build identity is claimed for `dd1ad1a` here. The known 61 unrelated style findings were not rerun for this narrow follow-up; owned code adds no new long executable lines. The previous style result remains recorded above.
+
+Follow-up self-check: RED and implementation commits exist, owned paths are committed, unrelated edits remain unstaged and preserved, and this checkpoint records every follow-up failure plus the outstanding exact-tree checks/live refresh. There are no new stubs, dependencies or backend/trust-boundary changes from this task.
