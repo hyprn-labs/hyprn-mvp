@@ -227,3 +227,96 @@ def test_closed_prediction_rejects_untrusted_or_incomplete_data(sample_env, chan
         json=body,
     )
     assert response.status_code == 400, response.text
+
+
+@pytest.mark.parametrize('failure', ['cold', 'persistent', 'corrupt', 'revoked', 'superseded'])
+def test_prediction_renews_only_saved_state_and_never_resamples(sample_env, failure):
+    e = sample_env
+    body = build_request(e)
+    path = '/api/1/studies/' + e['sid'] + '/exploration-surrogates'
+    assert e['client'].post(path, json=body).status_code == 202
+    owner, native = Surrogates(e['store']), NumericTransport()
+    owner.process_one(native)
+    saved = e['store'].receipt(e['actor'], e['sid'], 'exploration_surrogate', body['command_id'])
+    group = saved['request']['groups'][0]
+    query = dict(
+        schema_version='1',
+        selection_token=uid(),
+        combination=0,
+        inputs=[
+            dict(target=d['target'], units=d['units'], value=d['lower'])
+            for d in group['combination']['dimensions']
+        ],
+        axis=None,
+        curve_points=0,
+    )
+    if failure == 'corrupt':
+        with e['store'].connection(write=True) as db:
+            saved['request']['artifacts'][0]['bounds'][0][0] -= 1
+            db.execute(
+                "UPDATE receipts SET request=? WHERE category='exploration_surrogate' "
+                'AND command_id=?',
+                (json.dumps(saved['request']), body['command_id']),
+            )
+    calls = []
+
+    def transport(request, runtime):
+        calls.append(request['operation'])
+        assert runtime == saved['result']['groups'][0]['computation_runtime']
+        if request['operation'] == 'predict' and (len(calls) == 1 or failure == 'persistent'):
+            raise RuntimeError('Prediction session unavailable')
+        if request['operation'] == 'warm':
+            assert request['payload']['artifact'] == saved['request']['artifacts'][0]
+            with e['store'].connection(write=True) as db:
+                if failure == 'revoked':
+                    db.execute('DELETE FROM memberships WHERE study_id=?', (e['sid'],))
+                elif failure == 'superseded':
+                    db.execute("DELETE FROM receipts WHERE category='exploration_query'")
+        if request['operation'] == 'predict':
+            return dict(
+                identity=request['identity'],
+                values=[
+                    [dict(value=None, reason='incomplete_samples') for _ in group['targets']]
+                    for _ in request['payload']['queries']
+                ],
+            )
+        return NumericTransport.surrogate(native, request, runtime)
+
+    native.surrogate = transport
+    replies = []
+    thread = threading.Thread(
+        target=lambda: replies.append(
+            e['client'].post(path + '/' + body['command_id'] + '/predictions', json=query)
+        )
+    )
+    thread.start()
+    try:
+        until = time.monotonic() + 5
+        while time.monotonic() < until:
+            if owner.process_one(native, lane='query'):
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail('Prediction did not reach owner')
+    finally:
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert replies[0].status_code == (
+        200 if failure == 'cold' else 404 if failure == 'revoked' else 503
+    )
+    assert calls == (
+        ['predict']
+        if failure == 'corrupt'
+        else ['predict', 'warm']
+        if failure in ('revoked', 'superseded')
+        else ['predict', 'warm', 'predict']
+    )
+    # No warm/build command receipts or original evaluations are introduced by renewal.
+    with e['store'].connection() as db:
+        assert (
+            db.execute(
+                "SELECT count(*) FROM receipts WHERE category='exploration_warm'"
+            ).fetchone()[0]
+            == 0
+        )
+    assert len([r for r in native.calls if r['operation'] == 'build']) == 1

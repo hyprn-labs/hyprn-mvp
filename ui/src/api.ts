@@ -221,9 +221,9 @@ export class HyprnMvpApi {
   onPendingChange = () => {};
   retryReady = false;
   pending: { path: string; body: { command_id: string }; method: string; category: string; study?: string } | null = null;
-  async request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', signal?: AbortSignal): Promise<Envelope<T>> {
+  async request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', signal?: AbortSignal, timeoutMs = 30000): Promise<Envelope<T>> {
     const actor = this.actor;
-    const timeout = AbortSignal.timeout(30000);
+    const timeout = AbortSignal.timeout(timeoutMs);
     const result = await fetch('/api/1' + path, { method, credentials: 'same-origin', signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': this.csrf },
       body: body === undefined ? undefined : JSON.stringify(body) });
@@ -474,6 +474,7 @@ export class HyprnMvpApi {
         body,
         'POST',
         signal,
+        45000,
       )
     ).data;
   previewExplorationSamples = async (

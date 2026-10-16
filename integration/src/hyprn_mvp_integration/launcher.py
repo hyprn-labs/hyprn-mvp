@@ -742,17 +742,16 @@ class WarmExploration:
         exploration.admit_request(request)
         if request['operation'] not in ('warm', 'predict'):
             raise ValueError('Explicit warm or existing-version prediction required')
-        if self.proc is None:
-            if request['operation'] != 'warm':
-                raise RuntimeError('Warm session absent; prepare in Sample settings')
-            self.start()
-        if (
+        if self.proc is not None and (
             self.proc.poll() is not None
             or time.monotonic() - self.started > 900
             or (self.binding != self.current_binding())
         ):
             self.close()
-            raise RuntimeError('Warm session expired or runtime changed; explicit warm required')
+        if self.proc is None:
+            if request['operation'] != 'warm':
+                raise RuntimeError('Warm session absent; prepare in Sample settings')
+            self.start()
         raw = canonical(request) + b'\n'
         if len(raw) > 1048576:
             raise ValueError('Warm request byte bound')

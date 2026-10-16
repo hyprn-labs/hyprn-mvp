@@ -59,6 +59,17 @@ function render(name, el) {
   return html;
 }
 
+const pendingExploration = render('QuantityResult pending', h(F.QuantityResult, {
+  value: null, units: 'm', state: 'unavailable', pending: true,
+}));
+check('Pending prediction is a loading state, never an unavailable result',
+  pendingExploration.includes('aria-busy="true"') && pendingExploration.includes('Updating')
+  && !pendingExploration.includes('Not computed'));
+const pendingCurve = render('ResponseCurve pending', h(F.ResponseCurve, {
+  label: 'Distance', axis: 'Time', units: 'm', points: [], selected: 1, pending: true,
+}));
+check('Pending curve does not claim a missing calculation',
+  pendingCurve.includes('Updating') && !pendingCurve.includes('Not computed'));
 const missingExploration = render('QuantityResult unavailable', h(F.QuantityResult, {
   value: null, units: 'm', state: 'unavailable',
 }));

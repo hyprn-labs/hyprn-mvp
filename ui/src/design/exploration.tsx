@@ -187,12 +187,20 @@ export function QuantityResult({
   units,
   state,
   reason,
+  pending = false,
 }: {
+  pending?: boolean;
   value: number | null;
   units: string;
   state: 'estimated' | 'calculated' | 'unavailable';
   reason?: string | null;
 }) {
+  if (pending)
+    return (
+      <div className="hf-quantity-result" aria-busy="true" aria-label="Updating predictions">
+        <StatusTag tone="running">Updating…</StatusTag>
+      </div>
+    );
   const label =
     value === null ? 'Not computed' : state === 'calculated' ? 'Calculated' : 'Estimated';
   return (
@@ -233,7 +241,9 @@ export function ResponseCurve({
   calculated = [],
   selected,
   selectedResult,
+  pending = false,
 }: {
+  pending?: boolean;
   label: string;
   axis: string;
   units: string;
@@ -252,7 +262,12 @@ export function ResponseCurve({
   const available = [...points, ...calculated, ...(selectedPoint ? [selectedPoint] : [])].filter(
     (p): p is { x: number; y: number } => p.y !== null,
   );
-  if (!available.length) return <p>{axis} · Not computed</p>;
+  if (!available.length)
+    return (
+      <p>
+        {axis} · {pending ? 'Updating…' : 'Not computed'}
+      </p>
+    );
   const xs = [...points, ...calculated, ...(selectedPoint ? [selectedPoint] : [])].map((p) => p.x),
     ys = available.map((p) => p.y);
   const lo = Math.min(...xs),

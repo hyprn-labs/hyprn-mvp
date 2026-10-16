@@ -78,6 +78,7 @@ export function AnswerExplorer({
   const [surrogates, setSurrogates] = useState<ExplorationSurrogate1[]>([]);
   const [prediction, setPrediction] = useState<ExplorationQueryResult1 | null>(null);
   const [predictionError, setPredictionError] = useState('');
+  const [predictionPending, setPredictionPending] = useState(false);
   const carry = useRef<{ vector: SelectedInput[]; dimensions: Dimension[] } | null>(null);
   const combo = design && supportedCombination(design.request.combinations, categories);
   const dimensions = combo?.dimensions ?? [];
@@ -232,7 +233,11 @@ export function AnswerExplorer({
   }, [api, studyId, answer.answer_version_id, refresh]);
   useEffect(() => {
     setPredictionError('');
-    if (!loaded || !surrogate || !vector || combinationIndex < 0) return;
+    if (!loaded || !surrogate || !vector || combinationIndex < 0) {
+      setPredictionPending(false);
+      return;
+    }
+    setPredictionPending(true);
     const fence = api.fence({ studyId });
     const token = crypto.randomUUID();
     // Immediate local control update; only the last settled selection is sent.
@@ -256,10 +261,12 @@ export function AnswerExplorer({
         })
         .catch(async (e) => {
           await api.readFailed(e, fence);
-          if (fence.valid())
-            setPredictionError('Live estimates unavailable. ' + message(e));
+          if (fence.valid()) setPredictionError('Live estimates unavailable. ' + message(e));
         })
-        .finally(fence.done);
+        .finally(() => {
+          if (fence.valid()) setPredictionPending(false);
+          fence.done();
+        });
     }, 20);
     return () => {
       window.clearTimeout(timer);
@@ -737,7 +744,8 @@ export function AnswerExplorer({
           )}
           {vector && !selectedPoints.some((p) => p.outputs.some((o) => o.value !== null)) && (
             <p role="status" className="hf-exploration-gap">
-              {predictionError ||
+              {(predictionPending && 'Updating predictions…') ||
+                predictionError ||
                 'This input combination has no available results. Use Sample settings to calculate it or prepare more samples.'}
             </p>
           )}
@@ -851,6 +859,7 @@ export function AnswerExplorer({
                 return (
                   <>
                     <QuantityResult
+                      pending={predictionPending && result === null}
                       units={output.units}
                       value={result}
                       state={resultKind}
@@ -860,6 +869,7 @@ export function AnswerExplorer({
                     />
                     {axis && current !== null && (
                       <ResponseCurve
+                        pending={predictionPending}
                         label={output.name}
                         units={output.units}
                         axis={axis.name + ' (' + unitLabel(axis.units) + ')'}

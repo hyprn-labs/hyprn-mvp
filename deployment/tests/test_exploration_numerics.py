@@ -205,6 +205,28 @@ def test_joint_state_reuse_and_bounded_warm_latency():
         )['values']
         assert restored == forward
         proof['kriging_restart_values'] = restored
+        # An explicit reload replaces an expired child in one call, never fits.
+        previous_pid = session.proc.pid
+        session.started -= 901
+        session.call(
+            dict(
+                schema_version='3',
+                operation='warm',
+                identity=second_identity,
+                payload=dict(artifact=kriging_artifact),
+            )
+        )
+        assert session.proc.pid != previous_pid
+        renewed = session.call(
+            dict(
+                schema_version='3',
+                operation='predict',
+                identity=second_identity,
+                payload=dict(queries=queries),
+            )
+        )
+        assert renewed['values'] == forward
+
         # A dominant nonlinear coordinate plus weak joint contributions must
         # not collapse to a constant predictor in a many-input fit.
         primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]

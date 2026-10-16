@@ -495,7 +495,7 @@ class Surrogates:
             payload=dict(queries=queries),
         )
         query_id = request['selection_token']
-        deadline = time.time() + 2
+        deadline = time.time() + 40
         with self.store.connection(write=True) as db:
             self.store.authorize(db, actor, sid)
             # These interaction messages are explicitly disposable, unlike build
@@ -519,6 +519,8 @@ class Surrogates:
                     json.dumps(
                         dict(
                             numerical=numerical,
+                            version=version,
+                            combination=index,
                             deadline=deadline,
                             runtime=result['groups'][index]['computation_runtime'],
                         )
@@ -633,7 +635,40 @@ class Surrogates:
             if category == 'exploration_query':
                 if time.time() > saved['deadline']:
                     raise RuntimeError('Superseded interaction')
-                result = native.surrogate(saved['numerical'], saved['runtime'])
+                try:
+                    result = native.surrogate(saved['numerical'], saved['runtime'])
+                except RuntimeError:
+                    # Loading immutable numerical state is safe to repeat. Never
+                    # rebuild a surrogate or dispatch original evaluations here.
+                    version = self.store.receipt(
+                        actor, sid, 'exploration_surrogate', saved['version']
+                    )
+                    index = saved['combination']
+                    public = version['result']['groups'][index]
+                    artifact = version['request']['artifacts'][index]
+                    if (
+                        public['identity'] != saved['numerical']['identity']
+                        or public['computation_runtime'] != saved['runtime']
+                        or digest(artifact) != public['artifact_sha256']
+                    ):
+                        raise ValueError('Surrogate renewal identity mismatch')
+                    native.surrogate(
+                        dict(
+                            schema_version='3',
+                            operation='warm',
+                            identity=public['identity'],
+                            payload=dict(artifact=artifact),
+                        ),
+                        saved['runtime'],
+                    )
+                    if time.time() > saved['deadline']:
+                        raise RuntimeError('Expired interaction')
+                    with self.store.connection() as db:
+                        self.store.authorize(db, actor, sid)
+                        current = self.store.command_receipt(db, sid, category, command)
+                        if current is None or current['state'] != 'dispatching':
+                            return True
+                    result = native.surrogate(saved['numerical'], saved['runtime'])
             elif category == 'exploration_warm':
                 version = self.store.receipt(actor, sid, 'exploration_surrogate', saved['version'])
                 for group, artifact, public in zip(
