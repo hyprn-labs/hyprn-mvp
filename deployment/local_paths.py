@@ -67,6 +67,10 @@ Environment variables:
     ``upstream.cache``; default ``<data root>/cache/upstream/whatsopt``.
 ``HYPRN_MVP_EVIDENCE_ROOT``
     Evidence of development runs. Default ``<data root>/evidence``.
+``HYPRN_MVP_EXPERIMENT_STORAGE_CONFIG``
+    Explicit developer experiment retention policy. Default: experiment-storage.json
+    below the data root. Absence disables experiment collection. Not passed to scoped
+    children; installation stores are never automatically enrolled.
 ``HYPRN_MVP_SCRATCH_ROOT``
     Folder that holds scoped test folders (``hyprn-mvp-test-<uuid>``). Default: the
     operating system's temporary folder, resolved to its real path. Scoped test children

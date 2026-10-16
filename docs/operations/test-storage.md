@@ -78,3 +78,50 @@ unrelated Docker resources. A successful prune exit is followed by measurement.
   and build caches on a separate builder. Scientific record retention remains a
   separate application/platform policy. These test-cleanup changes do not garbage
   collect production studies or implement cloud infrastructure.
+
+## Demo backups and ad-hoc experiments
+
+Explicitly enroll **disposable developer folders** with the public CLI. This does
+not enroll application installations or scan the home folder. The policy path
+resolves from `--config`, then `HYPRN_MVP_EXPERIMENT_STORAGE_CONFIG`, then
+`experiment-storage.json` below the configured development data root. No host
+path is embedded in the repository.
+
+```sh
+./hyprn-mvp dev storage enroll --root "$DEMO_FOLDER" --root "$EXPERIMENT_FOLDER"
+./hyprn-mvp dev storage status
+./hyprn-mvp dev storage collect
+./hyprn-mvp dev storage run --root "$EXPERIMENT_FOLDER" -- your-experiment-command
+```
+
+Folders must already exist. Enrollment persists across invocations; enroll each
+new ad-hoc folder, or use `run --root` to enroll it and execute its command. Every
+subsequent `dev check` automatically collects the configured folders before
+admission. `storage run` collects before and after its command. There is no
+background daemon: cleanup happens at these command boundaries, including after
+an experiment returns a failure. Use `collect` in an existing host maintenance
+schedule if cleanup while idle is required.
+
+The default aggregate budget is **40 GiB**, with **5 GiB free space** reserved on
+each enrolled filesystem. Change these with `enroll --budget-bytes N
+--reserve-bytes N --root "$EXPERIMENT_FOLDER"`. All enrolled bytes, including
+protected files, count. Budget pressure refuses new managed work and reports
+which folders remain; it never deletes recent data or stops running experiments.
+An experiment that crosses the budget reports a failing wrapper exit on completion.
+These are admission/completion limits, not quotas on arbitrary external writers.
+
+An entire folder is protected until all its files are older than **24 hours**,
+using modification, change and available creation times. Host process arguments,
+open files and Docker bind mounts protect active folders. Failed activity
+inspection refuses collection. Trees are rechecked before removal; cooperating
+writers should use `storage run` and keep their working directory or files inside
+the enrolled experiment. External processes can race observation; use filesystem
+quotas for a strict cloud capacity limit.
+
+Only recognized disposable data formats (SQLite/databases and sidecars, logs,
+tabular/array data, backup archives and rendered media) are removed. Repositories,
+source subtrees, links, hard links and unknown formats remain. A `package.json`
+file is preserved without protecting gigabytes of sibling databases. Empty folder
+scaffolding remains, so enrolled locations remain usable. Source and scientific
+execution/attestation rules are unchanged. Enrollment is an explicit declaration
+that expired data in that folder is disposable; do not enroll durable study stores.
