@@ -1,9 +1,8 @@
 # Operating on HYPRN primitives
 
 Read before authoring or revising a study. This is a semantic operating guide, not
-an alternative API specification. [CONTEXT.md](../../../../CONTEXT.md) defines terms;
-[the public contract](../../../../contracts/hyprn-mvp.openapi.yaml) and the session's
-exposed tool schemas define permitted operations. Keep wire names unchanged even
+an alternative API specification. The offered tool schemas and canonical playbook
+define the permitted operations. Keep wire names unchanged even
 when the UI uses clearer terms such as quantity rather than port.
 
 ## Establish the surface
@@ -14,23 +13,17 @@ pagination, truncation and missing-source warnings. Read the exact underlying
 records for consequential claims rather than relying on a clipped overview.
 
 A capability flag does not grant permission or add a tool to the session. Inspect the
-actual exposed catalogue, stage and delegated effects. The owner-operated demonstration
-has a separately authorized [public tool path](../../local-api-demo.md); it is not a way
-around delegated restrictions. Never infer capability from a roadmap.
+actual exposed catalogue, stage and delegated effects. Never infer capability from
+roadmap prose. Read the unit catalogue returned by `get_capabilities` before
+model authoring. Use the tool schemas that support quantity definitions; unsupported
+units require a limitation or justified reformulation, never a false unit label.
+For money, catalogue metadata determines currency, scale and denominator. Save
+price year, economic basis and evidence for the exact model quantities in the model
+explanation before configurations or analysis. Units do not imply FX or inflation.
 
-Read the unit catalogue before declaring model quantities. For the authorized
-owner HTTP client, discovery uses `GET /api/1/capabilities` and
-`GET /api/1/studies/{study_id}/unit-catalog`. Use the current schema version that
-supports quantity definitions when advertised; do not omit semantic definitions
-merely because an older model format remains accepted. Unsupported units call for
-an explicit limitation or justified reformulation, never a false unit label.
-
-The owner client accepts `{"operation":"run_status","study_id":"<UUID>",
-"run_ids":["<UUID>"]}` for a single lightweight status read of up to 20 distinct
-runs. Use bounded batches and back off between unchanged observations. Read full
-records when results or a failure need inspection. Keep returned envelopes intact:
-a configuration's saved record is under `data.configuration`. Validate against the
-public response schema rather than assuming all reads have identical nesting.
+Use `get_run_status` or `wait_for_runs` for standalone runs; use
+`get_analysis_execution` for launched analyses. Read full results when a value or
+failure needs inspection. Keep returned identities and receipt states intact.
 
 When a request is rejected unchanged, repair the indicated fields using the public
 schema and discovery results. Do not recreate the study. Save command IDs before
@@ -110,14 +103,15 @@ This sequence follows actual dependencies; it is not a demand for redundant save
    from what the source actually calculates. Save the brief version before binding criteria.
 5. Preview and save configurations with all free values, provenance and numerical settings.
    Put the configurations in an analysis version and bind brief criteria to its outputs.
-6. Submit the intended configurations within the current execution limits. Wait on
-   existing run identities; an uncertain receipt requires lookup/reconciliation,
+6. Launch the saved analysis through `launch_analysis` and monitor
+   `get_analysis_execution`; standalone verification uses the offered run tools. Wait on
+   existing operation identities; an uncertain receipt requires lookup/reconciliation,
    never an automatic second submission. A readiness failure is not a run.
 7. Read the complete results needed for the question and verification. Plan a further
    calculation only when it resolves an identified error, sensitivity or coverage gap.
 8. Before publishing interactive results, prepare joint boundary samples and independently
    assessed surrogates following [Joint answer exploration](joint-exploration.md). Call
-   `check_analysis_preparation` for all shown outcomes and require readiness. Verify
+   `prepare_answer_exploration` for all shown outcomes and require readiness. Verify
    complete-vector predictions; reopening uses automatic renewal, never model reruns.
 9. Save the study answer with its exact brief, calculations, runs and passing estimate.
    Read it back; inspect the public UI when requested or relevant and accessible. An API-only
@@ -172,7 +166,8 @@ Use the same check for any reference document, dataset or previous study.
 Synthetic arithmetic example, not a measured benchmark or saved HYPRN study.
 Question: can a pump meet a duty within a 3 kW shaft-power limit, and what is the
 annual electricity expense? Select pressure rise 200 kPa, flow 0.010 m³/s, efficiency
-0.80, 4,000 operating hours/year and an assumed tariff of 0.20 currency units/kWh.
+0.80, 4,000 operating hours/year and an illustrative 2026 tariff of
+0.20 USD/(kW*h). The tariff is an explicit assumption, not a market observation.
 
 - **Method/model:** a pump-duty component computes hydraulic power `Δp Q` and shaft
   power `Δp Q / η`; an operating-energy component uses shaft power, duration and
@@ -184,9 +179,9 @@ annual electricity expense? Select pressure rise 200 kPa, flow 0.010 m³/s, effi
   data, not invented measurements. Set a shaft-power criterion of at most 3,000 W.
   The hand-calculated verification target is 2,000 W hydraulic and 2,500 W shaft
   power. At an explicitly assumed unit motor efficiency, energy is 10,000 kWh/year
-  and expense 2,000 currency units/year; declare the currency and price year when
-  applying the example to a real study. Currency remains outside dimensional checking
-  if the installation does not support it.
+  and the conditional annual expense is 2,000 USD on that assumed 2026 basis.
+  Save the tariff and expense conventions against their exact model quantities. If its monetary unit is not admitted, leave
+  expense unavailable rather than disguising money as dimensionless.
 - **Challenge cases:** if flow and pressure may each rise 10% and pump efficiency
   fall to 0.70, the combined corner is about 3,457 W. That corner has physical meaning
   only if the simultaneous conditions are credible for the pump/system interaction.
@@ -201,18 +196,11 @@ This illustrates an acceptable screening answer that rejects a stronger sizing c
 The same primitive sequence applies to thermal, structural, process and aircraft
 studies; the required physics and evidence change.
 
-## Owner-session tools and execution budgets
+## Execution budgets
 
-Use the named tools documented in [the local client](../../local-api-demo.md).
-`describe_tool` supplies the public body schema; `create_model`, `preview_model`
-and `edit_model` choose request formats without changing saved scientific versions.
-Do not extrapolate a request format from `model/4` in capabilities. Consult
-`model_formats` for operation-specific formats if a direct API operation is needed.
-
-Use `submit_run` with an explicit `execution_budget.wall_seconds`, then `run_status`
-for lightweight polling and `get_run` for results or diagnosis. The default is 300
-seconds and the supported range is 1–3600 seconds, discoverable in capabilities.
-The native process retains the budget. Read `execution_summary` and the retained failure reason even when
-`history.results` is null. `read_artifact` returns checked bytes separately from API
-envelopes. Preserve command IDs before calls and returned IDs after each step;
-resume from those records rather than restarting authoring after a local exception.
+Use the exposed submission schema and `get_capabilities` for execution limits.
+The run's wall budget includes startup and differs from the HTTP request timeout.
+Inspect terminal execution state and failure reason even when results are absent.
+An ambiguous submission requires receipt reconciliation, never an automatic retry.
+Saved analysis launch owns missing-run admission and the frozen surrogate plan;
+standalone run tools remain appropriate for separate verification calculations.

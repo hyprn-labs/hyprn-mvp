@@ -25,8 +25,8 @@ import {
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, message } from './api';
 import type {
-  ModelDraftRead4,
-  ModelRevisionRead4,
+  ModelDraftRead5,
+  ModelRevisionRead5,
   Study,
   PublicRun,
   PublicRunDetail2,
@@ -121,7 +121,7 @@ export function Workspace() {
 
   const [runFilters, setRunFilters] = useState<RunFilters>(emptyRunFilters);
   const [initialConfigurationRevision, setInitialConfigurationRevision] =
-    useState<ModelRevisionRead4 | null>(null);
+    useState<ModelRevisionRead5 | null>(null);
   const [runListEpoch, setRunListEpoch] = useState(0);
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const [context, setContext] = useState<WorkspaceContext | null>(null);
@@ -136,7 +136,7 @@ export function Workspace() {
     output: { instance_id: string; port_id: string };
   } | null>(null);
   const [runInspection, setRunInspection] = useState<PublicRunDetail2 | null>(null);
-  const [revision, setRevision] = useState<ModelRevisionRead4 | null>(null);
+  const [revision, setRevision] = useState<ModelRevisionRead5 | null>(null);
   const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
   const [configuration, setConfiguration] = useState<FrozenConfigurationRead7 | null>(null);
   const [calculationScope, setCalculationScope] = useState<CalculationScope>({});
@@ -147,7 +147,7 @@ export function Workspace() {
   const [filter, setFilter] = useState('');
   const currentLink = useRef('');
   const [models, setModels] = useState<Array<{ model_id: string; name: string }>>([]);
-  const [model, setModel] = useState<ModelDraftRead4 | null>(null);
+  const [model, setModel] = useState<ModelDraftRead5 | null>(null);
   const [newStudy, setNewStudy] = useState('');
   const [newModel, setNewModel] = useState('');
   const [template, setTemplate] = useState<'empty' | 'two_component_example'>('empty');
@@ -159,7 +159,7 @@ export function Workspace() {
   const explanationSlot = useGuardSlot(cleanGuard);
   const pendingCopy = useRef<{
     configuration: ConfigurationRevisionRead6;
-    snapshot: ModelRevisionRead4;
+    snapshot: ModelRevisionRead5;
   } | null>(null);
   const configurationSlot = useGuardSlot<ConfigurationHandle>(() => ({
     ...cleanGuard(),
@@ -427,7 +427,7 @@ export function Workspace() {
       homeTabs.current?.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();
     });
   }
-  function currentModel(value: ModelDraftRead4) {
+  function currentModel(value: ModelDraftRead5) {
     setModel(value);
     setRevision(null);
     setContext({
@@ -802,7 +802,7 @@ export function Workspace() {
   }
   async function copyRunConfiguration(
     config: ConfigurationRevisionRead6,
-    snapshot: ModelRevisionRead4,
+    snapshot: ModelRevisionRead5,
   ) {
     if (!study || config.study_id !== study.study_id || config.model_id !== snapshot.model_id)
       throw new Error('This configuration does not belong to this study and model.');
@@ -842,7 +842,7 @@ export function Workspace() {
     });
     link({ study: study.study_id, view: 'configurations', model: draft.model_id });
   }
-  async function newConfiguration(modelId: string, exact?: ModelRevisionRead4) {
+  async function newConfiguration(modelId: string, exact?: ModelRevisionRead5) {
     if (!study) return;
     const sid = study.study_id,
       token = ++generation.current,

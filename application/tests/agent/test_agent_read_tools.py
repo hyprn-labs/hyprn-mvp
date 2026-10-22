@@ -302,10 +302,13 @@ class RecordedApi:
             return self.model(parts[1:], pairs)
         if parts == ['evidence']:
             return self.evidence(pairs)
-        if head == 'evidence' and len(parts) == 2:
+        if head == 'evidence' and (len(parts) == 2 or parts[2:] == ['source-inspection']):
             found = [e for e in d['evidence_versions'] if e['evidence_version_id'] == parts[1]]
             if not found:
                 raise Refused(404, 'resource_not_found')
+            if len(parts) == 3:
+                return dict(schema_version='1', evidence_version_id=parts[1],
+                            basis='author_supplied', retrieval=None), {}
             return found[0], {}
         if parts == ['configurations']:
             key = lambda c: c['configuration']['configuration_revision_id']  # noqa: E731
@@ -608,7 +611,8 @@ OWNERSHIP_ROWS = [
     ),
     (
         ('list_evidence', 'read_evidence'),
-        {S_ + '/evidence', S_ + '/evidence/{evidence_version_id}'},
+        {S_ + '/evidence', S_ + '/evidence/{evidence_version_id}',
+         S_ + '/evidence/{evidence_version_id}/source-inspection'},
         {'store'},
     ),
     (

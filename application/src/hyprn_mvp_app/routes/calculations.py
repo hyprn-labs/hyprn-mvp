@@ -106,15 +106,22 @@ def router(deps):
     @r.get('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution')
     def analysis_execution(study_id: str, version_id: str, request: Request, who: Actor):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'AnalysisExecutionRead1',
+        return result(request, 'AnalysisExecutionRead2',
                       AnalysisExecution(deps.store).read(who, sid, valid_id(version_id)))
 
     @r.post('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution', status_code=202)
     def analysis_launch(study_id: str, version_id: str, request: Request, who: Actor,
                         body: dict = Body(...)):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'AnalysisExecution1',
+        return result(request, 'AnalysisExecution2',
                       AnalysisExecution(deps.store).launch(who, sid, valid_id(version_id), body), 202)
+
+    @r.post('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation')
+    def analysis_cancel(study_id: str, version_id: str, request: Request, who: Actor,
+                        body: dict = Body(...)):
+        sid, _ = scope(request, who, study_id)
+        return result(request, 'AnalysisExecutionRead2',
+                      AnalysisExecution(deps.store).cancel(who, sid, valid_id(version_id), body))
 
     @r.get('/api/1/studies/{study_id}/calculation-versions/{version_id}/runs')
     def calculation_runs(study_id: str, version_id: str, request: Request, who: Actor):

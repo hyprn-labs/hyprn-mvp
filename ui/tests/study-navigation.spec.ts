@@ -144,8 +144,12 @@ async function harness(page: Page) {
     if (/^\/studies\/[^/]+\/assistant\/messages$/.test(path) && method === 'POST') {
       state.assistantSends.push(body);
       if (state.assistantFailure === 'unknown') return route.abort('failed');
-      if (state.assistantFailure === 'none') return ok({ state: 'running', error: null,
-        can_send: false, can_stop: true, has_earlier_messages: false, messages: [] });
+      if (state.assistantFailure === 'none') {
+        state.assistantStage = 'running';
+        return ok({ state: 'running', error: null,
+        can_send: false, can_stop: true, has_earlier_messages: false, messages: [],
+        next_cursor: 'newest', earlier_cursor: null, has_more_messages: false });
+      }
       return route.fulfill({ status: 429, json: { error: {
         code: 'limit_exceeded', message: 'limit exceeded', outcome: 'unchanged',
         fields: [{ path: '/assistant/budget', code: 'assistant_budget_reserved',
@@ -158,6 +162,7 @@ async function harness(page: Page) {
         state: state.assistantStage, error: null,
         can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
         messages: state.messages, has_earlier_messages: false,
+        next_cursor: 'newest', earlier_cursor: null, has_more_messages: false,
       });
     // The model editor negotiates its edit format: this service accepts model format 4 edits.
     if (path === '/capabilities' && method === 'GET')
@@ -1785,5 +1790,52 @@ test('Assistant progress cards reflect the backend stages in light and narrow la
   expect(activity).not.toBeNull();
   expect(composer).not.toBeNull();
   expect(composer!.y - (activity!.y + activity!.height)).toBeGreaterThanOrEqual(16);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Earlier Assistant pages do not overwrite a newer running turn', async ({ page }) => {
+  const state = await harness(page);
+  state.assistantFailure = 'none';
+  const held = latch(), requested = latch(), completed = latch();
+  await page.route('**/api/1/studies/*/assistant?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has('before')) return route.fallback();
+    requested.release();
+    await held.promise;
+    await route.fulfill({ json: { schema_version: '1', data: {
+      state: 'idle', error: null, can_send: true, can_stop: false,
+      messages: [{ message_id: 'older', role: 'assistant', text: 'Retained earlier reply.',
+        actor_id: null, author_display_name: null, created_at: 1 }],
+      next_cursor: 'old-end', earlier_cursor: null, has_earlier_messages: false,
+      has_more_messages: false,
+    } } });
+    completed.release();
+  });
+  await page.route('**/api/1/studies/*/assistant', async (route) => {
+    await route.fulfill({ json: { schema_version: '1', data: {
+      state: state.assistantStage, error: null,
+      can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
+      messages: [{ message_id: 'recent', role: 'assistant', text: 'Retained recent reply.',
+        actor_id: null, author_display_name: null, created_at: 2 }],
+      next_cursor: 'recent-end', earlier_cursor: 'recent-start', has_earlier_messages: true,
+      has_more_messages: false,
+    } } });
+  });
+  await login(page);
+  await openStudy(page);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await page.getByRole('button', { name: 'Earlier messages', exact: true }).click();
+  await requested.promise;
+  const composer = page.getByRole('textbox', { name: 'Message assistant' });
+  await composer.fill('Continue this study.');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(composer).toHaveValue('');
+  held.release();
+  await completed.promise;
+  await expect(page.getByText('Retained earlier reply.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Retained recent reply.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Earlier messages', exact: true })).toHaveCount(0);
+  expect(state.assistantSends).toHaveLength(1);
   expect(state.unknown).toEqual([]);
 });

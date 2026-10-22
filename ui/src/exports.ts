@@ -1,5 +1,5 @@
 import { unitLabel } from './unitLabels';
-import type { ModelPackage, Source } from './contract';
+import type { ModelPackageRead5, Source } from './contract';
 import { project, type Snapshot } from './GraphView';
 import { variableRows, type VariableContext } from './VariablesTable';
 import type { Selection } from './workspaceModel';
@@ -25,7 +25,7 @@ export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical((value as Record<string, unknown>)[key])).join(',') + '}';
 }
-export async function checkPackage(text: string): Promise<ModelPackage> {
+export async function checkPackage(text: string): Promise<ModelPackageRead5> {
   if (new TextEncoder().encode(text).length > 2 * 1024 * 1024 - 512) throw new Error('The portable model record exceeds the 2 MiB limit.');
   const value = JSON.parse(text);
   const invalid = (message = 'Unsupported or invalid portable model record.'): never => { throw new Error(message); };
@@ -39,13 +39,14 @@ export async function checkPackage(text: string): Promise<ModelPackage> {
     }
   }
   bounded(value);
-  if (!value || !['1', '2', '3', '4'].includes(value.schema_version) || !Array.isArray(value.revisions) || !value.revisions.length || value.revisions.length > 1000 || !Array.isArray(value.files) || value.files.length > 1000 || !Array.isArray(value.required_capabilities) || value.required_capabilities.some((v: unknown) => typeof v !== 'string')) invalid();
+  if (!value || !['1', '2', '3', '4', '5'].includes(value.schema_version) || !Array.isArray(value.revisions) || !value.revisions.length || value.revisions.length > 1000 || !Array.isArray(value.files) || value.files.length > 1000 || !Array.isArray(value.required_capabilities) || value.required_capabilities.some((v: unknown) => typeof v !== 'string')) invalid();
   if (value.schema_version === '3' && !value.required_capabilities.includes('unit_declarations/1')) invalid('Record format 3 requires unit_declarations/1.');
   if (value.schema_version === '4' && !value.required_capabilities.includes('quantity_definitions/1')) invalid('Record format 4 requires quantity_definitions/1.');
+  if (value.schema_version === '5' && (!value.required_capabilities.includes('unit_declarations/1') || !value.required_capabilities.includes('quantity_definitions/1'))) invalid('This record requires unit_declarations/1 and quantity_definitions/1.');
   if (!uuid.test(value.model_id) || !uuid.test(value.model_revision_id)) invalid('The portable model record has invalid identities.');
   const { digest, ...body } = value;
   if (!hash.test(digest) || await sha256(new TextEncoder().encode(canonical(body))) !== digest) invalid('The portable model record does not match its SHA-256. No import was submitted.');
-  const inventory = new Map<string, ModelPackage['files'][number]>();
+  const inventory = new Map<string, ModelPackageRead5['files'][number]>();
   async function addFile(path: string, raw: Uint8Array, media_type: string, role: 'source' | 'model') {
     const key = (await sha256(new TextEncoder().encode('model-package-v1:' + path))).slice(0, 32);
     const file_id = [key.slice(0, 8), key.slice(8, 12), key.slice(12, 16), key.slice(16, 20), key.slice(20)].join('-');
@@ -53,13 +54,13 @@ export async function checkPackage(text: string): Promise<ModelPackage> {
   }
   const seen = new Set<string>(); let parent: string | null = null;
   for (const revision of value.revisions) {
-    if (!revision || !(value.schema_version === '1' ? ['1'] : value.schema_version === '2' ? ['1', '2'] : value.schema_version === '3' ? ['1', '2', '3'] : ['1', '2', '3', '4']).includes(revision.schema_version)) invalid('Model version record formats do not match the portable model record format.');
+    if (!revision || !(value.schema_version === '1' ? ['1'] : value.schema_version === '2' ? ['1', '2'] : value.schema_version === '3' ? ['1', '2', '3'] : value.schema_version === '4' ? ['1', '2', '3', '4'] : ['1', '2', '3', '4', '5']).includes(revision.schema_version)) invalid('Model version record formats do not match the portable model record format.');
     if (revision.schema_version === '3' && (!Array.isArray(revision.required_capabilities) || !revision.required_capabilities.includes('unit_declarations/1'))) invalid('Model version record format 3 requires unit_declarations/1.');
     const { digest: expected, ...content } = revision;
     if (revision.model_id !== value.model_id || !uuid.test(revision.model_revision_id) || seen.has(revision.model_revision_id) || revision.parent_model_revision_id !== parent || !Array.isArray(revision.source_files) || revision.source_files.length > 1000 || !hash.test(expected) || await sha256(new TextEncoder().encode(canonical(content))) !== expected) invalid('Model version identity, parent or SHA-256 mismatch.');
     for (const field of ['definitions', 'instances', 'ports', 'connections', 'boundary_mappings', 'annotations']) if (!Array.isArray(revision[field]) || revision[field].length > 1000) invalid('Invalid or oversized model collection.');
     if (revision.instances.length + revision.connections.length + revision.definitions.reduce((n: number, d: { ports: unknown[] }) => n + (Array.isArray(d.ports) ? d.ports.length : 1001), 0) > 1000) invalid('Model exceeds the 1000 element limit.');
-    if (revision.schema_version === '4') {
+    if (['4', '5'].includes(revision.schema_version)) {
       if (!Array.isArray(revision.required_capabilities) || !revision.required_capabilities.includes('quantity_definitions/1')) invalid('Model version record format 4 requires quantity_definitions/1.');
       const definitions=new Set<string>();
       for (const definition of revision.definitions) {
@@ -90,7 +91,7 @@ export async function checkPackage(text: string): Promise<ModelPackage> {
     }
     await addFile('revisions/' + revision.model_revision_id + '.json', new TextEncoder().encode(canonical(revision)), 'application/json', 'model');
     seen.add(revision.model_revision_id); parent = revision.model_revision_id;
-    if (revision.schema_version === '1' && 'assumptions' in revision || (['2','3','4'].includes(revision.schema_version)) && (!Array.isArray(revision.assumptions) || revision.assumptions.length > 1000)) invalid('Invalid model version assumptions.');
+    if (revision.schema_version === '1' && 'assumptions' in revision || (['2','3','4','5'].includes(revision.schema_version)) && (!Array.isArray(revision.assumptions) || revision.assumptions.length > 1000)) invalid('Invalid model version assumptions.');
     const ids = new Set<string>();
     for (const item of revision.assumptions ?? []) {
       if (!item || !uuid.test(item.assumption_id) || ids.has(item.assumption_id) || typeof item.statement !== 'string' || !item.statement.trim() || item.statement.length > 4096 || !Array.isArray(item.evidence_links) || item.evidence_links.length > 64) invalid('Invalid assumption.');
@@ -113,7 +114,7 @@ export async function checkPackage(text: string): Promise<ModelPackage> {
     if (total > 32 * 1024 * 1024) invalid('The files in the portable model record exceed the size limit.');
   }
   if (canonical(value.files) !== canonical([...inventory.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) invalid("The portable model record's file list does not match its model versions and source files.");
-  return value as ModelPackage; // Server performs closed-schema, capability, topology and collision validation atomically.
+  return value as ModelPackageRead5; // Server performs closed-schema, capability, topology and collision validation atomically.
 }
 const visible = (element: Element) => !element.closest('[hidden]') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
 function workbench(root: HTMLElement) { const region = [...root.querySelectorAll<HTMLElement>('.connected-views')].find(visible); if (!region) throw new Error("Open a model or a run's Model tab first."); return region; }

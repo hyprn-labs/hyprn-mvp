@@ -5,7 +5,7 @@ here. Callers still own authorization, immutable digest/provenance validation,
 connection compatibility and app/private configuration pairing.
 
 Model-version interpretation owned here: ``port_units`` is the one rule for
-which units a model port binds (Model1/2 exact literal, Model3/4 resolved engine
+which units a model port binds (Model1/2 exact literal, Model3/4/5 resolved engine
 spelling, anything else unsupported); ``active_ports`` and ``resolved_model_units``
 own active-occurrence readiness.
 """
@@ -13,18 +13,21 @@ own active-occurrence readiness.
 from .contracts import definition, DomainError, canonical, validate
 
 # Identity pins from the audited unit catalog table, not a fallback catalog or parser.
-UNIT_CATALOG_DIGEST = '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45'
+UNIT_CATALOG_DIGEST = '5abc0ae35d2e2fcc8beb1ca9267e709007c007d51f20f95d735122daeef54885'
 # Historical artifacts authenticate their exact table; current discovery uses only the new pin.
 RETAINED_UNIT_CATALOG_DIGESTS = frozenset(
-    (UNIT_CATALOG_DIGEST, 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
+    (UNIT_CATALOG_DIGEST, '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45', 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
 )
 UNIT_ENGINE_SOURCE_SHA256 = '9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92'
+UNIT_ENGINE_LIBRARY_SHA256 = '8094fb7d3e8cb65a56311c2ea5ccfbc9c29cb8b4160f1486c39c19dd779a43d3'
 UNIT_CATALOG_BYTES = 16384
 
 # The closed contract vocabulary is shared authority, not a fallback engine table.
 _PHYSICAL = frozenset(
-    definition('UnitDeclaration1')['oneOf'][2]['properties']['expression']['enum']
+    definition('UnitDeclaration2')['oneOf'][2]['properties']['expression']['enum']
 )
+
+_MONETARY = frozenset(definition('MonetaryUnit1')['properties']['expression']['enum'])
 
 
 def _meaning(value):
@@ -33,7 +36,7 @@ def _meaning(value):
             raise DomainError('invalid_request', 400)
         canonical(value)
         return value
-    validate('UnitDeclaration1', value)
+    validate('UnitDeclaration2', value)
     if value['kind'] == 'unspecified':
         return None
     return '' if value['kind'] == 'dimensionless' else value['expression']
@@ -76,9 +79,9 @@ def require_engine_unit(value, *, path='/units', port_id=None):
 def active_ports(model):
     """Validate every retained shape, then select each instance's exact version."""
     validate(
-        'ModelRevisionRead4'
+        'ModelRevisionRead5'
         if isinstance(model, dict) and 'model_revision_id' in model
-        else 'ModelDraftRead4',
+        else 'ModelDraftRead5',
         model,
     )
     definitions = {}
@@ -99,6 +102,10 @@ def active_ports(model):
             if port['definition_version_id'] != version or port['port_id'] in ids:
                 raise DomainError('invalid_model', 422)
             ids.add(port['port_id'])
+            if (model['schema_version'] != '5' or isinstance(port['units'], str)) and _meaning(port['units']) in {
+                *_MONETARY, 'pax'
+            }:
+                raise DomainError('invalid_model', 422)
             # Unused unspecified is valid. Unsupported retained engine spellings
             # are not silently repaired or interpreted as dimensionless.
             if _meaning(port['units']) is not None:
@@ -149,10 +156,10 @@ def resolved_model_units(model):
     }
 
 
-# the single port-units rule. Model1/2 bind the exact retained literal; Model3/4
+# the single port-units rule. Model1/2 bind the exact retained literal; Model3/4/5
 # bind the resolved engine spelling. No other module repeats this choice.
 LITERAL_UNIT_MODELS = frozenset({'1', '2'})
-RESOLVED_UNIT_MODELS = frozenset({'3', '4'})
+RESOLVED_UNIT_MODELS = frozenset({'3', '4', '5'})
 
 
 def port_units(model):
@@ -160,7 +167,7 @@ def port_units(model):
 
     - Model1/2: the exact retained literal, never parsed, resolved or repaired. An instance
       whose definition version is absent raises ``KeyError`` (it is never skipped).
-    - Model3/4: ``resolved_model_units``; an incomplete or unsupported active unit raises
+    - Model3/4/5: ``resolved_model_units``; an incomplete or unsupported active unit raises
       its ``invalid_model`` 422.
     - Any other model version: ``unsupported_record_version`` 422. Nothing is guessed.
 
@@ -178,3 +185,19 @@ def port_units(model):
         for i in model['instances']
         for p in definitions[i['definition_version_id']]['ports']
     }
+
+
+def monetary_expression(value):
+    """Return the exact finite monetary spelling, never infer money from labels."""
+    expression = _meaning(value)
+    return expression if expression in _MONETARY else None
+
+
+def monetary_basis_key(basis):
+    """Comparable declared money, including exact scale; no FX, inflation or unit conversion."""
+    if basis is None:
+        return None
+    expression = basis['catalogue_expression']
+    if expression not in _MONETARY:
+        raise DomainError('invalid_request', 422)
+    return expression, basis['price_year'], basis['economic_basis']

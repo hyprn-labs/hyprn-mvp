@@ -2,7 +2,7 @@ import { ActionGroup, Button, FilePicker, TransferSection } from './design';
 import { ActionDialog, DialogActions } from './design';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { HyprnMvpApi, message } from './api';
-import type { ApplicationCapabilities, ModelDraftRead4, ModelPackage, Study } from './contract';
+import type { ApplicationCapabilities, ModelDraftRead5, ModelPackageRead5, Study } from './contract';
 import type { Snapshot } from './GraphView';
 import {
   checkPackage,
@@ -35,7 +35,7 @@ export function ComparisonView({
   scope: ExportScope | null;
   root: RefObject<HTMLElement | null>;
   navigate: (action: () => void) => void;
-  onImported: (model: ModelDraftRead4) => Promise<void>;
+  onImported: (model: ModelDraftRead5) => Promise<void>;
   /** Render the actions in place when no action host is supplied. */
   standalone?: boolean;
 }) {
@@ -45,7 +45,7 @@ export function ComparisonView({
   const generation = useRef(0);
   const [packageText, setPackageText] = useState(''),
     [preview, setPreview] = useState<{
-      package: ModelPackage;
+      package: ModelPackageRead5;
       collision: boolean;
       unsupported: string[];
       revision: string;
@@ -104,7 +104,7 @@ export function ComparisonView({
       throw new Error('Open a saved model version before downloading a portable model record.');
     const snapshot = scope.snapshot;
     const value = (
-      await api.request<ModelPackage>(
+      await api.request<ModelPackageRead5>(
         `/studies/${study.study_id}/models/${snapshot.model_id}/export` +
           `?model_revision_id=${snapshot.model_revision_id}`,
       )
@@ -145,7 +145,7 @@ export function ComparisonView({
           'that does not collide with an existing model first.',
       );
     const model = (
-      await api.mutate<ModelDraftRead4>(
+      await api.mutate<ModelDraftRead5>(
         `/studies/${study.study_id}/model-imports`,
         {
           command_id: preview.command,

@@ -5,20 +5,20 @@ import { DataTable } from './design';
 import { Button, DialogFrame, SectionHeader } from './design';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, message, sourceText, validateEditCommand } from './api';
-import type { ApplyRead4, ModelDraftRead4, ModelRevisionRead4, ConfigurationRevisionRead6, ConfigurationCandidate, ConfigurationCandidate6, ConfigurationPreview3, EvidenceSnapshot } from './api';
+import type { ApplyRead5, ModelDraftRead5, ModelRevisionRead5, ConfigurationRevisionRead6, ConfigurationCandidate, ConfigurationCandidate6, ConfigurationPreview3, EvidenceSnapshot } from './api';
 import { configurationContext, modelAssumptions, recordLimitations, recordedModelAssumptions, unreadableModelAssumptions, configurationCriteria } from './recordViews';
 
 /** Assumption changes cannot be compared when either side's format is unreadable; say so. */
-const unreadableAssumptions = (models: Array<ModelDraftRead4 | ModelRevisionRead4 | null>) => models.some(model => unreadableModelAssumptions(modelAssumptions(model)));
-function UnreadableAssumptions({ models }: { models: Array<ModelDraftRead4 | ModelRevisionRead4 | null> }) {
+const unreadableAssumptions = (models: Array<ModelDraftRead5 | ModelRevisionRead5 | null>) => models.some(model => unreadableModelAssumptions(modelAssumptions(model)));
+function UnreadableAssumptions({ models }: { models: Array<ModelDraftRead5 | ModelRevisionRead5 | null> }) {
   return unreadableAssumptions(models) ? <p>{recordLimitations.modelAssumptionsUnreadable} Assumption changes are not shown.</p> : null;
 }
-export type ChangeProposal = { before: ModelDraftRead4; command: ApplyRead4; invoker: HTMLElement | null; safe: string; apply: string; finish: (result: ModelDraftRead4 | null) => void };
-function differences(before: ModelDraftRead4, after: ModelDraftRead4) {
+export type ChangeProposal = { before: ModelDraftRead5; command: ApplyRead5; invoker: HTMLElement | null; safe: string; apply: string; finish: (result: ModelDraftRead5 | null) => void };
+function differences(before: ModelDraftRead5, after: ModelDraftRead5) {
   const rows: Array<{ id: string; label: string; before: string; after: string }> = [];
   const add = (id: string, label: string, a: string, b: string) => { if (a !== b) rows.push({ id, label, before: a || 'None', after: b || 'None' }); };
   if (before.name !== after.name) add('model', 'Model name', before.name, after.name);
-  function name(snapshot: ModelDraftRead4, id: string) {
+  function name(snapshot: ModelDraftRead5, id: string) {
     const instance = snapshot.instances.find(i => i.instance_id === id), peers = snapshot.instances.filter(i => i.name === instance?.name);
     return (instance?.name ?? 'Unavailable component') + (peers.length > 1 ? ` · instance ${peers.findIndex(i => i.instance_id === id) + 1}` : '');
   }
@@ -30,17 +30,17 @@ function differences(before: ModelDraftRead4, after: ModelDraftRead4) {
     else add(id + '-name', 'Component name', a.name, b.name);
     const ports = (d: typeof ad) => d?.ports.map(p => `${p.direction}: ${p.name}${p.name === p.code_symbol ? '' : ` (${p.code_symbol})`} · ${unitLabel(p.units)}`).join('\n') ?? '';
     add(id + '-ports', label + ' · ports', ports(ad), ports(bd));
-    const definitions = (model: ModelDraftRead4) => quantityDefinitions(model).filter(q => q.instance.instance_id === id).map(q => q.port.code_symbol + ': ' + (q.statement ?? 'No definition')).join('\n');
+    const definitions = (model: ModelDraftRead5) => quantityDefinitions(model).filter(q => q.instance.instance_id === id).map(q => q.port.code_symbol + ': ' + (q.statement ?? 'No definition')).join('\n');
     add(id + '-definitions', label + ' · quantity definitions', definitions(before), definitions(after));
     if (a && b && JSON.stringify(ad?.source_refs) !== JSON.stringify(bd?.source_refs)) {
-      const text = (m: ModelDraftRead4, d: typeof ad) => m.source_files.filter(s => d?.source_refs.includes(s.sha256)).map(sourceText).join('\n');
+      const text = (m: ModelDraftRead5, d: typeof ad) => m.source_files.filter(s => d?.source_refs.includes(s.sha256)).map(sourceText).join('\n');
       add(id + '-source', label + ' · source', text(before, ad), text(after, bd));
     } else if (!a && bd?.source_refs.length) add(id + '-source', label + ' · source', '', 'Starter source — add output equations before running');
     // Notes (annotations) are not shown or authored in the UI; they stay in the record.
   }
-  const endpoint = (m: ModelDraftRead4, ref: { instance_id: string; port_id: string }) => { const i = m.instances.find(i => i.instance_id === ref.instance_id); const p = m.definitions.find(d => d.definition_version_id === i?.definition_version_id)?.ports.find(p => p.port_id === ref.port_id); return `${name(m, ref.instance_id)} · ${p?.code_symbol ?? 'Unavailable port'}`; };
+  const endpoint = (m: ModelDraftRead5, ref: { instance_id: string; port_id: string }) => { const i = m.instances.find(i => i.instance_id === ref.instance_id); const p = m.definitions.find(d => d.definition_version_id === i?.definition_version_id)?.ports.find(p => p.port_id === ref.port_id); return `${name(m, ref.instance_id)} · ${p?.code_symbol ?? 'Unavailable port'}`; };
   for (const id of new Set([...before.connections, ...after.connections].map(c => c.connection_id))) {
-    const format = (m: ModelDraftRead4) => { const c = m.connections.find(c => c.connection_id === id); return c ? `${endpoint(m, c.source_ref)} → ${endpoint(m, c.target_ref)}` : ''; };
+    const format = (m: ModelDraftRead5) => { const c = m.connections.find(c => c.connection_id === id); return c ? `${endpoint(m, c.source_ref)} → ${endpoint(m, c.target_ref)}` : ''; };
     add(id, 'Connection', format(before), format(after));
   }
   // Unreadable formats are stated beside the table; their items are never compared as absent.
@@ -55,7 +55,7 @@ function differences(before: ModelDraftRead4, after: ModelDraftRead4) {
   }
   return rows;
 }
-function DifferenceTable({ before, after }: { before: ModelDraftRead4; after: ModelDraftRead4 }) {
+function DifferenceTable({ before, after }: { before: ModelDraftRead5; after: ModelDraftRead5 }) {
   return <><div className="table-scroll" tabIndex={0}><DataTable className="change-table"><thead><tr><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>{differences(before, after).map(row => <tr key={row.id}><th scope="row"><div className="exact-proposal">{row.label}</div></th><td><div className="exact-proposal">{row.before}</div></td><td><div className="exact-proposal">{row.after}</div></td></tr>)}</tbody></DataTable></div><UnreadableAssumptions models={[before, after]} /></>;
 }
 
@@ -63,7 +63,7 @@ export function ChangePreview({ api, proposal }: { api: HyprnMvpApi; proposal: C
   const dialog = useRef<HTMLDialogElement>(null), safe = useRef<HTMLButtonElement>(null);
   const initialFocus = useRef(true);
   const [command, setCommand] = useState(proposal.command), [base, setBase] = useState(proposal.before);
-  const [preview, setPreview] = useState<ModelDraftRead4 | null>(null), [current, setCurrent] = useState<ModelDraftRead4 | null>(null);
+  const [preview, setPreview] = useState<ModelDraftRead5 | null>(null), [current, setCurrent] = useState<ModelDraftRead5 | null>(null);
   const [error, setError] = useState<unknown>(null), [busy, setBusy] = useState(false);
   useEffect(() => {
     const focus = proposal.invoker;
@@ -196,7 +196,7 @@ function HumanChanges({rows, label}: {rows: HumanChange[]; label: string}) {
 }
 
 /** Format only server-reported stable owner/use changes, with exact retained titles. */
-export function ConfigurationChanges({before,after,changes,model}: {before: ConfigurationRevisionRead6; after: ConfigurationCandidate | ConfigurationCandidate6; changes: ConfigurationPreview3['changes']; model?: ModelRevisionRead4}) {
+export function ConfigurationChanges({before,after,changes,model}: {before: ConfigurationRevisionRead6; after: ConfigurationCandidate | ConfigurationCandidate6; changes: ConfigurationPreview3['changes']; model?: ModelRevisionRead5}) {
   const evidence = (value: typeof before | typeof after, id: string) => evidenceLabel(value.evidence_snapshots,id);
   // Every format that records assumptions and explicit general context (Configuration3 and 4) is read.
   const assumption = (value: typeof before | typeof after, id: string) => { const context = configurationContext(value); return context.kind === 'supported' && context.assumptions.kind === 'recorded' ? context.assumptions.items.find(a => a.assumption_id === id) : undefined; };
@@ -223,7 +223,7 @@ export function ConfigurationChanges({before,after,changes,model}: {before: Conf
   return rows.length ? <HumanChanges rows={rows} label="Assumption and evidence changes" /> : null;
 }
 
-export function ModelAssumptionChanges({before,after,beforeEvidence=[],afterEvidence=[]}: {before: ModelRevisionRead4 | null; after: ModelRevisionRead4; beforeEvidence?: EvidenceSnapshot[]; afterEvidence?: EvidenceSnapshot[]}) {
+export function ModelAssumptionChanges({before,after,beforeEvidence=[],afterEvidence=[]}: {before: ModelRevisionRead5 | null; after: ModelRevisionRead5; beforeEvidence?: EvidenceSnapshot[]; afterEvidence?: EvidenceSnapshot[]}) {
   const unreadable=unreadableAssumptions([before,after]);
   const a=unreadable ? [] : recordedModelAssumptions(modelAssumptions(before)), b=unreadable ? [] : recordedModelAssumptions(modelAssumptions(after));
   const rows: HumanChange[]=[];

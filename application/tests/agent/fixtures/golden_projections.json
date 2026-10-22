@@ -852,7 +852,87 @@
     "m/s**2",
     "N*m",
     "W/(m*K)",
-    "W/(m**2*K)"
+    "W/(m**2*K)",
+    "USD",
+    "kUSD",
+    "MUSD",
+    "pax",
+    "USD/pax",
+    "USD/kg",
+    "USD/m**3",
+    "USD/h",
+    "USD/kW",
+    "USD/(kW*h)",
+    "USD/J",
+    "USD/MJ"
+   ],
+   "monetary": [
+    {
+     "denominator": "",
+     "expression": "USD",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "",
+     "expression": "kUSD",
+     "numerator": "USD",
+     "scale": 1000.0
+    },
+    {
+     "denominator": "",
+     "expression": "MUSD",
+     "numerator": "USD",
+     "scale": 1000000.0
+    },
+    {
+     "denominator": "pax",
+     "expression": "USD/pax",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "kg",
+     "expression": "USD/kg",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "m**3",
+     "expression": "USD/m**3",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "h",
+     "expression": "USD/h",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "kW",
+     "expression": "USD/kW",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "kW*h",
+     "expression": "USD/(kW*h)",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "J",
+     "expression": "USD/J",
+     "numerator": "USD",
+     "scale": 1.0
+    },
+    {
+     "denominator": "MJ",
+     "expression": "USD/MJ",
+     "numerator": "USD",
+     "scale": 1.0
+    }
    ]
   }
  },
@@ -2814,7 +2894,11 @@
   },
   "revision_token": "5e000000-0000-4000-8000-000000000301",
   "updated_at": "2026-10-14T07:50:00+00:00",
-  "which": "draft"
+  "which": "draft",
+  "completion": {
+   "missing": "completion_not_assessed"
+  },
+  "scientific_review": {}
  },
  "get_study_answer_version_1": {
   "alternative_mappings": [
@@ -3099,7 +3183,11 @@
     }
    }
   },
-  "which": "answer_version_id"
+  "which": "answer_version_id",
+  "completion": {
+   "missing": "completion_not_assessed"
+  },
+  "scientific_review": {}
  },
  "get_study_brief_draft": {
   "alternatives": [
@@ -3321,7 +3409,8 @@
   },
   "revision_token": "5f000000-0000-4000-8000-000000000001",
   "updated_at": "2026-10-14T07:45:00Z",
-  "which": "draft"
+  "which": "draft",
+  "deliverables": []
  },
  "get_study_brief_latest_version": {
   "alternatives": [
@@ -3530,7 +3619,8 @@
     }
    }
   },
-  "which": "latest_version"
+  "which": "latest_version",
+  "deliverables": []
  },
  "get_study_brief_version_1_criteria": {
   "brief_version": {
@@ -4489,6 +4579,10 @@
      "version_id": "53000000-0000-4000-8000-000000000012"
     }
    ]
+  },
+  "source_inspection": {
+   "basis": "author_supplied",
+   "retrieval": null
   }
  },
  "read_evidence_without_title": {
@@ -4519,6 +4613,10 @@
   },
   "scope": {
    "kind": "study"
+  },
+  "source_inspection": {
+   "basis": "author_supplied",
+   "retrieval": null
   }
  }
 }

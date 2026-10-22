@@ -261,7 +261,7 @@ def test_the_read_never_selects_the_outbox_payload_whole(submission, monkeypatch
     c, actor = client(store, actor)
     statements = traced(monkeypatch)
     assert status(c, sid, *runs).status_code == 200
-    reads = [s for s in statements if 'outbox' in s]
+    reads = [s for s in statements if 'execution_operations' in s]
     assert len(reads) == 1 and not any(map(whole_outbox_payload, statements)), reads
     # The detector is not vacuous: the full run read selects the payload whole.
     statements.clear()

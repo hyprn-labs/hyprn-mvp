@@ -1,5 +1,8 @@
 """Mandatory post-build gate: source checks cannot stand in for installed bytes."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('baseline')
+
 import json
 from pathlib import Path
 import sys

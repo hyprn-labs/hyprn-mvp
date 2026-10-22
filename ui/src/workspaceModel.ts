@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { ModelDraftRead4, ModelRevisionRead4 } from './contract';
+import type { ModelDraftRead5, ModelRevisionRead5 } from './contract';
 
 /** Unsaved-work seam of one editor that Workspace guards before navigation.
  * `dirty` describes the latest handle; `save` resolves false when the editor kept
@@ -117,14 +117,14 @@ export type Selection =
     };
 export type WorkspaceContext = { actor_id: string; study_id: string; view: WorkspaceView } & (
   | { kind: 'study' }
-  | { kind: 'draft'; model_id: string; draft_revision: string; snapshot: ModelDraftRead4 }
-  | { kind: 'revision'; model_id: string; model_revision_id: string; snapshot: ModelRevisionRead4 }
+  | { kind: 'draft'; model_id: string; draft_revision: string; snapshot: ModelDraftRead5 }
+  | { kind: 'revision'; model_id: string; model_revision_id: string; snapshot: ModelRevisionRead5 }
   | {
       kind: 'configuration';
       model_id: string;
       model_revision_id: string;
       configuration_revision_id: string;
-      snapshot: ModelRevisionRead4;
+      snapshot: ModelRevisionRead5;
     }
   | {
       kind: 'run';
@@ -132,7 +132,7 @@ export type WorkspaceContext = { actor_id: string; study_id: string; view: Works
       model_id?: string;
       model_revision_id?: string;
       configuration_revision_id?: string;
-      snapshot?: ModelRevisionRead4;
+      snapshot?: ModelRevisionRead5;
     }
 );
 export type WorkspaceLink = {

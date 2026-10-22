@@ -9,9 +9,10 @@ import {
 } from './api';
 import type {
   Diagnostic,
-  StudyBriefContent1,
-  StudyBriefState1,
-  StudyBriefVersion1,
+  StudyBriefContent2,
+  StudyBriefContentRead2,
+  StudyBriefStateRead2,
+  StudyBriefVersionRead2,
   StudyCriterion1,
 } from './contract';
 import type { EditorGuard } from './workspaceModel';
@@ -31,10 +32,11 @@ export type CriterionForm = {
   direction: 'minimize' | 'maximize';
   evidence_links: StudyCriterion1['evidence_links'];
 };
-export type BriefForm = Omit<StudyBriefContent1, 'criteria'> & { criteria: CriterionForm[] };
+export type BriefForm = Omit<StudyBriefContent2, 'criteria'> & { criteria: CriterionForm[] };
 
-export const emptyBrief = (): StudyBriefContent1 => ({
-  schema_version: '1',
+export const emptyBrief = (): StudyBriefContent2 => ({
+  schema_version: '2',
+  deliverables: [],
   question: '',
   original_question: null,
   elaboration: null,
@@ -77,8 +79,10 @@ export function criterionForm(criterion: StudyCriterion1): CriterionForm {
       };
 }
 
-export const briefForm = (content: StudyBriefContent1): BriefForm => ({
+export const briefForm = (content: StudyBriefContentRead2): BriefForm => ({
   ...structuredClone(content),
+  schema_version: '2',
+  deliverables: content.schema_version === '2' ? content.deliverables : [],
   criteria: content.criteria.map(criterionForm),
 });
 
@@ -109,7 +113,7 @@ function number(value: string): number | null | 'invalid' {
 /** The content to save, or the first problem in the form's own words. */
 export function briefContent(
   form: BriefForm,
-): { content: StudyBriefContent1 } | { problem: string } {
+): { content: StudyBriefContent2 } | { problem: string } {
   const criteria: StudyCriterion1[] = [];
   for (const [index, c] of form.criteria.entries()) {
     const label = `Criterion ${index + 1}`;
@@ -158,9 +162,9 @@ export function briefContent(
 export type BriefControllerState = {
   studyId: string | null;
   status: 'idle' | 'loading' | 'ready' | 'working' | 'stale' | 'uncertain' | 'error';
-  server: StudyBriefState1 | null;
+  server: StudyBriefStateRead2 | null;
   /** Saved versions, newest first. */
-  versions: StudyBriefVersion1[];
+  versions: StudyBriefVersionRead2[];
   /** The editing copy; null while the brief is only read. */
   local: BriefForm | null;
   error: string;
@@ -323,7 +327,7 @@ export class BriefController {
     try {
       const signal = this.read.signal;
       const server = await this.api.brief(studyId, signal);
-      const versions: StudyBriefVersion1[] = [];
+      const versions: StudyBriefVersionRead2[] = [];
       let before: number | undefined;
       do {
         const page = await this.api.briefVersions(studyId, before, signal);
@@ -495,7 +499,7 @@ export class BriefController {
     }
   };
   private async reread(studyId: string) {
-    const versions: StudyBriefVersion1[] = [];
+    const versions: StudyBriefVersionRead2[] = [];
     let before: number | undefined;
     do {
       const page = await this.api.briefVersions(studyId, before);

@@ -61,21 +61,68 @@ def test_sampling_tools_resolve_exact_ports_and_freeze_accuracy_through_public_a
     assert isinstance(refused, ToolError) and refused.category == 'invalid_input'
 
 
-def test_analysis_launch_cannot_bypass_run_admission_and_saved_plan_is_explicit(env):
+def test_analysis_launch_accepts_missing_runs_as_one_durable_finite_plan(env):
     created = one(env, 'create_analysis', calculation(env))
     vid = created['calculation_version']['id']
     assert one(env, 'get_analysis_execution', {'calculation_version_id': vid}) == {
         'state': 'not_launched'
     }
-    refused = one(env, 'launch_analysis', {'calculation_version_id': vid})
-    assert isinstance(refused, ToolError) and refused.category == 'not_ready'
-    assert one(env, 'get_analysis_execution', {'calculation_version_id': vid}) == {
-        'state': 'not_launched'
-    }
+    accepted = one(env, 'launch_analysis', {'calculation_version_id': vid})
+    assert not isinstance(accepted, ToolError), accepted
+    assert accepted['state'] == 'calculating'
+    assert accepted['total_count'] == 1
+    assert one(env, 'launch_analysis', {'calculation_version_id': vid}) == accepted
+    assert one(env, 'get_analysis_execution', {'calculation_version_id': vid}) == accepted
     from hyprn_mvp_app.calculations import Calculations
 
     saved = Calculations(env['store']).version(env['owner'], env['sid'], vid)
     assert saved['schema_version'] == '4' and saved['content']['estimate_plan'] is None
+
+
+def test_accepted_analysis_outlives_delegation_expiry_but_not_revocation(env):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+
+    created = one(env, 'create_analysis', calculation(env))
+    vid = created['calculation_version']['id']
+    accepted = one(env, 'launch_analysis', {'calculation_version_id': vid})
+    assert not isinstance(accepted, ToolError), accepted
+    with env['store'].connection(write=True) as db:
+        db.execute('UPDATE agent_delegations SET expires_at=? WHERE agent_actor_id=?',
+                   (time.time() - 1, env['agent']))
+    owner = AnalysisExecution(env['store'])
+    assert owner.process_one(Submissions(env['store'], None, None))
+    state = owner.read(env['owner'], env['sid'], vid)
+    assert state['runs'][0]['run_id'] is not None
+    with env['store'].connection(write=True) as db:
+        db.execute('UPDATE agent_delegations SET revoked_at=?,revoked_reason=? '
+                   'WHERE agent_actor_id=?', (time.time(), 'owner_revoked', env['agent']))
+    assert owner.process_one(Submissions(env['store'], None, None))
+    assert owner.read(env['owner'], env['sid'], vid)['admission_state'] == 'revoked'
+
+
+def test_durable_analysis_authority_refuses_other_studies_and_commands_and_does_not_escape(env):
+    import pytest
+    from uuid import uuid4
+    from hyprn_mvp_app.analysis_execution import identity
+    from hyprn_mvp_app.contracts import DomainError
+
+    vid = one(env, 'create_analysis', calculation(env))['calculation_version']['id']
+    accepted = one(env, 'launch_analysis', {'calculation_version_id': vid})
+    assert not isinstance(accepted, ToolError), accepted
+    with env['store'].connection(write=True) as db:
+        db.execute('UPDATE agent_delegations SET expires_at=? WHERE agent_actor_id=?',
+                   (time.time() - 1, env['agent']))
+    with env['store'].analysis_authority(env['agent'], env['sid'], identity(vid)):
+        with env['store'].connection() as db:
+            env['store'].authorize(db, env['agent'], env['sid'], write=True)
+            with pytest.raises(DomainError):
+                env['store'].authorize(db, env['agent'], str(uuid4()), write=True)
+        with pytest.raises(DomainError):
+            env['store'].command(env['agent'], env['sid'], 'run', str(uuid4()), {}, lambda db: {})
+    with env['store'].connection() as db:
+        with pytest.raises(DomainError):
+            env['store'].authorize(db, env['agent'], env['sid'], write=True)
 
 
 def test_background_sampling_keeps_agent_attribution_in_a_separate_store(env):
@@ -137,3 +184,18 @@ def test_new_read_surfaces_are_registered_and_have_closed_inputs():
         assert tool.effect == 'read'
         assert tool.input_schema['additionalProperties'] is False
         assert all(method == 'GET' for method, _ in tool.api_operations)
+
+
+def test_sampling_capacity_is_reported_before_a_design_is_sent(env):
+    args = dict(model_id=env['model'], model_version_id=VERSION, name='Oversized design',
+        method='latin_hypercube', seed=42,
+        groups=[dict(configuration_version_id=env['configurations'][0],
+                     training_count=64, validation_count=2,
+                     dimensions=[dict(quantity='Range.fuel_fraction', lower=0.2, upper=0.4,
+                                      unit='dimensionless')])] * 2)
+    value = one(env, 'create_sampled_analysis', args)
+    assert isinstance(value, ToolError)
+    assert value.category == 'invalid_input'
+    assert '132' in str(value.envelope()) and '128' in str(value.envelope())
+    with env['store'].connection() as db:
+        assert db.execute("SELECT count(*) FROM receipts WHERE category='calculation_sample'").fetchone()[0] == 0

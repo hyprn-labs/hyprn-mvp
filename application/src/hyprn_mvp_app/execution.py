@@ -34,7 +34,7 @@ class StaticPreparation:
         from uuid import UUID,uuid5
         validate_frozen_configuration(frozen)
         if uses_polish_envelope(frozen['model_snapshot'],frozen.get('approach_closure')):
-            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponseRead3',resources=[sid])
+            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponseRead4',resources=[sid])
             from .readiness import supports_descriptive_execution
             if status!=200 or not supports_descriptive_execution(response.get('data'),frozen['model_snapshot']):
                 raise ValueError('Modeling backend lacks exact descriptive execution support')
@@ -47,11 +47,11 @@ class StaticPreparation:
             request_schema='Prepare2' if config['schema_version']=='5' else 'Prepare',resources=[mid])
         if set(response)!={'data'} or not isinstance(response['data'],dict):raise ValueError('Invalid preparation response')
         prepared=response['data']
-        if prepared.get('schema_version') not in ('2', '3', '4'):
+        if prepared.get('schema_version') not in ('2', '3', '4', '5'):
             raise ValueError('Unsupported preparation version; create a new schema2 run command')
-        closed('PreparedModelArtifactRead4',prepared)
+        closed('PreparedModelArtifactRead5',prepared)
         # A configuration without criteria runs only under result protocol 3, and only it does.
-        if (prepared['schema_version']=='4')!=(config['schema_version']=='5'):
+        if (prepared['schema_version'] in ('4','5'))!=(config['schema_version']=='5'):
             raise ValueError('Preparation does not match the configuration version')
         if len({f['file_id'] for f in prepared['files']})!=len(prepared['files']):raise ValueError('Duplicate file identity')
         files={};total=0
@@ -97,7 +97,7 @@ class Submissions:
         self.store,self.prepare,self.native=store,prepare,native
         self.fault=lambda point:None
 
-    def submit(self,actor,sid,body,*,expected_runtime=None):
+    def submit(self,actor,sid,body,*,expected_runtime=None,admission_limit=None):
         command=body['command_id'];revision=body['configuration_revision_id']
         payload=dict(operation='submit_run',target=sid,configuration_revision_id=revision)
         if expected_runtime is not None:
@@ -114,11 +114,25 @@ class Submissions:
                 raise DomainError('invalid_request', 400) from None
             payload['execution_budget'] = budget
 
+        def admission(db):
+            if admission_limit is None:
+                return
+            if type(admission_limit) is not int or admission_limit < 1:
+                raise ValueError('Positive execution admission limit required')
+            # Store.command already holds the single-writer transaction lock;
+            # admission and receipt acceptance cannot race across actor studies.
+            count = db.execute("""SELECT count(*) AS total FROM execution_operations
+                WHERE actor_id=? AND state IN ('accepted_run','dispatching','uncertain')
+                AND (preparation_state IS NULL OR preparation_state<>'preparation_failed')""",
+                (actor,)).fetchone()['total']
+            if count >= admission_limit:
+                raise DomainError('limit_exceeded', 429)
+
         def accept(db):
             row=db.execute('SELECT payload FROM configurations WHERE study_id=? AND configuration_revision_id=?',(sid,revision)).fetchone()
             if row is None:raise DomainError('resource_not_found',404)
             frozen=json.loads(row['payload'])
-            if frozen['configuration']['schema_version'] in ('3','4','6') or frozen['model_snapshot']['schema_version'] in ('2','3','4'):
+            if frozen['configuration']['schema_version'] in ('3','4','6') or frozen['model_snapshot']['schema_version'] in ('2','3','4','5'):
                 validate_frozen_configuration(frozen)
                 if frozen['configuration']['study_id']!=sid:raise ValueError('Configuration study mismatch')
             run_id=uid();result=dict(run_id=run_id,command_id=command,state='accepted_run',
@@ -149,7 +163,8 @@ class Submissions:
             self.fault('before_receipt')
             return result
         result=self.store.command(actor,sid,'run',command,payload,accept,
-            receipt_state='accepted_run',attribute=lambda accepted:[('run',accepted['run_id'],None)])
+            receipt_state='accepted_run',admission=admission,
+            attribute=lambda accepted:[('run',accepted['run_id'],None)])
         self.fault('after_receipt')
         return self.read(actor,sid,result['run_id'])
 
@@ -181,42 +196,56 @@ class Submissions:
                 raise ValueError('Recorded process association cannot change')
             db.execute('UPDATE run_associations SET store_uuid=?,process_uuid=? WHERE run_id=?',
                        (record['store_uuid'],record['process_uuid'],run_id))
-            payload=json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(run_id,)).fetchone()[0])
             if stored_request(row,payload,self.store.command_receipt(db,row['study_id'],'run',row['command_id']))!=saved['request']:
                 raise ValueError('Stored request changed during retained read')
-            if 'history' in payload and not payload['history']['errors'] and payload['history']!=saved:
+            current=json.loads(db.execute('SELECT payload FROM execution_operations WHERE run_id=?',
+                                         (run_id,)).fetchone()[0])
+            if 'history' in current and not current['history']['errors'] and current['history']!=saved:
                 raise ValueError('Completed retained projection cannot change')
-            payload['status']={k:retained[k] for k in ('process_state','exit_status')}
-            payload['history']=saved
-            db.execute('UPDATE outbox SET payload=? WHERE run_id=?',(json.dumps(payload),run_id))
+            current['status']={k:retained[k] for k in ('process_state','exit_status')}
+            current['history']=saved
+            db.execute('UPDATE execution_operations SET payload=? WHERE run_id=?',(json.dumps(current),run_id))
             self._state(db,row['study_id'],row['command_id'],run_id,'recorded')
 
     def _state(self,db,sid,command,run_id,state):
         receipt=self.store.command_receipt(db,sid,'run',command)
-        payload=json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(run_id,)).fetchone()[0])
+        status_field = ("read_summary->>'status'" if getattr(db,'dialect',None)=='postgresql'
+                        else "json_extract(payload,'$.status')")
+        status=db.execute('SELECT '+status_field+' AS status FROM execution_operations WHERE run_id=?',
+                          (run_id,)).fetchone()['status']
         # Preparation is a phase of accepted work, before the native claim.
         # Preserve the existing outbox state constraint and immutable records.
-        if state in ('prepared','preparation_failed'):payload['preparation_state']=state
-        db.execute('UPDATE outbox SET state=?,payload=? WHERE run_id=?',
-                   ('accepted_run' if state in ('prepared','preparation_failed') else state,json.dumps(payload),run_id))
-        result={**receipt['result'],'state':state,**payload.get('status',{})}
+        if state in ('prepared','preparation_failed'):
+            db.execute('UPDATE execution_operations SET preparation_state=?,state=? WHERE run_id=?',
+                       (state,'accepted_run',run_id))
+        else:
+            db.execute('UPDATE execution_operations SET state=? WHERE run_id=?',(state,run_id))
+        result={**receipt['result'],'state':state,**(json.loads(status) if status else {})}
         db.execute("UPDATE receipts SET state=?,result=? WHERE scope=? AND category='run' AND command_id=?",
                    (state,json.dumps(result),sid,command))
 
     def dispatch_batch(self, run_ids):
-        if hasattr(self.store, 'database'):
-            # A batch cannot borrow another actor's row authority. Preserve batching
-            # within each verified actor, and recheck every item during dispatch.
-            groups = {}
-            for run_id in run_ids:
-                for job in self.store.background_jobs('run', run_id):
-                    groups.setdefault(job['actor_id'], []).append(run_id)
-            for items in groups.values():
-                with self.store.background_actor('run', items[0]) as admitted:
-                    if admitted:
-                        self._dispatch_batch(items)
-            return
-        return self._dispatch_batch(run_ids)
+        if (not isinstance(run_ids, list) or not run_ids
+                or len(set(run_ids)) != len(run_ids)):
+            raise ValueError('Distinct bounded run identities required')
+        # A batch holds one actor and one finite authority. Splitting by parent
+        # preserves batching while preventing a scope from hiding another plan.
+        groups = {}
+        for run_id in run_ids:
+            parent = self.store.background_analysis_parent('run', run_id)
+            if hasattr(self.store, 'database'):
+                jobs = self.store.background_jobs('run', run_id)
+                if not jobs:
+                    continue
+                actor = jobs[0]['actor_id']
+            else:
+                actor = parent['actor_id'] if parent else None
+            key = (actor, parent['analysis_command'] if parent else None)
+            groups.setdefault(key, []).append(run_id)
+        for items in groups.values():
+            with self.store.background_actor('run', items[0]) as admitted:
+                if admitted:
+                    self._dispatch_batch(items)
 
     def _dispatch_batch(self, run_ids):
         """Claim a bounded group under the existing dispatch lock, then cross once.
@@ -334,7 +363,7 @@ class Submissions:
             return
         if row['state'] == 'prepared' and payload['bundle']['manifest'].get(
             'schema_version'
-        ) not in ('2', '3', '4', '5', '6', '8', '10', '11'):
+        ) not in ('2', '3', '4', '5', '6', '8', '10', '11', '12'):
             self._preparation_failure(row, 'unsupported_execution_version')
             return
         self.native.require_attestation()
@@ -343,7 +372,7 @@ class Submissions:
                 dependencies = None
                 if payload['frozen']['configuration']['schema_version'] in ('3', '4', '6') or payload[
                     'frozen'
-                ]['model_snapshot']['schema_version'] in ('2', '3', '4'):
+                ]['model_snapshot']['schema_version'] in ('2', '3', '4', '5'):
                     validate_frozen_configuration(payload['frozen'])
                 # Every configuration that can carry result-linked inputs resolves them.
                 if payload['frozen']['configuration']['schema_version'] in ('2', '3', '4', '6'):
@@ -437,9 +466,6 @@ class Submissions:
                         row['study_id'],
                         [r[2] for r in source_records.values()],
                     )
-                db.execute(
-                    'UPDATE outbox SET payload=? WHERE run_id=?', (json.dumps(payload), run_id)
-                )
                 self._state(db, row['study_id'], row['command_id'], run_id, 'dispatching')
         except DomainError as error:
             # The claim transaction rolled back. Persist a terminal failure

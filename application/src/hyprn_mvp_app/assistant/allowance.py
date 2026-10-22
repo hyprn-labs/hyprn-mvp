@@ -23,6 +23,8 @@ async def account(store, provider, actor):
             provider_id = found['id']
         if not provider_id:
             continue
+        if provider_id in sessions:
+            continue
         usage = await provider.session_account(provider_id)
         spent += usage['spent_cents']
         sessions.append(provider_id)

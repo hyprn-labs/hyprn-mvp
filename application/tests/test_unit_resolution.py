@@ -67,7 +67,7 @@ def test_unspecified_readable_but_no_engine_interpretation():
 
 @pytest.mark.parametrize('value', [None, {}, [], 0, {'kind':'physical'},
     {'kind':'physical','expression':''}, {'kind':'physical','expression':'m '},
-    {'kind':'physical','expression':'USD'}, {'kind':'physical','expression':'__import__("os")'},
+    {'kind':'physical','expression':'EUR'}, {'kind':'physical','expression':'__import__("os")'},
     {'kind':'dimensionless','expression':'m'}, {'kind':'unspecified','extra':True}])
 def test_malformed_or_unsupported_typed_declarations_rejected(value):
     from hyprn_mvp_app.units import unit_label, require_engine_unit
@@ -217,7 +217,7 @@ def test_port_units_never_relaxes_incomplete_typed_units():
     assert canonical(value) == before
 
 
-@pytest.mark.parametrize('version', ['0','5','99','', None, 3, '3 '])
+@pytest.mark.parametrize('version', ['0','6','99','', None, 3, '3 '])
 def test_port_units_unknown_model_version_is_explicitly_unsupported(version):
     from hyprn_mvp_app.units import port_units
     value = model('2'); value['schema_version'] = version

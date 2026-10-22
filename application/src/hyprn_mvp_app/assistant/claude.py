@@ -1,6 +1,6 @@
 """Claude Managed Agents wire adapter; no reasoning loop or scientific effects.
 
-Only custom HYPRN tools are exposed. Requests never retry mutations automatically.
+Custom HYPRN tools and an explicitly constrained research toolset are exposed. Requests never retry mutations automatically.
 Callers own durable intent and reconcile unknown delivery against provider records.
 The endpoint is fixed: a configured credential cannot be redirected to another host.
 """
@@ -112,8 +112,25 @@ def identity(value):
     return value
 
 
-def agent_definition(model, definitions, system):
-    """The shared tool catalogue, without shell, network or MCP servers; children inherit only these tools."""
+def research_tools():
+    """No shell, writing, repository mounts, MCP servers or arbitrary network client."""
+    return [{
+        'type': 'agent_toolset_20260401',
+        'default_config': {'enabled': False, 'permission_policy': {'type': 'always_allow'}},
+        'configs': [
+            {'name': 'read', 'type': 'read', 'enabled': True,
+             'permission_policy': {'type': 'always_allow'}},
+            {'name': 'web_search', 'type': 'web_search', 'enabled': True,
+             'permission_policy': {'type': 'always_allow'}},
+            {'name': 'web_fetch', 'type': 'web_fetch', 'enabled': True,
+             'max_content_tokens': 12000,
+             'permission_policy': {'type': 'always_allow'}},
+        ],
+    }]
+
+
+def agent_definition(model, definitions, system, *, skills=(), reviewers=(), research=False):
+    """Explicit capabilities; unlisted and inline delegates are never available."""
     return {
         'name': 'HYPRN study assistant',
         'model': model,
@@ -121,10 +138,14 @@ def agent_definition(model, definitions, system):
         'multiagent': {
             'type': 'multiagent_20261001',
             'advisor': {'type': 'disabled'},
-            'subagents': {'type': 'enabled', 'inline_agents': {'type': 'enabled'}},
+            'subagents': ({'type': 'enabled', 'inline_agents': {'type': 'disabled'},
+                           'predefined_agents': list(reviewers)}
+                          if reviewers else {'type': 'disabled'}),
             'workflows': {'type': 'disabled'},
         },
-        'tools': custom_tools(definitions),
+        'tools': custom_tools(definitions) + (research_tools() if research else []),
+        'mcp_servers': [],
+        'skills': list(skills),
     }
 
 
@@ -156,7 +177,7 @@ class Claude:
     async def close(self):
         await self._client.aclose()
 
-    async def request(self, method, path, *, body=None, params=None):
+    async def request(self, method, path, *, body=None, params=None, files=None, data=None, binary=False):
         if not path.startswith('/v1/') or '..' in path or '?' in path:
             raise ValueError('A provider path must be fixed by the adapter')
         headers = {
@@ -167,7 +188,7 @@ class Claude:
         uncertain = method != 'GET'
         try:
             async with self._client.stream(
-                method, path, json=body, params=params, headers=headers
+                method, path, json=body, params=params, headers=headers, files=files, data=data
             ) as reply:
                 if reply.status_code >= 300:
                     code = {
@@ -185,6 +206,8 @@ class Claude:
                     raw.extend(chunk)
                     if len(raw) > MAX_RESPONSE:
                         raise ProviderError('provider_response_too_large', uncertain=uncertain)
+            if binary:
+                return bytes(raw)
             value = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError()
@@ -193,6 +216,25 @@ class Claude:
             raise ProviderError('provider_unavailable', uncertain=uncertain) from None
         except (ValueError, UnicodeError):
             raise ProviderError('invalid_provider_record', uncertain=uncertain) from None
+
+    async def thread_agent(self, session_id, thread_id):
+        """Provider-authenticated thread identity for the application's role ceiling."""
+        result = await self.request('GET', '/v1/sessions/' + identity(session_id)
+                                    + '/threads/' + identity(thread_id))
+        if (result.get('id') != thread_id or result.get('session_id') != session_id
+                or not isinstance(result.get('agent'), dict)):
+            raise ProviderError('invalid_provider_record')
+        return result
+
+    async def upload_skill(self, archive, display_name):
+        return await self.request('POST', '/v1/skills', data={'display_name': display_name},
+                                  files=[('files[]', ('hyprn.zip', archive, 'application/zip'))])
+
+    async def skill_content(self, skill_id, version):
+        if version == 'latest':
+            raise ProviderError('exact_skill_version_required')
+        return await self.request('GET', '/v1/skills/' + identity(skill_id) + '/versions/'
+                                  + identity(version) + '/content', binary=True)
 
     async def create_session(self, settings, conversation_id):
         return await self.request(
@@ -250,8 +292,13 @@ class Claude:
     async def ensure_tools(self, session_id, definitions):
         """Upgrade idle sessions in place. Preserve history, budget and multiagent policy."""
         path = '/v1/sessions/' + identity(session_id)
-        expected = custom_tools(definitions)
         current = await self.request('GET', path)
+        # Preserve only the reviewed built-in research toolset during catalogue refresh.
+        builtins = [item for item in current.get('agent', {}).get('tools', [])
+                    if item.get('type') != 'custom']
+        if builtins and builtins != research_tools():
+            raise ProviderError('provider_definition_drift')
+        expected = custom_tools(definitions) + builtins
         if current.get('agent', {}).get('tools') == expected:
             return
         if current.get('status') != 'idle':

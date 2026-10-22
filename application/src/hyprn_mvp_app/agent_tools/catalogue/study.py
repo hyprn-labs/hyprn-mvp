@@ -25,7 +25,8 @@ from ..projections import (
 )
 from ..spec import SURFACES, ToolError, ToolSpec
 
-SECTIONS = ('question', 'alternatives', 'criteria', 'assumptions', 'limits', 'open_questions')
+SECTIONS = ('question', 'alternatives', 'criteria', 'assumptions', 'limits',
+            'open_questions', 'deliverables')
 STATE = ('GET', '/api/1/studies/{study_id}/brief')
 VERSIONS = ('GET', '/api/1/studies/{study_id}/brief/versions')
 SAVE_DRAFT = ('POST', '/api/1/studies/{study_id}/brief/draft')
@@ -80,6 +81,12 @@ def content_projection(content, sections):
     """The brief content: alternatives and statements numbered, criteria at their priority;
     every item keeps its id and every text is the authors' (untrusted)."""
     projection = {}
+    if 'deliverables' in sections:
+        projection['deliverables'] = [
+            dict(ref('deliverable', item['deliverable_id'], item['statement']),
+                 kind=item['kind'])
+            for item in content.get('deliverables', [])
+        ]
     if 'question' in sections:
         texts = {'question': content['question'], 'scope': content['scope']}
         for key in ('original_question', 'elaboration'):
@@ -367,6 +374,7 @@ ITEM_IDS = {
     'assumptions': 'assumption_id',
     'limits': 'limit_id',
     'open_questions': 'question_id',
+    'deliverables': 'deliverable_id',
 }
 CONTENT_SCHEMA = {
     'type': 'object',
@@ -378,6 +386,14 @@ CONTENT_SCHEMA = {
     ),
     'properties': {
         'question': _TEXT,
+        'deliverables': _items(
+            32, ('kind', 'statement'),
+            {'deliverable_id': _UUID,
+             'kind': {'enum': ['assessment', 'interactive_exploration']},
+             'statement': _STATEMENT},
+            'Explicit requested outcomes. Interactive exploration requires checked joint '
+            'coverage before the answer can claim completion.',
+        ),
         'scope': _TEXT,
         'original_question': _CLAIM,
         'elaboration': _CLAIM,
@@ -434,7 +450,8 @@ CONTENT_SCHEMA = {
     },
 }
 EMPTY_CONTENT = dict(
-    schema_version='1',
+    schema_version='2',
+    deliverables=[],
     question='',
     original_question=None,
     elaboration=None,
@@ -457,6 +474,7 @@ def _merged(current, changes):
     """The current draft content with the given sections replaced; new items get an id and the
     optional texts and link lists of an item default to empty (never a number)."""
     content = dict(current)
+    content.update(schema_version='2', deliverables=current.get('deliverables', []))
     for key, value in changes.items():
         if key in ITEM_IDS:
             id_key = ITEM_IDS[key]

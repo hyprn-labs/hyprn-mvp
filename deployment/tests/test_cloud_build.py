@@ -1,5 +1,8 @@
 """Only committed, unchanged source can become a cloud Docker build context."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
+
 from pathlib import Path
 import json
 import subprocess

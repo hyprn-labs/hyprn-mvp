@@ -82,6 +82,27 @@ def save(e, revision, command=None):
     )
 
 
+def test_requested_deliverables_are_explicit_and_versioned(api):
+    e = api
+    requirement = dict(deliverable_id=uid(), kind='interactive_exploration',
+                       statement='Explore all declared input ranges together.')
+    body = content(schema_version='2', deliverables=[requirement])
+    written = draft(e, body)
+    assert written.status_code == 200, written.text
+    frozen = save(e, written.json()['data']['revision'])
+    assert frozen.status_code == 201, frozen.text
+    version = frozen.json()['data']['version']
+    assert version['schema_version'] == '2'
+    assert version['content']['deliverables'] == [requirement]
+    changed = draft(e, dict(body, deliverables=[]), frozen.json()['data']['draft']['revision'])
+    assert changed.status_code == 200, changed.text
+    retained = e['client'].get(path(e, '/versions/' + version['brief_version_id']))
+    assert retained.json()['data'] == version
+    invalid = draft(e, dict(body, deliverables=[requirement, requirement]),
+                    changed.json()['data']['revision'])
+    assert invalid.status_code == 422
+
+
 def test_a_new_study_has_no_brief_until_one_is_written(api):
     state = api['client'].get(path(api))
     assert state.status_code == 200, state.text

@@ -160,7 +160,8 @@ def test_corrupt_retained_data_is_explicit_partial_error(submission,kind):
     url=f'/api/1/studies/{sid}/runs/{rid}'
     aid=c.get(url).json()['data']['history']['artifacts'][0]['artifact_id']
     with store.connection(write=True) as db:
-        payload=json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
+        table = 'execution_operations' if kind in ('result','artifact') else 'outbox'
+        payload=json.loads(db.execute('SELECT payload FROM '+table+' WHERE run_id=?',(rid,)).fetchone()[0])
         if kind=='source':payload['bundle']['files']['model.json']=base64.b64encode(b'{}').decode()
         if kind=='missing_file':payload['bundle']['files'].pop('context.json')
         if kind=='request':payload['request']['scope']=uid()
@@ -168,7 +169,7 @@ def test_corrupt_retained_data_is_explicit_partial_error(submission,kind):
         if kind=='result':payload['history']['results']={'outputs':[0]}
         if kind=='artifact':payload['history']['artifacts'][0]['bytes']='Zm9yZ2Vk'
         if kind=='snapshot':payload['frozen']['configuration']['inputs'][0]['value']=0
-        db.execute('UPDATE outbox SET payload=? WHERE run_id=?',(json.dumps(payload),rid))
+        db.execute('UPDATE '+table+' SET payload=? WHERE run_id=?',(json.dumps(payload),rid))
     detail=c.get(url).json()['data']['history']
     assert detail['errors']==[dict(code='corrupt_retained_record',partial=True)]
     assert detail['results'] is None and detail['configuration'] is None

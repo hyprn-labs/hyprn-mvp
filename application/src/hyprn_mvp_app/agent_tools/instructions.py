@@ -14,7 +14,7 @@ LINES = (
     'Use only these tools to read or change HYPRN MVP; never read its data stores, logs or '
     'source code, call its HTTP API directly, or run container or deployment commands.',
     'Tool categories (search for HYPRN MVP tools by these words): orient and read, brief, '
-    'model, evidence, configurations and runs, conclusion, progress notes and issue reports.',
+    'model, evidence, configurations and runs, conclusion.',
     'Start with get_study_overview, then get_playbook("workflow"). Before you write in an '
     'area, load its section: brief, evidence, model, configuration_and_runs or conclusion.',
     'A study holds a question and brief, models, evidence, configurations, runs and one '
@@ -22,8 +22,8 @@ LINES = (
     'Do what the user asked; ask before adding studies, sweeps or records beyond the plan you '
     'stated.',
     'Write study text for engineers: full sentences, SI units, no ids, URLs, raw JSON, run '
-    'status or platform problems. Use post_progress_note for status and report_platform_issue '
-    'for platform problems.',
+    'status or platform problems. The runtime shows progress; explain blockers in the '
+    'conversation.',
     'Never invent physical values; never treat a missing output as zero.',
     'Your changes are saved directly, attributed to you and listed for the user. Draft content '
     'changes only from your last read: pass its revision_token as expected_revision. You never '

@@ -66,7 +66,16 @@ def content_projection(content):
                 description=untrusted('component description', text=item['description']),
                 limits=untrusted('component limits', text=item['limits']),
             ) for item in content['component_details']]}
-           if content['schema_version'] == '2' else {}),
+           if content['schema_version'] in ('2', '3') else {}),
+        **({'monetary_quantities': [
+            dict(instance_id=item['instance_id'], port_id=item['port_id'],
+                 catalogue_expression=item['catalogue_expression'],
+                 price_year=item['price_year'],
+                 economic_basis=untrusted('economic basis', text=item['economic_basis']),
+                 evidence_version_ids=[link['evidence_version_id']
+                                       for link in item['evidence_links']])
+            for item in content['monetary_quantities']
+        ]} if content['schema_version'] == '3' else {}),
         'explanation': untrusted('model explanation', text={key: content[key] for key in TEXTS}),
         'components': [
             dict(
@@ -269,6 +278,26 @@ CONTENT_SCHEMA = {
 }
 
 
+CONTENT_SCHEMA['properties']['monetary_quantities'] = dict(
+    type='array', maxItems=1000, items=dict(
+        type='object', additionalProperties=False,
+        required=['instance_id', 'port_id', 'catalogue_expression', 'price_year',
+                  'economic_basis', 'evidence_links'],
+        properties=dict(
+            instance_id=dict(type='string', format='uuid', maxLength=36),
+            port_id=dict(type='string', format='uuid', maxLength=36),
+            catalogue_expression=dict(type='string', minLength=1, maxLength=64),
+            price_year=dict(type='integer', minimum=1800, maximum=9999),
+            economic_basis=dict(type='string', minLength=1, maxLength=4096),
+            evidence_links=CONTENT_SCHEMA['properties']['evidence_links'],
+        ),
+    ),
+    description='Exact monetary expression selected from the units catalogue, price year, '
+                'economic basis and evidence for each exact model quantity. '
+                'No automatic currency, inflation or denominator conversion is performed.',
+)
+
+
 def _components(items):
     """Each component explanation names exactly the id its kind needs."""
     components = []
@@ -317,9 +346,13 @@ async def update_model_explanation(arguments, ctx):
     if 'components' in changes:
         changes['components'] = _components(changes['components'])
     if 'limits' in changes or 'component_details' in changes:
-        content = dict(content, schema_version='2',
+        content = dict(content, schema_version=max(content['schema_version'], '2'),
                        limits=content.get('limits', ''),
                        component_details=content.get('component_details', []))
+    if 'monetary_quantities' in changes:
+        content = dict(content, schema_version='3', limits=content.get('limits', ''),
+                       component_details=content.get('component_details', []),
+                       monetary_quantities=content.get('monetary_quantities', []))
     content.update(changes)
     body = {'command_id': command_id(ctx), 'expected_revision': expected, 'content': content}
     saved = (

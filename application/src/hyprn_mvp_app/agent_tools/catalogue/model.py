@@ -1035,10 +1035,10 @@ async def create_model(arguments, ctx):
 
 
 async def _edit_format(ctx, model):
-    """The model edit request format: 4 wherever the service advertises it, since a format 4
-    edit upgrades an earlier draft and only a format 4 model version can be configured; a
-    format 4 draft keeps format 4; otherwise format 3."""
+    """Negotiate the current typed format without downgrading an existing draft."""
     formats = (await read(ctx, '/api/1/capabilities'))['data']['model_formats']['edit_request']
+    if '5' in formats or model.get('schema_version') == '5':
+        return '5'
     return '4' if '4' in formats or model.get('schema_version') == '4' else '3'
 
 

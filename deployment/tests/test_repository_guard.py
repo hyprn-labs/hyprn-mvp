@@ -1263,8 +1263,11 @@ class BrowserSpecRegistryTests(unittest.TestCase):
         self.assertEqual(sorted(present - set(registered)), [], 'browser specs selected by no group')
         self.assertEqual(sorted(set(registered) - present), [], 'registered browser specs that do not exist')
 
-    def test_opt_in_groups_are_the_served_and_fidelity_groups(self):
-        self.assertEqual(runner.OPT_IN_GROUPS, {'ui-served', 'ui-fidelity'})
+    def test_opt_in_groups_require_external_installation_or_reviewed_artifacts(self):
+        self.assertEqual(runner.OPT_IN_GROUPS, {
+            'ui-served', 'ui-fidelity', 'hosted-artifact', 'hosted-native-installed',
+            'hosted-app-installed', 'platform-backup-set',
+        })
         for group in runner.OPT_IN_GROUPS:
             self.assertEqual(runner.group_class(group), 'opt-in')
             self.assertNotIn(group, runner.must_pass_groups())
@@ -1272,6 +1275,19 @@ class BrowserSpecRegistryTests(unittest.TestCase):
         self.assertEqual(runner.group_needs('ui-fidelity'), ('browser',))
         self.assertEqual(runner.group_class('ui-reading'), 'must-pass')
         self.assertIn('installation', runner.NEEDS)
+
+    def test_hosted_artifact_groups_refuse_missing_inputs_before_allocation(self):
+        groups = ('platform-backup-set', 'hosted-native-installed',
+                  'hosted-artifact', 'hosted-app-installed')
+        for group in groups:
+            with self.subTest(group=group), patch.dict(os.environ, {}, clear=True), \
+                    patch.object(runner, 'require_environment'), \
+                    patch.object(fixture, 'allocate_scope') as allocate, \
+                    patch.object(runner.subprocess, 'run') as spawned:
+                with self.assertRaises(ValueError):
+                    runner.run_group(group)
+                allocate.assert_not_called()
+                spawned.assert_not_called()
 
     def test_fidelity_group_refuses_without_reference_images(self):
         empty = self.scope.root / 'tmp' / ('fidelity-' + uuid4().hex)
@@ -1290,7 +1306,8 @@ class BrowserSpecRegistryTests(unittest.TestCase):
         inside.write_text('synthetic\n')
         cases = (
             ({}, 'environment absent: installation'),
-            ({runner.UI_BASE_URL: 'http://127.0.0.1:' + str(max(live_fence.LIVE_PORTS)), runner.UI_PASSWORD_FILE: str(password)},
+            ({runner.UI_BASE_URL: 'http://127.0.0.1:19110', runner.UI_PASSWORD_FILE: str(password),
+              'HYPRN_MVP_LIVE_PORTS': '19110'},
              'live URLs denied'),
             ({runner.UI_BASE_URL: 'http://example.invalid:19000', runner.UI_PASSWORD_FILE: str(password)}, 'loopback'),
             ({runner.UI_BASE_URL: 'http://127.0.0.1:19111', runner.UI_PASSWORD_FILE: str(password),
@@ -1349,15 +1366,28 @@ class PythonTestModuleRegistryTests(unittest.TestCase):
                                 capture_output=True, check=True, timeout=120).stdout.decode().split('\0')
         return {path for path in listed if path and re.fullmatch(r'(?:[^/]+/)+tests/test_[^/]+\.py', path)}
 
-    def test_every_tracked_python_test_module_runs_in_a_must_pass_group_or_is_retired(self):
+    def test_every_tracked_python_test_module_has_required_or_explicit_artifact_coverage(self):
         tracked = self.tracked_test_modules()
         self.assertTrue(tracked)
         registered = runner.python_test_modules()
         must_pass = {path for path, groups in registered.items()
                      if any(runner.group_class(group) == 'must-pass' for group in groups)}
+        # These acceptance journeys require separately built/reviewed release artifacts
+        # or the sibling platform checkout. They remain runnable, never retired or skipped.
+        artifact_groups = {
+            'deployment/tests/test_hosted_artifact.py': 'hosted-artifact',
+            'deployment/tests/test_hosted_native_installed.py': 'hosted-native-installed',
+            'deployment/tests/test_hosted_app_installed.py': 'hosted-app-installed',
+            'deployment/tests/test_platform_backup_set.py': 'platform-backup-set',
+        }
+        for path, group in artifact_groups.items():
+            with self.subTest(artifact_module=path):
+                self.assertIn(path, tracked)
+                self.assertEqual(set(registered[path]), {group})
+                self.assertEqual(runner.group_class(group), 'opt-in')
         retired = set(runner.RETIRED_TEST_MODULES)
-        self.assertEqual(sorted(tracked - must_pass - retired), [],
-                         'tracked test modules that no must-pass group runs and that are not retired')
+        self.assertEqual(sorted(tracked - must_pass - retired - artifact_groups.keys()), [],
+                         'test modules without required, exact artifact, or retired coverage')
         self.assertEqual(sorted(set(registered) - tracked), [], 'group targets that are not tracked test modules')
 
     def test_retired_test_modules_are_closed_tracked_and_never_group_targets(self):
@@ -1721,6 +1751,14 @@ class LiveFenceTests(unittest.TestCase):
                              ('test_term_scan.py', "unittest_module_hooks('unit')"),
                              ('test_findings_native_guards.py', "unittest_module_hooks('unit')"),
                              ('test_units_fixture_guards.py', "unittest_module_hooks('baseline')"),
+                             *((name, "unittest_module_hooks('unit')") for name in (
+                                 'test_cloud_build.py', 'test_hosted_backup.py',
+                                 'test_cloud_native_bundle.py', 'test_cloud_execution_config.py',
+                                 'test_cloud_native_owner.py', 'test_platform_backup_set.py')),
+                             *((name, "unittest_module_hooks('baseline')") for name in (
+                                 'test_hosted_lifecycle.py', 'test_cloud_owner_schemas.py',
+                                 'test_hosted_native_installed.py', 'test_hosted_app_installed.py',
+                                 'test_hosted_artifact.py')),
                              *((name, "pytest_fixture('baseline')") for name in (
                                  'test_native_journey.py', 'test_units_native.py', 'test_approach_native.py',
                                  'test_assumptions_evidence_journey.py', 'test_investigation_native.py',

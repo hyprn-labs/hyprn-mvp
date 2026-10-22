@@ -96,7 +96,7 @@ class ScalarCalculation(CalcJob):
                 }
                 if bundle_layout(manifest) == '2':
                     expected = {}
-                elif bundle_layout(manifest) in ('3', '4', '5', '6', '8', '9', '11'):
+                elif bundle_layout(manifest) in ('3', '4', '5', '6', '8', '9', '11', '12'):
                     descriptor = manifest['result_dependencies']
                     with repository.open('result-dependencies.json', mode='rb') as stream:
                         raw = stream.read(min(descriptor['size'], MAX_BYTES) + 1)
@@ -116,7 +116,7 @@ class ScalarCalculation(CalcJob):
                     raise ValueError('Upstream inputs differ from frozen dependency mapping')
                 if inputs['metadata'].get('disable_cache') is not True:
                     raise ValueError('Fresh execution requires disabled cache')
-                if bundle_layout(manifest) in ('2', '3', '4', '5', '6', '8', '9', '11'):
+                if bundle_layout(manifest) in ('2', '3', '4', '5', '6', '8', '9', '11', '12'):
                     files = {}
                     total = 0
                     if not 0 < len(manifest['files']) <= 2000:
@@ -377,7 +377,7 @@ class NativeExecution:
             if bundle_layout(manifest) == '1':
                 bundle = retained_bundle(repository, request)  # Historical data only.
             else:
-                if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9', '11'):
+                if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9', '11', '12'):
                     raise ValueError('Unsupported source bundle')
                 files = {}
                 total = 0
@@ -553,7 +553,7 @@ class NativeExecution:
                 raise ValueError('Closed independent run required')
             bundle, request = item['bundle'], item['request']
             execution_wall_seconds(item['wall_seconds'])
-            if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9', '11'):
+            if bundle_layout(bundle['manifest']) not in ('2', '3', '4', '5', '6', '8', '9', '11', '12'):
                 raise ValueError('Unsupported bundle version; create a new run command')
             if (set(request) != REQUEST_KEYS
                     or request['bundle_digest'] != bundle['manifest']['bundle_digest']

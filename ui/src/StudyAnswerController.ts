@@ -12,16 +12,23 @@ import type {
   Calculation4,
   CalculationVersionRead4,
   Diagnostic,
-  StudyAnswerContent2,
-  StudyAnswerContentRead2,
-  StudyAnswerStateRead2,
-  StudyAnswerVersionRead2,
-  StudyBriefVersion1,
+  StudyAnswerContent3,
+  StudyAnswerContentRead3,
+  StudyAnswerStateRead3,
+  StudyAnswerVersionRead3,
+  StudyBriefVersionRead2,
 } from './contract';
 import type { EditorGuard } from './workspaceModel';
 
-export const emptyAnswer = (): StudyAnswerContent2 => ({
-  schema_version: '2',
+export const emptyAnswer = (): StudyAnswerContent3 => ({
+  schema_version: '3',
+  completion: { state: 'interim', deliverables: [] },
+  scientific_review: {
+    brief_fidelity: { state: 'unassessed', explanation: '' },
+    source_basis: { state: 'unassessed', explanation: '' },
+    physical_validity: { state: 'unassessed', explanation: '' },
+    sensitivity: { state: 'unassessed', explanation: '' },
+  },
   brief_version_id: null,
   alternative_mappings: [],
   comparison: [],
@@ -36,12 +43,15 @@ export const emptyAnswer = (): StudyAnswerContent2 => ({
 });
 
 /** Historical saved versions keep their bytes; only an editing/reading copy is adapted. */
-export function currentAnswer(content: StudyAnswerContentRead2): StudyAnswerContent2 {
-  if (content.schema_version === '2') return structuredClone(content);
+export function currentAnswer(content: StudyAnswerContentRead3): StudyAnswerContent3 {
+  if (content.schema_version === '3') return structuredClone(content);
+  if (content.schema_version === '2')
+    return { ...emptyAnswer(), ...structuredClone(content), schema_version: '3' };
   const old = content.interpretation;
   return {
+    ...emptyAnswer(),
     ...structuredClone(content),
-    schema_version: '2',
+    schema_version: '3',
     comparison: content.comparison.map((cell) => ({ ...cell, output_name: null })),
     interpretation: {
       interpretation: [old.observations, old.interpretation, old.qualifications]
@@ -61,7 +71,7 @@ export function currentAnswer(content: StudyAnswerContentRead2): StudyAnswerCont
  * alternatives and criteria), the study's calculations with their latest versions, and the
  * study's evidence. */
 export type AnswerReferences = {
-  briefVersions: StudyBriefVersion1[];
+  briefVersions: StudyBriefVersionRead2[];
   calculations: Calculation4[];
   calculationVersions: CalculationVersionRead4[];
   evidence: EvidenceRecord[];
@@ -70,8 +80,8 @@ export type AnswerReferences = {
 /** The content to save, or the first problem in the form's own words. Cells' evaluations are
  * cleared: the application fills them from the cited runs. */
 export function answerContent(
-  form: StudyAnswerContent2,
-): { content: StudyAnswerContent2 } | { problem: string } {
+  form: StudyAnswerContent3,
+): { content: StudyAnswerContent3 } | { problem: string } {
   for (const [index, item] of form.justifications.entries())
     if (!item.reason.trim()) return { problem: `Justification ${index + 1}: enter the reason.` };
   for (const [index, item] of form.decisive_uncertainties.entries())
@@ -86,12 +96,12 @@ export function answerContent(
 export type StudyAnswerControllerState = {
   studyId: string | null;
   status: 'idle' | 'loading' | 'ready' | 'working' | 'stale' | 'uncertain' | 'error';
-  server: StudyAnswerStateRead2 | null;
+  server: StudyAnswerStateRead3 | null;
   /** Saved versions, newest first. */
-  versions: StudyAnswerVersionRead2[];
+  versions: StudyAnswerVersionRead3[];
   references: AnswerReferences;
   /** The editing copy; null while the answer is only read. */
-  local: StudyAnswerContent2 | null;
+  local: StudyAnswerContent3 | null;
   error: string;
   diagnostics: Diagnostic[];
   /** Confirmed access loss with unsaved edits: nothing read from the server is kept; the
@@ -249,7 +259,7 @@ export class StudyAnswerController {
     });
   }
   private async versionsOf(studyId: string, signal?: AbortSignal) {
-    const versions: StudyAnswerVersionRead2[] = [];
+    const versions: StudyAnswerVersionRead3[] = [];
     let before: number | undefined;
     do {
       const page = await this.api.studyAnswerVersions(studyId, before, signal);
@@ -263,7 +273,7 @@ export class StudyAnswerController {
     signal?: AbortSignal,
     answers = this.state.versions,
   ): Promise<AnswerReferences> {
-    const briefVersions: StudyBriefVersion1[] = [];
+    const briefVersions: StudyBriefVersionRead2[] = [];
     let before: number | undefined;
     do {
       const page = await this.api.briefVersions(studyId, before, signal);
@@ -336,7 +346,7 @@ export class StudyAnswerController {
       if (valid()) await this.failed(error);
     }
   };
-  edit = (form: StudyAnswerContent2) => {
+  edit = (form: StudyAnswerContent3) => {
     if (this.busy || this.command || this.api.pending || !this.state.local || this.state.accessLost)
       return;
     this.update({ local: structuredClone(form), error: '', status: 'ready' });

@@ -9,6 +9,10 @@ An explicit scalar input with its unit, state and provenance: the building block
 - **Compact.** Inside a labelled table, `compact` keeps the input's accessible label, the unassigned placeholder and the invalid state and message, but drops the repeated label and tag above the input. Zero is then explained once beneath the table, so rows keep an even height.
 - Read-only fields keep exact values. Configuration tables retain their full input/provenance rows and scroll naturally. Numeric configuration fields align right in both editable and read-only states; saved fields retain their sunken surface.
 
+Catalogue unit editors and their labels use shrinkable grid tracks. A native input’s
+intrinsic width must not enlarge or overflow its table cell; the surrounding table
+owns horizontal scrolling at narrow widths and browser zoom.
+
 The shared label/input gap and field spacing come from Foundry. Errors are associated with aria-describedby and aria-invalid; disabled controls preserve visible reason text. Local appearance choices use SettingsSection/Select and never mutate scientific values. Wrapped labels and coarse-pointer control targets remain readable in both themes.
 
 ## Narrative form fields

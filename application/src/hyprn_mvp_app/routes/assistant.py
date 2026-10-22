@@ -15,16 +15,19 @@ def router(deps):
     Actor = Annotated[str, Depends(deps.actor)]
     r = APIRouter()
 
-    def scope(request, who, study_id):
+    def scope(request, who, study_id, allowed=()):
         sid = valid_id(study_id)
-        if request.query_params or deps.current_session(request)['kind'] != 'user':
+        if deps.current_session(request)['kind'] != 'user':
             raise DomainError('forbidden', 403)
+        pairs = list(request.query_params.multi_items())
+        if any(key not in allowed for key, _ in pairs) or len(pairs) != len(dict(pairs)):
+            raise DomainError('invalid_request', 400)
         with deps.store.connection() as db:
             deps.store.authorize(db, who, sid)
         return sid, request.app.state.assistant
 
     def result(request, value, status=200):
-        validate('AssistantConversationRead3', value)
+        validate('AssistantConversationRead4', value)
         return response(request, value, status)
 
     @r.get('/api/1/assistant/budget')
@@ -47,8 +50,12 @@ def router(deps):
 
     @r.get(BASE)
     async def assistant_conversation(study_id: str, request: Request, who: Actor):
-        sid, owner = scope(request, who, study_id)
-        return result(request, owner.read(who, sid))
+        sid, owner = scope(request, who, study_id, ('after', 'before'))
+        query = dict(request.query_params)
+        if len(query) > 1:
+            raise DomainError('invalid_request', 400)
+        cursors = {key: valid_id(value) for key, value in query.items()}
+        return result(request, owner.read(who, sid, **cursors))
 
     @r.post(BASE + '/messages', status_code=202)
     async def assistant_send(study_id: str, request: Request, who: Actor, body: dict = Body(...)):

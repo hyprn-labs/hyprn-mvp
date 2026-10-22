@@ -1,3 +1,4 @@
+import { criterionStatus, evaluationReasons } from './design';
 import { OpenLink } from './design';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { message, type HyprnMvpApi } from './api';
@@ -5,7 +6,7 @@ import type {
   CalculationRun1,
   CriterionEvaluation1,
   StudyAnswerCell2,
-  StudyAnswerContent2,
+  StudyAnswerContent3,
   StudyAnswerJustification1,
   StudyAnswerOutcome1,
 } from './contract';
@@ -26,6 +27,7 @@ import {
   ReadingStack,
   Button,
   FormActions,
+  FormField,
   Checkbox,
   DataTable,
   Panel,
@@ -36,7 +38,6 @@ import {
   TextInput,
   VersionSelect,
   formatNumber,
-  type Tone,
 } from './design';
 import { requirement } from './AnalysisResults';
 import { unitLabel } from './unitLabels';
@@ -45,6 +46,12 @@ import { AnswerExplorationBasis } from './AnswerExplorationBasis';
 import type { WorkspaceLink } from './workspaceModel';
 
 const short = (id: string) => id.slice(0, 8);
+const reviewLabels = {
+  brief_fidelity: 'Fit to the question',
+  source_basis: 'Source checks',
+  physical_validity: 'Physical limits',
+  sensitivity: 'Sensitivity',
+} as const;
 
 /** Names of the records an answer cites, from the references read with it. */
 function names(refs: AnswerReferences, briefVersionId: string | null) {
@@ -69,18 +76,6 @@ function names(refs: AnswerReferences, briefVersionId: string | null) {
   };
 }
 
-/** Why a criterion reads as it does for a run, in the reader's words. */
-const evaluationReasons: Record<CriterionEvaluation1['reason'], string> = {
-  threshold_comparison: 'Compared with the threshold',
-  measured: 'Measured',
-  criterion_not_bound: 'Criterion not bound',
-  run_not_recorded: 'No results yet',
-  retained_record_invalid: 'Record could not be verified',
-  convergence_unresolved: 'Convergence unresolved',
-  required_output_unavailable: 'Output not computed',
-  invalid_criterion_or_units: 'Value or units invalid',
-};
-
 /** A cited run's criterion evaluation: shape, word and colour; the value with its units, or
  * "not computed". A cell saved but not yet evaluated says so. */
 function Evaluation({
@@ -95,14 +90,7 @@ function Evaluation({
     evaluation.value === null
       ? 'not computed'
       : formatNumber(evaluation.value) + ' ' + unitLabel(evaluation.units);
-  const [tone, word]: [Tone, string] =
-    evaluation.outcome === 'met'
-      ? ['ok', 'Met']
-      : evaluation.outcome === 'not_met'
-        ? ['alarm', 'Not met']
-        : evaluation.outcome === 'measured'
-          ? ['inert', 'Measured']
-          : ['advisory', 'Not evaluated'];
+  const [tone, word] = criterionStatus(evaluation.outcome);
   return (
     <span className="calculation-evaluation">
       <StatusTag tone={tone}>{word}</StatusTag>
@@ -131,7 +119,7 @@ function AnswerReader({
   studyId,
   onOpen,
 }: {
-  content: StudyAnswerContent2;
+  content: StudyAnswerContent3;
   refs: AnswerReferences;
   figure: ReactNode;
   studyId: string;
@@ -162,6 +150,9 @@ function AnswerReader({
         : 'calculations';
   return (
     <ReadingStack>
+      <StatusTag tone={content.completion.state === 'complete' ? 'ok' : 'advisory'}>
+        {content.completion.state === 'complete' ? 'Requested work complete' : 'Interim answer'}
+      </StatusTag>
       <Panel
         label="Conclusion"
         title="Conclusion"
@@ -211,6 +202,24 @@ function AnswerReader({
         )}
       </Panel>
       {figure}
+      {Object.values(content.scientific_review).some((item) => item.explanation) && (
+        <ReadingSection aria-label="Scientific review">
+          <SectionHeader level={3} title="Scientific review" help="scientificReview" />
+          <ReadingStack>
+            {Object.entries(reviewLabels).map(([key, title]) => {
+              const item = content.scientific_review[key as keyof typeof reviewLabels];
+              return (
+                item.explanation && (
+                  <ReadingSection key={key} aria-label={title}>
+                    <h4>{title}</h4>
+                    <p className="context-copy">{item.explanation}</p>
+                  </ReadingSection>
+                )
+              );
+            })}
+          </ReadingStack>
+        </ReadingSection>
+      )}
       <ReadingSection aria-label="Alternatives comparison">
         <SectionHeader level={3} title="Alternatives comparison" help="answerComparison" />
         <DataTable
@@ -267,6 +276,15 @@ function AnswerReader({
                             : formatNumber(cell.evaluation.value) +
                               ' ' +
                               unitLabel(cell.evaluation.units)}
+                          {cell.monetary_basis && (
+                            <span
+                              className="hf-field-hint"
+                              title={cell.monetary_basis.economic_basis}
+                            >
+                              {' · '}
+                              {cell.monetary_basis.price_year} prices
+                            </span>
+                          )}
                         </td>
                         <td>
                           {criterion ? (
@@ -442,7 +460,7 @@ function CellAdder({
 }: {
   api: HyprnMvpApi;
   studyId: string;
-  form: StudyAnswerContent2;
+  form: StudyAnswerContent3;
   refs: AnswerReferences;
   onAdd: (cell: StudyAnswerCell2) => void;
 }) {
@@ -480,13 +498,7 @@ function CellAdder({
   const evaluationWord = (r: CalculationRun1) => {
     const e = r.evaluations.find((x) => x.criterion_id === criterion);
     if (!e) return 'criterion not evaluated';
-    return e.outcome === 'met'
-      ? 'met'
-      : e.outcome === 'not_met'
-        ? 'not met'
-        : e.outcome === 'measured'
-          ? 'measured'
-          : 'not evaluated';
+    return criterionStatus(e.outcome)[1].toLowerCase();
   };
   return (
     <fieldset className="form-stack">
@@ -593,11 +605,11 @@ function AnswerEditor({
 }: {
   api: HyprnMvpApi;
   studyId: string;
-  form: StudyAnswerContent2;
+  form: StudyAnswerContent3;
   refs: AnswerReferences;
-  onChange: (form: StudyAnswerContent2) => void;
+  onChange: (form: StudyAnswerContent3) => void;
 }) {
-  const set = (patch: Partial<StudyAnswerContent2>) => onChange({ ...form, ...patch });
+  const set = (patch: Partial<StudyAnswerContent3>) => onChange({ ...form, ...patch });
   const n = names(refs, form.brief_version_id);
   const calculationVersions = refs.calculations.map((c) => c.latest_version.calculation_version_id);
   const [kind, setKind] = useState<JustificationKind>('calculation_version');
@@ -667,6 +679,108 @@ function AnswerEditor({
           ))}
         </Select>
       </label>
+      <ReadingSection tone="sunken" aria-label="Completion">
+        <FormField label="Answer status">
+          <Select
+            aria-label="Answer status"
+            value={form.completion.state}
+            onChange={(e) =>
+              set({
+                completion: {
+                  ...form.completion,
+                  state: e.target.value as 'interim' | 'complete',
+                },
+              })
+            }
+          >
+            <option value="interim">Interim answer</option>
+            <option value="complete">Requested work complete</option>
+          </Select>
+        </FormField>
+        {(n.brief?.content.schema_version === '2' ? n.brief.content.deliverables : []).map(
+          (item) => {
+            const assessment = form.completion.deliverables.find(
+              (value) => value.deliverable_id === item.deliverable_id,
+            ) ?? {
+              deliverable_id: item.deliverable_id,
+              state: 'pending' as const,
+              explanation: '',
+            };
+            const change = (patch: Partial<typeof assessment>) =>
+              set({
+                completion: {
+                  ...form.completion,
+                  deliverables: [
+                    ...form.completion.deliverables.filter(
+                      (value) => value.deliverable_id !== item.deliverable_id,
+                    ),
+                    { ...assessment, ...patch },
+                  ],
+                },
+              });
+            return (
+              <ReadingSection key={item.deliverable_id} aria-label={item.statement}>
+                <FormField label={item.statement}>
+                  <Select
+                    aria-label={item.statement}
+                    value={assessment.state}
+                    onChange={(e) => change({ state: e.target.value as typeof assessment.state })}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="fulfilled">Fulfilled</option>
+                    <option value="unavailable">Unavailable</option>
+                  </Select>
+                </FormField>
+                <FormField label="Assessment">
+                  <TextArea
+                    aria-label={`Assessment: ${item.statement}`}
+                    value={assessment.explanation}
+                    maxLength={4096}
+                    onChange={(e) => change({ explanation: e.target.value })}
+                  />
+                </FormField>
+              </ReadingSection>
+            );
+          },
+        )}
+      </ReadingSection>
+      <ReadingSection tone="sunken" aria-label="Scientific review">
+        <SectionHeader level={3} title="Scientific review" help="scientificReview" />
+        {Object.entries(reviewLabels).map(([key, title]) => {
+          const aspect = key as keyof typeof reviewLabels;
+          const item = form.scientific_review[aspect];
+          const change = (patch: Partial<typeof item>) =>
+            set({
+              scientific_review: {
+                ...form.scientific_review,
+                [aspect]: { ...item, ...patch },
+              },
+            });
+          return (
+            <ReadingSection key={key} aria-label={title}>
+              <FormField label={title}>
+                <Select
+                  aria-label={title}
+                  value={item.state}
+                  onChange={(e) => change({ state: e.target.value as typeof item.state })}
+                >
+                  <option value="unassessed">Not assessed</option>
+                  <option value="checked">Checked</option>
+                  <option value="limited">Limited</option>
+                </Select>
+              </FormField>
+              <FormField label="Checks and remaining limits">
+                <TextArea
+                  aria-label={`Checks: ${title}`}
+                  value={item.explanation}
+                  maxLength={4096}
+                  onChange={(e) => change({ explanation: e.target.value })}
+                />
+              </FormField>
+            </ReadingSection>
+          );
+        })}
+      </ReadingSection>
       <fieldset className="form-stack">
         <legend>Alternatives and their analyses</legend>
         {!form.alternative_mappings.length && (

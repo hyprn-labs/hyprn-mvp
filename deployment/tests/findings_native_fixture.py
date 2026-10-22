@@ -226,8 +226,11 @@ def processes():
 
 def validate_original_payloads(records):
     with readonly(ORIGINAL.root/'artifacts/combined.sqlite') as connection:
+        split = connection.execute("SELECT 1 FROM sqlite_master WHERE name='execution_operations'").fetchone()
         for item in records:
-            row = connection.execute('SELECT state,payload FROM outbox WHERE run_id=?', (item['run_id'],)).fetchone()
+            row = connection.execute(
+                'SELECT x.state,o.payload FROM outbox o JOIN execution_operations x USING(run_id) WHERE o.run_id=?'
+                if split else 'SELECT state,payload FROM outbox WHERE run_id=?', (item['run_id'],)).fetchone()
             if row is None or row[0] != 'recorded' or sha(row[1].encode()) != item['payload_sha256']:
                 raise ValueError('Original outbox bytes/state changed')
             association = connection.execute('SELECT study_id,configuration_revision_id,store_uuid,process_uuid FROM run_associations WHERE run_id=?', (item['run_id'],)).fetchone()
@@ -280,7 +283,10 @@ def reconciliation_records(journal, additions):
     records = []
     with readonly(ORIGINAL.root/'native/database.sqlite') as native, readonly(ORIGINAL.root/'artifacts/combined.sqlite') as app:
         app.row_factory = sqlite3.Row
-        outbox = app.execute('SELECT state,payload FROM outbox WHERE run_id=?', (request['run_id'],)).fetchone()
+        split = app.execute("SELECT 1 FROM sqlite_master WHERE name='execution_operations'").fetchone()
+        outbox = app.execute(
+            'SELECT x.state,o.payload FROM outbox o JOIN execution_operations x USING(run_id) WHERE o.run_id=?'
+            if split else 'SELECT state,payload FROM outbox WHERE run_id=?', (request['run_id'],)).fetchone()
         association = app.execute('SELECT * FROM run_associations WHERE run_id=?', (request['run_id'],)).fetchone()
         if outbox is None or association is None:
             return records
@@ -851,8 +857,9 @@ class NativeContinuation:
         return orm.QueryBuilder(backend=self.backend).append(orm.CalcJobNode).count()
 
     def payload(self,rid):
+        from hyprn_mvp_app.history import run_association
         with self.store.connection() as db:
-            return json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
+            return json.loads(run_association(db,rid)['payload'])
 
     def request(self,method,path,body=None,status=200):
         if self.read_only and method!='GET': require_write('public scientific command')

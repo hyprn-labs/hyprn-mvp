@@ -2,11 +2,11 @@ import { useEffect, useState, useId } from 'react';
 import { Button, FieldHint, Select, TextInput } from './design';
 import { HyprnMvpApi, message } from './api';
 import { evidenceAccessLost } from './EvidenceView';
-import type { UnitCatalog1 } from './contract';
+import type { UnitCatalog2 } from './contract';
 import { type UnitDraft, unitDeclaration } from './unitLabels';
 
 export function useUnitCatalog(api: HyprnMvpApi, studyId: string, resource = '') {
-  const [catalog, setCatalog] = useState<UnitCatalog1 | null>(null);
+  const [catalog, setCatalog] = useState<UnitCatalog2 | null>(null);
   const [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const scope = studyId + '/' + api.actor + '/' + resource;
@@ -26,14 +26,14 @@ export type UnitGuidanceState = ReturnType<typeof useUnitCatalog>;
 export function UnitGuidance({guidance}: {guidance: UnitGuidanceState}) {
   return <>{guidance.loading && <p role="status">Loading unit guidance…</p>}{guidance.error && <div role="alert"><p>{guidance.error}</p><Button onClick={guidance.retry}>Retry unit guidance</Button></div>}</>;
 }
-type Props = { label: string; value: UnitDraft; onChange: (value: UnitDraft) => void; catalog: UnitCatalog1 | null; disabled?: boolean; resolvedOnly?: boolean };
+type Props = { label: string; value: UnitDraft; onChange: (value: UnitDraft) => void; catalog: UnitCatalog2 | null; disabled?: boolean; resolvedOnly?: boolean };
 export function UnitEditor({label,value,onChange,catalog,disabled,resolvedOnly=false}: Props) {
   const suggestions = useId(), hint = useId();
   let error = '';
   if (catalog && value.kind === 'physical') { try { unitDeclaration(value,catalog); } catch (e) { error = message(e); } }
   return <div className="hf-unit-editor">
     <label>Units<Select aria-label={label} disabled={disabled || !catalog} value={value.kind} onChange={e => onChange(e.target.value === 'physical' ? {kind:'physical',expression:''} : e.target.value === 'dimensionless' ? {kind:'dimensionless'} : {kind:'unspecified'})}>
-      <option value="unspecified" disabled={resolvedOnly}>Not specified</option><option value="dimensionless">Dimensionless</option><option value="physical">Physical units</option>
+      <option value="unspecified" disabled={resolvedOnly}>Not specified</option><option value="dimensionless">Dimensionless</option><option value="physical">Named units</option>
     </Select></label>
     {value.kind === 'physical' && <><label>Unit symbol<TextInput aria-label={label+' spelling'} list={suggestions} aria-describedby={hint} value={value.expression} maxLength={64} disabled={disabled} aria-invalid={!!error} onChange={e => onChange({kind:'physical',expression:e.target.value})}/></label>
       <datalist id={suggestions}>{catalog?.supported_units.map(unit=><option key={unit} value={unit}/>)}</datalist><FieldHint id={hint}>Choose a unit from the suggestions.</FieldHint></>}

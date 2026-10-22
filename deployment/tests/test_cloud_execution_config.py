@@ -1,5 +1,8 @@
 """Execution selection cannot silently borrow a local installation's identity."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
+
 import json
 import os
 from pathlib import Path

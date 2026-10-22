@@ -146,3 +146,93 @@ def test_server_instructions_equal_the_tooling_specification_text():
     block = section.split('```text\n', 1)[1].split('\n```', 1)[0]
     assert SERVER_INSTRUCTIONS == block
     assert str(len(SERVER_INSTRUCTIONS)) in section.replace(',', '')
+
+
+def test_every_guided_tool_has_a_callable_offer_on_each_supported_writer_surface():
+    """Guidance cannot send an agent to a registered placeholder or a missing tool."""
+    for surface in SURFACES:
+        offered = {
+            tool.name: tool
+            for tool in REGISTRY.offered(surface, 'runs', {'read', 'draft', 'record', 'submit'})
+        }
+        for section in playbook.SECTIONS:
+            for name in section.tools:
+                assert name in offered, (surface, section.name, name)
+                assert callable(offered[name].handler), (surface, section.name, name)
+        # Reviewer sessions can read guidance without acquiring the actions it describes.
+        readers = {
+            tool.name for tool in REGISTRY.offered(surface, 'runs', {'read'})
+        }
+        assert 'get_playbook' in readers
+        assert not {'launch_analysis', 'update_study_answer', 'edit_model'} & readers
+
+
+def test_guided_scientific_lifecycle_can_be_expressed_by_offered_tool_schemas():
+    """Validate the cross-tool pins and new scientific fields against real input contracts."""
+    from jsonschema import Draft202012Validator
+
+    pin = '00000000-0000-4000-8000-000000000001'
+    calls = {
+        'launch_analysis': {'calculation_version_id': pin},
+        'get_analysis_execution': {'calculation_version_id': pin, 'wait_seconds': 20},
+        'get_surrogate': {'estimate_id': pin},
+        'prepare_answer_exploration': {'estimate_id': pin, 'outputs': ['Balance.result']},
+        'get_answer_exploration': {'estimate_id': pin},
+        'predict_answer': {
+            'estimate_id': pin,
+            'inputs': [{'quantity': 'Balance.load', 'value': 3.0, 'unit': 'kW'}],
+            'axis': 'Balance.load',
+            'curve_points': 5,
+        },
+    }
+    for name, arguments in calls.items():
+        tool = REGISTRY.tool(name)
+        Draft202012Validator(tool.input_schema).validate(arguments)
+        assert tool.api_operations, name
+    brief = REGISTRY.tool('update_study_brief').input_schema['properties']['content']['properties']
+    answer = REGISTRY.tool('update_study_answer').input_schema['properties'][
+        'content'
+    ]['properties']
+    explanation = REGISTRY.tool('update_model_explanation').input_schema['properties'][
+        'content'
+    ]['properties']
+    assert 'deliverables' in brief
+    assert {'completion', 'scientific_review'} <= answer.keys()
+    money = explanation['monetary_quantities']['items']['properties']
+    required_money = {'catalogue_expression', 'price_year', 'economic_basis', 'evidence_links'}
+    assert required_money <= money.keys()
+    assert not {'currency', 'denominator', 'scale'} & money.keys()
+    excerpt = REGISTRY.tool('add_evidence').input_schema['properties']['source_excerpt']
+    Draft202012Validator(excerpt).validate({
+        'excerpt': 'A finite quoted source passage.',
+        'source_reference': 'Synthetic verification source, edition 1.',
+        'location': 'Section 2',
+        'explanation': 'Supports the stated boundary condition only.',
+    })
+
+
+def test_managed_skill_bundles_the_same_playbook_and_resolvable_references():
+    """The native skill is portable without repository access or a second guidance copy."""
+    import importlib.util
+    import io
+    import posixpath
+    import zipfile
+
+    path = REPO / 'deployment/managed_skill.py'
+    spec = importlib.util.spec_from_file_location('test_guidance_managed_skill', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    raw, manifest = module.bundle()
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        names = set(archive.namelist())
+        assert archive.read('hyprn/references/playbook.md').decode() == playbook.render_document()
+        for name in sorted(names):
+            if not name.endswith('.md'):
+                continue
+            text = archive.read(name).decode()
+            for target in re.findall(r'\]\(([^)]+)\)', text):
+                if target.startswith(('https://', 'http://', '#')):
+                    continue
+                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), target))
+                assert resolved in names, (name, target)
+    assert manifest['inputs'][playbook.SOURCE]

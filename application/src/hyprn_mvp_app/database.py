@@ -27,6 +27,35 @@ class DatabasePermissionDenied(RuntimeError):
 
 
 _actor = ContextVar('hyprn_database_actor', default=None)
+_analysis = ContextVar('hyprn_database_analysis', default=None)
+_analysis_child = ContextVar('hyprn_database_analysis_child', default=False)
+
+
+@contextmanager
+def analysis_scope(study_id, command_id):
+    """Private owner context for one accepted finite plan, never an HTTP credential.
+
+    PostgreSQL independently checks the retained receipt and current authority.
+    Application command admission additionally restricts exact member identities.
+    """
+    current = _analysis.get()
+    value = (study_id, command_id)
+    if current is not None and current != value:
+        raise ValueError('An accepted analysis scope cannot change')
+    token = _analysis.set(value)
+    try:
+        yield
+    finally:
+        _analysis.reset(token)
+
+
+@contextmanager
+def analysis_child_scope():
+    token = _analysis_child.set(True)
+    try:
+        yield
+    finally:
+        _analysis_child.reset(token)
 
 
 @contextmanager
@@ -301,6 +330,13 @@ class PostgreSQL:
                 db.execute('SET TRANSACTION READ ONLY')
             if not authentication and not background:
                 db.execute("SELECT set_config('hyprn.actor_id', ?, true)", (_actor.get() or '',))
+                if _analysis.get() is not None:
+                    study_id, command_id = _analysis.get()
+                    db.execute("SELECT set_config('hyprn.analysis_study', ?, true), "
+                               "set_config('hyprn.analysis_command', ?, true)",
+                               (study_id, command_id))
+                    db.execute("SELECT set_config('hyprn.analysis_child', ?, true)",
+                               ('true' if _analysis_child.get() else 'false',))
                 if write:
                     # The single writer serializes short write transactions. Domain
                     # CAS and receipts observe the prior accepted commit; no native
@@ -308,8 +344,13 @@ class PostgreSQL:
                     db.execute('SELECT pg_advisory_xact_lock(68272601)')
             yield db
             raw.commit()
-        except BaseException:
-            raw.rollback()
+        except BaseException as primary:
+            try:
+                raw.rollback()
+            except Exception as cleanup:
+                # Preserve the statement/commit failure. A lost transport during
+                # cleanup cannot establish whether a commit was acknowledged.
+                primary.add_note('Transaction rollback also failed: ' + type(cleanup).__name__)
             raise
 
     @contextmanager

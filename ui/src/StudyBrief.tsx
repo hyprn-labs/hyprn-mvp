@@ -11,7 +11,7 @@ import {
   type BriefForm,
   type CriterionForm,
 } from './BriefController';
-import type { StudyBriefContent1, StudyCriterion1 } from './contract';
+import type { StudyBriefContentRead2, StudyCriterion1 } from './contract';
 import { criterionOperators } from './criterionLabels';
 import {
   RecordDetails,
@@ -64,7 +64,7 @@ function BriefReader({
 }: {
   api: HyprnMvpApi;
   studyId: string;
-  content: StudyBriefContent1;
+  content: StudyBriefContentRead2;
   compact?: boolean;
 }) {
   const ids = evidenceIds(content);
@@ -88,7 +88,7 @@ function BriefReader({
     },
     identity: (record) => record.evidence_version_id,
   });
-  const evidence = (links: StudyBriefContent1['assumptions'][number]['evidence_links']) =>
+  const evidence = (links: StudyBriefContentRead2['assumptions'][number]['evidence_links']) =>
     links.length > 0 && collection.busy ? (
       <p role="status">Loading evidence…</p>
     ) : (
@@ -140,6 +140,16 @@ function BriefReader({
         <ReadingSection aria-label="Scope">
           <h3>Scope</h3>
           <p className="context-copy">{content.scope}</p>
+        </ReadingSection>
+      )}
+      {content.schema_version === '2' && content.deliverables.length > 0 && (
+        <ReadingSection aria-label="Requested outcomes">
+          <SectionHeader level={3} title="Requested outcomes" />
+          <ul>
+            {content.deliverables.map((item) => (
+              <li key={item.deliverable_id}>{item.statement}</li>
+            ))}
+          </ul>
         </ReadingSection>
       )}
       <ReadingSection aria-label="Alternatives">
@@ -409,6 +419,7 @@ function StatementList<T>({
   write,
   create,
   onChange,
+  fields,
 }: {
   title: string;
   word: string;
@@ -418,6 +429,7 @@ function StatementList<T>({
   write: (item: T, value: string) => T;
   create: () => T;
   onChange: (items: T[]) => void;
+  fields?: (item: T, index: number) => ReactNode;
 }) {
   return (
     <ReadingSection tone="sunken" aria-label={title}>
@@ -438,6 +450,7 @@ function StatementList<T>({
                   }
                 />
               </label>
+              {fields?.(item, index)}
               <ItemControls
                 name={name}
                 index={index}
@@ -476,6 +489,40 @@ function BriefEditor({ form, onChange }: { form: BriefForm; onChange: (form: Bri
           />
         </FormField>
       </ReadingSection>
+      <StatementList
+        title="Requested outcomes"
+        word="Outcome"
+        items={form.deliverables}
+        identity={(item) => item.deliverable_id}
+        read={(item) => item.statement}
+        write={(item, statement) => ({ ...item, statement })}
+        create={() => ({
+          deliverable_id: crypto.randomUUID(),
+          kind: 'assessment' as const,
+          statement: '',
+        })}
+        onChange={(deliverables) => set({ deliverables })}
+        fields={(item, index) => (
+          <FormField label={`Outcome ${index + 1} type`}>
+            <Select
+              aria-label={`Outcome ${index + 1} type`}
+              value={item.kind}
+              onChange={(e) =>
+                set({
+                  deliverables: form.deliverables.map((value) =>
+                    value.deliverable_id === item.deliverable_id
+                      ? { ...value, kind: e.target.value as typeof item.kind }
+                      : value,
+                  ),
+                })
+              }
+            >
+              <option value="assessment">Engineering assessment</option>
+              <option value="interactive_exploration">Interactive exploration</option>
+            </Select>
+          </FormField>
+        )}
+      />
       <StatementList
         title="Assumptions"
         word="Assumption"
@@ -661,7 +708,7 @@ export function StudyBrief({
   const choice =
     selected ?? (server?.latest_version ? server.latest_version.brief_version_id : 'draft');
   const version = versions.find((v) => v.brief_version_id === choice);
-  const shown: StudyBriefContent1 | null =
+  const shown: StudyBriefContentRead2 | null =
     choice === 'draft' ? (server?.draft?.content ?? null) : (version?.content ?? null);
   const draftSaved =
     !!server?.draft &&

@@ -18,7 +18,7 @@ import type {
   PortRef,
   ConfigurationCommit6,
   ConfigurationRequest6,
-  ModelRevisionRead4,
+  ModelRevisionRead5,
 } from './contract';
 import { modelPorts } from './ConfigurationPanel';
 import {
@@ -107,7 +107,7 @@ export function SamplingDialog({
   const savedPlan = current?.content.schema_version === '4' ? current.content.estimate_plan : null;
   const [estimatesEnabled, setEstimatesEnabled] = useState(!!savedPlan);
   const [estimateRows, setEstimateRows] = useState(() => estimateChoices(savedPlan));
-  const [model, setModel] = useState<ModelRevisionRead4 | null>(null);
+  const [model, setModel] = useState<ModelRevisionRead5 | null>(null);
   const [savedReferences, setSavedReferences] = useState<FrozenConfigurationRead7[]>([]);
   const [reference, setReference] = useState<FrozenConfigurationRead7 | null>(null);
   const [rows, setRows] = useState<Record<string, SamplingRow>>({});

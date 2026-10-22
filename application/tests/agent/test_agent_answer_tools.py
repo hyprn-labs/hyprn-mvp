@@ -216,3 +216,21 @@ def test_a_reader_delegation_reads_the_answer_and_is_offered_no_write(env):
     assert WRITES <= offered(WRITER) and not WRITES & offered(READER)
     read = one(env, 'get_study_answer', {}, effects=READER, session='reader')
     assert read['revision_token'] is None
+
+
+def test_answer_monetary_projection_retains_catalogue_and_version_basis_only():
+    from hyprn_mvp_app.agent_tools.catalogue.conclusion import _price_basis
+    basis = dict(instance_id=uid(), port_id=uid(), catalogue_expression='USD/pax',
+                 price_year=2025, economic_basis='Fuel purchase only; no capital or operating costs.',
+                 model_revision_id=uid(), model_digest='a' * 64,
+                 explanation_version_id=uid(), explanation_digest='b' * 64,
+                 evidence_links=[dict(evidence_version_id=uid(), relation='supports',
+                                      unknown='must not leak')], unknown='must not leak')
+    projected = _price_basis(basis)
+    assert projected['catalogue_expression'] == 'USD/pax' and projected['price_year'] == 2025
+    assert projected['quantity'] == {key: basis[key] for key in ('instance_id', 'port_id')}
+    assert projected['model_version']['id'] == basis['model_revision_id']
+    assert projected['explanation_version']['id'] == basis['explanation_version_id']
+    assert projected['model_digest'] == 'a' * 64 and projected['explanation_digest'] == 'b' * 64
+    assert projected['economic_basis']['untrusted_content']['text'] == basis['economic_basis']
+    assert 'must not leak' not in str(projected)

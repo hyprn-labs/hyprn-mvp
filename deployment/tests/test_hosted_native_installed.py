@@ -1,5 +1,8 @@
 """Real Linux initialization from exact packaged bytes; no source fallback."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('baseline')
+
 import json
 import unittest
 

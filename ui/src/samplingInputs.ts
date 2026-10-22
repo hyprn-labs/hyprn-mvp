@@ -3,7 +3,7 @@ import type {
   LiteralRequest,
   ResultRequest,
   ResultBinding,
-  ModelRevisionRead4,
+  ModelRevisionRead5,
   SampledDesign1,
   SampledDesign2,
   SampledDesign3,
@@ -22,7 +22,7 @@ export type SamplingRow = {
 };
 const key = (target: { instance_id: string; port_id: string }) =>
   target.instance_id + '/' + target.port_id;
-const freeInputs = (model: ModelRevisionRead4) =>
+const freeInputs = (model: ModelRevisionRead5) =>
   modelPorts(model).filter(
     (p) =>
       p.direction === 'input' &&
@@ -31,7 +31,7 @@ const freeInputs = (model: ModelRevisionRead4) =>
 
 /** Only revising this design restores values. An unrelated configuration is never a default. */
 export function samplingRows(
-  model: ModelRevisionRead4,
+  model: ModelRevisionRead5,
   reference: FrozenConfigurationRead7 | null,
   dimensions: SampledDimension1[] = [],
 ): Record<string, SamplingRow> {
@@ -54,7 +54,7 @@ export function samplingRows(
 }
 
 export function samplingDeclaration(
-  model: ModelRevisionRead4,
+  model: ModelRevisionRead5,
   rows: Record<string, SamplingRow>,
   reference: FrozenConfigurationRead7 | null,
   design: SampledDesign1 | SampledDesign2 | SampledDesign3 | SampledDesign4 | null,

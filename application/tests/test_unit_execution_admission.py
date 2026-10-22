@@ -42,7 +42,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope='module')
-def catalog(tmp_path_factory):
+def current_catalog(tmp_path_factory):
     # The producer's patched catalog is the 040 catalog with the 080 catalog hunk applied once,
     # exactly; the fixture carries those bytes.
     root = tmp_path_factory.mktemp('catalog')
@@ -63,8 +63,22 @@ def catalog(tmp_path_factory):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'offset' not in result.stdout and 'fuzz' not in result.stdout
+    patch = (REPO / 'upstream/whatsopt-patches/110-monetary-units.patch').read_text()
+    patch = patch[patch.index('--- a/config/modeling.units.json') :].split('\n--- ', 1)[0]
+    result = subprocess.run(
+        ['patch', '--batch', '--forward', '--fuzz=0', '-p1'],
+        input=patch + '\n', text=True, cwd=root, capture_output=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'offset' not in result.stdout and 'fuzz' not in result.stdout
     current = json.loads((root / 'config/modeling.units.json').read_bytes())
     assert current['catalog_digest'] == CURRENT_CATALOG_DIGEST
+    return current
+
+
+@pytest.fixture(scope='module')
+def catalog(current_catalog):
+    current = current_catalog
     value = json.loads(fixture()['files'][CATALOG_PATH])
     assert current['supported_units'][: len(value['supported_units'])] == value['supported_units']
     assert all(pair in current['linear_pairs'] for pair in value['linear_pairs'])
@@ -80,6 +94,39 @@ def catalog(tmp_path_factory):
         == UNIT_CATALOG_DIGEST
     )
     return value
+
+
+def test_current_retained_catalog_authenticates_internal_library_pin(current_catalog):
+    from hyprn_mvp_app.execution_bundle import validate_unit_catalog
+
+    case = case6(current_catalog)
+    validate_unit_catalog(case['prepared'], case['files'], case['frozen']['configuration'],
+                          case['frozen']['model_snapshot'], lambda target: '')
+    # The API projection's label is not the retained engine table's field name.
+    wrong = deepcopy(current_catalog)
+    wrong['engine_library_sha256'] = wrong.pop('library_source_sha256')
+    case = case6(wrong)
+    with pytest.raises(ValueError, match='Unsupported retained unit catalog'):
+        validate_unit_catalog(case['prepared'], case['files'], case['frozen']['configuration'],
+                              case['frozen']['model_snapshot'], lambda target: '')
+
+
+def test_monetary_discovery_does_not_rewrite_retained_producer_capabilities(catalog):
+    from hyprn_mvp_app.execution_bundle import model_capabilities
+    from hyprn_mvp_app.modeling import Coordinator
+
+    # The real producer retains these requirements in model, package and preparation.
+    # Unit declaration format2 is selected by Model5 and negotiated separately.
+    model = deepcopy(case8(catalog, approach_version=None)['frozen']['model_snapshot'])
+    model['schema_version'] = '5'
+    advertised = dict(contract_versions=['1.3'], schema_versions=['3', '4', '5'],
+        capabilities=[dict(id=name, version=version, supported=True) for name, version in (
+            ('flat_explicit_scalar', '1'), ('unit_declarations', '1'),
+            ('quantity_definitions', '1'), ('unit_declarations', '2'))])
+    assert Coordinator.supports_monetary(advertised)
+    assert model_capabilities(model) == model['required_capabilities']
+    assert 'unit_declarations/1' in model['required_capabilities']
+    assert 'unit_declarations/2' not in model['required_capabilities']
 
 
 def repin(case):

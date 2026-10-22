@@ -1,5 +1,8 @@
 """Real owner ledgers are observed without migration or candidate execution."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('baseline')
+
 import copy
 import hashlib
 import json

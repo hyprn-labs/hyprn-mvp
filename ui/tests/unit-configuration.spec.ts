@@ -39,7 +39,7 @@ async function ports(page: Page) {
   await page.getByRole('button',{name:'Manage quantities',exact:true}).click();
   return page.getByRole('dialog',{name:'Manage quantities',exact:true});
 }
-/** A quantity definition saves the model in the current format (Model4), which new
+/** A quantity definition saves the model in the current format (Model5), which new
  * configurations require. */
 async function defineQuantity(edit: ReturnType<Page['getByRole']>) {
   await edit.getByLabel('Quantity 1 definition',{exact:true}).fill('Specific energy supplied to the law');
@@ -86,10 +86,10 @@ test('@units-configuration explicit input units use the public catalog; configur
 });
 
 test('@units-configuration invalid spelling, incompatible proof and catalog outage keep local edits',async({page})=>{
-  await configuration(page);const {sid,mid}=ids(page);await physical(page,'Energy law · x units','USD');
+  await configuration(page);const {sid,mid}=ids(page);await physical(page,'Energy law · x units','EUR');
   await expect(page.getByRole('alert').filter({hasText:'This unit spelling is not supported'})).toBeVisible();
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toHaveValue('USD');
+  await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toHaveValue('EUR');
   await page.getByLabel('Energy law · x units spelling',{exact:true}).fill('m');
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'incompatible'}).first()).toBeVisible();
@@ -209,7 +209,7 @@ test('@units-configuration light dark narrow and actual 200 percent zoom preserv
       const size=await page.evaluate(()=>({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio}));
       expect(size.scrollWidth).toBeLessThanOrEqual(size.width+1);
       const fields=await page.locator('td input').evaluateAll(inputs=>inputs.map(input=>{const a=input.getBoundingClientRect(),b=input.closest('td')!.getBoundingClientRect();return {label:input.getAttribute('aria-label'),left:a.left,right:a.right,cellLeft:b.left,cellRight:b.right};}));
-      for(const field of fields){expect(field.left).toBeGreaterThanOrEqual(field.cellLeft);expect(field.right).toBeLessThanOrEqual(field.cellRight+1);}
+      for(const field of fields){expect(field.left).toBeGreaterThanOrEqual(field.cellLeft);expect(field.right,JSON.stringify(field)).toBeLessThanOrEqual(field.cellRight+1);}
       geometry.push({name,buttons,...size,fields});
       const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});await writeFile(join(root,'evidence/'+name+'.png'),Buffer.from(shot.data,'base64'));
     }
@@ -225,7 +225,7 @@ test('@units-configuration light dark narrow and actual 200 percent zoom preserv
       await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
       const intent=page.getByLabel('Energy law · x units',{exact:true});await intent.focus();await page.keyboard.press('Tab');await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toBeFocused();await capture('units-configuration-200-'+theme);
       // An unsupported spelling stays readable and keyboard-correctable at 200 percent.
-      const spelling=page.getByLabel('Energy law · x units spelling',{exact:true});await spelling.fill('USD');const unsupported=page.getByRole('alert').filter({hasText:'This unit spelling is not supported'});await unsupported.scrollIntoViewIfNeeded();await expect(unsupported).toBeVisible();await capture('units-configuration-error-200-'+theme);await spelling.fill('MJ/kg');await expect(unsupported).toHaveCount(0);await expect(spelling).toBeFocused();
+      const spelling=page.getByLabel('Energy law · x units spelling',{exact:true});await spelling.fill('EUR');const unsupported=page.getByRole('alert').filter({hasText:'This unit spelling is not supported'});await unsupported.scrollIntoViewIfNeeded();await expect(unsupported).toBeVisible();await capture('units-configuration-error-200-'+theme);await spelling.fill('MJ/kg');await expect(unsupported).toHaveCount(0);await expect(spelling).toBeFocused();
       await page.getByRole('button',{name:'Save configuration',exact:true}).focus();await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeFocused();
     }
     await writeFile(join(root,'evidence/units-native-zoom.json'),JSON.stringify({zoom:2,viewport:null,geometry},null,2));

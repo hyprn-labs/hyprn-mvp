@@ -24,6 +24,7 @@ def router(deps):
         configuration6=configs.supports3(caps) and configs.supports_criteria_free(caps)
         units=coordinator.supports_units(caps)
         quantities=coordinator.supports_quantities(caps)
+        monetary=coordinator.supports_monetary(caps)
         return response(
             request,
             dict(
@@ -38,7 +39,8 @@ def router(deps):
                 ]
                 + (['configuration/6', 'execution_bundle/11'] if configuration6 else [])
                 + (['model/3'] if units else [])
-                + (['model/4'] if quantities else []),
+                + (['model/4'] if quantities else [])
+                + (['model/5', 'execution_bundle/12'] if monetary and configuration6 else []),
                 engineering=[
                     'flat_explicit_scalar',
                     'result_linked_inputs/1',
@@ -49,7 +51,8 @@ def router(deps):
                 modeling=['model_revision_listing', 'model_rename']
                 + (['model_assumptions/1'] if assumptions else [])
                 + (['unit_declarations/1'] if units else [])
-                + (['quantity_definitions/1'] if quantities else []),
+                + (['quantity_definitions/1'] if quantities else [])
+                + (['unit_declarations/2'] if monetary else []),
                 execution='durable_scalar_submission',
                 execution_budget=dict(
                     default_wall_seconds=EXECUTION_WALL_DEFAULT,
@@ -59,8 +62,8 @@ def router(deps):
                 ),
                 model_formats=dict(
                     create_request=['3'],
-                    edit_request=['4'] if quantities else ['3'],
-                    saved_record=['4'] if quantities else ['3'],
+                    edit_request=['5'] if monetary else ['4'] if quantities else ['3'],
+                    saved_record=['5'] if monetary else ['4'] if quantities else ['3'],
                 ),
                 unavailable=([] if quantities else ['quantity_definitions/1'])
                 + ([] if units else ['unit_declarations/1'])

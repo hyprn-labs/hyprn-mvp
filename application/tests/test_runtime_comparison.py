@@ -78,6 +78,9 @@ def test_attestation_failure_stop_restart_throttle_and_slow_call(observation):
     publisher.refresh();clock[0]=1009
     assert not publisher.refresh() and native.calls==['attest','runtime']
     publisher.stopped();assert store.execution_observation()['runtime'] is None
+    # A real executor restart constructs a new publisher; the stopped owner
+    # cannot publish a late native reply after its terminal invalidation.
+    publisher = ObservationPublisher(store, native, monotonic=lambda: clock[0])
     clock[0]=1010;native.error=RuntimeError('/private/secret')
     assert publisher.refresh();assert native.calls==['attest','runtime','attest']
     assert compare(observation)['state']=='unavailable'

@@ -13,17 +13,26 @@
     "schema_versions": [
       "1",
       "2",
-      "3"
+      "3",
+      "4",
+      "5"
     ],
     "bundle_versions": [
       "2",
       "3",
       "4",
       "5",
-      "6"
+      "6",
+      "8",
+      "10",
+      "11",
+      "12"
     ],
     "artifact_versions": [
-      "2"
+      "2",
+      "3",
+      "4",
+      "5"
     ],
     "program_versions": [
       "1"
@@ -32,7 +41,9 @@
       "1"
     ],
     "results_versions": [
-      "1"
+      "1",
+      "2",
+      "3"
     ],
     "result_dependencies_versions": [
       "1"
@@ -48,7 +59,7 @@
       "unit_declarations": "1"
     },
     "capability_advertisement": "only_when_supported",
-    "description": "Declared version matrix, not a live service support claim. Query capabilities before sending a new version; fail explicitly when unsupported. Evidence revisions and configuration assumptions are application capabilities, not private family-management authority. Contract1.3 is declarative until implemented; new writes require unit_declarations/1. Old frozen/history/package readers remain pinned to model1/2. Unit catalog is data only; it does not assert executor readiness.",
+    "description": "Declared version matrix, not a live service support claim. Query capabilities before sending a new version; fail explicitly when unsupported. Frozen records retain exact version-specific readers. Monetary model5 pairs with configuration6, private configuration5, frozen10, prepared artifact5, bundle12 and history9. Unit catalogue discovery is data only; it does not assert executor readiness.",
     "compatible_unit_pairing": {
       "model": "3",
       "configuration": "4",
@@ -57,6 +68,16 @@
       "bundle": "6",
       "history": "4",
       "modified_run_seed": "4"
+    },
+    "monetary_unit_pairing": {
+      "model": "5",
+      "configuration": "6",
+      "private_configuration": "5",
+      "frozen": "10",
+      "prepared_artifact": "5",
+      "bundle": "12",
+      "history": "9",
+      "modified_run_seed": "9"
     }
   },
   "servers": [
@@ -99,7 +120,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponseRead3"
+                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponseRead4"
                 }
               }
             }
@@ -128,7 +149,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse5"
                 }
               }
             }
@@ -177,7 +198,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse5"
                 }
               }
             }
@@ -216,7 +237,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse5"
                 }
               }
             }
@@ -227,7 +248,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/model.schema.json#/$defs/PreviewRead4"
+                "$ref": "./schemas/model.schema.json#/$defs/PreviewRead5"
               }
             }
           }
@@ -265,7 +286,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftEditResponse5"
                 }
               }
             }
@@ -276,7 +297,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/model.schema.json#/$defs/ApplyRead4"
+                "$ref": "./schemas/model.schema.json#/$defs/ApplyRead5"
               }
             }
           }
@@ -314,7 +335,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse5"
                 }
               }
             }
@@ -373,7 +394,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelRevisionResponse5"
                 }
               }
             }
@@ -471,7 +492,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelPackageResponse"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelPackageResponse5"
                 }
               }
             }
@@ -499,7 +520,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ModelDraftResponse5"
                 }
               }
             }
@@ -510,7 +531,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/model.schema.json#/$defs/Import"
+                "$ref": "./schemas/model.schema.json#/$defs/Import5"
               }
             }
           }
@@ -598,7 +619,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse5"
                 }
               }
             }
@@ -718,7 +739,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/ReceiptResponse4"
+                  "$ref": "./schemas/model.schema.json#/$defs/ReceiptResponse5"
                 }
               }
             }
@@ -867,7 +888,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/UnitCatalogResponse1"
+                  "$ref": "./schemas/model.schema.json#/$defs/UnitCatalogResponse2"
                 }
               }
             }

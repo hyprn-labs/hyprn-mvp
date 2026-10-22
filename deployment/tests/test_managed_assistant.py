@@ -4,6 +4,8 @@ import json
 import copy
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import email
+import zipfile
 import os
 from pathlib import Path
 import sys
@@ -21,11 +23,21 @@ import managed_assistant as setup  # noqa: E402
 setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
 
 
+def test_bindings():
+    return {'skill': {'id': 'skill_test', 'version': 'skver_test',
+                      'sha256': setup.managed_skill.bundle()[1]['sha256']},
+            'reviewers': {role: {'id': 'agent_' + str(i), 'version': 1}
+                          for i, role in enumerate(setup.REVIEW_ROLES, 1)}}
+
+
 def offline_plan(tmp_path):
+    bindings = tmp_path / 'bindings.json'
+    setup.save(bindings, test_bindings())
     plan = tmp_path / 'plan.json'
     result = setup.main(
         [
             'plan',
+            '--bindings', str(bindings),
             '--plan',
             str(plan),
             '--deployment',
@@ -43,14 +55,20 @@ def offline_plan(tmp_path):
         'effort': {'type': 'high'},
         'speed': 'standard',
     }
-    assert all(tool['type'] == 'custom' for tool in value['agent']['tools'])
+    assert value['agent']['tools'][-1]['default_config']['enabled'] is False
+    assert value['agent']['skills'][0]['version'] == 'skver_test'
     assert value['environment']['config']['networking'] == {
         'type': 'limited',
-        'allowed_hosts': [],
+        'allowed_hosts': sorted(set(setup.DEFAULT_RESEARCH_HOSTS)),
         'allow_mcp_servers': False,
         'allow_package_managers': False,
     }
     assert len(value['configuration_sha256']) == 64
+    print(json.dumps({'system_characters': len(value['agent']['system']),
+                      'playbook_characters': len(setup.playbook.render_document()),
+                      'bundle_sha256': value['skill_bundle']['sha256'],
+                      'scenario_sha256': value['skill_bundle']['inputs'][
+                          'docs/agents/scientific-engineering/references/behavioral-scenarios.md']}))
 
 
 class SetupTests(unittest.TestCase):
@@ -64,6 +82,8 @@ class SetupTests(unittest.TestCase):
         self.key.write_text('synthetic-private-test-key')
         self.key.chmod(0o600)
         self.provider = ProviderDouble()
+        self.bindings_path = self.root / 'bindings.json'
+        setup.save(self.bindings_path, test_bindings())
         self.transport = httpx.MockTransport(self.provider)
 
     def command(self, command, *args):
@@ -77,7 +97,9 @@ class SetupTests(unittest.TestCase):
     def plan(self, **changes):
         args = dict(deployment='staging', model='claude-sonnet-5-5', effort='high', **changes)
         flattened = [part for key, value in args.items() for part in ('--' + key, value)]
-        self.assertEqual(self.command('plan', *flattened)[0], 0)
+        prepared = setup.bootstrap(**args)
+        self.provider.seed(prepared, test_bindings())
+        self.assertEqual(self.command('plan', '--bindings', str(self.bindings_path), *flattened)[0], 0)
         return json.loads(self.plan_path.read_text())
 
     def apply(self, plan, command='apply'):
@@ -108,7 +130,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.apply(plan)[0], 0)
         self.assertEqual(len(self.provider.writes), 2)
         self.assertTrue(
-            any(url.endswith('/agents/agent_1?version=1') for _, url in self.provider.calls)
+            any(url.endswith('/agents/agent_4?version=1') for _, url in self.provider.calls)
         )
         self.assertNotIn(self.key.read_text(), self.state_path.read_text() + output)
         self.assertEqual(self.state_path.stat().st_mode & 0o777, 0o600)
@@ -150,22 +172,15 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.apply(plan)[0], 0)
         self.assertEqual(len(self.provider.writes), 2)
 
-    def test_changed_release_uses_new_agent_and_preserves_existing_environment(self):
+    def test_changed_skill_pin_refuses_existing_provider_content(self):
         plan = self.plan()
         self.assertEqual(self.apply(plan)[0], 0)
-        self.plan_path = self.root / 'next-review.json'
-        self.assertEqual(
-            self.command(
-                'plan', '--deployment', 'staging', '--model', 'claude-opus-5-5', '--effort', 'high'
-            )[0],
-            0,
-        )
-        following = json.loads(self.plan_path.read_text())
-        self.assertNotEqual(plan['configuration_sha256'], following['configuration_sha256'])
-        self.assertEqual(self.apply(following)[0], 0)
-        self.assertEqual(len(self.provider.writes), 3)
-        self.assertEqual(len(self.provider.resources['environments']), 1)
-        self.assertEqual(len(self.provider.resources['agents']), 2)
+        self.provider.skill_archive = self.provider.skill_archive + b'trailer'
+        # ZIP container metadata can change without changing scientific contents.
+        self.assertEqual(self.apply(plan)[0], 0)
+        self.provider.skill_archive = b'invalid archive'
+        self.assertIn('provider_skill_drift', self.apply(plan)[2])
+        self.assertEqual(len(self.provider.writes), 2)
 
     def test_drift_in_unversioned_environment_refuses_binding(self):
         plan = self.plan()
@@ -202,7 +217,9 @@ class SetupTests(unittest.TestCase):
             'claude_managed', setup.LOCAL_STAGE, setup.ROLE_EFFECTS['writer']
         )
         self.assertEqual(plan['definitions_sha256'], setup.digest(definitions))
-        self.assertIn(setup.playbook.render_document(), plan['agent']['system'])
+        self.assertNotIn(setup.playbook.render_document(), plan['agent']['system'])
+        self.assertLess(len(plan['agent']['system']), 2500)
+        self.assertIn('Load the attached', plan['agent']['system'])
         with patch.object(
             setup.playbook, 'render_document', return_value='changed release guidance'
         ):
@@ -265,7 +282,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.apply(plan, 'reconcile')[0], 0)
         self.state_path.unlink()
         self.provider.resources['agents'].append(
-            copy.deepcopy(self.provider.resources['agents'][0])
+            copy.deepcopy(self.provider.resources['agents'][-1])
         )
         self.assertIn('ambiguous_resource', self.apply(plan, 'reconcile')[2])
         with setup.locked(self.state_path):
@@ -284,16 +301,172 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(all('budget' not in body for _, body in self.provider.writes))
 
 
+    def test_public_research_allowlist_is_configurable_and_plan_pinned(self):
+        pins = test_bindings()
+        plan = setup.definition('staging', 'claude-sonnet-5-5', 'high', bindings=pins,
+                                public_hosts=['nasa.gov', '*.nasa.gov'])
+        self.assertEqual(plan['environment']['config']['networking']['allowed_hosts'],
+                         ['*.nasa.gov', 'nasa.gov'])
+        self.assertEqual(setup.validate_plan(plan), plan)
+        self.assertIn('url_not_allowed', plan['agent']['system'])
+        altered = copy.deepcopy(plan)
+        altered['research_hosts'].append('nist.gov')
+        with self.assertRaisesRegex(setup.ProviderError, 'release_definition_changed'):
+            setup.validate_plan(altered)
+        for hosts in ([], ['*'], ['127.0.0.1'], ['metadata.internal'], ['localhost'], ['https://nasa.gov']):
+            with self.assertRaises(setup.ProviderError):
+                setup.bootstrap('staging', 'claude-sonnet-5-5', 'high', public_hosts=hosts)
+
+    def bootstrap_plan(self):
+        self.assertEqual(self.command('bootstrap', '--deployment', 'staging',
+                                    '--model', 'claude-sonnet-5-5', '--effort', 'high')[0], 0)
+        return json.loads(self.plan_path.read_text())
+
+    def test_bootstrap_uploads_curated_archive_and_returns_exact_pins(self):
+        plan = self.bootstrap_plan()
+        code, output, error = self.apply(plan)
+        self.assertEqual((code, error), (0, ''))
+        bindings = json.loads(output)
+        self.assertEqual(bindings['skill']['version'], 'skver_test')
+        self.assertEqual(bindings['skill']['sha256'], plan['skill_bundle']['sha256'])
+        self.assertEqual(set(bindings['reviewers']), set(setup.REVIEW_ROLES))
+        self.assertEqual(len(self.provider.writes), 4)
+        self.assertEqual(self.apply(plan)[0], 0)
+        self.assertEqual(len(self.provider.writes), 4)
+        final = setup.definition('staging', 'claude-sonnet-5-5', 'high', bindings=bindings)
+        self.assertEqual(final['agent']['multiagent']['subagents']['inline_agents'], {'type': 'disabled'})
+        for reviewer in final['reviewers'].values():
+            self.assertNotIn('multiagent', reviewer)
+            self.assertEqual(reviewer['skills'], final['agent']['skills'])
+            reads = setup.Registry(setup.catalogue.TOOLS).definitions(
+                'claude_managed', setup.LOCAL_STAGE, frozenset({'read'}))
+            self.assertEqual([tool['name'] for tool in reviewer['tools'] if tool['type'] == 'custom'],
+                             [tool['name'] for tool in reads])
+
+    def test_unknown_skill_upload_is_reconciled_without_duplicate(self):
+        plan = self.bootstrap_plan()
+        self.provider.interrupt_kind = 'skills'
+        self.assertEqual(self.apply(plan)[0], 2)
+        self.assertEqual(len(self.provider.writes), 1)
+        self.assertIn('setup_incomplete', self.apply(plan, 'reconcile')[2])
+        self.assertEqual(len(self.provider.writes), 1)
+        self.assertEqual(self.apply(plan)[0], 0)
+        self.assertEqual(len(self.provider.resources['skills']), 1)
+        self.assertEqual(len(self.provider.writes), 4)
+
+    def test_known_null_fetch_default_reconciles_intent_without_creation(self):
+        plan = self.bootstrap_plan()
+        self.assertEqual(self.apply(plan)[0], 0)
+        state = json.loads(self.state_path.read_text())
+        resource = next(key for key in state['resources'] if key.startswith('agent:'))
+        state['resources'][resource] = {'status': 'intent'}
+        setup.save(self.state_path, state)
+        before = len(self.provider.writes)
+        self.assertEqual(self.apply(plan, 'reconcile')[0], 0)
+        self.assertEqual(len(self.provider.writes), before)
+        state = json.loads(self.state_path.read_text())
+        self.assertEqual(state['resources'][resource]['status'], 'confirmed')
+
+    def test_reviewer_readback_refuses_any_nested_delegation_configuration(self):
+        plan = self.bootstrap_plan()
+        self.assertEqual(self.apply(plan)[0], 0)
+        reviewer = self.provider.resources['agents'][0]
+        reviewer['multiagent'] = {'type': 'multiagent_20261001',
+                                 'subagents': {'type': 'disabled'}}
+        self.assertIn('provider_definition_drift', self.apply(plan, 'reconcile')[2])
+        self.assertEqual(len(self.provider.writes), 4)
+
+    def test_fetch_normalization_never_ignores_policy_or_unknown_fields(self):
+        plan = self.bootstrap_plan()
+        self.assertEqual(self.apply(plan)[0], 0)
+        agent = self.provider.resources['agents'][0]
+        toolset = next(tool for tool in agent['tools'] if tool['type'] == 'agent_toolset_20260401')
+        fetch = next(config for config in toolset['configs'] if config['name'] == 'web_fetch')
+        self.assertIsNone(fetch['url_sources'])
+        for field, value in [('url_sources', {'user_input': {'type': 'none'}}),
+                             ('unknown_permission', None), ('enabled', False)]:
+            original = copy.deepcopy(fetch)
+            fetch[field] = value
+            self.assertIn('provider_definition_drift', self.apply(plan, 'reconcile')[2])
+            fetch.clear()
+            fetch.update(original)
+        self.assertEqual(len(self.provider.writes), 4)
+
+    def test_uncertain_absent_skill_upload_is_never_repeated(self):
+        plan = self.bootstrap_plan()
+        self.provider.interrupt_kind = 'skills'
+        self.provider.commit_before_interrupt = False
+        self.assertEqual(self.apply(plan)[0], 2)
+        self.assertIn('creation_uncertain_requires_reconciliation', self.apply(plan)[2])
+        self.assertEqual(len(self.provider.writes), 1)
+
+    def test_unpinned_skill_or_reviewer_cannot_be_a_production_plan(self):
+        with self.assertRaisesRegex(setup.ProviderError, 'exact_bootstrap_bindings_required'):
+            setup.definition('staging', 'claude-sonnet-5-5', 'high')
+        for field, value in [('version', 'latest'), ('sha256', '0' * 64)]:
+            pins = test_bindings()
+            pins['skill'][field] = value
+            with self.assertRaises(setup.ProviderError):
+                setup.definition('staging', 'claude-sonnet-5-5', 'high', bindings=pins)
+        pins = test_bindings()
+        pins['reviewers']['source-reviewer']['version'] = True
+        with self.assertRaises(setup.ProviderError):
+            setup.definition('staging', 'claude-sonnet-5-5', 'high', bindings=pins)
+
+    def test_reproducible_bundle_has_only_curated_files_and_detects_extra_content(self):
+        first, manifest = setup.managed_skill.bundle()
+        self.assertEqual((first, manifest), setup.managed_skill.bundle())
+        setup.managed_skill.verify_archive(first, manifest)
+        with zipfile.ZipFile(io.BytesIO(first)) as archive:
+            self.assertEqual(set(archive.namelist()), set(manifest['files']) | {'hyprn/manifest.json'})
+            self.assertTrue(all(name.endswith(('.md', '.json')) for name in archive.namelist()))
+            self.assertEqual(archive.read('hyprn/references/playbook.md').decode(), setup.playbook.render_document())
+        changed = io.BytesIO(first)
+        with zipfile.ZipFile(changed, 'a') as archive:
+            archive.writestr('hyprn/secret', b'secret')
+        with self.assertRaisesRegex(setup.ProviderError, 'provider_skill_drift'):
+            setup.managed_skill.verify_archive(changed.getvalue(), manifest)
+
+    def test_bundle_never_follows_source_symlinks_outside_curated_tree(self):
+        import shutil
+        root = self.root / 'source'
+        for relative in setup.managed_skill.FILES:
+            source = setup.managed_skill.REPO / (setup.managed_skill.SOURCE + relative)
+            target = root / (setup.managed_skill.SOURCE + relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+        target = root / (setup.managed_skill.SOURCE + 'references/primary-sources.md')
+        target.unlink()
+        target.symlink_to(self.key)
+        with self.assertRaisesRegex(setup.ProviderError, 'skill_source_invalid'):
+            setup.managed_skill.bundle(root)
+
+    def test_effort_comparison_freezes_same_guidance_and_scenarios(self):
+        high = setup.bootstrap('staging', 'claude-sonnet-5-5', 'high')
+        medium = setup.bootstrap('staging', 'claude-sonnet-5-5', 'medium')
+        self.assertEqual(high['skill_bundle'], medium['skill_bundle'])
+        self.assertIn('docs/agents/scientific-engineering/references/behavioral-scenarios.md',
+                      high['skill_bundle']['inputs'])
+        # This checks frozen inputs only. Quality, tokens, cost and latency need live evaluation.
+
+
 class ProviderDouble:
     """Official resource shapes through the real HTTP adapter, with controllable lost replies."""
 
     def __init__(self):
-        self.resources = {'agents': [], 'environments': []}
+        self.resources = {'agents': [], 'environments': [], 'skills': []}
+        self.skill_archive = setup.managed_skill.bundle()[0]
         self.calls, self.writes = [], []
         self.interrupt_kind = None
         self.commit_before_interrupt = True
         self.before_write = lambda: None
         self.reject = self.paginate = False
+
+    def seed(self, prepared, bindings):
+        self.resources['skills'] = [{'id': bindings['skill']['id'], 'latest_version_id': bindings['skill']['version'],
+                                     'display_name': 'hyprn-' + bindings['skill']['sha256']}]
+        self.resources['agents'] = [{**value, **bindings['reviewers'][role], 'archived_at': None}
+                                   for role, value in setup.reviewer_resources(prepared, bindings['skill']).items()]
 
     def __call__(self, request):
         self.calls.append((request.method, str(request.url)))
@@ -306,17 +479,44 @@ class ProviderDouble:
         if request.method == 'POST':
             assert len(pieces) == 3
             self.before_write()
-            body = json.loads(request.content)
+            if kind == 'skills':
+                message = email.message_from_bytes(('Content-Type: ' + request.headers['content-type']
+                                                     + '\r\nMIME-Version: 1.0\r\n\r\n').encode() + request.content)
+                parts = {part.get_param('name', header='content-disposition'): part.get_payload(decode=True)
+                         for part in message.walk() if part.get_content_maintype() != 'multipart'}
+                self.skill_archive = parts['files[]']
+                body = {'display_name': parts['display_name'].decode()}
+            else:
+                body = json.loads(request.content)
             self.writes.append((kind, body))
+            if kind == 'agents':
+                delegation = body.get('multiagent') or {}
+                references = delegation.get('subagents', {}).get('predefined_agents', [])
+                for reference in references:
+                    referenced = next(row for row in self.resources['agents']
+                                      if row['id'] == reference['id'])
+                    if referenced.get('multiagent') is not None:
+                        return httpx.Response(400, json={'error': {
+                            'type': 'invalid_request_error',
+                            'message': ('Referenced agent has its own subagents; '
+                                        'maximum depth is 1')}})
             if self.reject:
                 return httpx.Response(401, json={'error': 'upstream-secret-body'})
             resource = copy.deepcopy(body)
             resource.update(
-                id=('agent_' if kind == 'agents' else 'env_') + str(len(self.resources[kind]) + 1),
+                id=({'agents': 'agent_', 'environments': 'env_', 'skills': 'skill_'}[kind]) + str(len(self.resources[kind]) + 1),
                 archived_at=None,
             )
             if kind == 'agents':
                 resource['version'] = 1
+                resource.setdefault('multiagent', None)
+                for tool in resource.get('tools', []):
+                    if tool.get('type') == 'agent_toolset_20260401':
+                        for config in tool.get('configs', []):
+                            if config.get('type') == 'web_fetch':
+                                config.setdefault('url_sources', None)
+            elif kind == 'skills':
+                resource['latest_version_id'] = 'skver_test'
             else:
                 assert 'packages' not in resource['config']
                 resource['config']['packages'] = {
@@ -336,6 +536,10 @@ class ProviderDouble:
                 return httpx.Response(200, json={'data': [], 'next_page': 'second'})
             return httpx.Response(200, json={'data': self.resources[kind], 'next_page': None})
         resource = next(item for item in self.resources[kind] if item['id'] == pieces[3])
+        if kind == 'skills' and len(pieces) >= 6:
+            if pieces[-1] == 'content':
+                return httpx.Response(200, content=self.skill_archive)
+            return httpx.Response(200, json={'id': pieces[5], 'skill_id': pieces[3]})
         if kind == 'agents':
             assert request.url.params['version'] == '1'
         return httpx.Response(200, json=resource)

@@ -129,7 +129,7 @@ class ModifiedRuns:
             # Configuration 6: no criteria and no approach selection.
             request.pop('criteria')
             request['context_override']=dict(schema_version='1',**{k:config['context_snapshot'][k] for k in ('description','boundary')})
-            value.update(schema_version='8',source_configuration=deepcopy(config))
+            value.update(schema_version='9' if history['model_snapshot']['schema_version']=='5' else '8',source_configuration=deepcopy(config))
         elif config['schema_version']=='4':
             pin=config['approach_binding']
             request.update(approach_selection={k:pin[k] for k in ('approach_version_id',)} if pin else None,

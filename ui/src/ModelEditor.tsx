@@ -1,6 +1,6 @@
 import { currentDocumentation, useModelDocumentation } from './modelDocumentation';
 import { DialogActions, FormField, ReadingSection } from './design';
-import type { ModelExplanationContent2 } from './contract';
+import type { ModelExplanationContent3 } from './contract';
 import type { QuantityEditRequest } from './ModelView';
 import { Assumptions } from './Assumptions';
 import { evidenceAccessLost } from './EvidenceView';
@@ -12,10 +12,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError, HyprnMvpApi, message, sourceFromBytes, sourceFromText, sourceText } from './api';
 import type {
-  DefinitionChange4 as DefinitionChange,
-  Edit4 as Edit,
-  ModelDraftRead4,
-  PortRead3 as Port,
+  DefinitionChange5 as DefinitionChange,
+  Edit5 as Edit,
+  ModelDraftRead5,
+  PortRead4 as Port,
   Source,
 } from './api';
 import { SourceEditor } from './SourceEditor';
@@ -37,8 +37,8 @@ type Props = {
   explain: ComponentExplanation;
   modelActionHost?: HTMLDivElement | null;
   api: HyprnMvpApi;
-  model: ModelDraftRead4;
-  onModel: (model: ModelDraftRead4) => void;
+  model: ModelDraftRead5;
+  onModel: (model: ModelDraftRead5) => void;
   onHandle: (handle: EditorHandle) => void;
   navigate: (action: () => void) => void;
   selection: Selection;
@@ -80,7 +80,7 @@ export function ModelEditor({
   } | null>(null);
   const documentationBase = useRef('');
   const documentationSnapshot = useRef<{
-    content: ModelExplanationContent2;
+    content: ModelExplanationContent3;
     revision: string | null;
   } | null>(null);
   const beforeDocumentationEdit = useRef<ModelAssumption[]>([]);
@@ -102,7 +102,7 @@ export function ModelEditor({
     const controller = new AbortController();
     api
       .capabilities(controller.signal)
-      .then((c) => setFormat4(c.model_formats.edit_request.includes('4')))
+      .then((c) => setFormat4(c.model_formats.edit_request.some((version) => ['4', '5'].includes(version))))
       .catch(() => setFormat4(false));
     return () => controller.abort();
   }, [api]);
@@ -182,7 +182,7 @@ export function ModelEditor({
     }
     return edits;
   }
-  function acceptAssumptions(snapshot: ModelDraftRead4) {
+  function acceptAssumptions(snapshot: ModelDraftRead5) {
     setAssumptionBase(snapshot);
     setAssumptions('assumptions' in snapshot ? snapshot.assumptions : []);
     setAssumptionEditing(false);
@@ -282,7 +282,7 @@ export function ModelEditor({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<unknown>(null);
-  const [review, setReview] = useState<ModelDraftRead4 | null>(null);
+  const [review, setReview] = useState<ModelDraftRead5 | null>(null);
   const invoker = useRef<HTMLElement | null>(null);
   const code = useRef<HTMLTextAreaElement>(null);
   const errorFocused = useRef<unknown>(null);
@@ -448,7 +448,7 @@ export function ModelEditor({
     edits: Edit[],
     safe = 'Keep editing',
     apply = 'Apply changes',
-  ): Promise<ModelDraftRead4 | null> {
+  ): Promise<ModelDraftRead5 | null> {
     if (!guidance.catalog)
       return Promise.reject(
         new Error('Unit guidance is unavailable. Retry unit guidance. Your edits are kept.'),
@@ -472,8 +472,10 @@ export function ModelEditor({
           ),
       );
     // The runtime predicate excludes new operations before selecting the legacy envelope.
-    const command: import('./contract').ApplyRead4 = descriptive
-      ? { ...envelope, schema_version: '4', edits: structuredClone(edits) }
+    const command: import('./contract').ApplyRead5 = guidance.catalog.schema_version === '2'
+      ? { ...envelope, schema_version: '5', edits: structuredClone(edits) }
+      : descriptive
+      ? { ...envelope, schema_version: '4', edits: structuredClone(edits) as import('./contract').Edit4[] }
       : {
           ...envelope,
           schema_version: '3',

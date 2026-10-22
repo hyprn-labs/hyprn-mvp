@@ -137,7 +137,7 @@ puts 'NATIVE_RESULT='+JSON.generate({'artifact'=>first,'files'=>files,'capabilit
     artifact=result['artifact']; files={p:base64.b64decode(v) for p,v in result['files'].items()}
     check_program(artifact,files,artifact['prepared_digest'])
     validate('ProgramProvenance',json.loads(files['provenance/generator.json']))
-    validate('CapabilitiesRead3',result['capabilities'])
+    validate('CapabilitiesRead4',result['capabilities'])
     assert files['sources/'+hashlib.sha256(raw).hexdigest()+'.py']==raw
     assert b'<%= File.write' in b''.join(b for p,b in files.items() if p.startswith('generated/impl/'))
     assert artifact['schema_version']=='3'

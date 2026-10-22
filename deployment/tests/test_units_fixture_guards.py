@@ -347,7 +347,7 @@ class UnitsStagingTests(unittest.TestCase):
     def trusted_python(self, code):
         import subprocess
         fixture.validate_scope(self.scope)
-        image=json.loads((self.runtime.REPO/'deployment/pins.json').read_text())['worker_image']
+        image=fixture.local_paths.engine_image(required=False) or json.loads((self.runtime.REPO/'deployment/pins.json').read_text())['worker_image']
         command=['docker','run','--pull','never','--rm','-i','--network','none','--read-only',
             '--cap-drop','ALL','--security-opt','no-new-privileges','--user','10001:10001',
             '--memory','512m','--cpus','1','--pids-limit','32',
@@ -392,8 +392,8 @@ class UnitsStagingTests(unittest.TestCase):
         )
         catalog = json.loads(result.stdout)
         self.assertEqual(catalog['version'], '3.45.1')
-        self.assertEqual(len(catalog['supported_units']), 49)
-        self.assertEqual(len(set(catalog['supported_units'])), 49)
+        self.assertEqual(len(catalog['supported_units']), 61)
+        self.assertEqual(len(set(catalog['supported_units'])), 61)
         body = {k: v for k, v in catalog.items() if k != 'catalog_digest'}
         self.assertEqual(
             catalog['catalog_digest'],
@@ -456,6 +456,8 @@ names=[
     'N*m',
     'W/(m*K)',
     'W/(m**2*K)',
+    'USD', 'kUSD', 'MUSD', 'pax', 'USD/pax', 'USD/kg', 'USD/m**3',
+    'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ',
 ]
 pairs=[]
 for a in names:
@@ -486,9 +488,15 @@ print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,sourc
             ('kJ/(kg*K)', 'J/(kg*K)'): 1000,
             ('MW', 'W'): 1e6,
             ('N*m', 'J'): 1,
+            ('MUSD', 'USD'): 1e6,
+            ('USD/MJ', 'USD/J'): 1e-6,
+            ('USD/(kW*h)', 'USD/J'): 1/3.6e6,
         }.items():
             self.assertAlmostEqual(pairs[pair], value)
         self.assertNotIn(('degC', 'K'), pairs)
+        self.assertNotIn(('USD', ''), pairs)
+        self.assertNotIn(('USD', 'pax'), pairs)
+        self.assertNotIn(('USD/kg', 'USD/J'), pairs)
         self.assertEqual(pairs['degC', 'degC'], 1)
         self.native_base()
         legacy = json.loads((self.stage / 'config/modeling.units.json').read_text())
@@ -525,7 +533,10 @@ print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,sourc
         target.write_text(adapter)
         import subprocess
         quantity=(self.runtime.REPO/'upstream/whatsopt-patches/090-quantity-definitions.patch').read_text()
-        # The adapter-only criteria-free patch follows 090; unwind it first, exactly.
+        monetary=(self.runtime.REPO/'upstream/whatsopt-patches/110-monetary-units.patch').read_text()
+        reverse110=subprocess.run(['patch','--batch','--fuzz=0','-R','-p1'],cwd=self.stage,input=monetary,capture_output=True,text=True)
+        self.assertEqual(reverse110.returncode,0,reverse110.stdout+reverse110.stderr)
+        # Unwind each retained predecessor in reverse order, exactly.
         criteria_free=(self.runtime.REPO/'upstream/whatsopt-patches/100-configurations-without-criteria.patch').read_text()
         reverse100=subprocess.run(['patch','--batch','--fuzz=0','-R','-p1'],cwd=self.stage,input=criteria_free,capture_output=True,text=True)
         self.assertEqual(reverse100.returncode,0,reverse100.stdout+reverse100.stderr)
@@ -542,7 +553,11 @@ print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,sourc
         self.assertEqual(target.read_text(),baseline080)
         self.apply(quantity)
         self.apply(criteria_free)
+        monetary_catalog_before=(self.stage/'config/modeling.units.json').read_bytes()
+        self.apply(monetary)
         self.assertEqual(target.read_text(),adapter)
+        native_before['config/modeling.units.json']=(self.stage/'config/modeling.units.json').read_bytes()
+        self.assertNotEqual(monetary_catalog_before, native_before['config/modeling.units.json'])
         self.assertEqual(native_before,{name:(self.stage/name).read_bytes() for name in native_before})
         self.assertEqual((complete/'provenance-inputs/patches/090-quantity-definitions.patch').read_text(),quantity)
         self.assertEqual((complete/'provenance-inputs/patches/100-configurations-without-criteria.patch').read_text(),criteria_free)
@@ -639,7 +654,7 @@ m['instances'] << {'instance_id'=>'legacy','definition_version_id'=>'legacy'}
 c.require_resolved_units!(m)
 raise 'Legacy empty changed' unless c.unit_expression('')=='' && c.unit_expression({'kind'=>'dimensionless'})==''
 raise 'Compound changed' unless c.unit_expression(v2['ports'][0]['units'])=='MJ/kg'
-[{},nil,{'kind'=>'dimensionless','extra'=>true},{'kind'=>'physical','expression'=>"m';raise 'candidate'"},{'kind'=>'physical','expression'=>'USD'}].each do |bad|
+[{},nil,{'kind'=>'dimensionless','extra'=>true},{'kind'=>'physical','expression'=>"m';raise 'candidate'"},{'kind'=>'physical','expression'=>'EUR'}].each do |bad|
   reject { c.unit_expression(bad) }
   v1['ports'][0]['units']=bad
   reject { c.unit_readiness(m) }

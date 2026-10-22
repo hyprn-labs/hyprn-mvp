@@ -29,7 +29,7 @@ import { RecordedConfiguration } from './RecordedConfiguration';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, accessLostText, accessUnverifiedText, message } from './api';
 import { useAccessLoss } from './accessLoss';
-import type { ConfigurationCandidate, ConfigurationRevisionRead6, FrozenConfigurationRead7, ModelDraftRead4, ModelRevisionRead4, PortRef, Study } from './api';
+import type { ConfigurationCandidate, ConfigurationRevisionRead6, FrozenConfigurationRead7, ModelDraftRead5, ModelRevisionRead5, PortRef, Study } from './api';
 import type { EvidenceRecord, EvidenceResourceRef1 } from './api';
 import { configurationContext, evidenceSnapshotView, configurableModel, criteriaFreeSeed, modelAssumptions, recordLimitations, recordedModelAssumptions } from './recordViews';
 import { EvidencePicker } from './EvidencePicker';
@@ -46,8 +46,8 @@ export { modelPorts } from './modelPorts';
 type DraftBinding = Omit<ResultBinding, 'conversion'> & { conversion: ResultBinding['conversion'] | null };
 type InputDraft = { result_binding?: DraftBinding | null; target: PortRef; value: string; units: string; unitChoice?: UnitDraft; statement: string; kind: 'manual' | 'source'; evidence_version_ids: string[] };
 type Draft = { assumptions: ConfigurationAssumption[]; name: string; inputs: InputDraft[]; description: string; boundary: string; /** Stored notes, never shown or edited; sent back unchanged. */ originalNotes: string[]; contextEvidence: string[]; evidence: ConfigurationCandidate['evidence_snapshots'] };
-export type ConfigurationHandle = EditorGuard & { copy: (config: ConfigurationRevisionRead6, snapshot: ModelRevisionRead4) => void };
-export type ConfigurationInspection = { snapshot: ModelRevisionRead4 | null; inputs: Draft['inputs']; saved: FrozenConfigurationRead7 | null; dirty: boolean; evidence: Draft['evidence'] };
+export type ConfigurationHandle = EditorGuard & { copy: (config: ConfigurationRevisionRead6, snapshot: ModelRevisionRead5) => void };
+export type ConfigurationInspection = { snapshot: ModelRevisionRead5 | null; inputs: Draft['inputs']; saved: FrozenConfigurationRead7 | null; dirty: boolean; evidence: Draft['evidence'] };
 const empty: Draft = { assumptions: [], name: '', inputs: [], description: '', boundary: '', originalNotes: [], contextEvidence: [], evidence: [] };
 const numerical: ConfigurationCandidate['numerical'] = { mode: 'deterministic', initialization: [], solvers: [], derivatives: { method: 'none', form: null, check: null }, design_variables: [], objectives: [], constraints: [], optimizer: null, uncertainty: null };
 function fromConfig(c: ConfigurationRevisionRead6): Draft {
@@ -55,7 +55,7 @@ function fromConfig(c: ConfigurationRevisionRead6): Draft {
   const context = configurationContext(c), supported = context.kind === 'supported' ? context : null;
   return { description: c.context_snapshot.description, boundary: c.context_snapshot.boundary, assumptions: supported?.assumptions.kind === 'recorded' ? supported.assumptions.items : [], name: c.name, inputs: c.inputs.map(i => ({ target: i.target, value: String(i.value), units: i.units, statement: i.provenance.statement, kind: i.provenance.kind, evidence_version_ids: i.provenance.evidence_version_ids, result_binding: 'result_binding' in i ? i.result_binding : null })), contextEvidence: supported?.generalContext.kind === 'explicit' ? supported.generalContext.evidenceVersionIds : [], originalNotes: c.context_snapshot.notes, evidence: c.evidence_snapshots };
 }
-export function ConfigurationPanel({ modified, onCancelModified, resourceActionsRef, initialRevision = null, api, model, study, authoringDirty, activeRun, onSubmit, onHandle, onInspection, onEvidenceRecords, onViewSourceResult, onViewModelUnit }: { onViewModelUnit?: (model: ModelRevisionRead4, target: PortRef) => void; modified?: {seed: ModifiedRunSeedRead6; source: ConfigurationRevisionRead6}; onCancelModified?: () => void; onViewSourceResult?: (runId: string, output: PortRef) => void; resourceActionsRef?: (element: HTMLDivElement | null) => void; initialRevision?: ModelRevisionRead4 | null; api: HyprnMvpApi; model: ModelDraftRead4 | ModelRevisionRead4; study: Study; authoringDirty: boolean; activeRun: boolean; onSubmit: (configurationId: string) => Promise<void>; onHandle: (h: ConfigurationHandle) => void; onInspection?: (value: ConfigurationInspection) => void; evidence?: EvidenceRecord[]; onEvidenceRecords: (records: EvidenceRecord[]) => void }) {
+export function ConfigurationPanel({ modified, onCancelModified, resourceActionsRef, initialRevision = null, api, model, study, authoringDirty, activeRun, onSubmit, onHandle, onInspection, onEvidenceRecords, onViewSourceResult, onViewModelUnit }: { onViewModelUnit?: (model: ModelRevisionRead5, target: PortRef) => void; modified?: {seed: ModifiedRunSeedRead6; source: ConfigurationRevisionRead6}; onCancelModified?: () => void; onViewSourceResult?: (runId: string, output: PortRef) => void; resourceActionsRef?: (element: HTMLDivElement | null) => void; initialRevision?: ModelRevisionRead5 | null; api: HyprnMvpApi; model: ModelDraftRead5 | ModelRevisionRead5; study: Study; authoringDirty: boolean; activeRun: boolean; onSubmit: (configurationId: string) => Promise<void>; onHandle: (h: ConfigurationHandle) => void; onInspection?: (value: ConfigurationInspection) => void; evidence?: EvidenceRecord[]; onEvidenceRecords: (records: EvidenceRecord[]) => void }) {
   const [seed, setSeed] = useState(modified?.seed);
   const [review, setReview] = useState<
     ConfigurationPreview8 | null
@@ -72,7 +72,7 @@ export function ConfigurationPanel({ modified, onCancelModified, resourceActions
   const previewGeneration = useRef(0);
   const original = useRef<{ id: string; draft: Draft } | null>(null);
   const [attachment, setAttachment] = useState<{ label: string; input?: string; scope: EvidenceResourceRef1 | null } | null>(null);
-  const [snapshot, setSnapshot] = useState<ModelRevisionRead4 | null>(initialRevision);
+  const [snapshot, setSnapshot] = useState<ModelRevisionRead5 | null>(initialRevision);
   const initialDraft = (): Draft => modified ? {...fromConfig(modified.source), name: modified.source.name + ' — modified'} : initialRevision ? { ...empty, description: study.description, boundary: study.boundary, inputs: modelPorts(initialRevision).filter(p => p.direction === 'input' && !initialRevision.connections.some(c => refKey(c.target_ref) === refKey(p.target))).map(p => ({ target: p.target, value: '', units: resolvedUnit(p.units) ?? '', unitChoice: {kind:'unspecified'}, statement: '', kind: 'manual', evidence_version_ids: [] })) } : { ...empty, description: study.description, boundary: study.boundary };
   const [draft, setDraft] = useState<Draft>(initialDraft); const [baseline, setBaseline] = useState<Draft>(initialDraft);
   const [assumptionDirty, setAssumptionDirty] = useState(false);
@@ -88,7 +88,7 @@ export function ConfigurationPanel({ modified, onCancelModified, resourceActions
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState('');
   const [bindingEvidence, setBindingEvidence] = useState<Draft['evidence']>([]);
   const [bindingEvidenceError, setBindingEvidenceError] = useState('');
-  const [binding, setBinding] = useState<ModelRevisionRead4 | null>(null), [paste, setPaste] = useState(''), [proposal, setProposal] = useState<InputDraft[] | null>(null);
+  const [binding, setBinding] = useState<ModelRevisionRead5 | null>(null), [paste, setPaste] = useState(''), [proposal, setProposal] = useState<InputDraft[] | null>(null);
   const [pasteScope, setPasteScope] = useState<string | null>(null), [savingPaste, setSavingPaste] = useState(false);
   const pasteResolution = useRef<((value: Draft | null) => void) | null>(null);
   const guidance = useUnitCatalog(api, study.study_id, model.model_id + '/' + (snapshot?.model_revision_id ?? 'draft'));
@@ -146,7 +146,7 @@ export function ConfigurationPanel({ modified, onCancelModified, resourceActions
     finally { read.done(); locked.current = false; setBusy(false); }
   }
   useEffect(() => { let alive = true; api.configurations(study.study_id).then(v => { if (alive) setCopies(v.filter(v => v.configuration.model_id === model.model_id)); }).catch(e => { if (alive) setError(e); }); return () => { alive = false; }; }, [api, study.study_id, model.model_id]);
-  function copy(config: ConfigurationRevisionRead6, retained: ModelRevisionRead4) {
+  function copy(config: ConfigurationRevisionRead6, retained: ModelRevisionRead5) {
     if (config.model_id !== model.model_id) { setError(new Error('This configuration belongs to another model. Select that model before copying.')); return; }
     const context = configurationContext(config);
     if (context.kind === 'unsupported') { setError(new Error(recordLimitations.configurationUnsupported + ' It cannot be copied here.')); return; }
@@ -308,7 +308,7 @@ export function ConfigurationPanel({ modified, onCancelModified, resourceActions
       evidence: [...d.evidence.filter(e => e.evidence_version_id !== id), snapshot] }));
     setAttachment(null); setNotice('Evidence attached to this draft. Save the configuration to keep the attachment.');
   }
-  function applyBinding(revision: ModelRevisionRead4) {
+  function applyBinding(revision: ModelRevisionRead5) {
     setRetainedEvidence(null); setSnapshot(revision); setSaved(null);
     const free = modelPorts(revision).filter(p => p.direction === 'input' && !revision.connections.some(c => refKey(c.target_ref) === refKey(p.target)));
     const next = { ...draft, inputs: free.map(p => draft.inputs.find(i => refKey(i.target) === refKey(p.target)) ?? { target: p.target, value: '', units: resolvedUnit(p.units) ?? '', unitChoice: {kind:'unspecified' as const}, statement: '', kind: 'manual' as const, evidence_version_ids: [] }) };

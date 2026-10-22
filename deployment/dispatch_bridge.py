@@ -1,10 +1,12 @@
 """Fixed private dispatcher transport shared by local and cloud execution owners."""
 
 import contextlib
+import json
 import queue
 import subprocess
 import sys
 import threading
+import time
 import release as release_binding
 
 
@@ -50,6 +52,24 @@ def native_call(native, method, values, *, read_only=False, exports_only=False, 
     return native.inspect(values[0])
 
 
+def observed_native_call(native, method, values, **options):
+    """Bounded operational timing without inputs, identities or exception text."""
+    started = time.monotonic()
+    outcome = 'failed'
+    try:
+        result = native_call(native, method, values, **options)
+        outcome = 'finished'
+        return result
+    except TimeoutError:
+        outcome = 'timeout'
+        raise
+    finally:
+        if method not in ('require_attestation', 'bundle_runtime', 'matches', 'inspect'):
+            print(json.dumps(dict(event='native_operation', operation=method,
+                                  duration_ms=round((time.monotonic() - started) * 1000, 3),
+                                  outcome=outcome)), file=sys.stderr, flush=True)
+
+
 def bridge_child(
     native,
     command,
@@ -73,10 +93,12 @@ def bridge_child(
     child = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, env=env, cwd=cwd
     )
-    # Exactly two fixed lanes in the existing private stdio channel. The main
+    # Fixed bounded lanes in the existing private stdio channel. The main
     # thread alone touches AiiDA and candidate execution; the reader may only
-    # warm/query immutable numerical state. There is no dispatch queue for runs.
+    # warm/query immutable numerical state, while observation verifies the
+    # retained runtime and attestation. There is no dispatch queue for runs.
     primary_requests = queue.Queue(maxsize=1)
+    observation_requests = queue.Queue(maxsize=1)
     write_lock = threading.Lock()
     stopped = threading.Event()
 
@@ -84,6 +106,23 @@ def bridge_child(
         with write_lock:
             child.stdin.write(bridge_encode(response))
             child.stdin.flush()
+
+    def observe():
+        while not stopped.is_set():
+            try:
+                method, values = observation_requests.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                response = dict(data=observed_native_call(native, method, values))
+            except TimeoutError:
+                response = dict(error='native_timeout')
+            except (OSError, RuntimeError, ValueError):
+                response = dict(error='native_unavailable')
+            try:
+                reply(dict(response, channel='observation'))
+            except (OSError, ValueError):
+                stopped.set()
 
     def receive():
         try:
@@ -99,10 +138,14 @@ def bridge_child(
                     exports_only=exports_only
                     or (allow_exports and bridge_decode(raw).get('method') == 'archive_record'),
                 )
-                if method == 'surrogate':
+                if method in ('require_attestation', 'bundle_runtime'):
+                    observation_requests.put_nowait((method, values))
+                elif method == 'surrogate':
                     try:
-                        response = dict(data=native_call(native, method, values))
-                    except (OSError, RuntimeError, ValueError, TimeoutError):
+                        response = dict(data=observed_native_call(native, method, values))
+                    except TimeoutError:
+                        response = dict(error='native_timeout')
+                    except (OSError, RuntimeError, ValueError):
                         response = dict(error='native_unavailable')
                     reply(dict(response, channel='surrogate'))
                 else:
@@ -114,6 +157,8 @@ def bridge_child(
 
     reader = threading.Thread(target=receive, name='surrogate-bridge', daemon=True)
     reader.start()
+    observer = threading.Thread(target=observe, name='native-observation', daemon=True)
+    observer.start()
     try:
         on_ready()
         while True:
@@ -131,7 +176,7 @@ def bridge_child(
             method, values = bridge_operation(raw, read_only=read_only, exports_only=archive_mode)
             try:
                 with contextlib.redirect_stdout(sys.stderr):
-                    result = native_call(
+                    result = observed_native_call(
                         native,
                         method,
                         values,
@@ -140,7 +185,9 @@ def bridge_child(
                         native_fault=native_fault,
                     )
                 response = dict(data=result)
-            except (OSError, RuntimeError, ValueError, TimeoutError):
+            except TimeoutError:
+                response = dict(error='native_timeout')
+            except (OSError, RuntimeError, ValueError):
                 response = dict(error='native_unavailable')
             reply(response)
         try:
@@ -154,6 +201,7 @@ def bridge_child(
             child.terminate()
             child.wait(timeout=10)
         reader.join(timeout=35)
+        observer.join(timeout=35)
         if hasattr(native, 'close_surrogate'):
             native.close_surrogate()
         child.stdin.close()

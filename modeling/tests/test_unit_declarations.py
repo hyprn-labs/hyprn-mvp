@@ -67,10 +67,11 @@ def test_capability_catalog_and_scoped_jwt(service):
     c=service
     cap=c.call('GET','/capabilities')['data']
     assert '1.3' in cap['contract_versions'] and '3' in cap['schema_versions']
-    assert cap['execution_versions']['bundle_versions']==['10','11']
+    assert cap['execution_versions']['bundle_versions']==['10','11','12']
     assert any(x['id']=='unit_declarations' and x['version']=='1' and x['supported'] for x in cap['capabilities'])
-    cat=c.call('GET','/unit-catalog')['data'];validate('UnitCatalog1',cat)
-    assert len(cat['supported_units'])==48 and len(json.dumps(cat).encode())<16384
+    assert any(x['id']=='unit_declarations' and x['version']=='2' and x['supported'] for x in cap['capabilities'])
+    cat=c.call('GET','/unit-catalog')['data'];validate('UnitCatalog2',cat)
+    assert len(cat['supported_units'])==60 and len(json.dumps(cat).encode())<16384
     for kwargs,code in [({'expired':True},401),({'key':b'wrong'},401),({'permissions':[]},403),({'wrong_hash':True},401)]:
         c.call('GET','/unit-catalog',status=code,**kwargs)
 
@@ -113,9 +114,9 @@ def test_preview_apply_atomic_replay_and_closed_units(service):
     c.call('POST',path+'/edits',{**body,'command_id':uid()},status=409)
     c.call('POST',path+'/edits',{**body,'edits':[]},status=409)
     m=first['data']
-    for bad in ['',{'kind':'physical','expression':'USD'},{'kind':'physical','expression':'m;evil()'},{'kind':'physical','expression':''},{}]:
+    for bad in ['',{'kind':'physical','expression':'EUR'},{'kind':'physical','expression':'m;evil()'},{'kind':'physical','expression':''},{}]:
         attempt=edits({'kind':'dimensionless'});attempt[0]['ports'][0]['units']=bad
-        edit(c,m,attempt,status=422 if (bad.get('expression') if isinstance(bad,dict) else None) in ('USD','m;evil()') else 400)
+        edit(c,m,attempt,status=422 if (bad.get('expression') if isinstance(bad,dict) else None) in ('EUR','m;evil()') else 400)
         assert c.call('GET',path)['data']==m
     attempt=[dict(kind='rename_model',name='rollback'),dict(kind='remove_instance',instance_id=uid())]
     edit(c,m,attempt,status=409);assert c.call('GET',path)['data']==m
@@ -218,7 +219,7 @@ def test_assumptions_and_resolved_incompatible_connections(service):
 
 def test_actionable_unsupported_incompatible_and_prepare_diagnostics(service):
     c=service;m=create(c)
-    bad=edits({'kind':'physical','expression':'USD'})
+    bad=edits({'kind':'physical','expression':'EUR'})
     response=edit(c,m,bad,status=422)
     assert response['error']['fields'][0]['code']=='unit_unsupported'
     assert response['error']['fields'][0]['path']=='edits/0/ports/0/units'
@@ -246,7 +247,7 @@ def test_physical_static_preparation_and_configuration_unit_diagnostics(service)
     assert proof['compatible'] and proof['input_interpretations'][0]['conversion']['destination_value']==1000000
     catalog=c.call('GET','/unit-catalog')['data']
     assert proof['input_interpretations'][0]['conversion']['catalog_digest']==catalog['catalog_digest']
-    for unit,code in [('USD','unit_unsupported'),('kg','unit_incompatible')]:
+    for unit,code in [('EUR','unit_unsupported'),('kg','unit_incompatible')]:
         bad=copy.deepcopy(cfg);bad['inputs'][0]['units']=unit
         result=c.call('POST',path+'/configuration-compatibility',dict(model_revision_id=m['model_revision_id'],configuration_candidate=bad))['data']
         assert not result['compatible']

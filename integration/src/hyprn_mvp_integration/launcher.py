@@ -406,7 +406,7 @@ def verify_bundle(root, runtime, expected_digest=None, selected=None):
     ):
         raise ValueError('Invalid manifest')
     manifest = data_json(manifest_path.read_bytes())
-    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8', '10', '11'):
+    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8', '10', '11', '12'):
         raise ValueError('Unsupported bundle version; create a new run command')
     check_digest(manifest, 'bundle_digest')
     if expected_digest is not None and manifest['bundle_digest'] != expected_digest:
@@ -447,7 +447,7 @@ def verify_execution_bundle(bundle, request, selected):
     """Identical pure preflight before AiiDA node creation and container creation."""
     manifest = bundle['manifest']
     files = bundle['files']
-    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8', '10', '11'):
+    if manifest.get('schema_version') not in ('2', '3', '4', '5', '6', '8', '10', '11', '12'):
         raise ValueError('Unsupported bundle version; create a new run command')
     if manifest['runtime'] != selected['runtime']:
         raise ValueError('Bundle runtime binding mismatch')

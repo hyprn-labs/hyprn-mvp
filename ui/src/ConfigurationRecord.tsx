@@ -7,7 +7,7 @@ import { Assumptions } from './Assumptions';
 import type {
   ConfigurationRevisionRead6,
   EvidenceSnapshot,
-  ModelRevisionRead4,
+  ModelRevisionRead5,
   PortRef,
   RetainedResultsRead3,
 } from './contract';
@@ -44,7 +44,7 @@ export function ConfigurationRecord({
 }: {
   api?: HyprnMvpApi;
   configuration: ConfigurationRevisionRead6;
-  model: ModelRevisionRead4 | null;
+  model: ModelRevisionRead5 | null;
   results?: RetainedResultsRead3 | null;
   onViewSourceResult?: (runId: string, output: PortRef) => void;
 }) {
@@ -269,7 +269,7 @@ export function ModelAssumptionsLink({
 }: {
   api?: HyprnMvpApi;
   studyId?: string;
-  model: ModelRevisionRead4 | null;
+  model: ModelRevisionRead5 | null;
   records: EvidenceSnapshot[];
   configuration?: ConfigurationRevisionRead6;
 }) {

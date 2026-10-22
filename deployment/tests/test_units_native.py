@@ -175,111 +175,82 @@ def test_native_compounds_histories_and_archive():
         assert j.prepared(mixed)['schema_version']=='4'
         assert not j.canary()['candidate_side_effect']
         assert j.process_count()==6
-        # Assess the already retained native records through ordinary study HTTP commands.
-        # Answer authoring must neither launch science nor change any retained run/configuration.
-        from approach_native_fixture import step
-
-        bindings = [
-            dict(
-                binding_id=uid(),
-                model_id=saved['configuration']['model_id'],
-                model_revision_id=saved['configuration']['model_revision_id'],
-            )
-            for _, _, saved, _ in records
-        ]
-        method = step('Compare explicit conversions with retained-result reuse')
-        method.update(
-            purpose='Test the independently specified SI scale relationships.',
-            rationale='Compare independently executed identity models and exact retained reuse.',
-            intent=dict(
-                transformation='Scalar identity with explicit compatible SI unit conversion.',
-                inputs='Specified unit-bearing scalars and exact prior recorded outputs.',
-                outputs='Converted scalar outputs with retained units.',
-                depends_on_step_ids=[],
-            ),
-            implementation_state='linked',
-            implementation_refs=[
-                dict(kind='model', binding_id=binding['binding_id']) for binding in bindings
-            ],
-        )
-        approach = j.save_approach(dict(
-            schema_version='1',
-            question='Do the native fixture calculations preserve the specified SI relationships?',
-            scope='Synthetic scalar identity models with explicit units and exact retained inputs.',
-            limitations='Unit-conversion evidence only; no engineering-validity claim.',
-            open_questions='Independent engineering validation is outside this fixture.',
-            model_bindings=bindings,
-            steps=[method],
-            assumptions=[],
-            basis_refs=[],
-        ))
-        answer_path = 'approach/versions/' + approach['version']['approach_version_id'] + '/answers'
-        assert j.request('GET', answer_path)['items'] == []
-        assert all(
-            result['availability'] == 'available'
-            for _, detail, _, _ in records[:2]
-            for result in detail['history']['results']['outputs']
-        )
-        answer_command = dict(
-            schema_version='1', command_id=uid(), expected_revision=None,
-            approach_version_id=approach['version']['approach_version_id'],
-            observations='The two cited native runs retain available outputs and explicit units.',
-            interpretation=(
-                'Direct and result-linked calculations agree with the specified SI scale '
-                'expectations for this synthetic identity-model comparison.'
-            ),
-            qualifications=['This fixture does not validate an engineering model.'],
-            open_deliverables=['Independent engineering validation remains outside this fixture.'],
-            basis=dict(
-                configuration_revision_ids=[
-                    saved['configuration']['configuration_revision_id']
-                    for _, _, saved, _ in records[:2]
-                ],
-                run_ids=[rid for rid, _, _, _ in records[:2]],
-                evidence_version_ids=[eid],
-            ),
-        )
-        first_answer = j.request('POST', 'answers', answer_command, 201)
-        synthesis_command = dict(
-            answer_command, command_id=uid(), expected_revision=first_answer['answer_version_id'],
-            observations='Six retained native runs cover the stated SI conversion fixture.',
-            interpretation=(
-                'The examined computations support unit conversion and exact retained reuse; '
-                'they establish no physical feasibility conclusion.'
-            ),
-            basis=dict(
-                configuration_revision_ids=[
-                    saved['configuration']['configuration_revision_id']
-                    for _, _, saved, _ in records
-                ],
-                run_ids=[rid for rid, _, _, _ in records],
-                evidence_version_ids=[eid],
-            ),
-        )
-        study_answer = j.request('POST', 'answers', synthesis_command, 201)
-        revised_answer = j.request('POST', 'answers', dict(
-            synthesis_command, command_id=uid(),
-            expected_revision=study_answer['answer_version_id'],
-            qualifications=[
-                'This fixture does not validate an engineering model.',
-                'The comparison covers only the explicitly referenced unit relationships.',
-            ],
-        ), 201)
-        assert revised_answer['previous_version_id'] == study_answer['answer_version_id']
-        assert j.request('GET', 'answers/' + first_answer['answer_version_id']) == first_answer
-        assert j.request('GET', 'answers/' + study_answer['answer_version_id']) == study_answer
-        assert j.process_count() == 6
-        j.offline();j.restart_web()
-        for answer in (first_answer, revised_answer, study_answer):
-            assert j.request('GET', 'answers/' + answer['answer_version_id']) == answer
-        assert {
-            answer['answer_version_id'] for answer in j.request('GET', answer_path)['items']
-        } == {revised_answer['answer_version_id']}
-        receipt = j.request(
-            'GET', 'commands/' + answer_command['command_id'] + '?category=answer_save'
-        )
-        assert receipt['recovery'] == 'adopt' and receipt['result'] == first_answer
-        assert j.process_count() == 6
+        monetary_record = monetary_catalogue_public_authoring_and_restricted_execution(j)
+        answer_records = [*records, monetary_record]
+        # Save current study answers over genuine native results, including monetary basis.
+        alternative = dict(alternative_id=uid(), name='Synthetic native calculations',
+            description='Explicit identity-model cases.', reason='Exercise exact record provenance.')
+        outputs = [next(o for o in detail['history']['results']['outputs']
+                        if o['availability'] == 'available' and (index != 6 or o['units'] == 'USD'))
+                   for index, (_, detail, _, _) in enumerate(answer_records)]
+        criteria = [dict(criterion_id=uid(), kind='objective', name='Recorded quantity ' + str(index + 1),
+            statement='Inspect the exact computed scalar; no physical validity claim.',
+            direction='minimize', units=output['units'], evidence_links=[])
+            for index, output in enumerate(outputs)]
+        brief_state = j.request('GET', 'brief')
+        brief_content = dict(brief_state['draft']['content'], alternatives=[alternative], criteria=criteria)
+        brief_draft = j.request('POST', 'brief/draft', dict(command_id=uid(),
+            expected_revision=brief_state['draft']['revision'], content=brief_content))
+        answer_brief = j.request('POST', 'brief/versions', dict(command_id=uid(),
+            expected_revision=brief_draft['revision']), 201)['version']['brief_version_id']
+        analyses = []
+        for (rid, detail, frozen, _), chosen_output, criterion in zip(answer_records, outputs, criteria):
+            configuration = frozen['configuration']
+            analysis = j.request('POST', 'analyses', dict(command_id=uid(), content=dict(
+                schema_version='1', name='Retained result ' + str(len(analyses) + 1),
+                description='Exact native result and its declared quantity basis.',
+                model_id=configuration['model_id'], model_revision_id=configuration['model_revision_id'],
+                configuration_revision_ids=[configuration['configuration_revision_id']],
+                design=dict(kind='hand_picked'), brief_version_id=answer_brief,
+                criterion_bindings=[dict(criterion_id=criterion['criterion_id'], output=chosen_output['target'])])), 201)
+            analyses.append(analysis['calculation_version_id'])
+        answer_content = dict(schema_version='3', brief_version_id=answer_brief,
+            alternative_mappings=[dict(alternative_id=alternative['alternative_id'], calculation_version_ids=analyses)],
+            comparison=[dict(alternative_id=alternative['alternative_id'], criterion_id=criterion['criterion_id'],
+                calculation_version_id=analysis, run_id=record[0], note='Exact native calculation.',
+                evaluation=None, output_name=None)
+                for record, criterion, analysis in zip(answer_records, criteria, analyses)],
+            justifications=[dict(justification_id=uid(), kind='run', calculation_version_id=analysis,
+                run_id=record[0], relation='supports', reason='The retained native output supplies this scalar.')
+                for record, analysis in zip(answer_records, analyses)],
+            interpretation=dict(interpretation='Native scalar conversions retain exact units and source records.'),
+            outcome=dict(kind='no_recommendation', basis='insufficient_evidence',
+                reason='Synthetic identity calculations establish no engineering feasibility conclusion.'),
+            decisive_uncertainties=[], next_analysis=dict(statement='Independently validate an engineering model.',
+                resolves='Physical validity beyond this units fixture.'), exploration_basis=None,
+            completion=dict(state='interim', deliverables=[]),
+            scientific_review={key: dict(state='limited', explanation='Synthetic scalar checks only.')
+                for key in ('brief_fidelity', 'source_basis', 'physical_validity', 'sensitivity')})
+        assert j.request('GET', 'answer') == dict(draft=None, latest_version=None)
+        legacy_answer = deepcopy(answer_content)
+        legacy_answer['schema_version'] = '2'
+        legacy_answer.pop('completion'); legacy_answer.pop('scientific_review')
+        j.request('POST', 'answer/draft', dict(command_id=uid(), expected_revision=None,
+            content=legacy_answer), 422)
+        written = j.request('POST', 'answer/draft', dict(command_id=uid(), expected_revision=None, content=answer_content))
+        answer_command = dict(command_id=uid(), expected_revision=written['revision'])
+        first_saved = j.request('POST', 'answer/versions', answer_command, 201)
+        first_answer = first_saved['version']
+        money_basis = first_answer['content']['comparison'][-1]['monetary_basis']
+        assert money_basis['catalogue_expression'] == 'USD' and money_basis['price_year'] == 2025
+        assert money_basis['model_revision_id'] == monetary_record[1]['history']['model_snapshot']['model_revision_id']
+        monetary_evidence = json.loads((SCOPE.root / 'evidence/monetary-units.json').read_text())
+        assert money_basis['explanation_digest'] == monetary_evidence['explanation']['digest']
+        revised_content = deepcopy(answer_content)
+        revised_content['interpretation']['interpretation'] = 'The same retained quantities support a revised interpretation with explicit limits.'
+        written = j.request('POST', 'answer/draft', dict(command_id=uid(),
+            expected_revision=first_saved['draft']['revision'], content=revised_content))
+        revised_answer = j.request('POST', 'answer/versions', dict(command_id=uid(),
+            expected_revision=written['revision']), 201)['version']
+        assert revised_answer['version_number'] == first_answer['version_number'] + 1
+        assert j.request('GET', 'answer/versions/' + first_answer['answer_version_id']) == first_answer
+        assert j.process_count() == 7
+        j.offline(); j.restart_web()
+        for answer in (first_answer, revised_answer):
+            assert j.request('GET', 'answer/versions/' + answer['answer_version_id']) == answer
+        assert j.request('GET', 'answer')['latest_version'] == revised_answer
+        assert j.request('POST', 'answer/versions', answer_command, 201) == first_saved
+        assert j.process_count() == 7
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
             assert j.request('GET','configurations/'+saved['configuration']['configuration_revision_id'])==saved
@@ -309,6 +280,46 @@ def test_native_compounds_histories_and_archive():
             archives.append(dict(selected_run_id=selection,manifest=manifest,native_inventory=inventory))
 
         assert set().union(*(set(a['manifest']['computational_run_ids']) for a in archives))=={r[0] for r in records}
+        # The money interpretation belongs to the exact model, separate from native bytes.
+        money_run = monetary_record[0]
+        preview_request = j.request('POST', 'computational-record-previews',
+            dict(command_id=uid(), selected_run_ids=[money_run]), 202)
+        guard.run_export_dispatcher(SCOPE, j.native, j.store.path, preview_request['request_id'])
+        preview = j.request('GET', 'computational-records/' + preview_request['request_id'])
+        assert preview['state'] == 'reviewable', preview
+        created = j.request('POST', 'computational-records', dict(command_id=uid(),
+            preview_id=preview['request_id'],
+            expected_preview_digest=preview['preview']['preview_digest']), 202)
+        guard.run_export_dispatcher(SCOPE, j.native, j.store.path, created['request_id'])
+        ready = j.request('GET', 'computational-records/' + created['request_id'])
+        assert ready['state'] == 'ready', ready
+        response = j.http.get('/api/1/studies/' + j.sid + '/computational-records/'
+                              + created['request_id'] + '/download')
+        assert response.status_code == 200, response.text
+        money_archive = response.content
+        with zipfile.ZipFile(io.BytesIO(money_archive)) as archive:
+            money_manifest = json.loads(archive.read('manifest.json'))
+            assert money_manifest['schema_version'] == '3'
+            assert len(money_manifest['interpretations']) == 1
+            index = money_manifest['interpretations'][0]
+            closure = json.loads(archive.read(index['path']))
+            assert closure['explanation'] == monetary_evidence['explanation']
+            assert closure['model_digest'] == money_basis['model_digest']
+            assert closure['classification'] == 'associated_scientific_context'
+            assert {e['evidence_version_id'] for e in closure['evidence_records']} == {
+                link['evidence_version_id']
+                for item in closure['explanation']['content']['monetary_quantities']
+                for link in item['evidence_links']}
+            native_path = SCOPE.root / 'evidence/monetary-export.aiida'
+            native_path.write_bytes(archive.read('computations.aiida'))
+        service = ComputationalRecords(j.store, SCOPE.root / 'artifacts/money-offline-inspect')
+        _, _, preflight, _ = service._collect(j.actor, j.sid, [money_run])
+        with ArchiveFormatSqlZip().open(native_path, 'r') as archive:
+            inventory, _, _ = Export(j.native, preflight).inspect(archive.get_backend())
+        assert inspect_record(money_archive, native_inventory=inventory) == money_manifest
+        assert canonical(j.payload(money_run)) == monetary_record[3]
+        assert j.process_count() == 7
+        (SCOPE.root / 'evidence/monetary-export.zip').write_bytes(money_archive)
         # Restart the exact model store and check the retained native model revisions.
         j.docker('start',j.name)
         import time
@@ -321,17 +332,12 @@ def test_native_compounds_histories_and_archive():
         assert j.private('GET','/models/'+mixed['model_id']+'/revisions/'+mixed['model_revision_id'])==mixed
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
-        j.scientific_answers = dict(
-            approach_version_id=approach['version']['approach_version_id'],
-            first_answer=first_answer, revised_answer=revised_answer,
-            study_answer=study_answer,
-        )
+        j.scientific_answers = dict(first_answer=first_answer, revised_answer=revised_answer, run_id=records[0][0])
+        records.append(monetary_record)
         browser=j.browser(records)
         proof=dict(passed=True,browser=browser,analytical=EXPECT,records=[dict(run_id=r,history=h,configuration=s,payload_sha256=hashlib.sha256(b).hexdigest()) for r,h,s,b in records],
             scientific_answers=dict(
-                approach_version_id=approach['version']['approach_version_id'],
-                first_answer=first_answer, revised_answer=revised_answer,
-                study_answer=study_answer, application_restart=True,
+                first_answer=first_answer, revised_answer=revised_answer, application_restart=True,
             ),
             legacy=legacy,mixed=mixed,archives=archives,aggregate_archive_refusal=rejected,selected_run_ids=selected,
             modeling_outage=True,application_restart=True,modeling_restart=True,actual_http_jwt=True,
@@ -386,3 +392,127 @@ def test_http_fixture_response_disconnect_boundary(failure):
         with pytest.raises(RuntimeError,match='fixture write'):write_http_response(handler,response)
     else:assert write_http_response(handler,response)==(failure is None)
     assert calls==[200,('content-type','application/json'),('Content-Length','20'),b'exact retained bytes']
+
+
+def monetary_catalogue_public_authoring_and_restricted_execution(j):
+    """Money stays dimensional through the same public/native journey and retained UI."""
+    before_processes = j.process_count()
+    evidence = j.evidence('Declared constant 2025 USD, analytical scale checks only')
+    eid = evidence['evidence_version_id']
+    catalogue = j.request('GET', 'unit-catalog')
+    assert catalogue['schema_version'] == '2'
+    assert {x['expression'] for x in catalogue['monetary_units']} == {
+        'USD', 'kUSD', 'MUSD', 'USD/pax', 'USD/kg', 'USD/m**3', 'USD/h',
+        'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ',
+    }
+    study = j.http.get('/api/1/studies/' + j.sid).json()['data']
+    draft = j.request('POST', 'models', dict(command_id=uid(),
+        expected_revision=study['revision'], name='Explicit monetary dimensions', template='empty'), 201)
+    mp = 'models/' + draft['model_id']
+    edits = [edit for name, units in [('money', 'USD'), ('scaled', 'kUSD'),
+             ('mass_price', 'USD/kg'), ('energy_price', 'USD/J'), ('plain', '')]
+             for edit in (component(name, units), instance(name))]
+    edits.append(dict(kind='connect', temp_key='scale_connection',
+        source_ref=dict(instance_temp_key='money_instance', definition_temp_key='money', port_temp_key='y'),
+        target_ref=dict(instance_temp_key='scaled_instance', definition_temp_key='scaled', port_temp_key='x')))
+    draft = j.request('POST', mp + '/edits', dict(schema_version='5', command_id=uid(),
+        expected_revision=draft['draft_revision'], edits=edits))
+    bad_connection = dict(kind='connect', temp_key='invalid',
+        source_ref=targets(draft, 'money')['y'], target_ref=targets(draft, 'plain')['x'])
+    j.request('POST', mp + '/preview', dict(schema_version='5',
+        expected_revision=draft['draft_revision'], edits=[bad_connection]), 422)
+    j.request('POST', mp + '/preview', dict(schema_version='5',
+        expected_revision=draft['draft_revision'], edits=[component('unsupported', 'EUR')]), 400)
+    model = j.request('POST', mp + '/commits', dict(command_id=uid(),
+        expected_revision=draft['draft_revision']))
+    assert model['schema_version'] == '5'
+    initial_assignments = [literal(targets(model, name)['x'], value, unit, eid) for name, value, unit in [
+        ('money', 2, 'MUSD'), ('mass_price', 4, 'USD/kg'),
+        ('energy_price', 6, 'USD/MJ'), ('plain', 7, '')]]
+    j.request('POST', 'configurations/preview',
+              j.configuration(model, 'Missing monetary basis', initial_assignments, evidence), 422)
+    definitions = {d['definition_version_id']: d for d in model['definitions']}
+    monetary = [dict(instance_id=i['instance_id'], port_id=p['port_id'],
+                    catalogue_expression=p['units']['expression'], price_year=2025,
+                    economic_basis='Constant 2025 USD, excluding taxes.',
+                    evidence_links=[dict(evidence_version_id=eid, relation='supports')])
+                for i in model['instances'] for p in definitions[i['definition_version_id']]['ports']
+                if p['units']['kind'] == 'physical']
+    explanation = dict(schema_version='3', represents='Dimensional monetary scalar checks.',
+        basis='Explicit constant price basis.', calculation_logic='Identity and engine scale conversions.',
+        limits='Synthetic units acceptance, no economic forecast.', components=[],
+        component_details=[], evidence_links=[], monetary_quantities=monetary)
+    incompatible = deepcopy(explanation)
+    scaled_input = targets(model, 'scaled')['x']
+    next(x for x in incompatible['monetary_quantities']
+         if x['instance_id'] == scaled_input['instance_id'] and x['port_id'] == scaled_input['port_id'])['price_year'] = 2024
+    written = j.request('POST', mp + '/explanation/draft', dict(command_id=uid(),
+        expected_revision=None, content=incompatible))
+    j.request('POST', mp + '/explanation/versions', dict(command_id=uid(),
+        expected_revision=written['revision'], model_revision_id=model['model_revision_id']), 422)
+    incompatible = deepcopy(explanation)
+    incompatible['monetary_quantities'][0]['catalogue_expression'] = 'USD/kg'
+    written = j.request('POST', mp + '/explanation/draft', dict(command_id=uid(),
+        expected_revision=written['revision'], content=incompatible))
+    j.request('POST', mp + '/explanation/versions', dict(command_id=uid(),
+        expected_revision=written['revision'], model_revision_id=model['model_revision_id']), 422)
+    written = j.request('POST', mp + '/explanation/draft', dict(command_id=uid(),
+        expected_revision=written['revision'], content=explanation))
+    saved_basis = j.request('POST', mp + '/explanation/versions', dict(command_id=uid(),
+        expected_revision=written['revision'], model_revision_id=model['model_revision_id']), 201)['version']
+    assignments = [literal(targets(model, name)['x'], value, unit, eid) for name, value, unit in [
+        ('money', 2, 'MUSD'), ('mass_price', 4, 'USD/kg'),
+        ('energy_price', 6, 'USD/MJ'), ('plain', 7, '')]]
+    request = j.configuration(model, 'Explicit monetary inputs', assignments, evidence)
+    preview = j.request('POST', 'configurations/preview', request)
+    configured = j.request('POST', 'configurations', dict(command_id=uid(), configuration_id=None,
+        expected_revision=None, configuration=request, expected_preview_digest=preview['candidate_digest']), 201)
+    assert configured['schema_version'] == '10'
+    pending = j.request('POST', 'runs', dict(command_id=uid(),
+        configuration_revision_id=configured['configuration']['configuration_revision_id']), 202)
+    j.dispatch(pending['run_id'])
+    detail = j.request('GET', 'runs/' + pending['run_id'])
+    (SCOPE.root / 'evidence/monetary-run-detail.json').write_text(json.dumps(detail, indent=2))
+    assert detail['state'] == 'recorded' and not detail['history']['errors'], json.dumps(detail)
+    assert detail['history']['results']['execution']['state'] == 'finished'
+    assert detail['history']['history_schema_version'] == '9'
+    assert detail['history']['bundle']['schema_version'] == '12'
+    assert detail['history']['model_snapshot'] == model
+    for name, value, unit in [('money', 2e6, 'USD'), ('scaled', 2000, 'kUSD'),
+                              ('mass_price', 4, 'USD/kg'), ('energy_price', 6e-6, 'USD/J'), ('plain', 7, '')]:
+        found = output(detail, targets(model, name)['y'])
+        near(found['value'], value)
+        assert found['units'] == unit
+    assert saved_basis['model_digest'] == model['digest']
+    reread = j.request('GET', mp + '/revisions/' + model['model_revision_id'] + '/explanation')['explanation']
+    assert reread == saved_basis
+    # A separate exact model uses a different declared year. Feeding it a prior
+    # monetary result is a cross-model connection, not an inflation conversion.
+    study = j.http.get('/api/1/studies/' + j.sid).json()['data']
+    other = j.request('POST', 'models', dict(command_id=uid(),
+        expected_revision=study['revision'], name='Other price year', template='empty'), 201)
+    op = 'models/' + other['model_id']
+    other = j.request('POST', op + '/edits', dict(schema_version='5', command_id=uid(),
+        expected_revision=other['draft_revision'], edits=[component('recipient', 'USD'), instance('recipient')]))
+    other = j.request('POST', op + '/commits', dict(command_id=uid(), expected_revision=other['draft_revision']))
+    other_targets = targets(other, 'recipient')
+    other_explanation = deepcopy(explanation)
+    other_explanation['monetary_quantities'] = [dict(target, catalogue_expression='USD', price_year=2024,
+        economic_basis='Constant 2025 USD, excluding taxes.',
+        evidence_links=[dict(evidence_version_id=eid, relation='supports')]) for target in other_targets.values()]
+    other_written = j.request('POST', op + '/explanation/draft', dict(command_id=uid(),
+        expected_revision=None, content=other_explanation))
+    j.request('POST', op + '/explanation/versions', dict(command_id=uid(),
+        expected_revision=other_written['revision'], model_revision_id=other['model_revision_id']), 201)
+    linked = dict(kind='run_result', target=other_targets['x'], source_run_id=detail['run_id'],
+        source_output=targets(model, 'money')['y'], expected_results_digest=digest(detail['history']['results']),
+        provenance=dict(kind='manual', statement='Exact prior output, no inflation conversion.', evidence_version_ids=[eid]))
+    rejected = j.request('POST', 'configurations/preview',
+                        j.configuration(other, 'Incompatible price year', [linked], evidence), 422)
+    assert rejected['fields'][0]['code'] == 'monetary_basis_mismatch'
+    assert j.process_count() == before_processes + 1
+    (SCOPE.root / 'evidence/monetary-units.json').write_text(json.dumps(dict(
+        catalogue=catalogue, model_revision_id=model['model_revision_id'], model_digest=model['digest'],
+        configuration=configured['configuration'], explanation=saved_basis,
+        run_id=detail['run_id'], history=detail['history']), indent=2))
+    return detail['run_id'], detail, configured, canonical(j.payload(detail['run_id']))

@@ -160,6 +160,44 @@ DEFINITIONS = {
     ),
 }
 
+DEFINITIONS['StudyDeliverable1'] = _object(dict(
+    deliverable_id=_ID,
+    kind=dict(enum=['assessment', 'interactive_exploration']),
+    statement=_STATEMENT,
+))
+DEFINITIONS['StudyBriefContent2'] = deepcopy(DEFINITIONS['StudyBriefContent1'])
+DEFINITIONS['StudyBriefContent2']['properties'].update(
+    schema_version=dict(const='2'),
+    deliverables=dict(type='array', maxItems=32, items={'$ref': '#/$defs/StudyDeliverable1'}),
+)
+DEFINITIONS['StudyBriefContent2']['required'].append('deliverables')
+for _kind in ('Draft', 'Version', 'State', 'DraftSave', 'VersionSaved', 'VersionPage'):
+    _raw = json.dumps(DEFINITIONS[f'StudyBrief{_kind}1'])
+    for _ref in ('Content', 'Draft', 'Version'):
+        _raw = _raw.replace(f'StudyBrief{_ref}1', f'StudyBrief{_ref}2')
+    _schema = json.loads(_raw)
+    if 'schema_version' in _schema['properties']:
+        _schema['properties']['schema_version'] = dict(const='2')
+    DEFINITIONS[f'StudyBrief{_kind}2'] = _schema
+for _kind in ('Content', 'Draft', 'Version', 'DraftSave'):
+    DEFINITIONS[f'StudyBrief{_kind}Read2'] = dict(anyOf=[
+        {'$ref': f'#/$defs/StudyBrief{_kind}1'},
+        {'$ref': f'#/$defs/StudyBrief{_kind}2'},
+    ])
+for _kind in ('State', 'VersionSaved', 'VersionPage'):
+    _raw = json.dumps(DEFINITIONS[f'StudyBrief{_kind}2'])
+    for _ref in ('Draft', 'Version'):
+        _raw = _raw.replace(f'StudyBrief{_ref}2', f'StudyBrief{_ref}Read2')
+    DEFINITIONS[f'StudyBrief{_kind}Read2'] = json.loads(_raw)
+
+
+def current_content(content):
+    """Upgrade an editing copy only; historical requirements are never invented."""
+    value = deepcopy(content)
+    value.update(schema_version='2', deliverables=value.get('deliverables', []))
+    return value
+
+
 _VALIDATORS = {}
 
 
@@ -173,6 +211,13 @@ def _validator(name):
 
 
 def validate_brief(name, value, *, retained=False):
+    # Select only a declared supported format, preserving useful field diagnostics
+    # inside successor request unions. Unknown formats still fail the closed union.
+    if name == 'StudyBriefDraftSaveRead2' and isinstance(value, dict):
+        content = value.get('content')
+        version = content.get('schema_version') if isinstance(content, dict) else None
+        if version in ('1', '2'):
+            name = 'StudyBriefDraftSave' + version
     errors = list(_validator(name).iter_errors(value))
     if errors:
         if retained:
@@ -220,6 +265,9 @@ def _now():
 def _identity_problems(content):
     """Item identities are unique within each list; names of alternatives and criteria too."""
     problems = []
+    deliverables = [item['deliverable_id'] for item in content.get('deliverables', [])]
+    if len(deliverables) != len(set(deliverables)):
+        problems.append(issue(['deliverables'], 'Each deliverable needs its own identity.'))
     for field, key in (
         ('alternatives', 'alternative_id'),
         ('criteria', 'criterion_id'),
@@ -250,7 +298,7 @@ def read_stored(row, sid, name, key):
         raise DomainError('resource_not_found', 404)
     try:
         value = json.loads(row['payload'])
-        validate_brief(name, value, retained=True)
+        validate_brief(name[:-1] + value['schema_version'], value, retained=True)
         if value['study_id'] != sid or value[key] != row[key]:
             raise ValueError('Study brief identity mismatch')
         if name == 'StudyBriefVersion1' and (
@@ -340,14 +388,14 @@ class Briefs:
         body = deepcopy(body)
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid, write=True)
-        validate_brief('StudyBriefDraftSave1', body)
+        validate_brief('StudyBriefDraftSaveRead2', body)
 
         def operation(db):
             previous = self._draft(db, sid)
             self.store.cas(previous['revision'] if previous else None, body['expected_revision'])
             self._check_references(db, sid, body['content'])
             draft = dict(
-                schema_version='1',
+                schema_version=body['content']['schema_version'],
                 study_id=sid,
                 revision=uid(),
                 based_on_version_id=previous['based_on_version_id'] if previous else None,
@@ -355,7 +403,7 @@ class Briefs:
                 updated_by=actor,
                 updated_at=_now(),
             )
-            validate_brief('StudyBriefDraft1', draft, retained=True)
+            validate_brief('StudyBriefDraftRead2', draft, retained=True)
             db.execute(
                 'INSERT INTO study_brief_drafts VALUES(?,?,?) ON CONFLICT(study_id) '
                 'DO UPDATE SET revision=excluded.revision,payload=excluded.payload',
@@ -385,7 +433,7 @@ class Briefs:
             self._check_references(db, sid, draft['content'])
             latest = self._latest(db, sid)
             version = dict(
-                schema_version='1',
+                schema_version=draft['schema_version'],
                 study_id=sid,
                 brief_version_id=uid(),
                 version_number=latest['version_number'] + 1 if latest else 1,
@@ -395,7 +443,7 @@ class Briefs:
                 created_at=_now(),
             )
             version['digest'] = digest(version)
-            validate_brief('StudyBriefVersion1', version, retained=True)
+            validate_brief('StudyBriefVersionRead2', version, retained=True)
             db.execute(
                 'INSERT INTO study_brief_versions VALUES(?,?,?,?)',
                 (

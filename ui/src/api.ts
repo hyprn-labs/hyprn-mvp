@@ -1,7 +1,7 @@
 import type { AnalysisExecution1 } from './contract';
 import type {
   AssistantBudgetRead2,
-  AssistantConversationRead3,
+  AssistantConversationRead4,
   AssistantMessageRequest1,
 } from './contract';
 import type { ConfigurationSummary1 } from './contract';
@@ -33,36 +33,36 @@ import type {
   ReferenceMarkState1,
 } from './contract';
 import type {
-  ModelExplanationDraftRead2,
-  ModelExplanationDraftSaveRead2,
-  ModelExplanationStateRead2,
+  ModelExplanationDraftRead3,
+  ModelExplanationDraftSaveRead3,
+  ModelExplanationStateRead3,
   ModelExplanationVersionSave1,
-  ModelExplanationVersionSavedRead2,
-  ModelVersionExplanationRead2,
+  ModelExplanationVersionSavedRead3,
+  ModelVersionExplanationRead3,
 } from './contract';
 import type {
-  StudyAnswerDraft2,
-  StudyAnswerDraftSave2,
-  StudyAnswerStateRead2,
-  StudyAnswerVersionRead2,
-  StudyAnswerVersionPageRead2,
+  StudyAnswerDraftRead3,
+  StudyAnswerDraftSaveRead3,
+  StudyAnswerStateRead3,
+  StudyAnswerVersionRead3,
+  StudyAnswerVersionPageRead3,
   StudyAnswerVersionSave1,
-  StudyAnswerVersionSavedRead2,
+  StudyAnswerVersionSavedRead3,
 } from './contract';
 import type {
-  StudyBriefVersion1,
-  StudyBriefDraft1,
-  StudyBriefDraftSave1,
-  StudyBriefState1,
-  StudyBriefVersionPage1,
+  StudyBriefVersionRead2,
+  StudyBriefDraftRead2,
+  StudyBriefDraftSaveRead2,
+  StudyBriefStateRead2,
+  StudyBriefVersionPageRead2,
   StudyBriefVersionSave1,
-  StudyBriefVersionSaved1,
+  StudyBriefVersionSavedRead2,
 } from './contract';
 import type {
   Study,
   Association,
-  ModelDraftRead4,
-  ModelRevisionRead4,
+  ModelDraftRead5,
+  ModelRevisionRead5,
   Edit2,
   Source,
   Error as ContractError,
@@ -76,7 +76,7 @@ import type {
   EvidenceCreate2,
   ExecutionReadiness,
   Session,
-  ApplyRead4,
+  ApplyRead5,
   ResultSourcePage,
   ModifiedRunSeed1,
   ApplicationCapabilities,
@@ -117,7 +117,7 @@ import type {
   ApproachReceiptRead2,
   ApproachReceiptCategory1,
 } from './contract';
-import type { UnitCatalog1, PublicNewModel } from './contract';
+import type { UnitCatalog2, PublicNewModel } from './contract';
 import type { StudyArchiveCommand } from './contract';
 import type { ReceiptError } from './contract';
 import type { AgentAttribution1, AgentAttributionPage1 } from './contract';
@@ -219,7 +219,7 @@ export const sourceText = (source: Source) =>
     Uint8Array.from(atob(source.bytes), (c) => c.charCodeAt(0)),
   );
 // Closed typed commands are preserved from preview through apply/recovery.
-export function validateEditCommand(command: ApplyRead4, snapshot?: ModelDraftRead4) {
+export function validateEditCommand(command: ApplyRead5, snapshot?: ModelDraftRead5) {
   if (!command.edits.length || command.edits.length > 256)
     throw new Error('Batch must contain 1–256 edits; it will not be split.');
   if (new TextEncoder().encode(JSON.stringify(command)).length > 2 * 1024 * 1024)
@@ -280,10 +280,10 @@ export class HyprnMvpApi {
         signal,
       )
     ).data;
-  assistant = async (sid: string, signal?: AbortSignal) =>
+  assistant = async (sid: string, signal?: AbortSignal, page: { after?: string; before?: string } = {}) =>
     (
-      await this.request<AssistantConversationRead3>(
-        `/studies/${sid}/assistant`,
+      await this.request<AssistantConversationRead4>(
+        `/studies/${sid}/assistant${Object.keys(page).length ? `?${new URLSearchParams(page)}` : ''}`,
         undefined,
         'GET',
         signal,
@@ -291,25 +291,25 @@ export class HyprnMvpApi {
     ).data;
   assistantSend = async (sid: string, body: AssistantMessageRequest1) =>
     (
-      await this.request<AssistantConversationRead3>(
+      await this.request<AssistantConversationRead4>(
         `/studies/${sid}/assistant/messages`,
         body,
         'POST',
       )
     ).data;
   assistantResume = async (sid: string) =>
-    (await this.request<AssistantConversationRead3>(`/studies/${sid}/assistant/resume`, {}, 'POST'))
+    (await this.request<AssistantConversationRead4>(`/studies/${sid}/assistant/resume`, {}, 'POST'))
       .data;
   assistantStop = async (sid: string) =>
-    (await this.request<AssistantConversationRead3>(`/studies/${sid}/assistant/stop`, {}, 'POST'))
+    (await this.request<AssistantConversationRead4>(`/studies/${sid}/assistant/stop`, {}, 'POST'))
       .data;
   /** The study brief: its draft and latest saved version, the saved versions (newest first,
    * paged by version number), and the draft and version commands on the shared receipt path. */
   brief = async (sid: string, signal?: AbortSignal) =>
-    (await this.request<StudyBriefState1>(`/studies/${sid}/brief`, undefined, 'GET', signal)).data;
+    (await this.request<StudyBriefStateRead2>(`/studies/${sid}/brief`, undefined, 'GET', signal)).data;
   briefVersions = async (sid: string, before?: number, signal?: AbortSignal) =>
     (
-      await this.request<StudyBriefVersionPage1>(
+      await this.request<StudyBriefVersionPageRead2>(
         `/studies/${sid}/brief/versions?limit=100${before === undefined ? '' : `&before=${before}`}`,
         undefined,
         'GET',
@@ -318,19 +318,19 @@ export class HyprnMvpApi {
     ).data;
   briefVersion = async (sid: string, versionId: string, signal?: AbortSignal) =>
     (
-      await this.request<StudyBriefVersion1>(
+      await this.request<StudyBriefVersionRead2>(
         `/studies/${sid}/brief/versions/${versionId}`,
         undefined,
         'GET',
         signal,
       )
     ).data;
-  saveBriefDraft = async (sid: string, body: StudyBriefDraftSave1) =>
-    (await this.mutate<StudyBriefDraft1>(`/studies/${sid}/brief/draft`, body, 'brief_draft', sid))
+  saveBriefDraft = async (sid: string, body: StudyBriefDraftSaveRead2) =>
+    (await this.mutate<StudyBriefDraftRead2>(`/studies/${sid}/brief/draft`, body, 'brief_draft', sid))
       .data;
   saveBriefVersion = async (sid: string, body: StudyBriefVersionSave1) =>
     (
-      await this.mutate<StudyBriefVersionSaved1>(
+      await this.mutate<StudyBriefVersionSavedRead2>(
         `/studies/${sid}/brief/versions`,
         body,
         'brief_version',
@@ -342,7 +342,7 @@ export class HyprnMvpApi {
    * version commands on the shared receipt path. Reads never depend on the modeling service. */
   modelExplanation = async (sid: string, mid: string, signal?: AbortSignal) =>
     (
-      await this.request<ModelExplanationStateRead2>(
+      await this.request<ModelExplanationStateRead3>(
         modelPath(sid, mid) + '/explanation',
         undefined,
         'GET',
@@ -351,16 +351,16 @@ export class HyprnMvpApi {
     ).data;
   modelVersionExplanation = async (sid: string, mid: string, rid: string, signal?: AbortSignal) =>
     (
-      await this.request<ModelVersionExplanationRead2>(
+      await this.request<ModelVersionExplanationRead3>(
         modelPath(sid, mid) + `/revisions/${rid}/explanation`,
         undefined,
         'GET',
         signal,
       )
     ).data;
-  saveModelExplanationDraft = async (sid: string, mid: string, body: ModelExplanationDraftSaveRead2) =>
+  saveModelExplanationDraft = async (sid: string, mid: string, body: ModelExplanationDraftSaveRead3) =>
     (
-      await this.mutate<ModelExplanationDraftRead2>(
+      await this.mutate<ModelExplanationDraftRead3>(
         modelPath(sid, mid) + '/explanation/draft',
         body,
         'model_explanation_draft',
@@ -373,7 +373,7 @@ export class HyprnMvpApi {
     body: ModelExplanationVersionSave1,
   ) =>
     (
-      await this.mutate<ModelExplanationVersionSavedRead2>(
+      await this.mutate<ModelExplanationVersionSavedRead3>(
         modelPath(sid, mid) + '/explanation/versions',
         body,
         'model_explanation_version',
@@ -383,11 +383,11 @@ export class HyprnMvpApi {
   /** The study answer (ADR-0008, ADR-0010): its draft and latest saved version, the saved
    * versions (newest first, paged by version number), and the draft and version commands. */
   studyAnswer = async (sid: string, signal?: AbortSignal) =>
-    (await this.request<StudyAnswerStateRead2>(`/studies/${sid}/answer`, undefined, 'GET', signal))
+    (await this.request<StudyAnswerStateRead3>(`/studies/${sid}/answer`, undefined, 'GET', signal))
       .data;
   studyAnswerVersions = async (sid: string, before?: number, signal?: AbortSignal) =>
     (
-      await this.request<StudyAnswerVersionPageRead2>(
+      await this.request<StudyAnswerVersionPageRead3>(
         `/studies/${sid}/answer/versions?limit=100` +
           (before === undefined ? '' : `&before=${before}`),
         undefined,
@@ -397,16 +397,16 @@ export class HyprnMvpApi {
     ).data;
   studyAnswerVersion = async (sid: string, versionId: string, signal?: AbortSignal) =>
     (
-      await this.request<StudyAnswerVersionRead2>(
+      await this.request<StudyAnswerVersionRead3>(
         `/studies/${sid}/answer/versions/${versionId}`,
         undefined,
         'GET',
         signal,
       )
     ).data;
-  saveStudyAnswerDraft = async (sid: string, body: StudyAnswerDraftSave2) =>
+  saveStudyAnswerDraft = async (sid: string, body: StudyAnswerDraftSaveRead3) =>
     (
-      await this.mutate<StudyAnswerDraft2>(
+      await this.mutate<StudyAnswerDraftRead3>(
         `/studies/${sid}/answer/draft`,
         body,
         'answer_draft',
@@ -415,7 +415,7 @@ export class HyprnMvpApi {
     ).data;
   saveStudyAnswerVersion = async (sid: string, body: StudyAnswerVersionSave1) =>
     (
-      await this.mutate<StudyAnswerVersionSavedRead2>(
+      await this.mutate<StudyAnswerVersionSavedRead3>(
         `/studies/${sid}/answer/versions`,
         body,
         'answer_version',
@@ -669,7 +669,7 @@ export class HyprnMvpApi {
       )
     ).data;
   unitCatalog = async (sid: string, signal?: AbortSignal) =>
-    (await this.request<UnitCatalog1>(`/studies/${sid}/unit-catalog`, undefined, 'GET', signal))
+    (await this.request<UnitCatalog2>(`/studies/${sid}/unit-catalog`, undefined, 'GET', signal))
       .data;
 
   modifiedRunSeedRead = async (sid: string, rid: string, signal?: AbortSignal) =>
@@ -1046,12 +1046,12 @@ export class HyprnMvpApi {
   models = (sid: string, signal?: AbortSignal) =>
     this.list<Association>(`/studies/${sid}/models`, signal);
   model = async (sid: string, mid: string, signal?: AbortSignal) =>
-    (await this.request<ModelDraftRead4>(modelPath(sid, mid), undefined, 'GET', signal)).data;
+    (await this.request<ModelDraftRead5>(modelPath(sid, mid), undefined, 'GET', signal)).data;
   revisions = (sid: string, mid: string, signal?: AbortSignal) =>
     this.list<RevisionSummary>(modelPath(sid, mid) + '/revisions', signal);
   revision = async (sid: string, mid: string, rid: string, signal?: AbortSignal) =>
     (
-      await this.request<ModelRevisionRead4>(
+      await this.request<ModelRevisionRead5>(
         modelPath(sid, mid) + '/revisions/' + rid,
         undefined,
         'GET',
@@ -1192,7 +1192,7 @@ export class HyprnMvpApi {
       )
     ).data;
   createModelCommand = async (sid: string, command: PublicNewModel) =>
-    (await this.mutate<ModelDraftRead4>(`/studies/${sid}/models`, command, 'model', sid)).data;
+    (await this.mutate<ModelDraftRead5>(`/studies/${sid}/models`, command, 'model', sid)).data;
   createModel = async (study: Study, name: string, template: 'empty' | 'two_component_example') =>
     this.createModelCommand(study.study_id, {
       command_id: crypto.randomUUID(),
@@ -1200,11 +1200,11 @@ export class HyprnMvpApi {
       name,
       template,
     });
-  previewEdits = async (model: ModelDraftRead4, command: ApplyRead4) => {
+  previewEdits = async (model: ModelDraftRead5, command: ApplyRead5) => {
     validateEditCommand(command);
-    const { command_id: _commandId, ...preview }: ApplyRead4 = command;
+    const { command_id: _commandId, ...preview }: ApplyRead5 = command;
     const value = (
-      await this.request<ModelDraftRead4>(
+      await this.request<ModelDraftRead5>(
         modelPath(model.study_id, model.model_id) + '/preview',
         preview,
       )
@@ -1212,10 +1212,10 @@ export class HyprnMvpApi {
     validateEditCommand(command, value);
     return value;
   };
-  applyCommand = async (model: ModelDraftRead4, command: ApplyRead4) => {
+  applyCommand = async (model: ModelDraftRead5, command: ApplyRead5) => {
     validateEditCommand(command);
     return (
-      await this.mutate<ModelDraftRead4>(
+      await this.mutate<ModelDraftRead5>(
         modelPath(model.study_id, model.model_id) + '/edits',
         command,
         'model',
@@ -1223,8 +1223,8 @@ export class HyprnMvpApi {
       )
     ).data;
   };
-  apply = async (model: ModelDraftRead4, edits: Edit2[]) => {
-    if (model.schema_version === '3' || model.schema_version === '4')
+  apply = async (model: ModelDraftRead5, edits: Edit2[]) => {
+    if (['3', '4', '5'].includes(model.schema_version))
       throw new Error('Use an explicit version3 or version4 command for this model.');
     return this.applyCommand(model, {
       schema_version: '2',
@@ -1233,9 +1233,9 @@ export class HyprnMvpApi {
       edits,
     });
   };
-  commitModel = async (model: ModelDraftRead4) =>
+  commitModel = async (model: ModelDraftRead5) =>
     (
-      await this.mutate<ModelRevisionRead4>(
+      await this.mutate<ModelRevisionRead5>(
         modelPath(model.study_id, model.model_id) + '/commits',
         { command_id: crypto.randomUUID(), expected_revision: model.draft_revision } as {
           command_id: string;

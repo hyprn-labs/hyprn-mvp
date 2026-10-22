@@ -818,3 +818,310 @@ def test_user_spending_crosses_studies_without_crossing_accounts_on_postgres(hos
             await allowance.check(store, Costs(), subjects[0])
         assert (await allowance.check(store, Costs(), subjects[1]))[0] == 30
     asyncio.run(exercise())
+
+
+def test_lifecycle_transition_does_not_rewrite_retained_bytes(hosted):
+    from calculation_fixture import seed
+    from hyprn_mvp_app.execution import Submissions
+    from hyprn_mvp_app.history import History
+
+    _, store, accounts = hosted
+    actor = accounts[0]['actor']
+    sid = study(store, actor)
+    with actor_scope(actor):
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+        run = sample['submit']()
+        with store.connection(write=True) as db:
+            row = db.execute('SELECT payload FROM outbox WHERE run_id=?', (run['run_id'],)).fetchone()
+            document = json.loads(row['payload'])
+            document['retained_fixture'] = 'x' * (2 * 1024 * 1024)
+            db.execute('UPDATE outbox SET payload=? WHERE run_id=?', (json.dumps(document), run['run_id']))
+        with store.connection() as db:
+            before = db.execute('SELECT xmin::text AS revision,payload,payload_sha256 FROM outbox WHERE run_id=?',
+                                (run['run_id'],)).fetchone()
+        with store.connection(write=True) as db:
+            Submissions(store, None, None)._state(db, sid, run['command_id'], run['run_id'], 'dispatching')
+        with store.connection() as db:
+            after = db.execute('SELECT xmin::text AS revision,payload,payload_sha256 FROM outbox WHERE run_id=?',
+                               (run['run_id'],)).fetchone()
+        assert after == before, 'Lifecycle transitions must never write the immutable payload row'
+        assert History(store).submission_read(actor, sid, run['run_id'])['state'] == 'dispatching'
+
+
+def test_public_run_restart_records_without_rewriting_prepared_document(hosted):
+    import base64
+    from execution_fixtures import fixture, runtime_fixture
+    from hyprn_mvp_app.contracts import digest
+    from hyprn_mvp_app.execution import Submissions, executable_digest
+
+    fixture_db, store, accounts = hosted
+    actor = accounts[0]['actor']
+    sid = study(store, actor)
+    case = fixture('chain')
+    config = case['frozen']['configuration']
+    config['study_id'] = sid
+    config['digest'] = digest({k: v for k, v in config.items() if k != 'digest'})
+    prepared = case['prepared']
+    prepared['configuration_digest'] = config['digest']
+    prepared['executable_content_digest'] = executable_digest(prepared)
+    prepared['prepared_digest'] = digest({k: v for k, v in prepared.items() if k != 'prepared_digest'})
+    with actor_scope(actor), store.connection(write=True) as db:
+        db.execute('INSERT INTO configurations VALUES(?,?,?,?)',
+                   (config['configuration_revision_id'], config['configuration_id'], sid, json.dumps(case['frozen'])))
+    outputs = json.loads(case['files'][prepared['entrypoint']['bindings_path']])['outputs']
+
+    class Native:
+        launches = 0
+
+        def require_attestation(self):
+            return True
+
+        def bundle_runtime(self):
+            return runtime_fixture()
+
+        def launch(self, bundle, request):
+            self.launches += 1
+            self.bundle, self.request = bundle, request
+            self.association = dict(store_uuid=uid(), process_uuid=uid())
+            return self.association
+
+        def launch_budgeted(self, bundle, request, wall_seconds):
+            return self.launch(bundle, request)
+
+        def read_record(self, request, association):
+            assert request == self.request and association == self.association
+            results = dict(schema_version='1', run_id=request['run_id'], bundle_digest=request['bundle_digest'],
+                execution=dict(state='finished', exit_code=0, message='Retained fixture'),
+                convergence=dict(state='not_applicable', diagnostics_ref=None),
+                optimization=dict(termination='not_applicable', feasibility='not_applicable'),
+                completeness=dict(expected=len(outputs), available=len(outputs), failed=0, unavailable=0),
+                outputs=[dict(target=o['target'], value=2.0, units=o['units'], availability='available',
+                    reason=None, producer_completed=True, assigned=True) for o in outputs],
+                criteria=[], applicability=dict(state='unassessed', evidence_refs=[]), artifacts=[])
+            return dict(association, request=request, bundle=self.bundle, results=results,
+                        assessment=None, artifacts={}, errors=[], process_state='finished', exit_status=0)
+
+    native = Native()
+    worker = Store.postgres(fixture_db['request'], fixture_db['auth'],
+                            artifact_root=store.artifact_root, background=fixture_db['dispatcher'])
+    body = dict(command_id=uid(), configuration_revision_id=config['configuration_revision_id'])
+    try:
+        with live_api(store) as origin:
+            path = origin + '/api/1/studies/' + sid + '/runs'
+            own = headers(accounts[0], origin)
+            reply = httpx.post(path, headers=own, json=body)
+            assert reply.status_code == 202, reply.text
+            rid = reply.json()['data']['run_id']
+            Submissions(worker, lambda *args: (prepared, case['files']), native).dispatch(rid, prepare_only=True)
+            with actor_scope(actor), store.connection() as db:
+                original = db.execute('SELECT xmin::text AS revision,payload,payload_sha256 FROM outbox WHERE run_id=?', (rid,)).fetchone()
+            # Restart uses precisely the original prepared command and bytes.
+            Submissions(worker, None, native).dispatch(rid)
+            result = httpx.get(path + '/' + rid, headers=own)
+            assert result.status_code == 200, result.text
+            assert result.json()['data']['state'] == 'recorded'
+            assert [o['value'] for o in result.json()['data']['history']['results']['outputs']] == [2.0, 2.0]
+            assert httpx.post(path, headers=own, json=body).json()['data']['run_id'] == rid
+            assert httpx.get(path + '/' + rid, headers=headers(accounts[1], origin)).status_code == 404
+            with actor_scope(actor), store.connection() as db:
+                retained = db.execute('SELECT xmin::text AS revision,payload,payload_sha256 FROM outbox WHERE run_id=?', (rid,)).fetchone()
+            assert retained == original
+            document = json.loads(retained['payload'])
+            assert document['request'] == native.request
+            assert {p: base64.b64decode(b) for p, b in document['bundle']['files'].items()} == native.bundle['files']
+            assert native.launches == 1
+    finally:
+        worker.database.close()
+
+
+def test_admission_capacity_is_atomic_replayable_and_never_retains_busy_rejection(hosted):
+    from calculation_fixture import seed
+    from hyprn_mvp_app.contracts import DomainError
+    from hyprn_mvp_app.execution import Submissions
+
+    _, store, accounts = hosted
+    actor = accounts[1]['actor']
+    sid = study(store, actor)
+    with actor_scope(actor):
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    bodies = [dict(command_id=uid(), configuration_revision_id=sample['config']['configuration_revision_id']) for _ in range(2)]
+    def accept(body):
+        with actor_scope(actor):
+            try:
+                return Submissions(store, None, None).submit(actor, sid, body, admission_limit=1)
+            except DomainError as error:
+                assert error.status == 429
+                return None
+    with ThreadPoolExecutor(2) as pool:
+        replies = list(pool.map(accept, bodies))
+    assert sum(r is not None for r in replies) == 1
+    admitted = next(i for i, r in enumerate(replies) if r is not None)
+    assert accept(bodies[admitted])['run_id'] == replies[admitted]['run_id']
+    with actor_scope(actor), store.connection() as db:
+        assert store.command_receipt(db, sid, 'run', bodies[1-admitted]['command_id']) is None
+
+
+def test_operational_queue_is_bounded_indexed_private_and_cursor_reachable(hosted, capsys):
+    from calculation_fixture import seed
+
+    fixture_db, store, accounts = hosted
+    actor, foreign = (a['actor'] for a in accounts)
+    sid = study(store, actor)
+    with actor_scope(actor):
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    raw = fixture_db['admin'].connect()
+    try:
+        db = Connection(raw)
+        prefix = uid()
+        db.execute("""INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id)
+            SELECT md5(? || i::text)::uuid::text,?,?,md5(? || 'command' || i::text)::uuid::text
+            FROM generate_series(1,2000) i""", (prefix,sid,sample['config']['configuration_revision_id'],prefix))
+        db.execute("""INSERT INTO outbox(run_id,state,payload)
+            SELECT run_id,'recorded',? FROM run_associations WHERE study_id=?""", (json.dumps(dict(actor=actor)),sid))
+        db.execute("""UPDATE execution_operations SET state='accepted_run' WHERE run_id IN
+            (SELECT run_id FROM execution_operations WHERE study_id=? ORDER BY run_id LIMIT 3)""", (sid,))
+        db.execute('ANALYZE execution_operations')
+        plan = db.execute("""EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON)
+            SELECT study_id,actor_id,run_id FROM execution_operations
+            WHERE state IN ('accepted_run','dispatching')
+            AND (preparation_state IS NULL OR preparation_state<>'preparation_failed')
+            ORDER BY run_id LIMIT 2""").fetchone()[0]
+        raw.commit()
+        plan_text = json.dumps(plan)
+        assert 'execution_pending' in plan_text, plan_text
+        quota_plan = db.execute("""EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON)
+            SELECT count(*) FROM execution_operations WHERE actor_id=?
+            AND state IN ('accepted_run','dispatching','uncertain')
+            AND (preparation_state IS NULL OR preparation_state<>'preparation_failed')""",
+            (actor,)).fetchone()[0]
+        assert 'execution_actor_pending' in json.dumps(quota_plan)
+        db.execute("""INSERT INTO receipts(scope,category,command_id,actor_id,payload_digest,state)
+            SELECT study_id,'analysis_execution',command_id,?,?,
+                CASE WHEN row_number() OVER (ORDER BY command_id)<=3
+                    THEN 'pending_remote' ELSE 'committed' END
+            FROM run_associations WHERE study_id=?""",(actor,'a'*64,sid))
+        db.execute('ANALYZE receipts')
+        receipt_plan = db.execute("""EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON)
+            SELECT scope,actor_id,command_id FROM receipts WHERE category='analysis_execution'
+            AND state='pending_remote' ORDER BY command_id LIMIT 2""").fetchone()[0]
+        assert 'receipts_background_pending' in json.dumps(receipt_plan)
+        raw.commit()
+        worker = Store.postgres(fixture_db['request'],fixture_db['auth'],background=fixture_db['dispatcher'])
+        try:
+            seen = []
+            actors_seen = set()
+            after = None
+            while True:
+                page = worker.background_jobs('run',after=after,limit=2)
+                if not page:
+                    break
+                assert len(page) <= 2 and len(json.dumps(page).encode()) < 1024
+                assert all(set(row) == {'study_id','actor_id','work_id'} for row in page)
+                seen.extend(row['work_id'] for row in page if row['study_id']==sid)
+                actors_seen.update(row['actor_id'] for row in page)
+                after = page[-1]['work_id']
+            assert len(seen) == 3 and len(set(seen)) == 3
+            assert {actor, foreign} <= actors_seen
+            with pytest.raises(DatabasePermissionDenied), worker.database.background_connection() as background:
+                background.execute('SELECT payload FROM execution_operations')
+            with actor_scope(foreign), store.connection() as scoped:
+                assert scoped.execute('SELECT * FROM execution_operations WHERE study_id=?',(sid,)).fetchall() == []
+            with actor_scope(actor), pytest.raises(DatabaseConflict), store.connection(write=True) as scoped:
+                scoped.execute('UPDATE execution_operations SET payload=? WHERE run_id=?',
+                               ('{"frozen":{"replacement":true}}', seen[0]))
+            with capsys.disabled():
+                print('\nOperational discovery evidence: '+plan_text)
+                print('Admission plan evidence: '+json.dumps(quota_plan))
+                print('Receipt discovery evidence: '+json.dumps(receipt_plan))
+        finally:
+            worker.database.close()
+            # This fixture's synthetic queue entries must not become another
+            # test's executable analysis; pending receipts may finish once.
+            db.execute("UPDATE receipts SET state='committed' WHERE scope=? "
+                       "AND category='analysis_execution' AND state='pending_remote'", (sid,))
+            raw.commit()
+    finally:
+        raw.close()
+
+
+def test_analysis_authority_survives_expiry_and_is_finite_revocable_and_private(hosted):
+    from calculation_fixture import seed, sibling
+    from test_calculations_api import body
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.calculations import Analyses
+    from hyprn_mvp_app.contracts import DomainError
+    from hyprn_mvp_app.execution import Submissions
+
+    fixture, store, accounts = hosted
+    owner, foreign = (a['actor'] for a in accounts)
+    sid = study(store, owner)
+    with actor_scope(owner):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=owner, sid=sid)
+        sample.update(seed(sample))
+        members = [sample['config']['configuration_revision_id'], sibling(sample, sample['frozen'])]
+        version = Analyses(store).create(owner, sid, dict(command_id=uid(),
+            content=body(sample, members=members, schema_version='4', estimate_plan=None)))
+        with store.connection(write=True) as db:
+            agent = store.ensure_agent_actor(db, owner, 'claude_managed', 'Assistant')
+            grant = store.create_delegation(db, agent, sid, 'writer', {'read','record','submit'}, time.time()+600)
+    vid = version['calculation_version_id']
+    with actor_scope(agent):
+        existing = Submissions(store, None, None).submit(agent, sid, dict(
+            command_id=uid(), configuration_revision_id=members[0]))
+        AnalysisExecution(store).launch(agent, sid, vid, {})
+    raw = fixture['admin'].connect()
+    try:
+        Connection(raw).execute('UPDATE agent_delegations SET expires_at=? WHERE delegation_id=?',
+                                (time.time()-1, grant['delegation_id']))
+        raw.commit()
+    finally:
+        raw.close()
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    create_app(worker, Auth(worker, 'http://test'), None)
+    # Ordinary SQL remains hidden after expiry; accepted scope is not a session.
+    with actor_scope(agent), store.connection() as db:
+        with pytest.raises(DomainError):
+            store.authorize(db, agent, sid)
+        assert db.execute('SELECT * FROM configurations WHERE study_id=?', (sid,)).fetchall() == []
+    try:
+        runner = AnalysisExecution(worker)
+        assert runner.process_one(Submissions(worker, None, None))
+        with actor_scope(owner):
+            state = AnalysisExecution(store).read(owner, sid, vid)
+            assert all(m['run_id'] for m in state['runs']), state
+            assert state['runs'][0]['run_id'] == existing['run_id']
+            assert state['runs'][0]['reused']
+        with actor_scope(agent), worker.analysis_authority(agent, sid, identity(vid)):
+            with pytest.raises(DomainError):
+                worker.command(agent, sid, 'run', uid(), {}, lambda db: {})
+            with pytest.raises(DatabasePermissionDenied):
+                with worker.connection(write=True) as db:
+                    db.execute('INSERT INTO configurations VALUES(?,?,?,?)', (uid(),uid(),sid,'{}'))
+            with pytest.raises(DatabaseConflict):
+                with worker.connection(write=True) as db:
+                    db.execute("UPDATE receipts SET request='{}' WHERE scope=? AND category='analysis_execution' AND command_id=?",
+                               (sid,identity(vid)))
+        with actor_scope(foreign), worker.analysis_scope(sid, identity(vid)), worker.connection() as db:
+            assert db.execute('SELECT * FROM receipts WHERE scope=?', (sid,)).fetchall() == []
+        # The child owner can still prepare already accepted work after session expiry.
+        prepared = []
+        class Native:
+            def require_attestation(self):
+                pass
+        def prepare(actor, study_id, command, frozen):
+            prepared.append(actor)
+            raise DomainError('modeling_unavailable', 503)
+        Submissions(worker, prepare, Native()).dispatch(state['runs'][0]['run_id'])
+        assert prepared == [agent]
+        with actor_scope(owner), store.connection(write=True) as db:
+            store.revoke_delegation(db, grant['delegation_id'], 'owner_revoked')
+        assert runner.process_one(Submissions(worker, None, None))
+        with actor_scope(owner):
+            assert AnalysisExecution(store).read(owner, sid, vid)['admission_state'] == 'revoked'
+    finally:
+        worker.database.close()

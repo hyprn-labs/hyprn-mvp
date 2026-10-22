@@ -198,3 +198,28 @@ def test_quantity_changes_use_versioned_definition_edits_with_exact_existing_ids
     assert changes[0]['fields']['code_symbol'] == 'fuel_fraction'
     assert changes[1]['units'] == {'kind': 'physical', 'expression': 'km'}
     assert any(e['kind'] == 'replace_local_instance_version' for e in edits)
+
+
+def test_catalogue_backed_monetary_edits_negotiate_current_model_format(env):
+    caps = env['double'].caps
+    caps['schema_versions'].append('5')
+    caps['capabilities'].append(dict(
+        caps['capabilities'][0], id='unit_declarations', version='2', supported=True,
+    ))
+    preview = one(env, 'edit_model', {
+        'model_id': env['model'], 'expected_revision': token(env), 'preview_only': True,
+        'operations': [{
+            'op': 'add_component', 'name': 'Expense',
+            'inputs': [{'name': 'mass', 'unit': 'kg'}, {'name': 'price', 'unit': 'USD/kg'}],
+            'outputs': [{'name': 'expense', 'unit': 'USD'}],
+            'source': "def compute(inputs, outputs):\n    outputs['expense'] = inputs['mass'] * inputs['price']\n",
+        }],
+    })
+    assert preview['preview_only'] is True
+    ((action, batch),) = env['double'].batches
+    assert action == 'preview' and batch['schema_version'] == '5'
+    ports = batch['edits'][0]['ports']
+    assert [port['units'] for port in ports] == [
+        {'kind': 'physical', 'expression': unit} for unit in ('kg', 'USD/kg', 'USD')
+    ]
+    assert attributed(env) == set()

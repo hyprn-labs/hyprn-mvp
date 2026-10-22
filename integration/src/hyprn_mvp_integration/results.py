@@ -173,13 +173,19 @@ def artifact_json(raw):
 
 def _result_unit(value, model_version):
     """Resolve only the closed retained spelling; never parse or convert units."""
+    monetary_units = {
+        'USD', 'kUSD', 'MUSD', 'pax', 'USD/pax', 'USD/kg', 'USD/m**3',
+        'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ',
+    }
     if isinstance(value, str):
+        if model_version == '5' and value in monetary_units:
+            raise ValueError('Monetary output units require an explicit declaration')
         if len(value) > 4096:
             raise ValueError('Invalid retained unit')
         if model_version == '3' and value:
             return _result_unit({'kind': 'physical', 'expression': value}, '3')
         return value  # Legacy meanings remain exact, including empty string.
-    if model_version not in ('3', '4') or not isinstance(value, dict):
+    if model_version not in ('3', '4', '5') or not isinstance(value, dict):
         raise ValueError('Invalid retained unit declaration')
     if value == {'kind': 'dimensionless'}:
         return ''
@@ -237,7 +243,7 @@ def _result_unit(value, model_version):
             'N*m',
             'W/(m*K)',
             'W/(m**2*K)',
-        }
+        } | (monetary_units if model_version == '5' else set())
     ):
         return value['expression']
     raise ValueError('Unresolved or malformed retained output unit')
@@ -283,14 +289,14 @@ def validate_result(raw, request, model, *, result_schema_version='1'):
         fields |= {'convergence', 'optimization', 'completeness', 'applicability'}
     if set(result) != fields:
         raise ValueError('Unexpected result field')
-    if model.get('schema_version') not in ('1', '2', '3', '4'):
+    if model.get('schema_version') not in ('1', '2', '3', '4', '5'):
         raise ValueError('Unsupported result model version')
     definitions = {d['definition_version_id']: d for d in model['definitions']}
     if len(definitions) != len(model['definitions']) or len(
         {i['instance_id'] for i in model['instances']}
     ) != len(model['instances']):
         raise ValueError('Ambiguous result model inventory')
-    if model['schema_version'] == '4':
+    if model['schema_version'] in ('4', '5'):
         flattened = []
         for d in definitions.values():
             ports = d['ports']
@@ -316,7 +322,7 @@ def validate_result(raw, request, model, *, result_schema_version='1'):
                 if p['definition_version_id'] != d['definition_version_id']:
                     raise ValueError('Retained port owner')
                 if p['units'] != {'kind': 'unspecified'}:
-                    _result_unit(p['units'], '4')
+                    _result_unit(p['units'], model['schema_version'])
             flattened.extend(ports)
         if flattened != model['ports']:
             raise ValueError('Retained port aggregate')
@@ -327,7 +333,7 @@ def validate_result(raw, request, model, *, result_schema_version='1'):
         for p in definition['ports']:
             if p['definition_version_id'] != definition['definition_version_id']:
                 raise ValueError('Result port owner mismatch')
-            if model['schema_version'] in ('3', '4'):
+            if model['schema_version'] in ('3', '4', '5'):
                 _result_unit(p['units'], model['schema_version'])
     expected = {
         (i['instance_id'], p['port_id']): _result_unit(p['units'], model['schema_version'])
@@ -444,7 +450,7 @@ def _prepared_v1(manifest, prepared, files):
 
 
 def _prepared_v2(manifest, prepared, files):
-    if prepared.get('schema_version') not in ('2', '3', '4'):
+    if prepared.get('schema_version') not in ('2', '3', '4', '5'):
         raise UnsupportedRecordVersion('Unsupported retained artifact version for bundle2/3/4')
     if manifest['generator'] != prepared['generator_identity']:
         raise ValueError('Retained generator mismatch')
@@ -455,7 +461,7 @@ def _prepared_v2(manifest, prepared, files):
     if entry['protocol'] != 'hyprn_mvp.openmdao.program/1' or (
         prepared['schema_version'],
         prepared['result_protocol_version'],
-    ) not in (('2', '1'), ('3', '2'), ('4', '3')):
+    ) not in (('2', '1'), ('3', '2'), ('4', '3'), ('5', '3')):
         raise UnsupportedRecordVersion('Unsupported retained program or result protocol')
     for key in ('module_path', 'bindings_path', 'source_map_path'):
         if entry[key] not in files:
@@ -480,6 +486,7 @@ def retained_bundle(repository, request):
         '8': _prepared_v2,
         '10': _prepared_v2,
         '11': _prepared_v2,
+        '12': _prepared_v2,
     }
     reader = readers.get(manifest.get('schema_version'))
     if reader is None:
@@ -505,19 +512,19 @@ def retained_bundle(repository, request):
         'result_protocol_version',
         'bundle_digest',
     }
-    if layout in ('2', '3', '4', '5', '6', '8', '9', '11'):
+    if layout in ('2', '3', '4', '5', '6', '8', '9', '11', '12'):
         manifest_fields |= {'entrypoint', 'executable_content_digest'}
-    if layout in ('3', '4', '5', '6', '8', '9', '11'):
+    if layout in ('3', '4', '5', '6', '8', '9', '11', '12'):
         manifest_fields |= {'modeling_configuration_digest', 'result_dependencies'}
     if layout in ('5', '6', '8', '9'):
         manifest_fields |= {'approach_digest', 'approach_closure_digest'}
-    if layout in ('8', '9', '11'):
+    if layout in ('8', '9', '11', '12'):
         manifest_fields.add('model_schema_version')
-    if manifest['schema_version'] in ('10', '11'):
+    if manifest['schema_version'] in ('10', '11', '12'):
         manifest_fields.add('input_schema_version')
     if set(manifest) != manifest_fields:
         raise ValueError('Unexpected retained manifest fields')
-    if manifest['result_protocol_version'] != {'10': '2', '11': '3'}.get(manifest['schema_version'], '1'):
+    if manifest['result_protocol_version'] != {'10': '2', '11': '3', '12': '3'}.get(manifest['schema_version'], '1'):
         raise UnsupportedRecordVersion('Unsupported retained result protocol')
     check_digest(manifest, 'bundle_digest')
     if any(manifest[k] != request[k] for k in ('run_id', 'bundle_digest')):
@@ -537,7 +544,7 @@ def retained_bundle(repository, request):
         with repository.open(item['path'], mode='rb') as stream:
             files[item['path']] = stream.read(size + 1)
     verify_files(manifest['files'], files)
-    if layout in ('3', '4', '5', '6', '8', '9', '11'):
+    if layout in ('3', '4', '5', '6', '8', '9', '11', '12'):
         # Data-only validation, imported here so worker results1 remains stdlib
         # at import time. No runtime attestation, native lookup or model fetch.
         from hyprn_mvp_app.execution_bundle import validate_retained_bundle

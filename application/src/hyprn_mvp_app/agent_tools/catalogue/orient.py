@@ -192,6 +192,10 @@ async def get_capabilities(arguments, ctx):
             'affine_conversion': bool(catalog['affine_conversion']),
             'engine': catalog['engine'] + ' ' + catalog['engine_version'],
             'special': ['dimensionless', 'unspecified'],
+            'monetary': [
+                {key: row[key] for key in ('expression', 'numerator', 'scale', 'denominator')}
+                for row in catalog.get('monetary_units', [])
+            ],
         }
     except ToolError as error:
         if error.category not in ('unavailable', 'unsupported'):

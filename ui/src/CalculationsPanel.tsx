@@ -11,9 +11,9 @@ import type {
   Calculation4,
   CalculationContentRead4,
   CalculationVersionRead4,
-  ModelRevisionRead4,
+  ModelRevisionRead5,
   FrozenConfigurationRead7,
-  StudyBriefVersion1,
+  StudyBriefVersionRead2,
 } from './contract';
 import { EstimatesPanel, SamplingDialog, refKey } from './CalculationDesign';
 import { AnalysisResults, analysisPorts } from './AnalysisResults';
@@ -45,8 +45,8 @@ const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 type EditorBasis = {
   configurations: ConfigurationSummary1[];
-  snapshot: ModelRevisionRead4 | null;
-  brief: StudyBriefVersion1 | null;
+  snapshot: ModelRevisionRead5 | null;
+  brief: StudyBriefVersionRead2 | null;
 };
 
 /** Create a calculation or save its next version: a hand-picked set of this model version's
@@ -494,9 +494,9 @@ export function CalculationList({
 
 type RecordBasis = {
   version: CalculationVersionRead4;
-  brief: StudyBriefVersion1 | null;
+  brief: StudyBriefVersionRead2 | null;
   names: Record<string, string>;
-  snapshot: ModelRevisionRead4 | null;
+  snapshot: ModelRevisionRead5 | null;
   frozen: FrozenConfigurationRead7;
 };
 

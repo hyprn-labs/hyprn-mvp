@@ -90,6 +90,14 @@ DEFINITIONS['AssistantResumeRequest1'] = obj({})
 DEFINITIONS['AssistantConversationRead3'] = deepcopy(DEFINITIONS['AssistantConversationRead2'])
 DEFINITIONS['AssistantConversationRead3']['properties']['can_resume'] = {'type': 'boolean'}
 DEFINITIONS['AssistantConversationRead3']['required'].append('can_resume')
+DEFINITIONS['AssistantConversationRead4'] = deepcopy(DEFINITIONS['AssistantConversationRead3'])
+DEFINITIONS['AssistantConversationRead4']['properties'].update(
+    next_cursor=nullable(text(160)), earlier_cursor=nullable(text(160)),
+    has_more_messages={'type': 'boolean'},
+)
+DEFINITIONS['AssistantConversationRead4']['required'] += [
+    'next_cursor', 'earlier_cursor', 'has_more_messages',
+]
 DEFINITIONS['AssistantBudgetRead2'] = obj({
     'configured': {'type': 'boolean'}, 'currency': {'const': 'USD'},
     'limit_cents': money, 'spent_cents': nullable(money), 'remaining_cents': nullable(money),

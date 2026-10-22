@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { HyprnMvpApi, ModelDraftRead4, RevisionSummary } from './api';
+import type { HyprnMvpApi, ModelDraftRead5, RevisionSummary } from './api';
 import { unresolvedModelUnits } from './unitLabels';
 import { saveGuards, type GuardEntry } from './workspaceModel';
 
@@ -22,7 +22,7 @@ export type ModelControllerState = {
  * version list and notice it shows. */
 export type ModelVersionHost = {
   guards: readonly GuardEntry[];
-  onModel: (model: ModelDraftRead4) => void;
+  onModel: (model: ModelDraftRead5) => void;
   onRevisions: (revisions: RevisionSummary[]) => void;
   onNotice: (notice: string) => void;
 };

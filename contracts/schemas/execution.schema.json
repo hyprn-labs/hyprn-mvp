@@ -17704,6 +17704,1254 @@
           "$ref": "#/$defs/ExecutionBundle11"
         }
       ]
+    },
+    "UnitDeclaration2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "unspecified"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "dimensionless"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "physical"
+              ]
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "enum": [
+                "m",
+                "km",
+                "cm",
+                "mm",
+                "s",
+                "min",
+                "h",
+                "kg",
+                "g",
+                "N",
+                "Pa",
+                "kPa",
+                "MPa",
+                "K",
+                "degC",
+                "degF",
+                "rad",
+                "deg",
+                "m/s",
+                "km/h",
+                "J/kg",
+                "kJ/kg",
+                "MJ/kg",
+                "kg/m**3",
+                "g/cm**3",
+                "m**2",
+                "cm**2",
+                "mm**2",
+                "m**3",
+                "cm**3",
+                "mm**3",
+                "kg/m**2",
+                "g/m**2",
+                "1/m**2",
+                "J/(kg*K)",
+                "kJ/(kg*K)",
+                "J",
+                "kJ",
+                "MJ",
+                "W",
+                "kW",
+                "MW",
+                "m**3/s",
+                "kg/s",
+                "m/s**2",
+                "N*m",
+                "W/(m*K)",
+                "W/(m**2*K)",
+                "USD",
+                "kUSD",
+                "MUSD",
+                "pax",
+                "USD/pax",
+                "USD/kg",
+                "USD/m**3",
+                "USD/h",
+                "USD/kW",
+                "USD/(kW*h)",
+                "USD/J",
+                "USD/MJ"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "expression"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Explicit intent. Historical empty strings remain dimensionless. Physical spellings are a bounded vocabulary, not an expression parser; engine compatibility/readiness is independently checked before generation."
+    },
+    "Port4": {
+      "type": "object",
+      "properties": {
+        "port_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "definition_version_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "direction": {
+          "enum": [
+            "input",
+            "output",
+            "residual"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "code_symbol": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "value_type": {
+          "enum": [
+            "real_scalar"
+          ]
+        },
+        "units": {
+          "$ref": "#/$defs/UnitDeclaration2"
+        }
+      },
+      "required": [
+        "port_id",
+        "definition_version_id",
+        "direction",
+        "name",
+        "code_symbol",
+        "value_type",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "PortRead4": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PortRead3"
+        },
+        {
+          "$ref": "#/$defs/Port4"
+        }
+      ]
+    },
+    "Definition5": {
+      "type": "object",
+      "properties": {
+        "definition_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "definition_version_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "kind": {
+          "enum": [
+            "explicit_component",
+            "implicit_component",
+            "composite"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortRead4"
+          },
+          "maxItems": 1000
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "maxItems": 1000
+        },
+        "residual_port_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "maxItems": 1000
+        },
+        "child_instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Instance"
+          },
+          "maxItems": 1000
+        },
+        "boundary_mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BoundaryMapping"
+          },
+          "maxItems": 1000
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "maxItems": 1000
+        },
+        "quantity_definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuantityDefinition1"
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "definition_id",
+        "definition_version_id",
+        "kind",
+        "name",
+        "ports",
+        "source_refs",
+        "residual_port_ids",
+        "child_instances",
+        "boundary_mappings",
+        "annotations",
+        "quantity_definitions"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "ports": {
+              "items": {
+                "$ref": "#/$defs/Port"
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "ports": {
+              "items": {
+                "$ref": "#/$defs/Port4"
+              }
+            }
+          }
+        }
+      ],
+      "x-hyprn-mvp-invariants": [
+        "Unique port_id within this exact definition version; each ID belongs to ports. Enforced by the semantic validators, not uniqueItems. Exact legacy string or typed unit bytes stay homogeneous per definition. Notes remain annotations. No scientific input from descriptive text."
+      ]
+    },
+    "DefinitionRead5": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DefinitionRead4"
+        },
+        {
+          "$ref": "#/$defs/Definition5"
+        }
+      ]
+    },
+    "ModelDraft5": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "5"
+        },
+        "model_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "root_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DefinitionRead5"
+          },
+          "maxItems": 1000
+        },
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Instance"
+          },
+          "maxItems": 1000
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortRead4"
+          },
+          "maxItems": 1000
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Connection"
+          },
+          "maxItems": 1000
+        },
+        "boundary_mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BoundaryMapping"
+          },
+          "maxItems": 1000
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "maxItems": 1000
+        },
+        "source_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          },
+          "maxItems": 1000
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "maxItems": 1000
+        },
+        "study_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "draft_revision": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelAssumption"
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "model_id",
+        "root_instance_id",
+        "definitions",
+        "instances",
+        "ports",
+        "connections",
+        "boundary_mappings",
+        "annotations",
+        "source_files",
+        "required_capabilities",
+        "study_id",
+        "name",
+        "draft_revision",
+        "assumptions"
+      ],
+      "additionalProperties": false,
+      "x-hyprn-mvp-invariants": [
+        "Resolve instance to exact definition_version_id to port; preserve all legacy/typed declaration bytes and annotations. Descriptor revision cannot change scientific values or convert unspecified to dimensionless. Unique IDs and active-port unit readiness require model/worker validation."
+      ]
+    },
+    "ModelDraftRead5": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ModelDraftRead4"
+        },
+        {
+          "$ref": "#/$defs/ModelDraft5"
+        }
+      ]
+    },
+    "ModelRevision5": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "5"
+        },
+        "model_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "root_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DefinitionRead5"
+          },
+          "maxItems": 1000
+        },
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Instance"
+          },
+          "maxItems": 1000
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortRead4"
+          },
+          "maxItems": 1000
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Connection"
+          },
+          "maxItems": 1000
+        },
+        "boundary_mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BoundaryMapping"
+          },
+          "maxItems": 1000
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          },
+          "maxItems": 1000
+        },
+        "source_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          },
+          "maxItems": 1000
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "maxItems": 1000
+        },
+        "model_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "parent_model_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "originating_draft_revision": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelAssumption"
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "model_id",
+        "root_instance_id",
+        "definitions",
+        "instances",
+        "ports",
+        "connections",
+        "boundary_mappings",
+        "annotations",
+        "source_files",
+        "required_capabilities",
+        "model_revision_id",
+        "parent_model_revision_id",
+        "originating_draft_revision",
+        "digest",
+        "assumptions"
+      ],
+      "additionalProperties": false,
+      "x-hyprn-mvp-invariants": [
+        "Resolve instance to exact definition_version_id to port; preserve all legacy/typed declaration bytes and annotations. Descriptor revision cannot change scientific values or convert unspecified to dimensionless. Unique IDs and active-port unit readiness require model/worker validation."
+      ]
+    },
+    "ModelRevisionRead5": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ModelRevisionRead4"
+        },
+        {
+          "$ref": "#/$defs/ModelRevision5"
+        }
+      ]
+    },
+    "ModelPackage5": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "5"
+        },
+        "source_service": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "model_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelRevisionRead5"
+          },
+          "maxItems": 1000
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "maxItems": 1000
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "maxItems": 1000
+        },
+        "license_notices": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "maxItems": 1000
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_service",
+        "model_id",
+        "model_revision_id",
+        "revisions",
+        "files",
+        "required_capabilities",
+        "license_notices",
+        "digest"
+      ],
+      "additionalProperties": false,
+      "x-hyprn-mvp-invariants": [
+        "Selected root is ModelRevision5; retain exact predecessor ancestors, source bytes and digests."
+      ]
+    },
+    "ModelPackageRead5": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ModelPackage"
+        },
+        {
+          "$ref": "#/$defs/ModelPackage5"
+        }
+      ]
+    },
+    "PreparedModelArtifact5": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "5"
+        },
+        "preparation_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "model_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "model_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "configuration_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "maxItems": 1000
+        },
+        "generator_identity": {
+          "$ref": "#/$defs/NativeGeneratorIdentity"
+        },
+        "dependency_requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "version": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000
+        },
+        "model_package_manifest": {
+          "$ref": "#/$defs/ModelPackageRead5"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PreparedFileV2"
+          },
+          "maxItems": 1000,
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "license_notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PreparedLicenseNotice"
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "prepared_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "entrypoint": {
+          "$ref": "#/$defs/ProgramEntrypoint"
+        },
+        "executable_content_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "result_protocol_version": {
+          "const": "3"
+        }
+      },
+      "required": [
+        "schema_version",
+        "preparation_id",
+        "model_id",
+        "model_revision_id",
+        "model_digest",
+        "configuration_revision_id",
+        "configuration_digest",
+        "required_capabilities",
+        "generator_identity",
+        "dependency_requirements",
+        "model_package_manifest",
+        "files",
+        "license_notices",
+        "prepared_digest",
+        "entrypoint",
+        "executable_content_digest",
+        "result_protocol_version"
+      ],
+      "additionalProperties": false,
+      "description": "Active preparation format; pins result protocol 3. prepared_digest is SHA256 of RFC8785 complete manifest excluding prepared_digest only.",
+      "x-hyprn-mvp-invariants": [
+        "Check an independently trusted expected digest, exact model/configuration IDs and digests and intact ModelPackage ancestry/source bytes before consumption.",
+        "File paths are sorted and unique; file IDs are unique. Verify every raw size/hash, exact declared inventory, expanded bytes <=33554432 and regular files only (no symlinks/hardlinks/devices).",
+        "Entrypoint, bindings, source line mapping, all imports/support files, provenance, source archive and notices must resolve to declared regular files. No remote dependency fetch.",
+        "executable_content_digest is SHA256 of RFC8785 {protocol,model_digest,configuration_digest,generator_identity,files}; files sorted by path with only {path,size,sha256} for every generated/ file.",
+        "Executable content excludes preparation/file/request IDs, wallclock, scratch paths, transient SQL IDs and service URL; complete prepared_digest still binds receipt/file IDs.",
+        "Preserve separate model-author and generated/template notices; runtime notices are added by bundle assembly.",
+        "Only flat_explicit_scalar executes now; typed coupled/optimization/uncertainty settings remain unsupported, never ignored."
+      ]
+    },
+    "PreparedModelArtifactRead5": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PreparedModelArtifactRead4"
+        },
+        {
+          "$ref": "#/$defs/PreparedModelArtifact5"
+        }
+      ]
+    },
+    "ExecutionBundle12": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "12"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "run_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "prepared_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "model_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "configuration_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleFileV5"
+          },
+          "minItems": 1,
+          "maxItems": 2000,
+          "uniqueItems": true,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "path": {
+                    "enum": [
+                      "configuration.json"
+                    ]
+                  },
+                  "role": {
+                    "enum": [
+                      "configuration"
+                    ]
+                  },
+                  "media_type": {
+                    "enum": [
+                      "application/json"
+                    ]
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "path": {
+                    "enum": [
+                      "modeling-configuration.json"
+                    ]
+                  },
+                  "role": {
+                    "enum": [
+                      "modeling_configuration"
+                    ]
+                  },
+                  "media_type": {
+                    "enum": [
+                      "application/json"
+                    ]
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "path": {
+                    "enum": [
+                      "result-dependencies.json"
+                    ]
+                  },
+                  "role": {
+                    "enum": [
+                      "result_dependencies"
+                    ]
+                  },
+                  "media_type": {
+                    "enum": [
+                      "application/json"
+                    ]
+                  }
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "not": {
+                "contains": {
+                  "properties": {
+                    "role": {
+                      "enum": [
+                        "approach"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "generator": {
+          "$ref": "#/$defs/NativeGeneratorIdentity"
+        },
+        "entrypoint": {
+          "$ref": "#/$defs/ProgramEntrypoint"
+        },
+        "executable_content_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "lock_path": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^locks/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/){0,14}[A-Za-z0-9_-][A-Za-z0-9_.-]*(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "name",
+              "version",
+              "lock_path"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "image_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "architecture": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "python_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "worker_entrypoint": {
+              "enum": [
+                "hyprn_mvp_integration.worker"
+              ]
+            },
+            "policy_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "image_digest",
+            "architecture",
+            "python_version",
+            "worker_entrypoint",
+            "policy_digest"
+          ],
+          "additionalProperties": false
+        },
+        "required_capabilities": {
+          "enum": [
+            [
+              "flat_explicit_scalar",
+              "quantity_definitions/1"
+            ],
+            [
+              "flat_explicit_scalar",
+              "unit_declarations/1",
+              "quantity_definitions/1"
+            ]
+          ]
+        },
+        "licenses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BundleLicenseNotice"
+          },
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "result_protocol_version": {
+          "const": "3"
+        },
+        "bundle_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "modeling_configuration_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "result_dependencies": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "enum": [
+                "result-dependencies.json"
+              ]
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 33554432
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "size"
+          ],
+          "additionalProperties": false
+        },
+        "model_schema_version": {
+          "const": "5"
+        },
+        "input_schema_version": {
+          "const": "11"
+        }
+      },
+      "required": [
+        "schema_version",
+        "bundle_id",
+        "run_id",
+        "prepared_digest",
+        "model_revision_id",
+        "configuration_revision_id",
+        "model_digest",
+        "configuration_digest",
+        "files",
+        "generator",
+        "entrypoint",
+        "executable_content_digest",
+        "dependencies",
+        "runtime",
+        "required_capabilities",
+        "licenses",
+        "result_protocol_version",
+        "bundle_digest",
+        "modeling_configuration_digest",
+        "result_dependencies",
+        "model_schema_version",
+        "input_schema_version"
+      ],
+      "additionalProperties": false,
+      "description": "Exact root discriminator for Model4 with Config6; no inference from capabilities.",
+      "x-hyprn-mvp-invariants": [
+        "Bind exact raw Model4/Config6/private5 files before effects. No approach files and no criteria. Selected declarations alone govern numerical readiness; source/protocol/generated bytes remain unchanged. Manifest validates descriptors only, never referenced payload bytes."
+      ]
+    },
+    "ExecutionBundleRead12": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ExecutionBundleRead11"
+        },
+        {
+          "$ref": "#/$defs/ExecutionBundle12"
+        }
+      ]
+    },
+    "FrozenConfiguration10": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "10"
+        },
+        "configuration": {
+          "$ref": "#/$defs/ConfigurationRevision6"
+        },
+        "model_snapshot": {
+          "$ref": "#/$defs/ModelRevision5"
+        },
+        "study_revision": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "configuration",
+        "model_snapshot",
+        "study_revision"
+      ],
+      "additionalProperties": false,
+      "x-hyprn-mvp-invariants": [
+        "Exact ModelRevision5 and ConfigurationRevision6; no automatic exchange-rate or price-year conversions."
+      ]
+    },
+    "MonetaryUnit1": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "enum": [
+            "USD",
+            "kUSD",
+            "MUSD",
+            "USD/pax",
+            "USD/kg",
+            "USD/m**3",
+            "USD/h",
+            "USD/kW",
+            "USD/(kW*h)",
+            "USD/J",
+            "USD/MJ"
+          ]
+        },
+        "numerator": {
+          "const": "USD"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "denominator": {
+          "type": "string",
+          "enum": [
+            "",
+            "pax",
+            "kg",
+            "m**3",
+            "h",
+            "kW",
+            "kW*h",
+            "J",
+            "MJ"
+          ]
+        }
+      },
+      "required": [
+        "expression",
+        "numerator",
+        "scale",
+        "denominator"
+      ],
+      "additionalProperties": false,
+      "enum": [
+        {
+          "denominator": "",
+          "expression": "USD",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "",
+          "expression": "kUSD",
+          "numerator": "USD",
+          "scale": 1000.0
+        },
+        {
+          "denominator": "",
+          "expression": "MUSD",
+          "numerator": "USD",
+          "scale": 1000000.0
+        },
+        {
+          "denominator": "pax",
+          "expression": "USD/pax",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "kg",
+          "expression": "USD/kg",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "m**3",
+          "expression": "USD/m**3",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "h",
+          "expression": "USD/h",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "kW",
+          "expression": "USD/kW",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "kW*h",
+          "expression": "USD/(kW*h)",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "J",
+          "expression": "USD/J",
+          "numerator": "USD",
+          "scale": 1.0
+        },
+        {
+          "denominator": "MJ",
+          "expression": "USD/MJ",
+          "numerator": "USD",
+          "scale": 1.0
+        }
+      ]
     }
   },
   "$comment": "Generated by application/generate_execution_schema.py from reviewed launch-path roots. Do not edit by hand."

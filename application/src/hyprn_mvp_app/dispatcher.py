@@ -16,6 +16,7 @@ from .database import DatabaseUnavailable
 import math
 import hashlib
 import threading
+import time
 import queue
 from uuid import UUID
 from .execution_bundle import closed
@@ -43,6 +44,21 @@ ONE_SHOT_LOCK_ATTEMPTS = 5
 STALL_ITERATIONS = 3
 # The exponent is capped, so the delay stays finite at any attempt count.
 LOCK_BACKOFF_MAX_EXPONENT = 16
+
+
+class IdleBackoff:
+    """Bounded polling without a database notification dependency.
+
+    Cross-process submissions are discovered within one second; activity resets
+    the interval immediately. The owner stop event interrupts every wait.
+    """
+    def __init__(self, maximum=1.0):
+        self.seconds = 0.05
+        self.maximum = maximum
+
+    def delay(self, worked):
+        self.seconds = 0.05 if worked else min(self.maximum, self.seconds * 2)
+        return self.seconds
 
 
 def open_dispatcher_store(path):
@@ -312,7 +328,9 @@ class NativeBridge:
         self.stopped = threading.Event()
         self.warmed = set()
         self.send_lock = threading.Lock()
-        self.locks = {lane: threading.Lock() for lane in ('primary', 'surrogate')}
+        self.locks = {lane: threading.Lock() for lane in ('primary', 'surrogate', 'observation')}
+        self.stage_deadline = time.monotonic() + 300
+        self.primary_deadline = None
         self.replies = {lane: queue.Queue(maxsize=1) for lane in self.locks}
         if concurrent:
             threading.Thread(target=self.receive, name='native-replies', daemon=True).start()
@@ -337,8 +355,19 @@ class NativeBridge:
         raw = bridge_request(
             method, list(args), read_only=self.read_only, exports_only=self.exports_only
         )
-        lane = 'surrogate' if method == 'surrogate' else 'primary'
+        lane = ('surrogate' if method == 'surrogate' else 'observation'
+                if method in ('require_attestation', 'bundle_runtime') and self.concurrent
+                else 'primary')
         with self.locks[lane]:
+            if lane == 'primary':
+                # A bounded native operation may outlive the short application
+                # stage. Its deadline follows the declared execution budget.
+                budget = 300
+                if method == 'launch_budgeted':
+                    budget += args[2]
+                elif method == 'launch_batch':
+                    budget += sum(item['wall_seconds'] + 60 for item in args[0])
+                self.primary_deadline = time.monotonic() + budget
             with self.send_lock:
                 print(raw.decode('utf-8'), end='', flush=True)
             if self.concurrent:
@@ -354,13 +383,26 @@ class NativeBridge:
                 if not raw or len(raw) > MAX_MESSAGE:
                     raise ConnectionError('Native bridge unavailable')
                 value = bridge_decode(raw)
-                if value.pop('channel', 'primary') != lane:
+                expected = ('observation' if method in
+                            ('require_attestation', 'bundle_runtime') else lane)
+                if value.pop('channel', 'primary') not in (lane, expected):
                     raise ValueError('Native response channel mismatch')
+        if lane == 'primary':
+            self.primary_deadline = None
         if set(value) != {'data'}:
+            if value == {'error': 'native_timeout'}:
+                raise TimeoutError('Native operation exceeded its deadline')
             if method == 'resolve_results':
                 raise ValueError('Source result unavailable')
             raise RuntimeError('Native operation unavailable')
         return value['data']
+
+    def progress(self):
+        self.stage_deadline = time.monotonic() + 300
+
+    def progressing(self):
+        deadline = self.primary_deadline or self.stage_deadline
+        return not self.stopped.is_set() and time.monotonic() < deadline
 
     def require_attestation(self):
         return self.call('require_attestation')
@@ -421,10 +463,10 @@ def export_once(store, request_id=None, native=None):
 
 def pending_runs(db, run_id=None):
     return [run_id] if run_id else [r[0] for r in db.execute(
-        'SELECT run_id FROM outbox WHERE '
+        'SELECT run_id FROM execution_operations WHERE '
         "state IN ('accepted_run','dispatching') "
-        "AND COALESCE(json_extract(payload,'$.preparation_state'),'')"
-        "!='preparation_failed' ORDER BY rowid LIMIT 100")]
+        "AND (preparation_state IS NULL OR preparation_state!='preparation_failed') "
+        "ORDER BY run_id LIMIT 100")]
 
 
 def main():
@@ -514,31 +556,59 @@ def main():
     query_stop = threading.Event()
 
     def query_loop():
+        # Interactive predictions have a tighter wake bound than background work.
+        idle = IdleBackoff(maximum=0.25)
+        while not query_stop.is_set() and not native.stopped.is_set():
+            worked = False
+            try:
+                if hasattr(store, 'cloud_writer_lease'):
+                    store.cloud_writer_lease.check()
+                worked = CalculationExploration(store).process_one(native)
+            except (sqlite3.OperationalError, DatabaseUnavailable):
+                pass
+            query_stop.wait(idle.delay(worked))
+
+    def observation_loop():
         while not query_stop.is_set() and not native.stopped.is_set():
             try:
                 if hasattr(store, 'cloud_writer_lease'):
                     store.cloud_writer_lease.check()
-                CalculationExploration(store).process_one(native)
+                observation.refresh(progressing=native.progressing())
             except (sqlite3.OperationalError, DatabaseUnavailable):
-                pass
-            query_stop.wait(0.01)
+                pass  # An unpublished observation expires normally.
+            query_stop.wait(1)
 
     query_thread = None
+    observation_thread = None
+    analyses = AnalysisExecution(store)
+    idle = IdleBackoff()
     if native.concurrent:
         query_thread = threading.Thread(target=query_loop, name='surrogate-queries', daemon=True)
         query_thread.start()
+        observation_thread = threading.Thread(
+            target=observation_loop, name='executor-observation', daemon=True)
+        observation_thread.start()
     try:
         while True:
+            worked = False
             try:
+                if native.concurrent:
+                    native.progress()
                 if hasattr(store, 'cloud_writer_lease'):
                     store.cloud_writer_lease.check()
                 if args.with_exports:
                     export_once(store, native=native)
-                observation.refresh()
+                if not native.concurrent:
+                    observation.refresh()
                 if not args.run_id:
-                    CalculationSamples(store, Configurations(store, None)).process_one(native)
-                    AnalysisExecution(store).process_one(service)
-                    Estimates(store).process_one(native)
+                    worked = bool(CalculationSamples(
+                        store, Configurations(store, None)).process_one(native))
+                    if native.concurrent:
+                        native.progress()
+                    worked = analyses.process_one(service) or worked
+                    if native.concurrent:
+                        native.progress()
+                    worked = Estimates(store).process_one(native) or worked
                     if not native.concurrent:
                         CalculationExploration(store).process_one(native)
                 if hasattr(store, 'database'):
@@ -552,12 +622,15 @@ def main():
                 # still performs its own current attestation check.
                 if args.with_exports and not observation.ready():
                     runs = []
+                worked = bool(runs) or worked
                 if args.run_id:
                     for run in runs:
                         service.dispatch(run, prepare_only=args.prepare_only)
                 else:
                     from .contracts import BATCH_RUN_LIMIT
                     for start in range(0, len(runs), BATCH_RUN_LIMIT):
+                        if native.concurrent:
+                            native.progress()
                         service.dispatch_batch(runs[start:start + BATCH_RUN_LIMIT])
             except (sqlite3.OperationalError, DatabaseUnavailable) as error:
                 contended += 1
@@ -575,7 +648,7 @@ def main():
                 return
             # Detect the owned host exiting even while idle; do not leave app orphans.
             if native.concurrent:
-                if native.stopped.wait(0.02):
+                if native.stopped.wait(idle.delay(worked)):
                     return
             elif select.select([sys.stdin], [], [], 1)[0]:
                 return
@@ -584,8 +657,12 @@ def main():
         raise
     finally:
         query_stop.set()
+        if native.concurrent:
+            observation.stopping()
         if query_thread is not None:
             query_thread.join(timeout=35)
+        if observation_thread is not None:
+            observation_thread.join(timeout=35)
         # IN-01: the exit cause propagates; a failing terminal publication is only logged then.
         try:
             observation.stopped()

@@ -1,11 +1,11 @@
 import { GraphCanvas } from './design/graph';
 import type { ReactNode } from 'react';
-import type { Connection, Instance, ModelDraftRead4, ModelRevisionRead4, PortRead3, PortRef } from './contract';
+import type { Connection, Instance, ModelDraftRead5, ModelRevisionRead5, PortRead4, PortRef } from './contract';
 import type { Selection } from './workspaceModel';
 
 // Projection helpers shared by the canonical model view (ModelView.tsx) and the graph canvas.
-export type Snapshot = ModelDraftRead4 | ModelRevisionRead4;
-export type Node = { instance: Instance; ports: PortRead3[]; incomplete: boolean };
+export type Snapshot = ModelDraftRead5 | ModelRevisionRead5;
+export type Node = { instance: Instance; ports: PortRead4[]; incomplete: boolean };
 export type Exchange = { key: string; source: string; target: string; links: Connection[] };
 export type Projection = { nodes: Node[]; groups: Exchange[]; invalid: Connection[] };
 export type Trace = 'none' | 'incoming' | 'outgoing' | 'upstream' | 'downstream';
@@ -56,7 +56,7 @@ export function selectGroup(group: Exchange): Selection { return { kind: 'connec
 export type RevealTarget = { instance_id: string; port_id?: string; request: number };
 export type ViewProps = {
   toolbarEnd?: ReactNode;
-  portContent?: (instanceId: string, port: PortRead3) => ReactNode;
+  portContent?: (instanceId: string, port: PortRead4) => ReactNode;
   highlightedPorts?: Set<string>;
   reveal?: RevealTarget;
   projection: Projection;

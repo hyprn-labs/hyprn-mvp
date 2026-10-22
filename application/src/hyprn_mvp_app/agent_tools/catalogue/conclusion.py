@@ -38,6 +38,8 @@ SECTIONS = (
     'decisive_uncertainties',
     'next_analysis',
     'exploration_basis',
+    'completion',
+    'scientific_review',
 )
 ANSWER_PRIORITIES = [
     ('justifications', 'justifications', 'get_study_answer'),
@@ -71,6 +73,18 @@ def _current(content):
         value['next_analysis']['statement'] = '\n\n'.join(filter(None, [
             value['next_analysis']['statement'], *[d['text'] for d in old['open_deliverables']],
         ]))
+    return value
+
+
+REVIEW_ASPECTS = ('brief_fidelity', 'source_basis', 'physical_validity', 'sensitivity')
+
+
+def _publication(content):
+    value = _current(content)
+    if value['schema_version'] != '3':
+        value.update(schema_version='3', completion=dict(state='interim', deliverables=[]),
+                     scientific_review={key: dict(state='unassessed', explanation='')
+                                        for key in REVIEW_ASPECTS})
     return value
 
 
@@ -141,6 +155,24 @@ def _cited(item):
     return _calculation(item['calculation_version_id'])
 
 
+def _price_basis(basis):
+    """Only exact retained monetary fields; cost descriptions remain untrusted author text."""
+    return {
+        'quantity': {'instance_id': basis['instance_id'], 'port_id': basis['port_id']},
+        'catalogue_expression': basis['catalogue_expression'],
+        'price_year': basis['price_year'],
+        'economic_basis': untrusted('economic basis', text=basis['economic_basis']),
+        'model_version': ref('model_version', basis['model_revision_id'], None,
+                             missing='call_get_model'),
+        'model_digest': basis['model_digest'],
+        'explanation_version': ref('model_explanation_version', basis['explanation_version_id'],
+                                   None, missing='call_get_model_explanation'),
+        'explanation_digest': basis['explanation_digest'],
+        'evidence_links': [dict(evidence_version_id=link['evidence_version_id'],
+                                relation=link['relation']) for link in basis['evidence_links']],
+    }
+
+
 def content_projection(content):
     """The answer content: cited ids apart from the authors' texts (untrusted)."""
     content = _current(content)
@@ -156,6 +188,19 @@ def content_projection(content):
         stated['reason'] = untrusted('outcome reason', text=outcome['reason'])
     basis = content['exploration_basis']
     return {
+        'completion': (
+            dict(state=content['completion']['state'], deliverables=[
+                dict(deliverable_id=d['deliverable_id'], state=d['state'],
+                     explanation=untrusted('deliverable assessment', text=d['explanation']))
+                for d in content['completion']['deliverables']
+            ]) if content['schema_version'] == '3' else missing('completion_not_assessed')
+        ),
+        'scientific_review': {
+            key: dict(state=item['state'],
+                      explanation=untrusted('scientific review', text=item['explanation']))
+            for key, item in content.get('scientific_review', {}).items()
+            if key in REVIEW_ASPECTS
+        },
         'brief_version': ref(
             'brief_version', content['brief_version_id'], None, missing='call_get_study_brief'
         )
@@ -210,6 +255,8 @@ def content_projection(content):
                 'calculation_version': _calculation(c['calculation_version_id']),
                 'run': _run(c['run_id']),
                 'evaluation': _evaluation(c['evaluation']),
+                **({'monetary_basis': _price_basis(c['monetary_basis'])}
+                   if content['schema_version'] == '3' and c.get('monetary_basis') else {}),
                 'note': untrusted('table note', text=c['note']),
             }
             for c in content['comparison']
@@ -468,6 +515,28 @@ CONTENT_SCHEMA = {
         },
     },
 }
+CONTENT_SCHEMA['properties']['completion'] = dict(
+    type='object', additionalProperties=False, required=['state', 'deliverables'],
+    properties=dict(
+        state=dict(enum=['interim', 'complete']),
+        deliverables=_items(
+            32, ('deliverable_id', 'state', 'explanation'),
+            dict(deliverable_id=_UUID, state=dict(enum=['fulfilled', 'pending', 'unavailable']),
+                 explanation=_STATEMENT),
+            'Assess each exact requested brief deliverable. Pending work remains interim.',
+        ),
+    ),
+)
+CONTENT_SCHEMA['properties']['scientific_review'] = dict(
+    type='object', additionalProperties=False, required=list(REVIEW_ASPECTS),
+    properties={key: dict(type='object', additionalProperties=False,
+                         required=['state', 'explanation'], properties=dict(
+                             state=dict(enum=['checked', 'limited', 'unassessed']),
+                             explanation=_TEXT)) for key in REVIEW_ASPECTS},
+    description='Separate brief/inequality fidelity, inspected sources, physical adequacy and '
+                'sensitivity. Explain checks and limits; '
+                'surrogate accuracy is not physics validation.',
+)
 ITEM_IDS = {
     'justifications': 'justification_id',
     'decisive_uncertainties': 'uncertainty_id',
@@ -482,7 +551,7 @@ def _merged(current, changes):
     """The current draft content with the given sections replaced. New items get an id here,
     so an agent never invents an identity; optional texts default to empty (never a number)
     and table evaluations are left for the application to fill."""
-    content = _current(current)
+    content = _publication(current)
     for key, value in changes.items():
         if key in ITEM_IDS:
             value = [_with_id(item, ITEM_IDS[key]) for item in value]

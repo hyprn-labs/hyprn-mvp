@@ -25,8 +25,8 @@ from test_assumption_authoring import env as base_env, PrivateTransport, command
 from test_assumptions_evidence_contracts import sample,D
 
 CATALOG = dict(
-    schema_version='1',
-    catalog_digest='9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45',
+    schema_version='2',
+    catalog_digest='5abc0ae35d2e2fcc8beb1ca9267e709007c007d51f20f95d735122daeef54885',
     engine='OpenMDAO',
     engine_version='3.45.1',
     engine_source_sha256='9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92',
@@ -81,7 +81,11 @@ CATALOG = dict(
         'W/(m**2*K)',
     ],
     affine_conversion=False,
+    engine_library_sha256='8094fb7d3e8cb65a56311c2ea5ccfbc9c29cb8b4160f1486c39c19dd779a43d3',
+    monetary_units=deepcopy(D['MonetaryUnit1']['enum']),
 )
+CATALOG['supported_units'] += ['USD', 'kUSD', 'MUSD', 'pax', 'USD/pax', 'USD/kg',
+    'USD/m**3', 'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ']
 
 
 class UnitTransport(PrivateTransport):
@@ -139,7 +143,7 @@ def edit(e, preview=False):
 def test_catalog_exact_identity_public_envelope_and_scoped_jwt(env):
     r=env['client'].get(catalog_url(env))
     assert r.status_code==200,r.text
-    validate('UnitCatalogResponse1',r.json());assert r.json()['data']==CATALOG
+    validate('UnitCatalogResponse2',r.json());assert r.json()['data']==CATALOG
     assert [c[1] for c in env['transport'].calls]==['/modeling/1/capabilities','/modeling/1/unit-catalog']
     assert not any(c[0]=='POST' for c in env['transport'].calls)
 
@@ -269,6 +273,26 @@ def test_discovery_advertises_model3_only_when_backend_supports_it(env):
     report=env['client'].get('/api/1/capabilities').json()['data']
     assert 'unit_declarations/1' in report['unavailable'] and 'model/3' not in report['contract_versions']
 
+@pytest.mark.parametrize('missing', [None, 'units', 'quantities', 'model'])
+def test_discovery_monetary_edit_format_requires_the_complete_backend_family(env, missing):
+    caps = env['transport'].caps
+    caps['schema_versions'].extend(['4', '5'])
+    caps['capabilities'].extend([
+        dict(caps['capabilities'][0], id='unit_declarations', version='2'),
+        dict(caps['capabilities'][0], id='quantity_definitions', version='1'),
+    ])
+    if missing == 'model':
+        caps['schema_versions'].remove('5')
+    elif missing:
+        identifier, version = ('unit_declarations', '2') if missing == 'units' else ('quantity_definitions', '1')
+        caps['capabilities'] = [c for c in caps['capabilities']
+            if (c['id'], c['version']) != (identifier, version)]
+    response = env['client'].get('/api/1/capabilities')
+    assert response.status_code == 200, response.text
+    report = response.json()['data']
+    assert ('unit_declarations/2' in report['modeling']) is (missing is None)
+    assert (report['model_formats']['edit_request'] == ['5']) is (missing is None)
+
 def test_generated_registers_route_closed_create_union_and_authoritative_schemas():
     output=guard.scoped_path(SCOPE,'artifacts/units-b1.openapi.json')
     p=subprocess.run(guard.contract_generator_command(SCOPE,'artifacts/units-b1.openapi.json'),env=guard.clean_environment(SCOPE),capture_output=True,text=True)
@@ -276,14 +300,14 @@ def test_generated_registers_route_closed_create_union_and_authoritative_schemas
     assert p.returncode==0
     spec=json.loads(output.read_text());schemas=spec['components']['schemas']
     route=spec['paths']['/studies/{study_id}/unit-catalog']['get']
-    assert route['responses']['200']['content']['application/json']['schema']['properties']['data']['$ref'].endswith('/UnitCatalog1')
+    assert route['responses']['200']['content']['application/json']['schema']['properties']['data']['$ref'].endswith('/UnitCatalog2')
     assert 'oneOf' in schemas['PublicNewModel']
     assert spec['paths']['/studies/{study_id}/models']['post']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/PublicNewModel')
     assert {'Create3','Preview3','Apply3','ModelDraft3','UnitDeclaration1','UnitCatalog1'}<=schemas.keys()
     assert 'quantity_definitions/1' in schemas['ApplicationCapabilities']['properties']['modeling']['items']['enum']
     route=spec['paths']['/studies/{study_id}/models/{model_id}/edits']['post']
-    assert route['requestBody']['content']['application/json']['schema']['$ref'].endswith('/ApplyRead4')
-    assert route['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/ModelDraftEditResponse4')
+    assert route['requestBody']['content']['application/json']['schema']['$ref'].endswith('/ApplyRead5')
+    assert route['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/ModelDraftEditResponse5')
 
 @pytest.mark.parametrize('size',[16384,16385])
 def test_private_catalog_stream_bound_applies_before_json_parsing(monkeypatch,size):
@@ -310,13 +334,13 @@ def test_private_catalog_stream_bound_applies_before_json_parsing(monkeypatch,si
     monkeypatch.setattr(modeling.json,'loads',observed_loads)
     client=ModelingClient('http://private.invalid/modeling/1',b't'*32)
     if size==16384:
-        assert client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse1')[1]['data']==CATALOG
+        assert client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse2')[1]['data']==CATALOG
         # The bounded stream body is parsed exactly once; the only other parse is the
         # schema check's canonical snapshot of that already-parsed value, never stream bytes.
         snapshot=json.dumps(loads(raw),sort_keys=True,ensure_ascii=True,allow_nan=False,separators=(',',':')).encode()
         assert parsed[0]==raw and len(parsed[0])==16384 and parsed[1:]==[snapshot]
     else:
-        with pytest.raises(DomainError) as error:client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse1')
+        with pytest.raises(DomainError) as error:client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse2')
         assert error.value.status==503 and parsed==[]
 
 @pytest.mark.parametrize('operation',['preview','edits'])
@@ -441,3 +465,80 @@ def test_model_format_discovery_and_creation_diagnostic(env):
     fields = reply.json()['error']['fields']
     assert len(fields) == 1 and fields[0]['path'] == '/schema_version'
     assert 'Model creation accepts request format 3' in fields[0]['message']
+
+
+@pytest.mark.parametrize('version', ['4', '5'])
+def test_quantity_successor_read_requires_its_semantic_capability(env, version):
+    transport = enable_quantity(env)
+    transport.draft['schema_version'] = version
+    transport.draft['required_capabilities'].remove('quantity_definitions/1')
+    response = env['client'].get(url(env, ''))
+    assert response.status_code == 503
+    assert response.json()['error']['code'] == 'backend_unavailable'
+
+
+@pytest.mark.parametrize('failure', [None, 'digest', 'model_identity'])
+def test_current_portable_export_checks_exact_identity_and_digest(env, failure):
+    from test_assumption_authoring import revision
+    transport = enable_quantity(env)
+    transport.draft['schema_version'] = '5'
+    saved = revision(transport.draft)
+    package = sample(D['ModelPackage5'])
+    raw = canonical(saved)
+    record = dict(file_id=uid(), path='revisions/' + saved['model_revision_id'] + '.json',
+                  size=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                  media_type='application/json', role='model')
+    package.update(model_id=saved['model_id'], model_revision_id=saved['model_revision_id'],
+                   revisions=[saved], files=[record], required_capabilities=saved['required_capabilities'])
+    if failure == 'model_identity':
+        package['model_id'] = uid()
+    package.pop('digest')
+    package['digest'] = digest(package)
+    if failure == 'digest':
+        package['digest'] = '0' * 64
+    # Shape remains valid in both negative cases. The real public route must
+    # invoke Coordinator's semantic guard after accepting the current envelope.
+    validate('ModelPackageRead5', package)
+    def exported(method, path, raw, headers):
+        assert method == 'GET' and path.endswith('/export?revision=' + saved['model_revision_id'])
+        return 200, dict(schema_version='1', request_id=uid(), data=package)
+    env['coord'].model.transport = exported
+    response = env['client'].get(url(env, '/export?model_revision_id=' + saved['model_revision_id']))
+    assert response.status_code == (503 if failure else 200), response.text
+    if failure:
+        assert response.json()['error']['code'] == 'backend_unavailable'
+    else:
+        assert response.json()['data'] == package
+
+
+@pytest.mark.parametrize('operation', ['preview', 'edits'])
+@pytest.mark.parametrize('downgrade', [False, True])
+def test_current_authoring_preserves_requested_model_format(env, downgrade, operation):
+    transport = enable_quantity(env)
+    transport.caps['schema_versions'].append('5')
+    transport.caps['capabilities'].append(dict(
+        transport.caps['capabilities'][0], id='unit_declarations', version='2',
+    ))
+    transport.draft['schema_version'] = '5'
+    def preview(method, path, raw, headers):
+        status, response = transport(method, path, raw, headers)
+        if downgrade and path.endswith('/' + operation):
+            response['data']['schema_version'] = '4'
+            if operation == 'edits':
+                transport.receipts[json.loads(raw)['command_id']]['response']['data']['schema_version'] = '4'
+            # A valid older retained model must still be refused as the result
+            # of an explicitly current-format authoring preview.
+            validate('ModelDraft4', response['data'])
+        return status, response
+    env['coord'].model.transport = preview
+    body = edit(env, operation == 'preview')
+    body['schema_version'] = '5'
+    response = env['client'].post(url(env, '/' + operation), json=body)
+    assert response.status_code == ((503 if operation == 'preview' else 202) if downgrade else 200), response.text
+    if downgrade and operation == 'preview':
+        assert response.json()['error']['code'] == 'backend_unavailable'
+    elif downgrade:
+        with env['store'].connection() as db:
+            assert db.execute("SELECT state FROM receipts WHERE category='model'").fetchone()[0] == 'pending_remote'
+    else:
+        assert response.json()['data']['schema_version'] == '5'

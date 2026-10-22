@@ -9,10 +9,10 @@ from .runtime import host_record, required
 
 
 async def reconcile(store, provider, settings, plan, continuity, expected_identity):
-    from managed_assistant import definition, readback
-    if plan != definition(plan['deployment'], plan['agent']['model']['id'],
-                          plan['agent']['model']['effort']['type']):
-        raise ProviderError('release_definition_changed')
+    from managed_assistant import readback, validate_plan, verify_bindings
+    if plan.get('stage') != 'bound':
+        raise ProviderError('exact_bootstrap_bindings_required')
+    validate_plan(plan)
     if (plan['definitions_sha256'] != settings.definitions_sha256
             or set(continuity) != {'schema', *expected_identity, 'configuration_sha256',
                                   'prior_cents', 'total_cents', 'carried_sessions', 'review_sha256',
@@ -27,6 +27,7 @@ async def reconcile(store, provider, settings, plan, continuity, expected_identi
         raise ProviderError('shared_allowance_unknown')
     if not isinstance(continuity['review_sha256'], str) or not re.fullmatch('[0-9a-f]{64}', continuity['review_sha256']):
         raise ProviderError('shared_allowance_unknown')
+    await verify_bindings(provider, plan)
     await readback(provider, 'agent', {'id': settings.agent_id, 'version': settings.agent_version},
                    plan['agent'])
     await readback(provider, 'environment', {'id': settings.environment_id}, plan['environment'])
@@ -101,6 +102,7 @@ def install(app, environ):
         app.state.assistant_startup = await asyncio.wait_for(reconcile(
             app.state.store, app.state.assistant.provider, settings, plan, continuity,
             app.state.admission.identity), timeout=90)
+        app.state.assistant.configure_reviewers(plan['bindings']['reviewers'], plan['review_limits'])
 
     # Validate before the existing delivery pump is allowed to recover accepted work.
     app.router.on_startup.insert(0, checked_start)

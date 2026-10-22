@@ -311,7 +311,11 @@ def _records(scope):
     store = guard.no_symlinks(scope.root / 'artifacts/combined.sqlite')
     connection = sqlite3.connect(store.as_uri() + '?mode=ro&immutable=1', uri=True)
     try:
-        outbox = connection.execute('SELECT run_id,state,payload FROM outbox ORDER BY run_id').fetchall()
+        split = connection.execute("SELECT 1 FROM sqlite_master WHERE name='execution_operations'").fetchone()
+        outbox = connection.execute(
+            'SELECT o.run_id,x.state,o.payload FROM outbox o JOIN execution_operations x USING(run_id) ORDER BY o.run_id'
+            if split else 'SELECT run_id,state,payload FROM outbox ORDER BY run_id').fetchall()
+        operational = dict(connection.execute('SELECT run_id,payload FROM execution_operations')) if split else {}
         associations = {row[0]: row[1:] for row in connection.execute(
             'SELECT run_id,study_id,store_uuid,process_uuid FROM run_associations')}
     finally:
@@ -321,6 +325,9 @@ def _records(scope):
     records, payloads, values = [], {}, {}
     for run_id, state, payload in outbox:
         value = json.loads(payload)
+        # The captured payload file remains the exact original outbox bytes.
+        # Result interpretation also reads the operational owner in newer stores.
+        value.update(json.loads(operational.get(run_id, '{}')))
         configuration = value['frozen']['configuration']
         study_id, store_uuid, process_uuid = associations[run_id]
         if (store_uuid != scope.store_uuid or process_uuid != value['history']['association']['process_uuid']

@@ -37,6 +37,7 @@ RUN /opt/runtime/uv pip install --python /opt/runtime/venv/bin/python \
 FROM local AS cloud
 COPY --from=cloud-python /opt/runtime/venv /opt/runtime/venv
 COPY editions/cloud/src /app/editions/cloud/src
-COPY deployment/managed_assistant.py /app/deployment/managed_assistant.py
+COPY deployment/managed_assistant.py deployment/managed_skill.py /app/deployment/
+COPY docs/agents/scientific-engineering /app/docs/agents/scientific-engineering
 ENV PYTHONPATH=/app/application/src:/app/editions/cloud/src:/app/deployment
 CMD ["python","-m","uvicorn","hyprn_mvp_cloud.asgi:from_environment","--factory","--host","0.0.0.0","--port","8000","--no-access-log"]

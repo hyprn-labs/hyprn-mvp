@@ -27,13 +27,22 @@ def record(path, value, **permissions):
     write(path, json.dumps(value, sort_keys=True).encode(), **permissions)
 
 
+def assistant_plan():
+    """Exact synthetic provider pins for isolated startup, never production resources."""
+    from managed_assistant import definition, REVIEW_ROLES, managed_skill
+    bindings = {'skill': {'id': 'skill_fixture', 'version': 'skver_fixture',
+                          'sha256': managed_skill.bundle()[1]['sha256']},
+                'reviewers': {role: {'id': 'agent_fixture_' + role.replace('-', '_'), 'version': 1}
+                              for role in REVIEW_ROLES}}
+    return definition('staging', 'claude-sonnet-5-5', 'high', bindings=bindings)
+
+
 def seed(installation, release_hash):
     import jwt
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
-    from managed_assistant import definition
 
     ROOT.chmod(0o755)
     for name in ('control', 'secrets', 'data', 'data/artifacts'):
@@ -71,7 +80,7 @@ def seed(installation, release_hash):
         write(ROOT / 'secrets' / alias, password.encode(), uid=10002, mode=0o600)
     for alias in ('modeling-auth', 'assistant-provider'):
         write(ROOT / 'secrets' / alias, secrets.token_urlsafe(32).encode(), uid=10002, mode=0o600)
-    plan = definition('staging', 'claude-sonnet-5-5', 'high')
+    plan = assistant_plan()
     record(ROOT / 'control/assistant-plan.json', plan)
     prefix = 'HYPRN_MVP_'
     values = dict(EDITION='cloud', EXTERNAL_ORIGIN='https://staging.hyprn.ai', UI_ROOT='/app/ui',
@@ -136,7 +145,7 @@ def serve():
     import uvicorn
     from hyprn_mvp_app.assistant.claude import Claude
     from hyprn_mvp_cloud.access import AccessVerifier
-    from managed_assistant import MANAGERS
+    from managed_assistant import MANAGERS, managed_skill
     plan = json.loads((ROOT / 'control/assistant-plan.json').read_bytes())
     jwks = json.loads((ROOT / 'jwks.json').read_bytes())
     def external(request):
@@ -146,6 +155,17 @@ def serve():
             return httpx.Response(200, json=jwks)
         if request.url.host != 'api.anthropic.com':
             raise AssertionError('Unexpected external fixture destination')
+        skill = plan['bindings']['skill']
+        skill_path = '/v1/skills/' + skill['id'] + '/versions/' + skill['version']
+        if request.url.path == skill_path:
+            return httpx.Response(200, json={'id': skill['version'], 'skill_id': skill['id']})
+        if request.url.path == skill_path + '/content':
+            return httpx.Response(200, content=managed_skill.bundle()[0])
+        for role, binding in plan['bindings']['reviewers'].items():
+            if request.url.path == '/v1/agents/' + binding['id']:
+                if request.url.params.get('version') != str(binding['version']):
+                    raise AssertionError('Reviewer lookup must pin the exact version')
+                return httpx.Response(200, json=dict(plan['reviewers'][role], **binding))
         if request.url.path == '/v1/agents/agent_fixture':
             return httpx.Response(200, json=dict(plan['agent'], id='agent_fixture', version=1))
         if request.url.path == '/v1/environments/environment_fixture':

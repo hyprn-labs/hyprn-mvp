@@ -1,5 +1,8 @@
 """Hosted composition refuses implicit local stores or missing runtime bindings."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('baseline')
+
 from pathlib import Path
 import asyncio
 import copy
@@ -27,6 +30,7 @@ from hyprn_mvp_app import hosted_lifecycle
 from hyprn_mvp_app.hosted_runtime import request_lease
 import cloud_release
 import managed_assistant
+from installed_hosted_app import assistant_plan
 from hyprn_mvp_cloud.assistant_startup import reconcile
 from hyprn_mvp_app.assistant.claude import ProviderError
 from hosted_fixture import postgres_fixture
@@ -319,7 +323,7 @@ class HostedAdmissionTests(unittest.TestCase):
 
 class HostedAssistantStartupTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.plan = managed_assistant.definition('staging', 'claude-sonnet-5-5', 'high')
+        self.plan = assistant_plan()
         self.identity = dict(installation_id='fixture', release_sha256='a' * 64, config_sha256='b' * 64)
         self.settings = SimpleNamespace(definitions_sha256=self.plan['definitions_sha256'],
                                         agent_id='agent_fixture', agent_version=1,
@@ -335,12 +339,24 @@ class HostedAssistantStartupTests(unittest.IsolatedAsyncioTestCase):
             sessions = ['session_old', 'session_retained']
             status = 'idle'
             drift = False
+            skill_drift = False
+            reviewer_drift = False
 
             async def request(self, method, path, params=None):
                 test.assertEqual(method, 'GET')
                 if path == '/v1/sessions':
                     test.assertEqual(params, {'limit': 100, 'include_archived': 'true'})
                     return {'data': [{'id': sid} for sid in self.sessions], 'next_page': None}
+                skill = test.plan['bindings']['skill']
+                if path == '/v1/skills/' + skill['id'] + '/versions/' + skill['version']:
+                    return {'id': skill['version'], 'skill_id': skill['id']}
+                for role, binding in test.plan['bindings']['reviewers'].items():
+                    if path == '/v1/agents/' + binding['id']:
+                        test.assertEqual(params, {'version': binding['version']})
+                        result = dict(copy.deepcopy(test.plan['reviewers'][role]), **binding)
+                        if self.reviewer_drift:
+                            result['tools'] = test.plan['agent']['tools']
+                        return result
                 if path == '/v1/agents/agent_fixture':
                     test.assertEqual(params, {'version': 1})
                     result = dict(copy.deepcopy(test.plan['agent']), id='agent_fixture', version=1)
@@ -352,6 +368,10 @@ class HostedAssistantStartupTests(unittest.IsolatedAsyncioTestCase):
                     result['config']['packages'] = {'type': 'packages', **{manager: [] for manager in managed_assistant.MANAGERS}}
                     return result
                 raise AssertionError('Unexpected provider request')
+
+            async def skill_content(self, skill_id, version):
+                test.assertEqual((skill_id, version), ('skill_fixture', 'skver_fixture'))
+                return b'wrong archive' if self.skill_drift else managed_assistant.managed_skill.bundle()[0]
 
             async def find_session(self, correlation):
                 test.assertEqual(correlation, 'conversation_fixture')
@@ -389,13 +409,33 @@ class HostedAssistantStartupTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ProviderError, 'provider_definition_drift'):
             await self.check()
 
+    async def test_changed_native_skill_or_reviewer_write_authority_blocks_startup(self):
+        self.provider.skill_drift = True
+        with self.assertRaisesRegex(ProviderError, 'provider_skill_drift'):
+            await self.check()
+        self.provider.skill_drift = False
+        self.provider.reviewer_drift = True
+        with self.assertRaisesRegex(ProviderError, 'provider_definition_drift'):
+            await self.check()
+
+    async def test_bootstrap_or_missing_pins_cannot_start_delivery(self):
+        original = self.plan
+        for invalid in (managed_assistant.bootstrap('staging', 'claude-sonnet-5-5', 'high'),
+                        {key: value for key, value in original.items() if key != 'bindings'}):
+            self.plan = invalid
+            with patch.object(self.provider, 'request') as request:
+                with self.assertRaises(ProviderError):
+                    await self.check()
+                request.assert_not_called()
+        self.plan = original
+
     async def test_missing_prior_evidence_never_becomes_zero(self):
         self.continuity['untracked_cents'] = 0
         with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
             await self.check()
 
     def test_complete_released_assistant_plan_has_explicit_bounded_size(self):
-        plan = managed_assistant.definition('staging', 'claude-sonnet-5-5', 'high')
+        plan = assistant_plan()
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp).resolve() / 'plan.json'
             path.write_text(json.dumps(plan))

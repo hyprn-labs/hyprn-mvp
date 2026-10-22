@@ -1,5 +1,15 @@
 # Project State
 
+- **Audit remediation in progress (2026-10-22), not deployed:** durable analysis
+  admission, operational execution state, incremental chat and pinned native skill
+  provisioning are committed with focused evidence. Monetary quantities are being
+  integrated through catalogue-derived units and exact saved price bases; the
+  modeling/native acceptance revealed contract/version dispatch gaps under repair.
+  Parent owns remaining scientific publication, reviewer/source evidence, UI,
+  integrated qualification and staging deployment. No staging scientific data is
+  changed directly. Current scope/ownership:
+  [coverage](phases/06-hosted-staging/audit-remediation/COVERAGE.md).
+
 - **Assistant user budget deployed (2026-10-22):** product `0fe32eba`, staging
   source `b62fd35a`, release `2e6d90ab`, sequence 17, schema 9. USD 20 cumulative
   per user; no session cap, renewal or reset. Safe Resume and shared composer

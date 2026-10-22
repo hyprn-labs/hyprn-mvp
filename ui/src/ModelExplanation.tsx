@@ -9,9 +9,9 @@ import {
 } from './api';
 import { AttributionDetail, RecordAttribution } from './attribution';
 import type {
-  ModelExplanationContent2,
-  ModelExplanationStateRead2,
-  ModelExplanationVersionRead2,
+  ModelExplanationContent3,
+  ModelExplanationStateRead3,
+  ModelExplanationVersionRead3,
 } from './contract';
 import {
   ReadingSection,
@@ -32,13 +32,16 @@ import {
   documentationChanged,
   onDocumentationChange,
 } from './modelDocumentation';
+import { MonetaryBasisEditor, MonetaryBasisReader } from './MonetaryBasis';
+import { useUnitCatalog, UnitGuidance } from './UnitEditor';
 import { EvidencePicker } from './EvidencePicker';
 import { evidenceTitle, EvidenceList } from './EvidenceView';
 import type { Snapshot } from './GraphView';
 import { cleanGuard, type EditorGuard } from './workspaceModel';
 
-const EMPTY: ModelExplanationContent2 = {
-  schema_version: '2',
+const EMPTY: ModelExplanationContent3 = {
+  schema_version: '3',
+  monetary_quantities: [],
   limits: '',
   component_details: [],
   represents: '',
@@ -58,16 +61,16 @@ const RELATIONS = { supports: 'Supports', challenges: 'Challenges', context: 'Co
 type Loaded =
   | { kind: 'loading' }
   | { kind: 'failed'; error: string }
-  | { kind: 'draft'; state: ModelExplanationStateRead2 }
+  | { kind: 'draft'; state: ModelExplanationStateRead3 }
   | {
       kind: 'version';
-      state: ModelExplanationStateRead2;
-      saved: ModelExplanationVersionRead2 | null;
+      state: ModelExplanationStateRead3;
+      saved: ModelExplanationVersionRead3 | null;
     };
 
 /** Component names come from the displayed model; an explanation of a definition version
  * names every component that uses it. Identity is never inferred from a name. */
-function componentName(snapshot: Snapshot, item: ModelExplanationContent2['components'][number]) {
+function componentName(snapshot: Snapshot, item: ModelExplanationContent3['components'][number]) {
   if (item.kind === 'instance')
     return (
       snapshot.instances.find((i) => i.instance_id === item.instance_id)?.name ??
@@ -85,7 +88,7 @@ function ExplanationReader({
   snapshot,
   evidence,
 }: {
-  content: ModelExplanationContent2;
+  content: ModelExplanationContent3;
   snapshot: Snapshot;
   evidence: EvidenceRecord[];
 }) {
@@ -97,6 +100,13 @@ function ExplanationReader({
           <p className="context-copy">{content[key]}</p>
         </ReadingSection>
       ))}
+      {!!content.monetary_quantities.length && (
+        <MonetaryBasisReader
+          snapshot={snapshot}
+          items={content.monetary_quantities}
+          evidence={evidence}
+        />
+      )}
       {!!content.components.length && (
         <ReadingSection aria-label="Component explanations">
           <h4>Component explanations</h4>
@@ -150,7 +160,8 @@ export function ModelExplanation({
   onHandle?: (handle: EditorGuard) => void;
 }) {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
-  const [form, setForm] = useState<ModelExplanationContent2 | null>(null);
+  const [form, setForm] = useState<ModelExplanationContent3 | null>(null);
+  const guidance = useUnitCatalog(api, form ? studyId : '', modelId);
   const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
   const [picker, setPicker] = useState(false);
   const [working, setWorking] = useState(false);
@@ -236,7 +247,12 @@ export function ModelExplanation({
       if (token !== generation.current || !fence.valid()) return;
       const content = revisionId ? saved?.content : state.draft?.content;
       const attached = await Promise.all(
-        (content?.evidence_links ?? []).map(async (link) => {
+        [
+          ...(content?.evidence_links ?? []),
+          ...(content && 'monetary_quantities' in content
+            ? content.monetary_quantities.flatMap((item) => item.evidence_links)
+            : []),
+        ].map(async (link) => {
           try {
             return await api.evidenceVersion(studyId, link.evidence_version_id, fence.signal);
           } catch (error) {
@@ -455,6 +471,22 @@ export function ModelExplanation({
             />
           </FormField>
         ))}
+        <UnitGuidance guidance={guidance} />
+        <MonetaryBasisEditor
+          snapshot={snapshot}
+          items={form.monetary_quantities}
+          evidence={evidence}
+          catalog={guidance.catalog}
+          api={api}
+          studyId={studyId}
+          onChange={(items) => setForm({ ...form, monetary_quantities: items })}
+          onEvidence={(records) =>
+            setEvidence((known) => [
+              ...known.filter((k) => !records.some((r) => r.evidence_id === k.evidence_id)),
+              ...records,
+            ])
+          }
+        />
         <h4>Component explanations</h4>
         {snapshot.instances
           .filter((i) => i.instance_id !== snapshot.root_instance_id)
@@ -573,6 +605,7 @@ export function ModelExplanation({
       content &&
       (TEXTS.some(([key]) => currentDocumentation(content)[key].trim()) ||
         content.components.length ||
+        currentDocumentation(content).monetary_quantities.length ||
         content.evidence_links.length);
     body = hasContent ? (
       <ExplanationReader
@@ -611,10 +644,27 @@ export function ModelExplanation({
         help="modelExplanation"
         details={
           record ? (
-            <RecordDetails kind="Model explanation" metadata={<>{status}<RecordAttribution
-              kind={loaded.kind === 'version' ? 'model_explanation_version' : 'model_explanation_draft'}
-              id={'explanation_version_id' in record ? record.explanation_version_id : record.revision}
-              inline /></>}>
+            <RecordDetails
+              kind="Model explanation"
+              metadata={
+                <>
+                  {status}
+                  <RecordAttribution
+                    kind={
+                      loaded.kind === 'version'
+                        ? 'model_explanation_version'
+                        : 'model_explanation_draft'
+                    }
+                    id={
+                      'explanation_version_id' in record
+                        ? record.explanation_version_id
+                        : record.revision
+                    }
+                    inline
+                  />
+                </>
+              }
+            >
               <dl className="hf-record-details">
                 <AttributionDetail
                   kind={

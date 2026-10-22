@@ -440,10 +440,20 @@ DEFINITIONS['AnalysisExecution1'] = _object(dict(
         reused=dict(type='boolean'), completed=dict(type='boolean'),
     ))),
 ))
+DEFINITIONS['AnalysisExecution2'] = deepcopy(DEFINITIONS['AnalysisExecution1'])
+DEFINITIONS['AnalysisExecution2']['properties'].update(
+    schema_version=dict(const='2'),
+    state=dict(enum=['calculating', 'validating', 'complete', 'failed', 'needs_review', 'cancelled']),
+    admission_state=dict(enum=['ready', 'waiting', 'unavailable', 'invalid_attestation',
+                               'needs_review', 'revoked', 'cancelled', 'stopped']),
+)
+DEFINITIONS['AnalysisExecution2']['required'].append('admission_state')
 DEFINITIONS['AnalysisExecutionRead1'] = dict(anyOf=[
     {'$ref': '#/$defs/AnalysisExecution1'}, dict(type='null'),
 ])
-
+DEFINITIONS['AnalysisExecutionRead2'] = dict(anyOf=[
+    {'$ref': '#/$defs/AnalysisExecution1'}, {'$ref': '#/$defs/AnalysisExecution2'}, dict(type='null'),
+])
 
 _VALIDATORS = {}
 
@@ -799,6 +809,14 @@ class Analyses:
 
         if problems:
             raise DomainError('invalid_request', 422, fields=problems[:20])
+        # Monetary values carry the immutable price basis of the exact model version.
+        # Analysis cannot silently acquire a basis from a later draft or explanation.
+        if model is not None:
+            from .explanations import quantity_price_basis
+            from .units import monetary_expression
+            for (instance_id, port_id), expression in _output_ports(model).items():
+                if monetary_expression(expression) is not None:
+                    quantity_price_basis(db, sid, model, dict(instance_id=instance_id, port_id=port_id))
         bindings = content['criterion_bindings']
         if content['brief_version_id'] is None:
             if bindings:

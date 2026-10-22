@@ -49,9 +49,9 @@ Each run in a calculation shows one cell per study criterion, each its own `Stat
 | Criterion kind | ok | alarm | inert | advisory |
 |---|---|---|---|---|
 | Constraint | Met · value with units | Not met · value with units | — | Not evaluated · reason |
-| Objective | — | — | Measured · value with units | Not evaluated · reason |
+| Objective | — | — | Calculated · value with units | Not evaluated · reason |
 
-An unbound criterion reads "Not evaluated · Criterion not bound"; a missing value reads "not computed". Measured is a value, not a ranking.
+An unbound criterion reads "Not evaluated · Criterion not bound"; a missing value reads "not computed". Calculated is a model output, not a physical measurement or ranking. The historical wire outcome `measured` keeps its stored meaning; shared `criterionStatus` presents it as Calculated.
 
 ## Ensembles
 

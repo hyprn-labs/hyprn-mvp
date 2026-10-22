@@ -48,7 +48,7 @@ def run(*, group):
             for source in item['source_files']:add('sources/'+source['sha256']+'.py',base64.b64decode(source['bytes']),'text/x-python','source')
         root=revisions[-1]
         value=dict(schema_version=root['schema_version'],source_service='Declared private unit browser double',model_id=root['model_id'],model_revision_id=root['model_revision_id'],revisions=deepcopy(revisions),files=[files[k] for k in sorted(files)],required_capabilities=root['required_capabilities'],license_notices=[])
-        value['digest']=digest(value);validate('ModelPackage',value);return value
+        value['digest']=digest(value);validate('ModelPackageRead5',value);return value
 
     class Models:
         def __init__(self):
@@ -77,7 +77,10 @@ def run(*, group):
                 ))
                 # New configurations (version 6) need the criteria-free capability.
                 catalog_transport.caps['capabilities'].append(deepcopy(CRITERIA_FREE_CAPABILITY))
-                catalog_transport.caps['schema_versions'].append('4')
+                catalog_transport.caps['schema_versions'].extend(['4','5'])
+                catalog_transport.caps['capabilities'].append(dict(
+                    catalog_transport.caps['capabilities'][0],id='unit_declarations',version='2',
+                ))
                 catalog_transport.caps['contract_versions'].append('1.4')
                 return catalog_transport(method,path,raw,headers)
             if '/commands/' in key:
@@ -95,11 +98,11 @@ def run(*, group):
                 self.transports[transport.draft['model_id']] = transport
                 return result
             if key.endswith('/imports') and group=='units-ui-history':
-                validate('ModelPackage',body['package'])
+                validate('ModelPackageRead5',body['package'])
                 selected=body['package']['revisions'][-1];transport=UnitTransport(store,sid)
                 transport.draft={k:deepcopy(v) for k,v in selected.items() if k not in ('digest','model_revision_id','parent_model_revision_id','originating_draft_revision')}
                 transport.draft.update(study_id=sid,name='Imported exact model',draft_revision=uid())
-                validate('ModelDraft',transport.draft)
+                validate('ModelDraftRead5',transport.draft)
                 transport.revisions={r['model_revision_id']:deepcopy(r) for r in body['package']['revisions']}
                 self.transports[selected['model_id']]=transport
                 result=response(transport.draft)[1]
@@ -108,7 +111,7 @@ def run(*, group):
                 return 200,result
             mid = key.split('/models/')[1].split('/')[0]
             transport = self.transports[mid]
-            if key.endswith('/export') and group=='units-ui-history':
+            if key.endswith('/export') and group in ('units-ui-history','units-ui-authoring'):
                 from urllib.parse import parse_qs
                 selected=transport.revisions[parse_qs(urlsplit(path).query)['revision'][0]]
                 revisions=[selected]
@@ -196,11 +199,11 @@ def run(*, group):
                         draft['connections'].append(dict(connection_id=uid(),source_ref=edit['source_ref'],target_ref=edit['target_ref']))
                     else:raise AssertionError('Unsupported declared test operation: '+kind)
                 draft['ports']=[deepcopy(p) for d in draft['definitions'] for p in d['ports']]
-                if (draft['schema_version']=='4'
+                if (draft['schema_version'] in ('4','5')
                     and 'quantity_definitions/1' not in draft['required_capabilities']):
                     draft['required_capabilities'].append('quantity_definitions/1')
                 if operation=='edits':draft['draft_revision']=uid();transport.draft=draft
-                validate('ModelDraft4' if draft['schema_version']=='4' else 'ModelDraft',draft)
+                validate('ModelDraftRead5',draft)
                 result=response(draft,created_ids=created,diagnostics=[])[1]
             elif operation=='commits':
                 saved=revision(draft);transport.revisions[saved['model_revision_id']]=saved;result=response(saved)[1]
@@ -318,6 +321,44 @@ def run(*, group):
                 if group=='units-ui-history':result.update(package=package([before,after]),evidence=record)
                 (scope.root/'evidence'/('reader-fixture-'+draft['model_id']+'.json')).write_text(json.dumps(result,indent=2)+'\n')
                 return self.respond(200,json.dumps(result).encode(),'application/json')
+            if self.path=='/fixture/price-evidence' and self.command=='POST' and group=='units-ui-authoring':
+                guard.scope_from_environment();body=json.loads(self.rfile.read(length))
+                if set(body)!={'study_id'}:return self.respond(400,b'Invalid control','text/plain')
+                store.study(actor,body['study_id'])
+                from test_assumption_authoring import evidence
+                record=evidence(dict(store=store,actor=actor,sid=body['study_id']),title='Explicit price basis report')
+                return self.respond(200,json.dumps(record).encode(),'application/json')
+            if self.path=='/fixture/historical-configuration' and self.command=='POST' and group=='units-ui-history':
+                guard.scope_from_environment();body=json.loads(self.rfile.read(length))
+                if set(body)!={'study_id','model_id','model_revision_id'}:return self.respond(400,b'Invalid control','text/plain')
+                sid=body['study_id'];study=store.study(actor,sid);transport=models.transports[body['model_id']]
+                if transport.sid!=sid:return self.respond(404,b'Missing model','text/plain')
+                model=deepcopy(transport.revisions[body['model_revision_id']])
+                if model['schema_version']!='3':return self.respond(400,b'Historical Model3 required','text/plain')
+                # Explicit immutable historical seed, never a current authoring request.
+                frozen=sample(D['FrozenConfiguration5Model3']);config=frozen['configuration']
+                incoming={(c['target_ref']['instance_id'],c['target_ref']['port_id']) for c in model['connections']}
+                units=resolved_model_units(model)
+                config.update(study_id=sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],
+                    configuration_id=uid(),configuration_revision_id=uid(),parent_revision_id=None,
+                    name='Retained unit scenario',inputs=[dict(result_binding=None,target=dict(instance_id=i['instance_id'],port_id=p['port_id']),value=0,
+                        units=units[(i['instance_id'],i['definition_version_id'],p['port_id'])],
+                        provenance=dict(kind='manual',statement='Original exact zero',evidence_version_ids=[]))
+                        for i in model['instances'] for d in model['definitions'] if d['definition_version_id']==i['definition_version_id']
+                        for p in d['ports'] if p['direction']=='input' and (i['instance_id'],p['port_id']) not in incoming],
+                    criteria=[],context_snapshot=dict(description='Original retained scenario',boundary='Exact original boundary',notes=['Original note']),
+                    evidence_snapshots=[store.evidence_version(actor,sid,link['evidence_version_id']) for a in model['assumptions'][:1] for link in a['evidence_links']],
+                    required_capabilities=['unit_declarations/1','model_assumptions/1'],
+                    context_source=dict(kind='current_study',expected_study_revision=study['revision']),
+                    derivation=None,assumptions=[],general_context_evidence_version_ids=[],approach_binding=None)
+                config['numerical']=dict(mode='deterministic',initialization=[],solvers=[],derivatives=dict(method='none',form=None,check=None),design_variables=[],objectives=[],constraints=[],optimizer=None,uncertainty=None)
+                config.pop('digest');config['digest']=digest(config)
+                frozen.update(model_snapshot=model,study_revision=study['revision'],approach_closure=None)
+                validate('FrozenConfiguration5Model3',frozen)
+                with store.connection(write=True) as db:
+                    db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(config['configuration_revision_id'],config['configuration_id'],sid,json.dumps(frozen)))
+                    db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(config['configuration_id'],sid,config['configuration_revision_id']))
+                return self.respond(200,json.dumps(frozen).encode(),'application/json')
             if self.path=='/fixture/retain' and self.command=='POST' and group in ('units-ui-configuration','units-ui-history'):
                 guard.scope_from_environment();body=json.loads(self.rfile.read(length))
                 if set(body)!={'study_id','configuration_revision_id'}:return self.respond(400,b'Invalid control','text/plain')
@@ -330,10 +371,11 @@ def run(*, group):
                 outputs=[dict(target=dict(instance_id=i['instance_id'],port_id=p['port_id']),value=7,units=units[(i['instance_id'],i['definition_version_id'],p['port_id'])],availability='available',reason=None,producer_completed=True,assigned=True) for i in model['instances'] for d in model['definitions'] if d['definition_version_id']==i['definition_version_id'] for p in d['ports'] if p['direction']=='output']
                 execution=dict(state='finished',exit_code=0,message='Synthetic history double')
                 if config['schema_version']=='6':
-                    # History 8: configuration 6 on Model4, bundle 11 and results 3 (no criteria).
+                    # Current authoring retains its exact Model4/5 family; no numerical proof.
+                    monetary = model['schema_version']=='5'
                     results=dict(schema_version='3',run_id=rid,bundle_digest=bundle_digest,execution=execution,outputs=outputs,artifacts=[])
-                    manifest=dict(schema_version='11',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],model_schema_version='4',input_schema_version='11')
-                    history=dict(history_schema_version='8',configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],bundle={k:v for k,v in manifest.items() if k!='runtime'},results=results,artifacts=[],errors=[])
+                    manifest=dict(schema_version='12' if monetary else '11',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],model_schema_version=model['schema_version'],input_schema_version='11')
+                    history=dict(history_schema_version='9' if monetary else '8',configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],bundle={k:v for k,v in manifest.items() if k!='runtime'},results=results,artifacts=[],errors=[])
                 else:
                     results=dict(schema_version='1',run_id=rid,bundle_digest=bundle_digest,execution=execution,convergence=dict(state='not_applicable',diagnostics_ref=None),optimization=dict(termination='not_applicable',feasibility='not_applicable'),completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),outputs=outputs,criteria=[dict(criterion_id=c['criterion_id'],outcome='unresolved',reason='Synthetic fixture') for c in config['criteria']],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
                     manifest=dict(schema_version='6',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],approach_digest=None,approach_closure_digest=None)

@@ -22,6 +22,12 @@ def router(deps):
     @r.get("/api/1/studies/{study_id}/evidence/{evidence_version_id}")
     def get_evidence(study_id:str,evidence_version_id:str,request:Request,who:Actor):
         return response(request,store.evidence_version(who,valid_id(study_id),valid_id(evidence_version_id)))
+    @r.get('/api/1/studies/{study_id}/evidence/{evidence_version_id}/source-inspection')
+    def source_inspection(study_id:str,evidence_version_id:str,request:Request,who:Actor):
+        from ..assistant.research import read
+        if request.query_params:
+            raise DomainError('invalid_request',400)
+        return response(request,read(store,who,valid_id(study_id),valid_id(evidence_version_id)))
     @r.get("/api/1/studies/{study_id}/evidence-families/{evidence_id}")
     def evidence_family(study_id:str,evidence_id:str,request:Request,who:Actor):
         if request.query_params:raise DomainError("invalid_request",400)

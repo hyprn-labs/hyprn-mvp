@@ -3,7 +3,8 @@ import { message, type HyprnMvpApi } from './api';
 import type {
   ModelExplanationContent1,
   ModelExplanationContent2,
-  ModelExplanationDraftRead2,
+  ModelExplanationContent3,
+  ModelExplanationDraftRead3,
 } from './contract';
 import type { Snapshot } from './GraphView';
 
@@ -20,9 +21,11 @@ export function onDocumentationChange(api: HyprnMvpApi, modelId: string, refresh
   return () => changes.removeEventListener('changed', listener);
 }
 export function currentDocumentation(
-  content?: ModelExplanationContent1 | ModelExplanationContent2 | null,
-): ModelExplanationContent2 {
-  if (content?.schema_version === '2') return content;
+  content?: ModelExplanationContent1 | ModelExplanationContent2 | ModelExplanationContent3 | null,
+): ModelExplanationContent3 {
+  if (content?.schema_version === '3') return content;
+  if (content?.schema_version === '2')
+    return { ...content, schema_version: '3', monetary_quantities: [] };
   return {
     represents: '',
     basis: '',
@@ -30,7 +33,8 @@ export function currentDocumentation(
     components: [],
     evidence_links: [],
     ...content,
-    schema_version: '2',
+    schema_version: '3',
+    monetary_quantities: [],
     limits: '',
     component_details: [],
   };
@@ -42,8 +46,8 @@ export function useModelDocumentation(
   snapshot: Snapshot,
   studyId?: string,
 ) {
-  const [draft, setDraft] = useState<ModelExplanationDraftRead2 | null>(null);
-  const [content, setContent] = useState<ModelExplanationContent2 | null>(null);
+  const [draft, setDraft] = useState<ModelExplanationDraftRead3 | null>(null);
+  const [content, setContent] = useState<ModelExplanationContent3 | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -109,7 +113,7 @@ export function useModelDocumentation(
     loading: !!api && (loading || loaded !== identity),
     error: loaded === identity ? error : '',
     retry: () => setAttempt((n) => n + 1),
-    save: async (next: ModelExplanationContent2, expectedRevision: string | null) => {
+    save: async (next: ModelExplanationContent3, expectedRevision: string | null) => {
       if (!api || revision || loaded !== identity || loading || error)
         throw new Error('Read the current model documentation before editing it.');
       const saved = await api.saveModelExplanationDraft(sid, mid, {

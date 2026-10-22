@@ -1,4 +1,4 @@
-import type { ModelDraftRead4, ModelRevisionRead4, UnitCatalog1, UnitDeclaration1 } from './contract';
+import type { ModelDraftRead5, ModelRevisionRead5, UnitCatalog2, UnitDeclaration2 } from './contract';
 
 /** Local physical text stays verbatim until the public catalog admits it. */
 export type UnitDraft = { kind: 'unspecified' } | { kind: 'dimensionless' } | { kind: 'physical'; expression: string };
@@ -15,7 +15,7 @@ export function resolvedUnit(value: UnitValue): string | undefined {
 export function unitDraft(value: UnitValue): UnitDraft {
   return typeof value === 'string' ? (value === '' ? {kind:'dimensionless'} : {kind:'physical',expression:value}) : value;
 }
-export function unitDeclaration(value: UnitDraft, catalog: UnitCatalog1 | null): UnitDeclaration1 {
+export function unitDeclaration(value: UnitDraft, catalog: UnitCatalog2 | null): UnitDeclaration2 {
   if (!catalog) throw new Error('Unit guidance is unavailable. Retry unit guidance. Your edits are kept.');
   if (value.kind !== 'physical') return value;
   const expression = catalog.supported_units.find(unit => unit === value.expression);
@@ -23,7 +23,7 @@ export function unitDeclaration(value: UnitDraft, catalog: UnitCatalog1 | null):
   return {kind:'physical',expression};
 }
 /** Inspect actual instance bindings, never every retained definition version. */
-export function unresolvedModelUnits(model: ModelDraftRead4 | ModelRevisionRead4) {
+export function unresolvedModelUnits(model: ModelDraftRead5 | ModelRevisionRead5) {
   return model.instances.flatMap(instance => {
     const definition = model.definitions.find(d => d.definition_version_id === instance.definition_version_id);
     return (definition?.ports ?? []).filter(port => resolvedUnit(port.units) === undefined).map(port => ({

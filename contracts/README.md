@@ -124,6 +124,25 @@ remain mandatory. This exception does not authorize other in-place schema change
 
 Each port declares physical units (one supported spelling), dimensionless or unspecified. Unspecified units may be saved, but commit, preparation and execution require resolved units for every port in the selected executable closure.
 
+### Monetary unit successor
+
+UnitDeclaration2 and model format 5 add the finite expressions `USD`, `kUSD`, `MUSD`,
+`pax`, `USD/pax`, `USD/kg`, `USD/m**3`, `USD/h`, `USD/kW`, `USD/(kW*h)`, `USD/J`
+and `USD/MJ`. UnitCatalog2 publishes their engine-verified monetary numerator,
+scale and denominator with the catalogue digest and both engine source identities.
+Unsupported currencies and aliases remain errors. No exchange rate, inflation or
+implicit dimensionless conversion exists. All predecessor concrete definitions
+and exact historical catalogue identities are retained.
+
+ModelExplanationContent3 attaches `catalogue_expression`, `price_year`,
+`economic_basis` and nonempty evidence links to exact instance/port IDs. Its saved
+version pins the exact model digest. Monetary quantities need a complete declared
+basis; connected quantities cannot silently mix price years or economic bases.
+Monetary analysis reads that immutable explanation, never a later draft.
+Preparation5, Bundle12, FrozenConfiguration10 and RunHistory9 retain Model5 with
+Configuration6 and numerical result protocol3; ordinary predecessor models retain
+their existing families.
+
 ## Tests
 
 `contracts/tests` validate the schemas and fixtures; `modeling/tests` exercise the modeling contract against a running modeling service in fresh, isolated stores. They read the service URL and key file from environment variables (`HYPRN_MVP_MODEL_URL`, `HYPRN_MVP_MODEL_KEY_FILE`, and `HYPRN_MVP_MODEL_IMPORT_URL`, `HYPRN_MVP_MODEL_IMPORT_KEY_FILE` for a second service used by import tests; `HYPRN_MVP_MODEL_IMPORT_CONTAINER` names that service's test container when it is reached through the private test transport):

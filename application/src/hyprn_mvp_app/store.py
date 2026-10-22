@@ -2,6 +2,7 @@
 from __future__ import annotations
 from .evidence_content import read_content
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime, timezone
 import base64
@@ -11,13 +12,16 @@ import re
 from pathlib import Path
 import sqlite3
 import time
-from uuid import UUID
+from uuid import UUID, uuid5
 # Identity, validation and the Error envelope are owned by .contracts. Re-exporting
 # canonical/digest/uid/DomainError here is a temporary test-import alias; production code
 # imports them from contracts (test_module_boundaries.py).
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
 from .locations import refuse_location
 from . import identity
+
+
+_analysis_authority = ContextVar('hyprn_analysis_authority', default=None)
 
 
 # ---- Exact evidence: one owner for the stored-version read and snapshot creation.
@@ -125,6 +129,40 @@ CREATE TABLE IF NOT EXISTS outbox(
  state TEXT NOT NULL CHECK(state IN ('accepted_run','dispatching','recorded','uncertain')),
  payload TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS execution_operations(
+ run_id TEXT PRIMARY KEY REFERENCES run_associations(run_id),
+ study_id TEXT NOT NULL REFERENCES studies(study_id), actor_id TEXT NOT NULL,
+ command_id TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('accepted_run','dispatching','recorded','uncertain')),
+ preparation_state TEXT CHECK(preparation_state IN ('prepared','preparation_failed')),
+ payload TEXT NOT NULL DEFAULT '{}' CHECK(json_type(payload)='object'
+   AND json_remove(payload,'$.status','$.history')='{}')
+);
+CREATE INDEX IF NOT EXISTS execution_pending ON execution_operations(run_id)
+ WHERE state IN ('accepted_run','dispatching')
+ AND (preparation_state IS NULL OR preparation_state<>'preparation_failed');
+CREATE INDEX IF NOT EXISTS execution_actor_pending ON execution_operations(actor_id,state)
+ WHERE state IN ('accepted_run','dispatching','uncertain')
+ AND (preparation_state IS NULL OR preparation_state<>'preparation_failed');
+CREATE TRIGGER IF NOT EXISTS execution_insert AFTER INSERT ON outbox BEGIN
+ INSERT INTO execution_operations
+ SELECT r.run_id,r.study_id,coalesce(json_extract(NEW.payload,'$.actor'),''),r.command_id,
+ NEW.state,json_extract(NEW.payload,'$.preparation_state'),
+ hyprn_execution_projection(NEW.payload,'{}')
+ FROM run_associations r WHERE r.run_id=NEW.run_id;
+END;
+CREATE TRIGGER IF NOT EXISTS execution_source_update AFTER UPDATE OF payload,state ON outbox BEGIN
+ UPDATE execution_operations SET state=CASE WHEN NEW.state=OLD.state THEN state ELSE NEW.state END,
+ preparation_state=coalesce(json_extract(NEW.payload,'$.preparation_state'),preparation_state),
+ payload=hyprn_execution_projection(NEW.payload,payload)
+ WHERE run_id=NEW.run_id;
+END;
+CREATE TRIGGER IF NOT EXISTS execution_fixed BEFORE UPDATE ON execution_operations
+ WHEN NEW.run_id<>OLD.run_id OR NEW.study_id<>OLD.study_id OR NEW.actor_id<>OLD.actor_id
+ OR NEW.command_id<>OLD.command_id
+ BEGIN SELECT RAISE(ABORT,'execution identity is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS execution_no_delete BEFORE DELETE ON execution_operations
+ BEGIN SELECT RAISE(ABORT,'execution records are never deleted'); END;
 CREATE TABLE IF NOT EXISTS execution_observation(
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
  status TEXT NOT NULL CHECK(status IN ('ready','unavailable')),
@@ -164,6 +202,19 @@ CREATE TRIGGER IF NOT EXISTS study_archive_no_delete BEFORE DELETE ON study_arch
  BEGIN SELECT RAISE(ABORT,'study archive state is never deleted'); END;
 -- Agent principals. An agent actor is never a row of ``users``, so it can never sign in; the
 -- only reference to ``users`` is the delegating user. One agent actor per (user, surface).
+CREATE TRIGGER IF NOT EXISTS analysis_execution_request_fixed BEFORE UPDATE ON receipts
+ WHEN OLD.category='analysis_execution' AND NEW.request IS NOT OLD.request
+ BEGIN SELECT RAISE(ABORT,'accepted finite authority never changes'); END;
+CREATE TABLE IF NOT EXISTS analysis_execution_children(
+ study_id TEXT NOT NULL REFERENCES studies(study_id), analysis_command TEXT NOT NULL,
+ child_category TEXT NOT NULL CHECK(child_category IN ('run','calculation_estimate')),
+ child_command TEXT NOT NULL, run_id TEXT,
+ PRIMARY KEY(study_id,child_category,child_command), UNIQUE(run_id)
+);
+CREATE TRIGGER IF NOT EXISTS analysis_execution_children_no_update BEFORE UPDATE ON analysis_execution_children
+ BEGIN SELECT RAISE(ABORT,'accepted analysis child identity never changes'); END;
+CREATE TRIGGER IF NOT EXISTS analysis_execution_children_no_delete BEFORE DELETE ON analysis_execution_children
+ BEGIN SELECT RAISE(ABORT,'accepted analysis child identity never changes'); END;
 CREATE TABLE IF NOT EXISTS agent_actors(
  actor_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='agent'),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),
@@ -195,6 +246,14 @@ CREATE TABLE IF NOT EXISTS agent_api_sessions(
  read_only INTEGER NOT NULL CHECK(read_only IN (0,1)), expires_at REAL NOT NULL
 );
 """
+
+
+def _execution_projection(source, existing):
+    """Copy lifecycle fields without dropping nested nulls in scientific records."""
+    original = json.loads(source)
+    result = json.loads(existing)
+    result.update({key: original[key] for key in ('status', 'history') if key in original})
+    return json.dumps(result)
 
 # ---- Agent principals: closed vocabularies shared by ``store`` and ``auth``.
 AGENT_SURFACES=frozenset({'claude_managed','openai_agents'})
@@ -299,10 +358,18 @@ class Store:
         os.close(fd)
         os.chmod(self.path,0o600)
         with self.connection() as db:
+            operational_exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_operations'").fetchone()
             db.executescript(SCHEMA)
         # Additive, idempotent migration. Historical records and observation
         # values remain untouched; pre-existing rows simply have no runtime.
         with self.connection(write=True) as db:
+            if not operational_exists:
+                db.execute("""INSERT OR IGNORE INTO execution_operations
+                    SELECT r.run_id,r.study_id,coalesce(json_extract(o.payload,'$.actor'),''),r.command_id,
+                    o.state,json_extract(o.payload,'$.preparation_state'),
+                    hyprn_execution_projection(o.payload,'{}')
+                    FROM outbox o JOIN run_associations r USING(run_id)""")
             identity.ensure(db)
             columns={row['name'] for row in db.execute('PRAGMA table_info(execution_observation)')}
             if 'runtime_json' not in columns:
@@ -321,6 +388,7 @@ class Store:
             return
         db=sqlite3.connect(self.path, timeout=15, isolation_level=None)
         db.row_factory=sqlite3.Row
+        db.create_function('hyprn_execution_projection', 2, _execution_projection, deterministic=True)
         db.execute("PRAGMA foreign_keys=ON")
         try:
             if write: db.execute("BEGIN IMMEDIATE")
@@ -341,25 +409,74 @@ class Store:
             with self.connection(write=write) as db:
                 yield db
 
-    def background_jobs(self, category, identity=None):
+    def background_jobs(self, category, identity=None, *, after=None, limit=None):
         """Discover identity only through the process's narrowly granted queue function."""
+        if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
+            raise ValueError('Queue page must contain 1 to 100 identities')
         with self.database.background_connection() as db:
+            if after is not None or limit is not None:
+                return db.execute('SELECT * FROM hyprn_background_jobs_page(?,?,?,?)',
+                                  (category, identity, after, limit or 100)).fetchall()
             return db.execute('SELECT * FROM hyprn_background_jobs(?,?)',
                               (category, identity)).fetchall()
 
+    def background_analysis_parent(self, category, identity):
+        """Discover an immutable parent identity, without loading scientific payloads."""
+        if hasattr(self, 'database'):
+            with self.database.background_connection() as db:
+                return db.execute('SELECT * FROM hyprn_analysis_child_job(?,?)',
+                                  (category, identity)).fetchone()
+        with self.connection() as db:
+            return db.execute(
+                'SELECT c.study_id,c.analysis_command,r.actor_id '
+                'FROM analysis_execution_children c JOIN receipts r '
+                "ON r.scope=c.study_id AND r.category='analysis_execution' "
+                'AND r.command_id=c.analysis_command WHERE c.child_category=? AND '
+                + ('c.run_id' if category == 'run' else 'c.child_command') + '=?',
+                (category, identity)).fetchone()
+
     @contextmanager
     def background_actor(self, category, identity=None):
-        """Bind one discovered actor. All subsequent SQL retains ordinary row policies."""
-        if not hasattr(self, 'database'):
-            yield True
-            return
-        from .database import actor_scope
-        jobs = self.background_jobs(category, identity)
-        if not jobs:
-            yield False
-            return
-        with actor_scope(jobs[0]['actor_id'], request_boundary=True):
-            yield True
+        """Bind discovered actor and, for a child, its immutable accepted-plan identity."""
+        from .database import actor_scope, analysis_child_scope
+        from contextlib import nullcontext
+        child = None
+        if hasattr(self, 'database'):
+            jobs = self.background_jobs(category, identity)
+            if not jobs:
+                yield False
+                return
+            job = jobs[0]
+            if category in ('run', 'calculation_estimate'):
+                child = self.background_analysis_parent(category, job['work_id'])
+            actor_context = actor_scope(job['actor_id'], request_boundary=True)
+        else:
+            actor_context = nullcontext()
+            if category in ('run', 'calculation_estimate'):
+                with self.connection() as db:
+                    query = ('SELECT c.study_id,c.analysis_command,r.actor_id '
+                             'FROM analysis_execution_children c JOIN receipts r '
+                             "ON r.scope=c.study_id AND r.category='analysis_execution' "
+                             'AND r.command_id=c.analysis_command WHERE c.child_category=? ')
+                    if identity is not None:
+                        query += 'AND ' + ('c.run_id' if category == 'run' else 'c.child_command') + '=?'
+                        child = db.execute(query, (category, identity)).fetchone()
+                    else:
+                        query += ("AND c.child_command=(SELECT command_id FROM receipts "
+                                  "WHERE category=? AND state='pending_remote' ORDER BY rowid LIMIT 1)")
+                        child = db.execute(query, (category, category)).fetchone()
+        with actor_context:
+            if child is None:
+                yield True
+            else:
+                token = _analysis_authority.set((self, child['actor_id'], child['study_id'],
+                                                 child['analysis_command'], True))
+                try:
+                    with self.analysis_scope(child['study_id'], child['analysis_command']):
+                        with analysis_child_scope():
+                            yield True
+                finally:
+                    _analysis_authority.reset(token)
 
     def assistant_accounts(self):
         """Provider-account metadata for server-side accounting, never conversation text."""
@@ -375,10 +492,19 @@ class Store:
             with self.database.background_connection() as db:
                 return db.execute('SELECT * FROM hyprn_assistant_user_accounts()').fetchall()
         with self.connection() as db:
-            return db.execute(
-                'SELECT c.*, (SELECT t.actor_id FROM assistant_turns t '
-                'WHERE t.study_id=c.study_id ORDER BY t.created_at,t.turn_id LIMIT 1) '
-                'AS actor_id FROM assistant_conversations c').fetchall()
+            return db.execute('''
+ SELECT p.study_id,p.session_key AS conversation_id,p.provider_id,p.provision,
+ c.reserved_cents,c.active_turn,c.state,p.billing_actor AS actor_id
+ FROM assistant_provider_sessions p JOIN assistant_conversations c ON c.study_id=p.study_id
+ UNION ALL
+ SELECT c.study_id,c.conversation_id,c.provider_id,c.provision,
+ c.reserved_cents,c.active_turn,c.state,
+ (SELECT t.actor_id FROM assistant_turns t WHERE t.study_id=c.study_id
+ ORDER BY t.created_at,t.turn_id LIMIT 1) AS actor_id
+ FROM assistant_conversations c WHERE NOT EXISTS (
+ SELECT 1 FROM assistant_provider_sessions p WHERE p.study_id=c.study_id AND
+ (p.provider_id=c.provider_id OR (c.provider_id IS NULL AND p.provision<>'accepted')))
+''').fetchall()
 
     def lock_path(self, suffix):
         """Fixed process lock names share the explicitly configured storage root."""
@@ -428,6 +554,77 @@ class Store:
     # modules use these public names, never Store's private helpers: ``authorize``,
     # ``study_row``, ``command_receipt``, ``model_association``, ``evidence_record`` and ``cas``.
 
+    @contextmanager
+    def analysis_scope(self, study, command):
+        from .database import analysis_scope
+        with analysis_scope(study, command):
+            yield
+
+    @contextmanager
+    def analysis_authority(self, actor, study, command, *, child=False):
+        """Scope dispatcher work to one accepted finite plan; never renew a session."""
+        token = _analysis_authority.set((self, actor, study, command, child))
+        try:
+            with self.analysis_scope(study, command):
+                with self.connection() as db:
+                    self._analysis_permission(db, actor, study)
+                yield
+        finally:
+            _analysis_authority.reset(token)
+
+    def _analysis_permission(self, db, actor, study):
+        scope = _analysis_authority.get()
+        if scope is None:
+            return None
+        if scope[:3] != (self, actor, study):
+            raise DomainError('forbidden', 403)
+        receipt = self.command_receipt(db, study, 'analysis_execution', scope[3])
+        if (not receipt or receipt['actor_id'] != actor
+                or (receipt['state'] != 'pending_remote' and not scope[4])):
+            raise DomainError('analysis_authority_revoked', 403)
+        authority = (receipt['request'] or {}).get('authority')
+        if not authority or authority['actor_id'] != actor:
+            raise DomainError('analysis_authority_revoked', 403)
+        agent = self.agent_actor(db, actor)
+        if agent is not None:
+            row = db.execute('SELECT * FROM agent_delegations WHERE delegation_id=?',
+                             (authority['delegation_id'],)).fetchone()
+            if (not row or row['agent_actor_id'] != actor or row['study_id'] != study
+                    or row['revoked_at'] is not None or row['role_ceiling'] != 'writer'
+                    or 'submit' not in json.loads(row['allowed_effects'])):
+                raise DomainError('analysis_authority_revoked', 403)
+            subject = agent['delegator_actor_id']
+        else:
+            subject = actor
+        if self._membership_role(db, study, subject) not in ('owner', 'writer'):
+            raise DomainError('analysis_authority_revoked', 403)
+        return receipt
+
+    def _analysis_command(self, db, actor, study, category, command, payload):
+        receipt = self._analysis_permission(db, actor, study)
+        if receipt is None:
+            return
+        if _analysis_authority.get()[4]:
+            raise DomainError('forbidden', 403)
+        request = receipt['request']
+        namespace = UUID(receipt['command_id'])
+        if category == 'run':
+            member = payload.get('configuration_revision_id')
+            allowed = (member in request['members']
+                       and command == str(uuid5(namespace, member))
+                       and payload == dict(operation='submit_run', target=study,
+                                           configuration_revision_id=member))
+        elif category == 'calculation_estimate':
+            allowed = (request['estimate_plan'] is not None
+                       and command == str(uuid5(namespace, 'estimate'))
+                       and payload == dict(command_id=command,
+                           calculation_version_id=request['calculation_version_id'],
+                           tolerances=request['estimate_plan']['tolerances']))
+        else:
+            allowed = False
+        if not allowed:
+            raise DomainError('forbidden', 403)
+
     def authorize(self, db, actor, study, write=False, owner=False):
         """Authorize ``actor`` on ``study`` in the caller's ``db``.
 
@@ -438,6 +635,11 @@ class Store:
         membership and role decide exactly as for that user, so access loss applies on the
         next call.
         """
+        if _analysis_authority.get() is not None:
+            if owner:
+                raise DomainError('forbidden', 403)
+            self._analysis_permission(db, actor, study)
+            return
         subject=actor
         agent=self.agent_actor(db,actor)
         if agent is not None:
@@ -738,6 +940,7 @@ class Store:
     def replay(self,actor,study,category,command,payload,owner=False):
         with self.connection() as db:
             if study:self.authorize(db,actor,study,write=True,owner=owner)
+            self._analysis_command(db,actor,study,category,command,payload)
             agent=None if study else self.agent_actor(db,actor)
             if agent is not None and category!="study_create":raise DomainError("forbidden",403)
             row=self.command_receipt(db,self._scope(actor,study),category,command)
@@ -772,7 +975,7 @@ class Store:
                 delegator_actor_id=agent["delegator_actor_id"]))
 
     def command(self,actor,study,category,command,payload,operation,*,owner=False,receipt_state="committed",request=None,
-                delegation_id=None,attribute=None):
+                delegation_id=None,attribute=None,admission=None):
         """Run ``operation(db)`` once under receipt (scope, ``category``, ``command``) and return
         its result; a repeat with the same payload returns the stored outcome. ``attribute``
         maps an accepted result to the ``(record_kind, record_id, version_id)`` triples an agent
@@ -780,6 +983,7 @@ class Store:
         error=None
         with self.connection(write=True) as db:
             if study:self.authorize(db,actor,study,write=True,owner=owner)
+            self._analysis_command(db,actor,study,category,command,payload)
             agent=None if study else self.agent_actor(db,actor)
             if agent is not None:
                 # The only pre-study command an agent actor may issue is study creation under
@@ -796,6 +1000,8 @@ class Store:
                     self.authorize(db,actor,old["result"]["study_id"],write=True)
                 if old["error"]:raise DomainError(**old["error"])
                 return old["result"]
+            if admission is not None:
+                admission(db)
             db.execute("SAVEPOINT domain_write")
             try:
                 result=operation(db)
@@ -808,6 +1014,18 @@ class Store:
                 (scope,category,command,actor,digest(dict(major="1",scope=scope,category=category,payload=payload)),state,
                  json.dumps(result) if result is not None else None,
                  json.dumps(error.data()) if error else None,json.dumps(request) if request else None))
+            if error is None and category == 'analysis_execution':
+                for child_command, run_id in (request or {}).get('reused_runs', {}).items():
+                    db.execute('INSERT INTO analysis_execution_children '
+                               '(study_id,analysis_command,child_category,child_command,run_id) '
+                               "VALUES(?,?,'run',?,?) ON CONFLICT DO NOTHING",
+                               (study,command,child_command,run_id))
+            if error is None and _analysis_authority.get() is not None:
+                authority = _analysis_authority.get()
+                db.execute('INSERT INTO analysis_execution_children '
+                           '(study_id,analysis_command,child_category,child_command,run_id) '
+                           'VALUES(?,?,?,?,?)',
+                           (study,authority[3],category,command,result.get('run_id')))
             if error is None and attribute is not None:
                 self.attribute(db,actor,study,category,command,attribute(result))
         if error:raise error
@@ -872,7 +1090,7 @@ class Store:
             self._association(db,sid,scope['model_id'])
         # The exact remote revision is immutable. No local write lock spans I/O.
         if coordinator is None:raise DomainError('backend_unavailable',503,outcome='unknown')
-        model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],response_schema='ModelRevisionResponse4')['data']
+        model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],response_schema='ModelRevisionResponse5')['data']
         if (model['model_id']!=scope['model_id'] or model['model_revision_id']!=scope['model_revision_id']
             or model['digest']!=digest({k:v for k,v in model.items() if k!='digest'})):
             raise DomainError('backend_unavailable',503,outcome='unknown')
@@ -929,11 +1147,11 @@ class Store:
         elif 'model_id' in local:
             if coordinator is None:raise DomainError('backend_unavailable',503,outcome='unknown')
             model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],
-                                   response_schema='ModelRevisionResponse4')['data']
+                                   response_schema='ModelRevisionResponse5')['data']
             # Own a detached immutable copy, never a mutable adapter response alias.
             model=json.loads(canonical(model))
         if model is not None:
-            validate('ModelRevisionRead4',model,remote=True)
+            validate('ModelRevisionRead5',model,remote=True)
             expected=config if config is not None else scope
             if (model['model_id']!=expected['model_id'] or model['model_revision_id']!=expected['model_revision_id'] or
                 model['digest']!=digest({k:v for k,v in model.items() if k!='digest'})):

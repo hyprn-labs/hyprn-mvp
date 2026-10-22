@@ -285,23 +285,23 @@ class _RunProjection:
     def __init__(self, db):
         self.postgres = getattr(db, 'dialect', None) == 'postgresql'
         # The generated column changes atomically with the canonical source payload.
-        self.join = (' CROSS JOIN LATERAL (SELECT o.read_summary AS doc) j '
+        self.join = (' CROSS JOIN LATERAL (SELECT x.read_summary AS doc) j '
                      if self.postgres else ' ')
 
     def value(self, path):
         if self.postgres:
             return "j.doc#>>'{" + path.replace('.', ',') + "}'"
-        return "json_extract(o.payload,'$." + path + "')"
+        return "json_extract(x.payload,'$." + path + "')"
 
     def kind(self, path):
         if self.postgres:
             return "jsonb_typeof(j.doc#>'{" + path.replace('.', ',') + "}')"
-        return "json_type(o.payload,'$." + path + "')"
+        return "json_type(x.payload,'$." + path + "')"
 
     @property
     def state(self):
-        return ("CASE WHEN o.state='accepted_run' THEN COALESCE("
-                + self.value('preparation_state') + ",o.state) ELSE o.state END AS public_state")
+        return ("CASE WHEN x.state='accepted_run' THEN COALESCE("
+                + "x.preparation_state,x.state) ELSE x.state END AS public_state")
 
     @property
     def execution(self):
@@ -309,7 +309,7 @@ class _RunProjection:
             "(SELECT value::text FROM jsonb_array_elements(j.doc#>'{history,artifacts}') "
             "WHERE value->>'path'='result.json' LIMIT 1)"
             if self.postgres else
-            "(SELECT value FROM json_each(o.payload,'$.history.artifacts') "
+            "(SELECT value FROM json_each(x.payload,'$.history.artifacts') "
             "WHERE json_extract(value,'$.path')='result.json' LIMIT 1)"
         )
         return (self.value('status.process_state') + ' AS process_state,'
@@ -406,7 +406,7 @@ def retained_read_integrity(run_id, history):
                     or bundle['approach_digest'] != (closure['root_approach_digest'] if closure else None)
                     or bundle['approach_closure_digest'] != (closure['digest'] if closure else None)):
                 return result
-        if bundle_layout(bundle) == '11':
+        if bundle_layout(bundle) in ('11', '12'):
             validate_scientific_snapshot(dict(configuration=config, model_snapshot=model))
             if bundle['model_schema_version'] != model['schema_version']:
                 return result
@@ -500,11 +500,27 @@ def run_association(db,run_id,*,study_id=None,payload=True):
     ``payload=False`` selects no payload bytes. The caller authorizes first, except the
     trusted dispatcher path, which reads by run id only (``study_id=None``).
     """
-    row=db.execute('SELECT r.*,o.state,CASE WHEN ? THEN o.payload END AS payload FROM run_associations r JOIN outbox o USING(run_id) '
-                   'WHERE r.run_id=? AND (CAST(? AS TEXT) IS NULL OR r.study_id=?)',(bool(payload),run_id,study_id,study_id)).fetchone()
+    postgres = getattr(db, 'dialect', None) == 'postgresql'
+    witness = (",o.payload_sha256 || ':' || x.payload_sha256 || ':' || "
+               "COALESCE(x.preparation_state,'') AS payload_witness" if postgres else '')
+    row=db.execute('SELECT r.*,x.state,CASE WHEN ? THEN o.payload END AS payload,'
+                   'CASE WHEN ? THEN x.payload END AS operational_payload,x.preparation_state' + witness
+                   + ' FROM run_associations r JOIN outbox o USING(run_id) JOIN execution_operations x USING(run_id) '
+                   'WHERE r.run_id=? AND (CAST(? AS TEXT) IS NULL OR r.study_id=?)',
+                   (bool(payload),bool(payload),run_id,study_id,study_id)).fetchone()
     if row is None:return None
     row=dict(row)
-    if not payload:del row['payload']
+    operational = row.pop('operational_payload')
+    preparation = row.pop('preparation_state')
+    if not payload:
+        del row['payload']
+        row.pop('payload_witness', None)
+    elif operational != '{}' or preparation is not None:
+        original = json.loads(row['payload'])
+        original.update(json.loads(operational))
+        if preparation is not None:
+            original['preparation_state'] = preparation
+        row['payload'] = json.dumps(original)
     return row
 
 def last_run_position(db,sid):
@@ -527,8 +543,8 @@ def approach_runs(db,sid,approach_version_id,after,limit):
 def calculation_runs(db,sid,configuration_revision_ids,after,limit):
     """``(position, run_id, configuration_revision_id, state)`` of the study's runs of any of
     these configuration versions after insertion position ``after``, in insertion order."""
-    return db.execute("""SELECT r.rowid AS position,r.run_id,r.configuration_revision_id,o.state
-        FROM run_associations r JOIN outbox o USING(run_id)
+    return db.execute("""SELECT r.rowid AS position,r.run_id,r.configuration_revision_id,x.state
+        FROM run_associations r JOIN execution_operations x USING(run_id)
         WHERE r.study_id=? AND r.rowid>? AND r.configuration_revision_id IN (SELECT value FROM json_each(?))
         ORDER BY r.rowid LIMIT ?""",(sid,after,json.dumps(list(configuration_revision_ids)),limit)).fetchall()
 
@@ -700,7 +716,7 @@ class History:
             projection = _RunProjection(db)
             rows = db.execute(
                 "SELECT " + projection.execution + "r.run_id,r.configuration_revision_id,r.command_id,"
-                + projection.state + ' FROM run_associations r JOIN outbox o USING(run_id) '
+                + projection.state + ' FROM run_associations r JOIN execution_operations x USING(run_id) '
                 + projection.join + 'WHERE r.study_id=? ORDER BY r.rowid', (sid,),
             ).fetchall()
             contexts=self._contexts(db,sid,rows)
@@ -721,7 +737,7 @@ class History:
             projection = _RunProjection(db)
             rows = db.execute(
                 "SELECT " + projection.execution + "c.run_id,c.configuration_revision_id,c.command_id,"
-                + projection.state + ' FROM run_associations c JOIN outbox o USING(run_id) '
+                + projection.state + ' FROM run_associations c JOIN execution_operations x USING(run_id) '
                 + projection.join + f'WHERE {where} ORDER BY c.rowid {order} LIMIT ?',
                 (*values, limit + 1),
             ).fetchall()
@@ -780,7 +796,7 @@ class History:
                 + projection.value('history.results.schema_version') + ' AS results_version,'
                 + ','.join(projection.value('history.results.' + k) + ' AS ' + k
                            for k in (*STATUS_FACETS, 'criteria'))
-                + ' FROM run_associations r JOIN outbox o USING(run_id) '
+                + ' FROM run_associations r JOIN execution_operations x USING(run_id) '
                 + projection.join + 'WHERE r.study_id=? AND r.run_id IN ('
                 + ','.join('?' * len(run_ids)) + ')', (sid, *run_ids),
             ).fetchall()
@@ -840,7 +856,7 @@ class History:
         except (ValueError,KeyError,TypeError,OverflowError,RecursionError) as exc:
             raise RetainedRecordError('Retained binding invalid') from exc
         config=history['configuration'];model=history['model_snapshot'];results=history['results']
-        validate('ConfigurationRevisionRead6',config);validate('ModelRevisionRead4',model)
+        validate('ConfigurationRevisionRead6',config);validate('ModelRevisionRead5',model)
         try:
             if results is None:raise ValueError('Retained outcome missing')
             check_digest(config);check_digest(model)
@@ -852,7 +868,7 @@ class History:
             token=dict(run_id=rid,receipt_digest=digest(receipt))
             if compact_witness:
                 token['row_fingerprint'] = digest(
-                    dict(row, payload=raw_hash(row['payload'].encode('utf-8')))
+                    dict(row, payload=row['payload_witness'])
                 )
             else:
                 token['row_digest'] = digest(row)
@@ -869,8 +885,10 @@ class History:
             self.store.authorize(db, actor, sid)
             ids = list(dict.fromkeys(token['run_id'] for token in tokens))
             rows = db.execute(
-                'SELECT r.*,o.state,o.payload_sha256 AS payload '
-                'FROM run_associations r JOIN outbox o USING(run_id) '
+                "SELECT r.*,x.state,o.payload_sha256 || ':' || x.payload_sha256 || ':' || "
+                "COALESCE(x.preparation_state,'') AS payload,"
+                "o.payload_sha256 || ':' || x.payload_sha256 || ':' || COALESCE(x.preparation_state,'') AS payload_witness "
+                'FROM run_associations r JOIN outbox o USING(run_id) JOIN execution_operations x USING(run_id) '
                 'WHERE r.study_id=? AND r.run_id IN (' + ','.join('?' * len(ids)) + ')',
                 (sid, *ids),
             ).fetchall()
@@ -927,7 +945,7 @@ class History:
                         raise ValueError('Stored scientific snapshot mismatch')
                     value.update(configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],
                         bundle={k:manifest[k] for k in ('schema_version','bundle_digest','model_digest','configuration_digest','dependencies')})
-                    if manifest['schema_version'] in ('10', '11'):
+                    if manifest['schema_version'] in ('10', '11', '12'):
                         value['bundle']['input_schema_version'] = manifest['input_schema_version']
                     # History 1 is the absent field (RunHistory1 has none).
                     history_version = (
@@ -943,7 +961,7 @@ class History:
                     if family.carries_approach:
                         value['approach_closure']=payload['frozen']['approach_closure']
                         value['bundle'].update({k:manifest[k] for k in ('approach_digest','approach_closure_digest')})
-                    if bundle_layout(manifest) in ('8', '9', '11'):
+                    if bundle_layout(manifest) in ('8', '9', '11', '12'):
                         value['bundle']['model_schema_version'] = manifest['model_schema_version']
                     for f in manifest['files']:
                         self._artifact(value,downloads,run_id,'bundle',f['path'],files[f['path']],f.get('role','bundle'))
@@ -969,9 +987,11 @@ class History:
             and value['results'] is not None
             and value['results']['schema_version'] == '3'
         ):
-            value['history_schema_version'] = '8'
+            value['history_schema_version'] = (
+                '9' if (value.get('model_snapshot') or {}).get('schema_version') == '5' else '8'
+            )
         # History 8 has no criterion evaluator identity: configurations carry no criteria.
-        if value.get('history_schema_version') == '8':
+        if value.get('history_schema_version') in ('8', '9'):
             if value.pop('assessment') is not None:
                 value = dict(value, configuration=None, model_snapshot=None, context=None,
                     evidence=None, bundle=None, results=None, artifacts=[],

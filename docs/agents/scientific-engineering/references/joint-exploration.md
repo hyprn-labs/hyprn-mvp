@@ -38,10 +38,10 @@ do not store exploration settings there or repeat the settings inventory in pros
 See [Model and analysis authoring](model-analysis-authoring.md) for the creation
 paths and the distinction between saving and launching. Budget baseline/axis
 support, joint training and disjoint checks together; five points per slider is
-not enough to train an arbitrary multivariable surrogate. Provide at least five
-successful original points spanning each displayed baseline slice, including the
-baseline and endpoints, unless the discrete exception applies. Include joint
-interior and decision-relevant simultaneous boundary conditions. Preserve the
+not enough to train an arbitrary multivariable surrogate. Include enough joint training to resolve the response and its boundaries. Five points
+per independent axis do not establish multidimensional support. Report the actual
+calculated coordinates; do not require or fabricate baseline slice points when the
+joint design does not contain them. Preserve the
 platform's returned training/validation partition; validation points used for method selection
 are not independent assessment points. Reserve additional joint verification
 points before examining their original-model outputs.
@@ -53,61 +53,36 @@ Do not silently narrow the brief or promise all combinations from a sparse sampl
 
 ## Execute through the public primitives
 
-Use `list_tools` and `describe_tool` first. The owner-session tool names below are
-available in the current client; a restricted installation may expose less.
+Read the offered tool schemas and the canonical playbook section
+`configuration_and_runs`. The same scientific lifecycle applies on local and managed
+surfaces; a restricted catalogue never grants permission to bypass the public boundary.
 
-1. Save and mark explicit reference configurations of one exact model version. Declare
-   each group's independent dimensions, units, ranges, steps, and any required co-variation.
-   Discrete alternatives use separate groups with their own reference configuration;
-   never interpolate between category labels or infer shared meanings from names.
-2. Inspect existing calculations and sample operations. Reuse compatible saved configuration
-   runs by exact identity; do not relabel training data as held-out validation points. Choose `boundary_latin_hypercube` for published exploration. It includes every joint
-   corner in training and fills the remaining training budget with seeded interior points.
-   Validation points remain separate. Interior-only Latin hypercube sampling is available for investigation
-   but does not establish full slider coverage. Neither method guarantees five calculated
-   points on every baseline slice; report actual coordinates without inventing them.
-   For d independent dimensions, reserve more than 2^d training points (up to 64 per group)
-   and validation points within the 128-point total limit. Count linked coordinates once.
-   If the domain exceeds capacity, report the required count and capability gap. Do not
-   hide inputs, link unrelated variables, silently narrow ranges or promise full coverage.
-3. Use `sample_analysis` with explicit `estimate_plan.tolerances`, then `get_analysis_samples`. The completed operation creates
-   an immutable analysis version containing generated configurations and disjoint
-   training/validation partitions. Do not hand-pick substitute coordinates. Reconcile an
-   uncertain operation before trying again.
-   New requests use `validation_count`; new saved points use `partition: validation`.
-   Historical `check_count`/`check` records remain immutable. Training and validation
-   describe use, not numerical basis: model runs provide calculated values for both.
-4. Use `launch_analysis` with body `{}`, then `get_analysis_execution`. The launch pins
-   and reuses existing member runs, calculates missing points and automatically builds the
-   surrogate from the saved plan. It continues without an open client. Repeating launch
-   returns the same operation, never a replacement run. Resolve uncertain runs explicitly.
-5. Require execution `complete`, then inspect `get_analysis_estimate` using its pinned
-   estimate id. All requested outputs must pass; inspect each group's metrics and failures.
-   Do not call standalone fit for a managed analysis. Change ranges, counts or targets only
-   in a new analysis version, reusing compatible points. Never relax accuracy merely to
-   display a curve. Historical versions remain readable; create a version with an explicit
-   estimate plan to use this lifecycle.
-6. Read `get_analysis_exploration`, then `predict_analysis` on that exact estimate
-   with the complete selected input vector and an independently selected plot axis.
-   Cold predictions reload the assessed artifact automatically without fitting or sampling.
-   Exercise every group before publication to warm the interaction path and measure latency.
-   The figure starts at a labelled sample centre when training points are available; this is
-   an exploration selection, not a calculated result or a coverage guarantee. Reset restores
-   reference inputs, and calculated-point selection restores an exact original input vector.
-7. Call `check_analysis_preparation` with the estimate and all `shown_outputs`.
-   Require `ready: true`: every group's training corners cover the declared box, every shown
-   output passed its independent assessment, and calculated samples have available outputs.
-   A failed check is a preparation failure, even if the estimate's broad state says ready.
-   Refine training within budget, then rebuild and recheck. Keep tolerances unchanged;
-   reserve new independent checks when earlier check results inform refinement. Do not use
-   validation data to fit or select a model and still count it as independent assessment.
-8. Save the answer's `exploration_basis` with the exact analysis version, estimate and
-   bound output criteria, then read it back. Do not silently use an estimate belonging to
-   another version. Alternative comparisons cite exact calculations and original runs.
-
-These names refer to the owner-session thin tools. On a delegated surface, inspect the
-exposed catalogue first; absent operations remain a stated capability gap, never permission
-to bypass the public tool boundary.
+1. Save explicit configurations with units and provenance for each discrete group.
+   Derive ranges from the brief, applicable evidence or a labelled engineering assumption.
+   Keep independent variables independent; do not interpolate category codes.
+2. Call `create_sampled_analysis` with `boundary_latin_hypercube`, an explicit seed,
+   disjoint validation and output-specific tolerances. Count every group against the
+   advertised capacity: currently 128 training plus validation points in total, at most
+   64 of each per group. Training must accommodate all 2^d corners plus interior points.
+   Reserve unused capacity for added training and fresh independent validation. If the
+   required dimension count cannot fit, explain the capability gap instead of hiding
+   variables, weakening targets or silently narrowing the domain.
+3. Poll `get_sampling_status`, retain the saved analysis version and call
+   `launch_analysis`. Monitor `get_analysis_execution`; the application reuses pinned
+   runs, admits missing points and fits the immutable plan without an open agent session.
+   Do not manually submit member points or run a separate fit. A changed plan needs a
+   new analysis version. Resolve uncertain operations before any deliberate retry.
+4. Inspect `get_surrogate` for every output and group. Method-selection points choose
+   the approximation; validation points independently assess its selected method.
+   After a failure, diagnose and refine without relaxing accuracy. Once validation
+   outcomes influence refinement, reserve fresh validation before claiming independence.
+5. Require `prepare_answer_exploration` ready for all displayed outputs, then copy its
+   exact `exploration_basis` into the answer draft. A ready surrogate alone is not proof
+   of full joint support or physical validity. Keep incomplete outcomes interim.
+6. Use `get_answer_exploration` and `predict_answer` with complete independent input
+   vectors and a separately chosen plot axis. Verify every group, save the answer and
+   read it back. Predictions load the saved artifact automatically, without sampling,
+   refitting or original-model execution.
 
 No sampling, fitting or original execution belongs in the slider interaction path.
 Surrogates evaluate new selections cheaply; precomputing the exponential Cartesian product

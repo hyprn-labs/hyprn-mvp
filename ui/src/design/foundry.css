@@ -1545,8 +1545,8 @@ label > input:is([type=checkbox],[type=radio]) { flex:0 0 auto; margin:0; }
 .hf-settings-content .hf-settings { display:grid; gap:var(--space-3); padding:var(--space-4); border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-sunken); }
 .hf-settings-content .hf-settings > * { margin:0; }
 .hf-settings-content .hf-settings > h2 { font-size:var(--type-subheading-size); line-height:var(--type-subheading-line); }
-.hf-unit-editor { display:grid; gap:var(--space-2); }
-.hf-unit-editor label { display:grid; gap:var(--space-2); }
+.hf-unit-editor { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:var(--space-2); }
+.hf-unit-editor label { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:var(--space-2); }
 .hf-unit-editor .hf-field-hint { margin:0; }
 .hf-table .unit { white-space:nowrap; min-width:max-content; }
 .hf-record { background:var(--surface-sunken); color:var(--ink-2); border:1px solid var(--line); }

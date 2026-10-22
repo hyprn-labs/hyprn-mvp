@@ -496,3 +496,137 @@ def test_dispatch_readiness_expires_and_failed_publication_clears_it(api, monkey
     with pytest.raises(sqlite3.OperationalError):
         publisher.refresh()
     assert not publisher.ready()
+
+
+def test_idle_polling_is_bounded_and_work_resets_the_delay():
+    from hyprn_mvp_app.dispatcher import IdleBackoff
+
+    idle = IdleBackoff()
+    elapsed = 0
+    polls = 0
+    while elapsed < 60:
+        elapsed += idle.delay(False)
+        polls += 1
+    assert polls <= 65
+    assert idle.delay(True) == 0.05
+    assert idle.delay(False) == 0.1
+    interactive = IdleBackoff(maximum=0.25)
+    elapsed = polls = 0
+    while elapsed < 60:
+        delay = interactive.delay(False)
+        assert delay <= 0.25
+        elapsed += delay
+        polls += 1
+    assert polls <= 242
+
+
+def test_dispatch_discovery_uses_operational_state_without_reading_bundle(submission):
+    from hyprn_mvp_app.dispatcher import pending_runs
+    from test_submission import accepted
+
+    _, store, _, _, _, _ = submission
+    run = accepted(submission)['run_id']
+    statements = []
+    with store.connection() as db:
+        db.set_trace_callback(statements.append)
+        assert pending_runs(db) == [run]
+    assert not any('outbox' in statement.lower() for statement in statements)
+    assert any('execution_operations' in statement for statement in statements)
+
+
+def test_rollback_failure_preserves_primary_transaction_failure(monkeypatch):
+    from hyprn_mvp_app.database import PostgreSQL
+    import hyprn_mvp_app.database as module
+
+    class Raw:
+        def rollback(self):
+            raise ConnectionError('transport lost during rollback')
+
+    class Connection:
+        def __init__(self, raw):
+            pass
+
+        def execute(self, *args):
+            pass
+
+    monkeypatch.setattr(module, 'Connection', Connection)
+    primary = TimeoutError('statement exceeded its deadline')
+    with pytest.raises(TimeoutError) as failure:
+        with PostgreSQL._transaction(None, Raw(), write=False):
+            raise primary
+    assert failure.value is primary
+
+
+def test_actual_attestation_does_not_certify_an_expired_executor_stage(api, monkeypatch):
+    import hyprn_mvp_app.readiness as readiness
+
+    clock = [1000.]
+    monkeypatch.setattr(readiness, 'wall_time', lambda: clock[0])
+    native = Native()
+    owner = readiness.ObservationPublisher(api[1], native, monotonic=lambda: clock[0])
+    assert owner.refresh(progressing=True)
+    clock[0] += 31
+    assert owner.refresh(progressing=False)
+    assert api[1].execution_observation()['reason'] == 'executor_unavailable'
+    assert native.calls == 1
+    clock[0] += 10
+    native.error = ValueError('Changed runtime')
+    owner.refresh(progressing=True)
+    assert api[1].execution_observation()['reason'] == 'attestation_invalid'
+
+
+def test_stopped_owner_cannot_publish_late_ready_from_native_reply(api):
+    import threading
+    from hyprn_mvp_app.readiness import ObservationPublisher
+
+    entered, release = threading.Event(), threading.Event()
+    native = Native()
+    original = native.require_attestation
+
+    def delayed():
+        entered.set()
+        assert release.wait(5)
+        return original()
+
+    native.require_attestation = delayed
+    owner = ObservationPublisher(api[1], native)
+    thread = threading.Thread(target=owner.refresh)
+    thread.start()
+    try:
+        assert entered.wait(5)
+        owner.stopping()
+        assert not owner.ready()
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert owner.stopped()
+    assert api[1].execution_observation()['reason'] == 'executor_unavailable'
+
+
+def test_contention_unavailability_is_not_overwritten_by_inflight_attestation(api):
+    import threading
+    from hyprn_mvp_app.readiness import ObservationPublisher
+
+    entered, release = threading.Event(), threading.Event()
+    native = Native()
+    original = native.require_attestation
+
+    def delayed():
+        entered.set()
+        assert release.wait(5)
+        return original()
+
+    native.require_attestation = delayed
+    owner = ObservationPublisher(api[1], native)
+    thread = threading.Thread(target=owner.refresh)
+    thread.start()
+    try:
+        assert entered.wait(5)
+        owner.stall(3, RuntimeError('Synthetic contention'))
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not owner.ready()
+    assert api[1].execution_observation()['reason'] == 'executor_unavailable'

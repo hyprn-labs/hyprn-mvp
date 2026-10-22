@@ -6,8 +6,8 @@ import type {
   EvidenceRecord,
   FrozenConfigurationRead7,
   HyprnMvpApi,
-  ModelDraftRead4,
-  ModelRevisionRead4,
+  ModelDraftRead5,
+  ModelRevisionRead5,
   ModifiedRunSeedRead6,
   PublicRun,
   PublicRunDetail2,
@@ -99,13 +99,13 @@ export type ViewContext = GuardContext & {
   setView: Setter<WorkspaceView>;
   setContext: Setter<WorkspaceContext | null>;
   // Approach
-  newConfiguration: (modelId: string, exact?: ModelRevisionRead4) => Promise<void>;
+  newConfiguration: (modelId: string, exact?: ModelRevisionRead5) => Promise<void>;
   // Models
   models: Array<{ model_id: string; name: string }>;
-  model: ModelDraftRead4 | null;
-  setModel: Setter<ModelDraftRead4 | null>;
-  revision: ModelRevisionRead4 | null;
-  setRevision: Setter<ModelRevisionRead4 | null>;
+  model: ModelDraftRead5 | null;
+  setModel: Setter<ModelDraftRead5 | null>;
+  revision: ModelRevisionRead5 | null;
+  setRevision: Setter<ModelRevisionRead5 | null>;
   revisions: RevisionSummary[];
   selectedModel: string;
   creatingModel: boolean;
@@ -116,7 +116,7 @@ export type ViewContext = GuardContext & {
   template: 'empty' | 'two_component_example';
   setTemplate: Setter<'empty' | 'two_component_example'>;
   chooseModel: (mid: string) => Promise<void>;
-  currentModel: (value: ModelDraftRead4) => void;
+  currentModel: (value: ModelDraftRead5) => void;
   modelVersions: ModelController;
   setNotice: Setter<string>;
   setRevisions: Setter<RevisionSummary[]>;
@@ -124,7 +124,7 @@ export type ViewContext = GuardContext & {
   setModelActionHost: Setter<HTMLDivElement | null>;
   setResourceActions: Setter<HTMLDivElement | null>;
   // The displayed model version and its projections (Models, configuration, Run › Model)
-  displayedSnapshot: ModelDraftRead4 | ModelRevisionRead4 | null | undefined;
+  displayedSnapshot: ModelDraftRead5 | ModelRevisionRead5 | null | undefined;
   variableContext: VariableContext;
   frozenEvidence: EvidenceSnapshot[];
   // Configurations
@@ -136,18 +136,18 @@ export type ViewContext = GuardContext & {
   configInspection: ConfigurationInspection | null;
   setConfigInspection: Setter<ConfigurationInspection | null>;
   modified: { seed: ModifiedRunSeedRead6; source: ConfigurationRevisionRead6 } | null;
-  initialConfigurationRevision: ModelRevisionRead4 | null;
+  initialConfigurationRevision: ModelRevisionRead5 | null;
   choosingConfiguration: boolean;
   setChoosingConfiguration: Setter<boolean>;
   chooseConfigurationModel: () => Promise<void>;
   chooseView: (next: WorkspaceView) => void;
   copyRunConfiguration: (
     config: ConfigurationRevisionRead6,
-    snapshot: ModelRevisionRead4,
+    snapshot: ModelRevisionRead5,
   ) => Promise<void>;
   pendingCopy: RefObject<{
     configuration: ConfigurationRevisionRead6;
-    snapshot: ModelRevisionRead4;
+    snapshot: ModelRevisionRead5;
   } | null>;
   evidence: EvidenceRecord[];
   setEvidence: Setter<EvidenceRecord[]>;

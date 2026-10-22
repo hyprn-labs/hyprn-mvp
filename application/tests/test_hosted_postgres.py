@@ -234,6 +234,47 @@ def test_startup_never_migrates_and_refuses_schema_drift(hosted):
         raw.close()
 
 
+def test_explicit_operational_upgrade_preserves_exact_source_and_refuses_old_binary(monkeypatch):
+    from hyprn_mvp_app import migrations
+    migrations_all = migrations.MIGRATIONS
+    prior = tuple(p for p in migrations_all if p.name < '0010_')
+    with postgres_fixture(initialize_schema=False) as fixture:
+        with monkeypatch.context() as old:
+            old.setattr(migrations, 'MIGRATIONS', prior)
+            migrations.initialize(fixture['migration'])
+        raw = fixture['admin'].connect()
+        actor, sid, config, run, command = (str(uuid4()) for _ in range(5))
+        original = '{ "actor": "' + actor + '", "preparation_state": "prepared", "frozen": {"exact": "µ, 1.000"} }'
+        try:
+            db = Connection(raw)
+            db.execute('INSERT INTO users(actor_id,username) VALUES(?,?)',(actor,actor))
+            db.execute('INSERT INTO studies(study_id,revision,name,description,boundary,owner_actor_id) VALUES(?,?,?,?,?,?)',
+                       (sid,str(uuid4()),'Retained upgrade','','',actor))
+            db.execute('INSERT INTO memberships VALUES(?,?,?)',(sid,actor,'owner'))
+            db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(config,config,sid,'{}'))
+            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id) VALUES(?,?,?,?)',
+                       (run,sid,config,command))
+            db.execute('INSERT INTO outbox(run_id,state,payload) VALUES(?,?,?)',(run,'accepted_run',original))
+            raw.commit()
+            before = db.execute('SELECT payload,payload_sha256 FROM outbox WHERE run_id=?',(run,)).fetchone()
+            with pytest.raises(ValueError,match='explicit migration'):
+                Store.postgres(fixture['request'],fixture['auth'])
+            assert db.execute("SELECT count(*) AS n FROM pg_tables WHERE tablename='execution_operations'").fetchone()['n']==0
+            # Release fixture read locks before the explicit schema upgrade.
+            raw.commit()
+            migrations.initialize(fixture['migration'])
+            assert db.execute('SELECT payload,payload_sha256 FROM outbox WHERE run_id=?',(run,)).fetchone()==before
+            assert db.execute('SELECT state,preparation_state FROM execution_operations WHERE run_id=?',(run,)).fetchone()==dict(state='accepted_run',preparation_state='prepared')
+            with monkeypatch.context() as old:
+                old.setattr(migrations,'MIGRATIONS',prior)
+                with pytest.raises(ValueError,match='explicit migration'):
+                    Store.postgres(fixture['request'],fixture['auth'])
+                with pytest.raises(ValueError,match='explicit migration'):
+                    migrations.initialize(fixture['migration'])
+        finally:
+            raw.close()
+
+
 @pytest.mark.parametrize('role', ['hyprn_migration', 'hyprn_bypass', 'hyprn_auth', 'hyprn_assistant_background'])
 def test_request_role_cannot_inherit_elevated_authority(hosted, role):
     fixture, _, _ = hosted
@@ -322,3 +363,80 @@ def test_dead_idle_connection_is_replaced_before_starting_transaction(hosted):
         raw.close()
     with store.connection() as db:
         assert db.execute('SELECT pg_backend_pid() AS pid').fetchone()['pid'] != pid
+
+
+def test_provider_session_upgrade_migrates_legacy_cost_owner_without_rewriting_history(monkeypatch):
+    from hyprn_mvp_app import migrations
+    prior = tuple(p for p in migrations.MIGRATIONS if p.name < '0013_')
+    with postgres_fixture(initialize_schema=False) as fixture:
+        with monkeypatch.context() as old:
+            old.setattr(migrations, 'MIGRATIONS', prior)
+            migrations.initialize(fixture['migration'])
+        raw = fixture['admin'].connect()
+        actor, sid, conversation, turn = (str(uuid4()) for _ in range(4))
+        try:
+            db = Connection(raw)
+            db.execute('INSERT INTO users(actor_id,username) VALUES(?,?)', (actor, actor))
+            db.execute('INSERT INTO studies(study_id,revision,name,description,boundary,'
+                       'owner_actor_id) VALUES(?,?,?,?,?,?)',
+                       (sid, str(uuid4()), 'Provider upgrade', '', '', actor))
+            db.execute('INSERT INTO memberships VALUES(?,?,?)', (sid, actor, 'owner'))
+            db.execute('INSERT INTO assistant_conversations(study_id,conversation_id,provider_id,'
+                'provision,reserved_cents,active_turn,state,error,created_at) '
+                "VALUES(?,?,?,'accepted',0,NULL,'idle',NULL,1)",
+                (sid, conversation, 'session_legacy'))
+            db.execute('INSERT INTO assistant_turns(turn_id,study_id,actor_id,text,delivery,'
+                "created_at) VALUES(?,?,?,?,'accepted',1)",
+                (turn, sid, actor, 'Keep this historical author text unchanged.'))
+            raw.commit()
+            before = db.execute('SELECT * FROM assistant_turns WHERE study_id=?', (sid,)).fetchall()
+            raw.commit()
+            migrations.initialize(fixture['migration'])
+            row = db.execute('SELECT * FROM assistant_provider_sessions WHERE study_id=?',
+                             (sid,)).fetchone()
+            assert row['generation'] == 1 and row['session_key'] == conversation
+            assert row['billing_actor'] == actor and row['provider_id'] == 'session_legacy'
+            assert row['binding'] is None
+            assert db.execute('SELECT * FROM assistant_turns WHERE study_id=?',
+                              (sid,)).fetchall() == before
+            raw.commit()
+        finally:
+            raw.close()
+
+
+def test_provider_session_identity_and_costs_are_scoped_and_cannot_be_rewritten(hosted):
+    from hyprn_mvp_app.assistant import provider_sessions, records
+    from hyprn_mvp_app.database import DatabaseConflict
+    fixture, store, accounts = hosted
+    actor, stranger = (row['actor'] for row in accounts)
+    with actor_scope(actor):
+        sid = store.create_study(actor, str(uuid4()), 'Private provider ledger')['study_id']
+        turn = str(uuid4())
+        records.accept(store, actor, sid, turn, 'Start this study.', None)
+        with store.connection(write=True) as db:
+            row = provider_sessions.ensure_current(db, records.row(db, sid),
+                records.turn(db, turn), {'explicit': 'synthetic test binding'})
+            db.execute("UPDATE assistant_provider_sessions SET provision='intended' "
+                       'WHERE session_key=?', (row['session_key'],))
+            db.execute("UPDATE assistant_provider_sessions SET provision='accepted',provider_id=? "
+                       'WHERE session_key=?', ('session_private_test', row['session_key']))
+            records.update(db, sid, provider_id='session_private_test', provision='accepted')
+        with pytest.raises(DatabaseConflict):
+            with store.connection(write=True) as db:
+                db.execute('UPDATE assistant_provider_sessions SET binding=? WHERE study_id=?',
+                           ('replacement', sid))
+        with pytest.raises(DatabasePermissionDenied):
+            with store.connection(write=True) as db:
+                db.execute('DELETE FROM assistant_provider_sessions WHERE study_id=?', (sid,))
+    with actor_scope(stranger):
+        with store.connection() as db:
+            assert db.execute('SELECT * FROM assistant_provider_sessions WHERE study_id=?',
+                              (sid,)).fetchall() == []
+        with pytest.raises(DatabasePermissionDenied):
+            with store.connection(write=True) as db:
+                db.execute('INSERT INTO assistant_provider_sessions VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    (sid, 2, str(uuid4()), None, stranger, turn, '', None, 'new', 2))
+    accounts_rows = [dict(row) for row in store.assistant_user_accounts() if row['study_id'] == sid]
+    assert len(accounts_rows) == 1
+    assert accounts_rows[0]['provider_id'] == 'session_private_test'
+    assert accounts_rows[0]['actor_id'] == actor

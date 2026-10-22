@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from ..projections import cap, command_id, read, report, send, study_path, untrusted, uuid_schema
 from ..spec import SURFACES, ToolError, ToolSpec
-from .calculation import REVISION, VERSION, RUNS, _model, _version
+from .calculation import REVISION, VERSION, _model, _version
 from .configuration import PATH, Ports, ONE as CONFIGURATION
 from .runs import GET_RUN_STATUS, WAITING_STATES, get_run_status
 
@@ -87,11 +87,18 @@ def sample_projection(value):
         },
         'diagnostic': untrusted('sampling diagnostic', text=value['reason']),
         'next_step': 'When complete, get_analysis lists saved point configurations. '
-        'Submit their missing runs in admitted batches, then launch_analysis.',
+        'Use launch_analysis to admit the complete finite plan; missing runs progress automatically.',
     }
 
 
 async def create_sampled_analysis(a, ctx):
+    total = sum(g['training_count'] + g['validation_count'] for g in a['groups'])
+    if total > 128:
+        raise ToolError('invalid_input',
+            f'The design requests {total} points; capacity is 128 points per saved analysis.',
+            fields=({'path': 'groups', 'problem': f'{total} requested points exceeds capacity 128'},),
+            next_step='Reduce or narrow groups before creating the design. Preserve independent '
+            'validation and declared tolerances; refine using a new saved version after reviewing results.')
     ports = Ports(await _model(ctx, a['model_id'], a['model_version_id']))
     groups, provenance = [], []
     for n, group in enumerate(a['groups']):
@@ -201,6 +208,7 @@ def execution_projection(value):
                 'estimate_id',
             )
         },
+        **({'admission_state': value['admission_state']} if 'admission_state' in value else {}),
         'diagnostic': untrusted('analysis execution diagnostic', text=value['reason']),
     }
 
@@ -210,49 +218,14 @@ async def get_analysis_execution(a, ctx):
         ctx,
         study_path(ctx, 'analysis-versions', a['calculation_version_id'], 'execution'),
         a.get('wait_seconds', 0),
-        {'complete', 'failed', 'needs_review'},
+        {'complete', 'failed', 'needs_review', 'cancelled'},
     )
     return execution_projection(value)
 
 
 async def launch_analysis(a, ctx):
-    """Reuse only admitted, recorded runs. A launch must not bypass runtime run limits."""
+    """Authorize one exact finite plan; its durable owner admits bounded work."""
     vid = a['calculation_version_id']
-    version = await _version(ctx, vid)
-    current = (await read(ctx, study_path(ctx, 'analysis-versions', vid, 'execution')))['data']
-    if current is not None:
-        return execution_projection(current)
-    seen, after = {}, None
-    for _ in range(500):
-        params = {'limit': '20'}
-        if after is not None:
-            params['after'] = str(after)
-        page = (await read(ctx, study_path(ctx, 'analysis-versions', vid, 'runs'), params))['data']
-        for run in page['items']:
-            seen[run['configuration_revision_id']] = run
-        after = page['next_cursor']
-        if after is None:
-            break
-    else:
-        raise ToolError('too_large', 'The run history exceeds this call’s bounded read.')
-    missing = [
-        c
-        for c in version['content']['configuration_revision_ids']
-        if c not in seen or seen[c]['record_state'] != 'recorded'
-    ]
-    if missing:
-        raise ToolError(
-            'not_ready',
-            'Calculate every analysis point through submit_runs first.',
-            fields=(
-                {
-                    'path': 'calculation_version_id',
-                    'problem': str(len(missing)) + ' points need recorded runs',
-                },
-            ),
-            next_step='Use get_analysis and get_analysis_runs; submit missing runs '
-            'in admitted batches and wait for them before launching validation.',
-        )
     value = (
         await send(
             ctx,
@@ -529,6 +502,9 @@ TOOLS = (
         'Set tolerances before launch: absolute in each output unit, relative as a fraction. '
         'Null/omitted tolerances means no surrogate. Save explicit input vectors with '
         'provenance first. For revision supply calculation_id and expected_revision together. '
+        'Capacity is 128 total training plus validation points across all groups (64 each per group). '
+        'Check the requested total before sending. Refine ranges or create a new version after '
+        'reviewing failed targets; preserve independent validation and tolerances. '
         'Returns an operation; poll get_sampling_status. Never loosen accuracy to publish.',
         obj(
             dict(
@@ -565,17 +541,17 @@ TOOLS = (
     ),
     tool(
         'launch_analysis',
-        'Validate analysis',
-        'Starts the saved analysis execution and its frozen surrogate plan, reusing recorded '
-        'runs. First submit all missing point runs with submit_runs within its admission '
-        'limits and wait for recorded results. This tool refuses incomplete run coverage '
-        'rather than bypassing those limits. Changing fit settings requires a new version.',
+        'Launch analysis',
+        'Authorizes the exact finite saved analysis and its frozen surrogate plan. Reuses '
+        'pinned runs and automatically admits missing runs within bounded queue capacity, '
+        'continuing beyond this reasoning session. Poll get_analysis_execution. Uncertain '
+        'runs require reconciliation; changing fit settings requires a new version.',
         obj(
             dict(calculation_version_id=uuid_schema('Saved analysis version.')),
             ('calculation_version_id',),
         ),
         launch_analysis,
-        (VERSION, RUNS, EXECUTION, LAUNCH),
+        (LAUNCH,),
         effect='submit',
         outcome='receipt:analysis_execution',
     ),

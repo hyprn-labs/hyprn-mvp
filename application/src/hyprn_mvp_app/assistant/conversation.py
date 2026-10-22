@@ -15,8 +15,9 @@ from ..agent_runtime import control
 from ..agent_runtime.delegations import ROLE_EFFECTS, ceiling_for
 from ..agent_runtime.sessions import SessionRefused
 from ..agent_tools.registry import LOCAL_STAGE
+from ..agent_tools.catalogue.exploration import execution_projection
 from ..contracts import DomainError, canonical, digest
-from . import records, allowance
+from . import records, allowance, reviewers, research, provider_sessions
 from .budget import Budget
 from .claude import ProviderError, identity
 
@@ -36,13 +37,18 @@ def message_event(turn):
 
 
 class Conversations:
-    def __init__(self, store, runtime, provider, settings):
+    def __init__(self, store, runtime, provider, settings, *, analysis_reader=None):
         self.store, self.runtime = store, runtime
         self.provider, self.settings = provider, settings
         self._tasks = {}
         self._closing = False
         self.budget = Budget(store)
         self._allowance_admission = asyncio.Lock()
+        self._analysis_reader = analysis_reader
+        self._reviewer_pins = {}
+
+    def configure_reviewers(self, bindings, limits):
+        self._reviewer_pins = reviewers.configured(bindings, limits)
 
     def available(self):
         if not self.settings or not control.agent_enabled(self.runtime.environ):
@@ -52,8 +58,9 @@ class Conversations:
         )
         return digest(definitions) == self.settings.definitions_sha256
 
-    def read(self, actor, study):
-        return records.public(self.store, actor, study, available=self.available())
+    def read(self, actor, study, *, after=None, before=None):
+        return records.public(self.store, actor, study, available=self.available(),
+                              after=after, before=before)
 
     def send(self, actor, study, command, text):
         if not self.available():
@@ -151,10 +158,14 @@ class Conversations:
             if not records.may_resume(db, current, actor):
                 raise DomainError('conflict', 409)
             turn = records.turn(db, current['active_turn'])
-            events = {e['id']: e for e in records.events(db, study)}
             pending = db.execute('SELECT event_id FROM assistant_tool_results '
                 'WHERE study_id=? AND turn_id=? AND content IS NULL',
                 (study, turn['turn_id'])).fetchall()
+            events = {r['event_id']: records.event(db, study, r['event_id']) for r in pending}
+        if turn['delivery'] == 'new' and not turn['runtime_session']:
+            self._update(study, state='queued', error=None)
+            self.wake(study)
+            return self.read(actor, study)
         for row in pending:
             tool = self.runtime.registry.tool(events[row['event_id']]['name'])
             if tool.effect != 'read':
@@ -183,7 +194,7 @@ class Conversations:
         with self.store.connection(write=True) as db:
             records.update(db, study, **values)
 
-    def _authorize(self, turn):
+    def authorize_turn(self, turn):
         if not self.available():
             raise ProviderError('assistant_disabled')
         with self.store.connection() as db:
@@ -216,51 +227,52 @@ class Conversations:
             )
         turn['runtime_session'] = handle.session_id
 
-    async def _session(self, current, settings):
-        if current['provider_id']:
-            return current['provider_id']
-        study = current['study_id']
-        with self.store.connection(write=True) as db:
-            claimed = db.execute(
-                "UPDATE assistant_conversations SET provision='intended' "
-                "WHERE study_id=? AND provision='new' AND provider_id IS NULL",
-                (study,),
-            ).rowcount
-        if not claimed:
-            found = await self.provider.find_session(current['conversation_id'])
-            if not found:
-                raise ProviderError('session_delivery_unknown', uncertain=True)
-        else:
-            found = await self.provider.create_session(settings, current['conversation_id'])
-        provider_id = identity(found.get('id'))
-        self._update(study, provider_id=provider_id, provision='accepted')
-        return provider_id
+    async def _session(self, current, settings, turn=None):
+        if turn is None:
+            _, turn = self._load(current['study_id'])
+        return await provider_sessions.select(self, current, turn, settings)
 
-    def _events(self, study):
+    def configured_reviewers(self):
+        return dict(self._reviewer_pins)
+
+    def reviewer_policy(self, study):
         with self.store.connection() as db:
-            return records.events(db, study)
+            return provider_sessions.reviewer_policy(db, study)
+
+    def _pending(self, study, provider_event):
+        with self.store.connection() as db:
+            return records.pending_events(db, study, provider_event)
 
     def _receive_event(self, study, turn, event):
-        self._authorize(turn)
+        self.authorize_turn(turn)
         identity(event.get('id'))
+        if str(event.get('type', '')).startswith('hyprn.'):
+            raise ProviderError('invalid_provider_record')
         if len(canonical(event)) > 1024 * 1024:
             raise ProviderError('provider_response_too_large')
         event['_received_at'] = time.time()
         with self.store.connection(write=True) as db:
-            records.save_event(db, study, event)
+            return records.save_event(db, study, event)
 
     async def _history(self, study, provider_id, turn):
         # Database I/O must not block HTTP serving during a page of provider events.
         # to_thread preserves the study actor scope; each event still rechecks access.
-        previous = await asyncio.to_thread(self._events, study)
-        timestamps = [e['processed_at'] for e in previous if e.get('processed_at')]
-        since = max(timestamps) if timestamps else None
+        current, _ = await asyncio.to_thread(self._load, study)
+        since = current['provider_cursor']
+        received = []
         async for event in self.provider.events(provider_id, since):
-            await asyncio.to_thread(self._receive_event, study, turn, event)
-        return await asyncio.to_thread(self._events, study)
+            if await asyncio.to_thread(self._receive_event, study, turn, event):
+                received.append(event)
+        return received
 
     async def _deliver(self, study, turn, provider_id):
+        if turn['delivery'] == 'accepted':
+            return
         event = message_event(turn)
+        with self.store.connection() as db:
+            context = provider_sessions.handoff(db, study, turn['turn_id'])
+        if context:
+            event['content'].insert(0, {'type': 'text', 'text': context})
         with self.store.connection(write=True) as db:
             claimed = db.execute(
                 "UPDATE assistant_turns SET delivery='intended' "
@@ -268,12 +280,13 @@ class Conversations:
                 (turn['turn_id'],),
             ).rowcount
         if not claimed:
-            history = await self._history(study, provider_id, turn)
-            found = [
-                e
-                for e in history
-                if e.get('type') == 'user.message' and e.get('content') == event['content']
-            ]
+            await self._history(study, provider_id, turn)
+            with self.store.connection() as db:
+                found = [json.loads(r[0]) for r in db.execute(
+                    'SELECT payload FROM assistant_events WHERE study_id=? '
+                    "AND event_type='user.message' AND reference_id=? LIMIT 2",
+                    (study, turn['turn_id']))]
+            found = [e for e in found if e.get('content') == event['content']]
             if len(found) != 1:
                 raise ProviderError('message_delivery_unknown', uncertain=True)
             provider_event = found[0]['id']
@@ -298,7 +311,7 @@ class Conversations:
             ).fetchone()
 
     def _intend_tool(self, study, turn, event_id):
-        self._authorize(turn)
+        self.authorize_turn(turn)
         _, latest = self._load(study)
         if latest['stopped']:
             return False
@@ -309,17 +322,19 @@ class Conversations:
             )
         return True
 
-    def _retain_tool(self, study, turn, event_id, content, is_error):
-        self._authorize(turn)
+    def _retain_tool(self, study, turn, event_id, content, is_error, delivery='ready'):
+        self.authorize_turn(turn)
         with self.store.connection(write=True) as db:
             db.execute(
                 'UPDATE assistant_tool_results SET content=?,is_error=?,delivery=? '
                 'WHERE study_id=? AND event_id=?',
-                (content, int(is_error), 'ready', study, event_id),
+                (content, int(is_error), delivery, study, event_id),
             )
+            research.retain_evidence(
+                self.store, db, turn['actor_id'], study, event_id, content, is_error)
 
     def _tool_delivery_allowed(self, study, turn):
-        self._authorize(turn)
+        self.authorize_turn(turn)
         _, latest = self._load(study)
         return not latest['stopped']
 
@@ -331,6 +346,64 @@ class Conversations:
                 (study, event_id),
             )
 
+    def _authorize_wait(self, study, turn):
+        """An accepted finite wait outlives expiry, never revocation or current access."""
+        if not self.available():
+            raise ProviderError('assistant_disabled')
+        with self.store.connection() as db:
+            self.store.authorize(db, turn['actor_id'], study)
+            latest = records.turn(db, turn['turn_id'])
+            session = self.runtime.sessions.get(turn['runtime_session'])
+            delegation = db.execute('SELECT revoked_at FROM agent_delegations WHERE delegation_id=?',
+                                    (session['delegation_id'],)).fetchone() if session else None
+            if not delegation or delegation['revoked_at'] is not None or session['state'] == 'access_lost':
+                raise SessionRefused('access_lost')
+            return not latest['stopped']
+
+    async def _wait_analysis(self, study, turn, event, saved):
+        """Retain one monitoring result while the application owner advances exact work.
+
+        No tool is reinvoked and no provider inference is requested during this wait.
+        A fresh bounded reasoning lease starts only after a terminal result is retained.
+        """
+        if self._analysis_reader is None:
+            raise ProviderError('assistant_internal_error')
+        retained = json.loads(saved['content'])
+        version = retained['content']['calculation_version_id']
+        if version != event.get('input', {}).get('calculation_version_id'):
+            raise ProviderError('invalid_provider_record')
+        self._update(study, state='waiting')
+        delay, previous = 1.0, None
+        checked_at = 0
+        while True:
+            if not await asyncio.to_thread(self._authorize_wait, study, turn):
+                return None
+            if time.monotonic() - checked_at >= 30:
+                await self._check_spending(study)
+                checked_at = time.monotonic()
+            value = await asyncio.to_thread(self._analysis_reader, turn['actor_id'], study, version)
+            if value is None or value.get('calculation_version_id') != version:
+                raise ProviderError('invalid_provider_record')
+            if value['state'] not in ('calculating', 'validating'):
+                if not await asyncio.to_thread(self._authorize_wait, study, turn):
+                    return None
+                await self._check_spending(study)
+                # Ending the reasoning session never cancels accepted scientific work.
+                self.runtime.sessions.end(turn['runtime_session'])
+                self._open_runtime(turn)
+                retained['content'] = execution_projection(value)
+                content = canonical(retained).decode()
+                await asyncio.to_thread(self._retain_tool, study, turn, event['id'], content, False)
+                with self.store.connection(write=True) as db:
+                    records.save_event(db, study, dict(id='resume_'+turn['runtime_session'],
+                        type='hyprn.turn_resumed', turn_id=turn['turn_id'], _received_at=time.time()))
+                    records.update(db, study, state='running')
+                return dict(content=content, is_error=False, delivery='ready')
+            progress = (value['state'], value.get('completed_count'), value.get('admission_state'))
+            delay = 1.0 if progress != previous else min(30.0, delay * 1.5)
+            previous = progress
+            await asyncio.sleep(delay)
+
     async def _tool(self, study, turn, provider_id, event, history):
         event_id = event['id']
         saved = await asyncio.to_thread(self._saved_tool, study, event_id)
@@ -340,10 +413,8 @@ class Conversations:
             if self.runtime.registry.tool(event.get('name')).effect != 'read':
                 raise ProviderError('tool_outcome_unknown', uncertain=True)
         if not saved or saved['content'] is None:
-            # Child tool calls are cross-posted in this session's event stream.
-            # They use the same current human delegation and Stop fence as the parent.
-            if event.get('session_thread_id') is not None:
-                identity(event['session_thread_id'])
+            # Provider-authenticated pinned reviewers have a strictly read-only ceiling.
+            child = await reviewers.admit(self, study, turn, provider_id, event)
             if not saved and not await asyncio.to_thread(self._intend_tool, study, turn, event_id):
                 return
             if event.get('name') in ('wait_for_runs', 'get_sampling_status', 'get_analysis_execution'):
@@ -362,15 +433,27 @@ class Conversations:
                     state=outcome.state,
                 )
             ).decode()
+            if child and len(content) > reviewers.LIMITS['max_result_characters']:
+                content = canonical(dict(ok=False, content={
+                    'error': 'reviewer_result_limit',
+                    'message': 'Request a narrower section or fewer records.'},
+                    action_id=outcome.action_id, state=outcome.state)).decode()
+            waiting = (event.get('name') == 'get_analysis_execution' and outcome.ok
+                       and isinstance(outcome.content, dict)
+                       and outcome.content.get('state') in ('calculating', 'validating'))
+            delivery = 'waiting' if waiting else 'ready'
             await asyncio.to_thread(
-                self._retain_tool, study, turn, event_id, content, not outcome.ok)
-            saved = dict(content=content, is_error=not outcome.ok, delivery='ready')
+                self._retain_tool, study, turn, event_id, content, not json.loads(content)['ok'], delivery)
+            saved = dict(content=content, is_error=not json.loads(content)['ok'], delivery=delivery)
+        if saved['delivery'] == 'waiting':
+            saved = await self._wait_analysis(study, turn, event, saved)
+            if saved is None:
+                return False
         if not await asyncio.to_thread(self._tool_delivery_allowed, study, turn):
             return
-        acknowledged = any(
-            e.get('type') == 'user.custom_tool_result' and e.get('custom_tool_use_id') == event_id
-            for e in history
-        )
+        with self.store.connection() as db:
+            acknowledged = records.latest_event(db, study, ('user.custom_tool_result',),
+                                                reference=event_id)
         if not acknowledged:
             # Provider contract deduplicates custom results by the original tool-use ID.
             await self.provider.tool_result(
@@ -389,34 +472,32 @@ class Conversations:
             current, turn = self._load(study)
             if not turn or turn['stopped']:
                 return None
-            self._authorize(turn)
+            self.authorize_turn(turn)
             actor = allowance.owner(self.store, study)
             await allowance.check(self.store, self.provider, actor)
             _, latest = self._load(study)
             if not latest or latest['stopped']:
                 return None
             self._update(study, state='starting', error=None)
-            provider_id = await self._session(current, self.settings)
-            # This normal owner operation also upgrades existing sessions. It never
-            # raises a ceiling, reserves money, or changes scientific records.
+            provider_id = await self._session(current, self.settings, turn)
+            # Remove only obsolete provider budget ceilings; definition upgrades
+            # use pinned successor sessions and retain every prior provider cost.
             await self.provider.remove_session_cap(provider_id)
             return provider_id
 
     def _started_at(self, study, turn):
         event_id = 'turn_started_' + turn['turn_id']
         with self.store.connection(write=True) as db:
-            history = records.events(db, study)
-            resumed = [e['_received_at'] for e in history
-                       if e.get('type') == 'hyprn.turn_resumed'
-                       and e.get('turn_id') == turn['turn_id']]
+            resumed = records.latest_event(db, study, ('hyprn.turn_resumed',),
+                                           reference=turn['turn_id'])
             if resumed:
-                return max(resumed)
-            found = next((e for e in history if e['id'] == event_id), None)
+                return resumed['_received_at']
+            found = records.event(db, study, event_id)
             if found:
                 return found['_received_at']
             started = time.time() if turn['delivery'] == 'new' else turn['created_at']
             records.save_event(db, study, dict(id=event_id, type='hyprn.turn_started',
-                                              _received_at=started))
+                                              turn_id=turn['turn_id'], _received_at=started))
             return started
 
     async def _check_spending(self, study):
@@ -432,7 +513,20 @@ class Conversations:
             if turn['stopped'] and current['provider_id']:
                 await self._stop_remote(study, turn, current['provider_id'])
                 return
-            self._authorize(turn)
+            # A retained monitoring result survives the reasoning lease. Its exact
+            # accepted work is read by the application owner before a new lease opens.
+            with self.store.connection() as db:
+                waiting = db.execute('SELECT event_id FROM assistant_tool_results '
+                    "WHERE study_id=? AND turn_id=? AND delivery='waiting' LIMIT 1",
+                    (study, turn['turn_id'])).fetchone()
+                waiting_event = records.event(db, study, waiting[0]) if waiting else None
+            if waiting_event:
+                provider_id = current['provider_id']
+                saved = self._saved_tool(study, waiting[0])
+                if await self._wait_analysis(study, turn, waiting_event, saved) is None:
+                    await self._stop_remote(study, turn, provider_id)
+                    return
+            self.authorize_turn(turn)
             if turn['stopped'] and not current['provider_id']:
                 if current['provision'] != 'new':
                     raise ProviderError('session_delivery_unknown', uncertain=True)
@@ -459,23 +553,21 @@ class Conversations:
                 await self._deliver(study, turn, provider_id)
                 self._update(study, state='running', error=None)
             checked_at = time.monotonic()
+            delay = 1.0
             while True:
                 _, turn = self._load(study)
                 if turn['stopped']:
                     await self._stop_remote(study, turn, provider_id)
                     return
-                self._authorize(turn)
+                self.authorize_turn(turn)
                 if time.time() - started_at > MAX_TURN_SECONDS:
                     raise ProviderError('turn_time_limit')
                 if time.monotonic() - checked_at >= 10:
                     await self._check_spending(study)
                     checked_at = time.monotonic()
                 history = await self._history(study, provider_id, turn)
-                self._authorize(turn)
-                start = next(
-                    (i for i, e in enumerate(history) if e['id'] == turn['provider_event']), None
-                )
-                relevant = history[start + 1 :] if start is not None else []
+                self.authorize_turn(turn)
+                relevant, idle = await asyncio.to_thread(self._pending, study, turn['provider_event'])
                 delivered = False
                 for event in relevant:
                     if event.get('type') == 'agent.custom_tool_use' and not turn['stopped']:
@@ -485,11 +577,9 @@ class Conversations:
                         delivered = await self._tool(study, turn, provider_id, event, history) or delivered
                 if delivered:
                     # A result can wake the provider; never apply an earlier idle event.
+                    started_at = self._started_at(study, turn)
+                    delay = 1.0
                     continue
-                idle = next(
-                    (e for e in reversed(relevant)
-                     if e.get('type') in ('session.status_idle', 'session.status_running')), None
-                )
                 if (idle and idle['type'] == 'session.status_idle'
                         and (idle.get('stop_reason') or {}).get('type') != 'requires_action'):
                     reason = (idle.get('stop_reason') or {}).get('type')
@@ -501,7 +591,8 @@ class Conversations:
                         active_turn=None,
                     )
                     return
-                await asyncio.sleep(1)
+                delay = 1.0 if history else min(10.0, delay * 1.5)
+                await asyncio.sleep(delay)
         except asyncio.CancelledError:
             raise
         except (DomainError, SessionRefused):
@@ -537,8 +628,13 @@ class Conversations:
         if not sent:
             raise ProviderError('interrupt_delivery_unknown', uncertain=True)
         interrupt_id = identity(sent[0].get('id'))
+        current, _ = self._load(study)
+        since = current['provider_cursor']
         for _ in range(60):
-            async for event in self.provider.events(provider_id):
+            async for event in self.provider.events(provider_id, since):
+                stamp = event.get('created_at') or event.get('processed_at')
+                if stamp and (since is None or stamp > since):
+                    since = stamp
                 if event.get('id') == interrupt_id and event.get('processed_at'):
                     if turn['runtime_session']:
                         self.runtime.sessions.end(turn['runtime_session'])

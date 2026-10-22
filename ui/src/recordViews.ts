@@ -10,8 +10,8 @@ import type {
   EvidenceSnapshot,
   Instance,
   ModelAssumption,
-  ModelDraftRead4,
-  ModelRevisionRead4,
+  ModelDraftRead5,
+  ModelRevisionRead5,
 } from './contract';
 
 /**
@@ -50,7 +50,7 @@ export type ModelAssumptionsView =
   | { kind: 'unavailable' }
   | {
       kind: 'recorded';
-      version: '2' | '3' | '4';
+      version: '2' | '3' | '4' | '5';
       items: ModelAssumption[];
       modelOwned: ModelAssumption[];
       components: Array<{ instance: Instance; items: ModelAssumption[] }>;
@@ -58,17 +58,17 @@ export type ModelAssumptionsView =
   /** Model1 has no assumption concept; this is not an empty list. */
   | { kind: 'not_in_format'; version: '1' }
   /** The format requires an assumption list but the record carries none. */
-  | { kind: 'invalid'; version: '2' | '3' | '4' }
+  | { kind: 'invalid'; version: '2' | '3' | '4' | '5' }
   /** A format this application cannot read; compatibility is never guessed. */
   | { kind: 'unsupported'; version: string };
 
 export function modelAssumptions(
-  model: ModelRevisionRead4 | ModelDraftRead4 | null | undefined,
+  model: ModelRevisionRead5 | ModelDraftRead5 | null | undefined,
 ): ModelAssumptionsView {
   if (!model) return { kind: 'unavailable' };
   const format: string = model.schema_version;
   if (model.schema_version === '1') return { kind: 'not_in_format', version: '1' };
-  if (model.schema_version !== '2' && model.schema_version !== '3' && model.schema_version !== '4')
+  if (model.schema_version !== '2' && model.schema_version !== '3' && model.schema_version !== '4' && model.schema_version !== '5')
     return { kind: 'unsupported', version: format };
   const version = model.schema_version,
     items = model.assumptions;
@@ -203,12 +203,12 @@ export function carriesOwnCriteria(
   return c.schema_version !== '6';
 }
 
-/** New configurations need a model version in the current format (Model4). */
-export function configurableModel(model: ModelRevisionRead4 | ModelDraftRead4): boolean {
-  return model.schema_version === '4';
+/** New configurations need a model version with explicit quantity definitions. */
+export function configurableModel(model: ModelRevisionRead5 | ModelDraftRead5): boolean {
+  return model.schema_version === '4' || model.schema_version === '5';
 }
 
-/** A modified-run seed that can be saved: from a configuration without criteria (seed 8). */
+/** A modified-run seed that can be saved comes from a criteria-free configuration. */
 export function criteriaFreeSeed(seed: ModifiedRunSeedRead6): boolean {
-  return seed.schema_version === '8';
+  return seed.schema_version === '8' || seed.schema_version === '9';
 }

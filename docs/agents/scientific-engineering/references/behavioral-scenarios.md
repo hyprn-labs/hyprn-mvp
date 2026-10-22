@@ -256,3 +256,18 @@ observing errors, duplicating all component prose, claiming save executed the mo
 or calling all nine points independent validation.
 
 Maintainer walkthrough only; this is not a new independent agent evaluation.
+
+## Managed study lifecycle and catalogue conventions
+
+Supply only the request and raw facts to a reviewing agent. These synthetic tasks
+need no provider invocation, live study mutation or candidate-code execution.
+
+| Request and raw facts | Evidence to inspect in the resulting plan |
+|---|---|
+| A three-input response study has a saved sampled analysis with no runs yet; its execution API accepts the finite design. | Launch the saved analysis and monitor its operation. Do not implement a client queue or manually submit the sample members. |
+| Initial design totals 126 of 128 admitted points across groups; independent validation may fail. | Reconsider the initial allocation before computation, preserving the requested domain and reserving fresh validation/refinement capacity. If dimensional requirements cannot fit, state that gap. |
+| The brief says temperature must remain below 350 K; a result is exactly 350 K. | Preserve the strict requirement and reject equality. Do not invent an epsilon or replace below with at most. |
+| A remembered standard is cited, but no source extract is accessible. | Label the citation as uninspected, seek authorized retrieval, and do not mark the source basis checked on the strength of memory. |
+| The catalogue admits USD and USD/pax; a user supplies an expense in EUR. No conversion evidence is available. | Keep the monetary result unavailable until its declared unit is supported or an explicit conversion is justified. Do not label EUR values USD or dimensionless. |
+| A validated surrogate exists, but the model excludes a loss that may reverse the conclusion. | Numerical validation does not close physical validity or sensitivity; record the specific limitation and do not promote it to a qualified design. |
+| A baseline answer is saved, but requested interactive exploration is not prepared. | Record an interim answer with that requested deliverable pending; do not claim the complete study is finished. |

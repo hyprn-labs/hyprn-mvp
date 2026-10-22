@@ -303,12 +303,18 @@ def stage_modeling_contract(ctx):
             '080-unit-declarations.patch',
             '090-quantity-definitions.patch',
             '100-configurations-without-criteria.patch',
+            '110-monetary-units.patch',
         ):
             patch = (REPO / 'upstream/whatsopt-patches' / name).read_text()
             if name in ('090-quantity-definitions.patch', '100-configurations-without-criteria.patch'):
                 headers = [line for line in patch.splitlines() if line.startswith(('--- ', '+++ '))]
                 if headers != ['--- a/' + service, '+++ b/' + service]:
                     raise ValueError('Unexpected sections in adapter-only patch ' + name)
+            if name == '110-monetary-units.patch':
+                headers = [line for line in patch.splitlines() if line.startswith(('--- ', '+++ '))]
+                if headers != ['--- a/' + service, '+++ b/' + service,
+                               '--- a/config/modeling.units.json', '+++ b/config/modeling.units.json']:
+                    raise ValueError('Unexpected monetary patch sections')
             start = patch.index('--- a/' + service + '\n')
             end = patch.find('\n--- ', start + 1)
             patch = patch[start:] if end == -1 else patch[start:end] + '\n'
@@ -619,7 +625,16 @@ def stage_units_native_patch(ctx):
     ):
         raise ValueError('Unexpected units patch sections')
     destination = ctx / 'units.patch'
-    destination.write_text('\n'.join(sections[1:]))
+    monetary = (REPO / 'upstream/whatsopt-patches/110-monetary-units.patch').read_text()
+    monetary_sections = patch_sections(monetary)
+    if [(a, b) for a, b, _ in monetary_sections] != [
+        ('a/app/services/modeling_contract.rb', 'b/app/services/modeling_contract.rb'),
+        ('a/config/modeling.units.json', 'b/config/modeling.units.json'),
+    ]:
+        raise ValueError('Unexpected monetary patch sections')
+    catalog_header = '--- a/config/modeling.units.json\n'
+    catalog = catalog_header + monetary.split(catalog_header, 1)[1]
+    destination.write_text('\n'.join(sections[1:]) + catalog)
     return destination
 
 

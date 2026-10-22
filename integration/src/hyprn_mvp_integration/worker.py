@@ -155,19 +155,23 @@ def uuid_list(value, limit=1000):
 
 # Pinned unit_declarations/1 identities. This finite vocabulary is a wire
 # contract; numerical conversion remains exclusively OpenMDAO's responsibility.
-UNIT_CATALOG_DIGEST = '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45'
+UNIT_CATALOG_DIGEST = '5abc0ae35d2e2fcc8beb1ca9267e709007c007d51f20f95d735122daeef54885'
 # Historical artifacts authenticate their exact table; current discovery uses only the new pin.
 RETAINED_UNIT_CATALOG_DIGESTS = frozenset(
-    (UNIT_CATALOG_DIGEST, 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
+    (UNIT_CATALOG_DIGEST, '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45', 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3')
 )
 # RFC8785 digest of the same authenticated080 catalog, retained for string targets.
 LEGACY_TYPED_CATALOG_DIGESTS = {
-    UNIT_CATALOG_DIGEST: '12e353e5595f9b83d7287f83c1b0dc6e9464fea56b053d8bf3abcfc7c0e914b0',
+    UNIT_CATALOG_DIGEST: '71b795444971db10cd68c6fb2a85b427ee624edafe183571fe4a94fffef407f3',
+    '9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45': '12e353e5595f9b83d7287f83c1b0dc6e9464fea56b053d8bf3abcfc7c0e914b0',
     'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3': (
         '93fc4085d924c6abb015cd351741569876b873693dc2c084b240716f16cfbc07'
     ),
 }
 UNIT_ENGINE_SOURCE_SHA256 = '9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92'
+UNIT_ENGINE_LIBRARY_SHA256 = '8094fb7d3e8cb65a56311c2ea5ccfbc9c29cb8b4160f1486c39c19dd779a43d3'
+MONETARY_UNITS = frozenset(('USD', 'kUSD', 'MUSD', 'USD/pax', 'USD/kg', 'USD/m**3',
+                            'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ'))
 PHYSICAL_UNITS = frozenset(
     (
         'm',
@@ -218,6 +222,8 @@ PHYSICAL_UNITS = frozenset(
         'N*m',
         'W/(m*K)',
         'W/(m**2*K)',
+        'USD', 'kUSD', 'MUSD', 'pax', 'USD/pax', 'USD/kg', 'USD/m**3',
+        'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ',
     )
 )
 
@@ -245,7 +251,7 @@ def unit_meaning(value):
 
 def uses_typed_units(model):
     return model['schema_version'] == '3' or (
-        model['schema_version'] == '4'
+        model['schema_version'] in ('4', '5')
         and any(isinstance(p['units'], dict) for d in model['definitions'] for p in d['ports'])
     )
 
@@ -254,13 +260,13 @@ def model_capabilities(model):
     return (
         ['flat_explicit_scalar']
         + (['unit_declarations/1'] if uses_typed_units(model) else [])
-        + (['quantity_definitions/1'] if model['schema_version'] == '4' else [])
+        + (['quantity_definitions/1'] if model['schema_version'] in ('4', '5') else [])
     )
 
 
 def verify_unit_declarations(model, require_resolved=True):
     """Check retained shapes; resolve only exact active definition occurrences."""
-    if model['schema_version'] == '4':
+    if model['schema_version'] in ('4', '5'):
         exact_keys(
             model,
             (
@@ -283,7 +289,7 @@ def verify_unit_declarations(model, require_resolved=True):
             )
             + (
                 ' quantity_definitions'
-                if 'quantity_definitions' in d and model['schema_version'] == '4'
+                if 'quantity_definitions' in d and model['schema_version'] in ('4', '5')
                 else ''
             ),
         )
@@ -316,11 +322,13 @@ def verify_unit_declarations(model, require_resolved=True):
                 raise ValueError('Malformed retained port')
             ids.add(row['port_id'])
             shapes.add(isinstance(row['units'], str))
-            unit_meaning(row['units'])
+            expression = unit_meaning(row['units'])
+            if (model['schema_version'] != '5' or isinstance(row['units'], str)) and expression in MONETARY_UNITS | {'pax'}:
+                raise ValueError('Monetary units require the successor model format')
             flattened.append(row)
         if len(shapes) > 1:
             raise ValueError('Mixed legacy/typed definition')
-        if model['schema_version'] == '4' and 'quantity_definitions' in d:
+        if model['schema_version'] in ('4', '5') and 'quantity_definitions' in d:
             quantities = d['quantity_definitions']
             if not isinstance(quantities, list) or len(quantities) > 1000:
                 raise ValueError('Quantity bound')
@@ -342,7 +350,7 @@ def verify_unit_declarations(model, require_resolved=True):
         for key in ('child_instances', 'boundary_mappings', 'annotations'):
             if not isinstance(d[key], list) or len(d[key]) > 1000:
                 raise ValueError('Invalid retained definition collection')
-        if model['schema_version'] == '4':
+        if model['schema_version'] in ('4', '5'):
             for note in d['annotations']:
                 exact_keys(note, 'element_ref text')
                 uuid(note['element_ref'])
@@ -410,6 +418,7 @@ def verify_unit_catalog(manifest, files, prepared, model, config):
             continue
         exact_keys(
             catalog, 'catalog_digest engine version source_sha256 supported_units linear_pairs'
+            + (' library_source_sha256 monetary_units' if catalog['catalog_digest'] == UNIT_CATALOG_DIGEST else '')
         )
         payload = json.dumps(
             {k: v for k, v in catalog.items() if k != 'catalog_digest'},
@@ -425,9 +434,13 @@ def verify_unit_catalog(manifest, files, prepared, model, config):
             or catalog['source_sha256'] != UNIT_ENGINE_SOURCE_SHA256
         ):
             raise ValueError('Unsupported retained unit catalog')
+        if catalog['catalog_digest'] == UNIT_CATALOG_DIGEST and catalog['library_source_sha256'] != UNIT_ENGINE_LIBRARY_SHA256:
+            raise ValueError('Unsupported unit library source')
         catalogs.append(catalog)
     if len(catalogs) != 1:
         raise ValueError('Exactly one authenticated unit catalog required')
+    if model['schema_version'] == '5' and catalogs[0]['catalog_digest'] != UNIT_CATALOG_DIGEST:
+        raise ValueError('Monetary models require their exact catalogue')
     # Reuse retained canonical fragments for generator provenance pins.
     patched = array_items(object_fields(raw)['patched_files'])
     for key, kind in (
@@ -502,7 +515,7 @@ def configuration_criteria(config):
 
 def verify_assumption_closure(config, model):
     """Independent bounded data validation, without application or schema imports."""
-    if model['schema_version'] not in ('1', '2', '3', '4'):
+    if model['schema_version'] not in ('1', '2', '3', '4', '5'):
         raise ValueError('Unsupported model version')
     for key in (
         'study_id',
@@ -555,7 +568,7 @@ def verify_assumption_closure(config, model):
                 seen.add(pair)
                 required.add(pair[0])
     if (
-        model['schema_version'] in ('2', '3', '4')
+        model['schema_version'] in ('2', '3', '4', '5')
         and 'assumptions' not in model
         or model['schema_version'] == '1'
         and 'assumptions' in model
@@ -1327,12 +1340,12 @@ def verify_configuration_domains(manifest, files, prepared):
     version = bundle_layout(manifest)
     if (
         config['schema_version']
-        != {'2': '1', '3': '2', '4': '3', '5': '4', '6': '4', '8': '4', '11': '6'}[version]
+        != {'2': '1', '3': '2', '4': '3', '5': '4', '6': '4', '8': '4', '11': '6', '12': '6'}[version]
     ):
         raise ValueError('Configuration/bundle version mismatch')
     keys = (
         'schema_version study_id model_id model_revision_id name'
-        + (' inputs numerical' if version == '11' else ' inputs criteria numerical')
+        + (' inputs numerical' if version in ('11', '12') else ' inputs criteria numerical')
         + ' context_snapshot evidence_sn'
         'apshots required_capabilities configuration_id configur'
         'ation_revision_id parent_revision_id digest'
@@ -1340,17 +1353,17 @@ def verify_configuration_domains(manifest, files, prepared):
     exact_keys(
         config,
         keys
-        + (' context_source derivation' if version in ('3', '4', '5', '6', '8', '9', '11') else '')
+        + (' context_source derivation' if version in ('3', '4', '5', '6', '8', '9', '11', '12') else '')
         + (
             ' assumptions general_context_evidence_version_ids'
-            if version in ('4', '5', '6', '8', '9', '11')
+            if version in ('4', '5', '6', '8', '9', '11', '12')
             else ''
         )
         + (' approach_binding' if version in ('5', '6', '8', '9') else ''),
     )
     if version in ('5', '6', '8', '9'):
         verify_approach(manifest, files, config)
-    if version in ('4', '5', '6', '8', '9', '11'):
+    if version in ('4', '5', '6', '8', '9', '11', '12'):
         verify_assumption_closure(config, frozen_json(files['model.json']))
     targets = [port(i['target']) for i in config['inputs']]
     if len(targets) > 1000 or len(targets) != len(set(targets)):
@@ -1359,7 +1372,7 @@ def verify_configuration_domains(manifest, files, prepared):
         exact_keys(
             item,
             'target value units provenance'
-            + (' result_binding' if version in ('3', '4', '5', '6', '8', '9', '11') else ''),
+            + (' result_binding' if version in ('3', '4', '5', '6', '8', '9', '11', '12') else ''),
         )
         scalar(item['value'])
         if not isinstance(item['units'], str):
@@ -1371,13 +1384,13 @@ def verify_configuration_domains(manifest, files, prepared):
     fields = object_fields(raw)
     for key in ('context_source', 'derivation', 'digest'):
         fields.pop(key)
-    if version in ('4', '5', '6', '8', '9', '11'):
+    if version in ('4', '5', '6', '8', '9', '11', '12'):
         fields.pop('assumptions')
         fields.pop('general_context_evidence_version_ids')
     if version in ('5', '6', '8', '9'):
         fields.pop('approach_binding')
         fields['schema_version'] = b'"3"'
-    if version == '11':
+    if version in ('11', '12'):
         fields['schema_version'] = b'"5"'
     inputs = []
     for item in array_items(fields['inputs']):
@@ -1393,7 +1406,7 @@ def verify_configuration_domains(manifest, files, prepared):
             if frozen_json(r)
             not in (
                 {'result_linked_inputs/1', 'configuration_assumptions/1'}
-                if version in ('4', '5', '6', '8', '9', '11')
+                if version in ('4', '5', '6', '8', '9', '11', '12')
                 else {'result_linked_inputs/1'}
             )
         )
@@ -1728,7 +1741,7 @@ def verify_program_pins(manifest, files, prepared, model, config):
                 or row['units']
                 != (
                     unit_meaning(ports[target]['units'])
-                    if model['schema_version'] in ('3', '4')
+                    if model['schema_version'] in ('3', '4', '5')
                     else ports[target]['units']
                 )
                 or component['instance_id'] != target[0]
@@ -1774,10 +1787,10 @@ def verify_program_pins(manifest, files, prepared, model, config):
 def bundle_layout(manifest):
     version = manifest.get('schema_version')
     # Bundle 11: configuration 6 without criteria, result protocol 3.
-    if version == '11':
+    if version in ('11', '12'):
         if manifest.get('input_schema_version') != '11' or manifest['result_protocol_version'] != '3':
             raise ValueError('Unsupported bundle input layout or result protocol')
-        return '11'
+        return version
     if version == '10':
         layout = manifest.get('input_schema_version')
         if (
@@ -1808,7 +1821,7 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
     if len(raw_manifest) > 1048576:
         raise ValueError('Manifest size exceeded')
     manifest = frozen_json(raw_manifest)
-    if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9', '11'):
+    if bundle_layout(manifest) not in ('2', '3', '4', '5', '6', '8', '9', '11', '12'):
         raise ValueError('Unsupported bundle version; create a new run command')
     if bundle_layout(manifest) in ('5', '6', '8', '9'):
         exact_keys(
@@ -1825,7 +1838,7 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
             + (' model_schema_version' if bundle_layout(manifest) in ('8', '9') else '')
             + (' input_schema_version' if manifest['schema_version'] == '10' else ''),
         )
-    if bundle_layout(manifest) == '11':
+    if bundle_layout(manifest) in ('11', '12'):
         exact_keys(
             manifest,
             'schema_version bundle_id run_id prepared_digest model_revision_id'
@@ -1898,35 +1911,40 @@ def read_inputs(root, expected_digest=None, expected_manifest_sha256=None):
         ('2', '1'),
         ('3', '2'),
         ('4', '3'),
+        ('5', '3'),
     ):
         raise ValueError('Unsupported preparation version')
     for key in ('entrypoint', 'prepared_digest', 'executable_content_digest'):
         if manifest[key] != prepared[key]:
             raise ValueError('Prepared execution binding mismatch')
     model = frozen_json(files['model.json'])
+    if (model['schema_version'] == '5') != (bundle_layout(manifest) == '12') or (prepared['schema_version'] == '5') != (bundle_layout(manifest) == '12'):
+        raise ValueError('Monetary model/preparation/bundle pairing mismatch')
     if bundle_layout(manifest) == '6' and model['schema_version'] not in ('2', '3', '4'):
         raise ValueError('Invalid configuration/model version pairing')
     if (
-        bundle_layout(manifest) in ('8', '9', '11')
+        bundle_layout(manifest) in ('8', '9', '11', '12')
         and manifest['model_schema_version'] != model['schema_version']
     ):
         raise ValueError('Exact Bundle8 model version mismatch')
-    if model['schema_version'] in ('3', '4'):
+    if model['schema_version'] in ('3', '4', '5'):
         if (
-            model['schema_version'] == '4' and bundle_layout(manifest) not in ('8', '9', '11')
-        ) or bundle_layout(manifest) not in ('6', '8', '9', '11'):
+            model['schema_version'] in ('4', '5') and bundle_layout(manifest) not in ('8', '9', '11', '12')
+        ) or bundle_layout(manifest) not in ('6', '8', '9', '11', '12'):
             raise ValueError('Invalid configuration/model version pairing')
         verify_unit_declarations(model)
     if verify_object_digest(files['model.json']) != manifest['model_digest']:
         raise ValueError('Frozen model digest mismatch')
+    if model['schema_version'] != '5' and any(unit_meaning(p['units']) in MONETARY_UNITS | {'pax'} for p in model['ports']):
+        raise ValueError('Monetary units require the successor model format')
     configuration = verify_configuration_domains(manifest, files, prepared)
     if model['schema_version'] == '2' and configuration['schema_version'] not in ('3', '4'):
         raise ValueError('Invalid configuration/model version pairing')
     if configuration['schema_version'] == '4' and model['schema_version'] not in ('2', '3', '4'):
         raise ValueError('Invalid configuration/model version pairing')
-    if configuration['schema_version'] == '6' and model['schema_version'] != '4':
+    if configuration['schema_version'] == '6' and model['schema_version'] not in ('4', '5'):
         raise ValueError('Invalid configuration/model version pairing')
-    if bundle_layout(manifest) in ('4', '5', '6', '8', '9', '11'):
+    if bundle_layout(manifest) in ('4', '5', '6', '8', '9', '11', '12'):
         verify_program_pins(manifest, files, prepared, model, configuration)
     if uses_typed_units(model):
         verify_unit_catalog(manifest, files, prepared, model, configuration)

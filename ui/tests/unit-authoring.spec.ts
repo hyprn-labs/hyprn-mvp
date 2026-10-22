@@ -1,4 +1,4 @@
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, writeFile, readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import { test, expect, chromium, type Page } from 'playwright/test';
 import { chromiumExecutable } from './support/browser';
@@ -121,10 +121,24 @@ test('@units-authoring new ports remain unspecified in saved drafts and read-onl
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
   const version=await page.getByLabel('Model version',{exact:true}).locator('option').nth(1).getAttribute('value');
-  await page.getByLabel('Model version',{exact:true}).selectOption(version!);
-  await expect(page.getByText('Read-only',{exact:true}).first()).toBeVisible();
+  let release!:()=>void,arrived=false;
+  const held=new Promise<void>(resolve=>release=resolve);
+  await page.route(/\/models\/[^/]+\/revisions(?:\?.*)?$/,async route=>{
+    arrived=true;await held;await route.continue();
+  },{times:1});
+  try {
+    await page.getByLabel('Model version',{exact:true}).selectOption(version!);
+    await expect.poll(()=>arrived).toBe(true);
+    await expect(page.getByText('Read-only',{exact:true}).first()).toBeVisible();
+    await expect(page.getByText('Loading study/model…',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Create configuration',exact:true})).toBeDisabled();
+    await expect(page.getByLabel('Model version',{exact:true})).toBeDisabled();
+  } finally {release();}
+  await expect(page.getByLabel('Model version',{exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
+  await expect(page.getByLabel('Model version',{exact:true})).toBeEnabled();
+  await expect(page.getByText('Loading study/model…',{exact:true})).toHaveCount(0);
   const {sid,mid}=ids(page);
   const retained=(await(await page.request.get('/api/1/studies/'+sid+'/models/'+mid+'/revisions/'+version)).json()).data;
   expect(activePorts(retained).map((p:any)=>p.units)).toEqual([{kind:'unspecified'},{kind:'unspecified'}]);
@@ -137,13 +151,13 @@ test('@units-authoring catalog choices save explicit dimensionless and compound 
   await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');
   await edit.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');
   const spelling=edit.getByLabel('Quantity 2 units spelling',{exact:true});
-  await spelling.fill('USD');
+  await spelling.fill('EUR');
   await expect(edit.getByRole('alert')).toContainText('This unit spelling is not supported');
   await closePorts(page);await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'This unit spelling is not supported'})).toBeVisible();
   await page.getByRole('button',{name:'Return to all models',exact:true}).click();
   await page.getByRole('dialog',{name:'Unsaved changes',exact:true}).getByRole('button',{name:'Keep editing',exact:true}).click();
-  const again=await ports(page);await expect(again.getByLabel('Quantity 2 units spelling',{exact:true})).toHaveValue('USD');
+  const again=await ports(page);await expect(again.getByLabel('Quantity 2 units spelling',{exact:true})).toHaveValue('EUR');
   await again.getByLabel('Quantity 2 units spelling',{exact:true}).fill('MJ/kg');await closePorts(page);await save(page);
   expect(activePorts(await snapshot(page)).map((p:any)=>p.units)).toEqual([{kind:'dimensionless'},{kind:'physical',expression:'MJ/kg'}]);
   const reopened=await ports(page);await expect(reopened.getByLabel('Quantity 2 units spelling',{exact:true})).toHaveValue('MJ/kg');
@@ -173,7 +187,7 @@ test('@units-authoring lost acknowledgement keeps exact typed receipt and reload
   await component(page);const edit=await ports(page);await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');await closePorts(page);
   let original:any;await page.route('**/models/*/edits',async route=>{original=route.request().postDataJSON();await route.fetch();await route.abort();},{times:1});
   await page.getByRole('button',{name:'Save component',exact:true}).click();await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByText(/Command outcome is uncertain/).first()).toBeVisible();expect(original.schema_version).toBe('4');
+  await expect(page.getByText(/Command outcome is uncertain/).first()).toBeVisible();expect(original.schema_version).toBe('5');
   await page.getByRole('button',{name:'Keep editing',exact:true}).click();
   await page.getByRole('button',{name:'Check original command',exact:true}).click();
   await expect.poll(async()=>activePorts(await snapshot(page))[0].units).toEqual({kind:'dimensionless'});
@@ -261,7 +275,7 @@ test('@units-authoring shared labels preserve old strings and resolve only exact
 
 test('@units-authoring editor guard refused editor save keeps unit text and focuses the source editor',async({page})=>{
   await component(page);const edit=await ports(page);
-  await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Quantity 1 units spelling',{exact:true}).fill('USD');await closePorts(page);
+  await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Quantity 1 units spelling',{exact:true}).fill('EUR');await closePorts(page);
   // The source editor sits in the component's "Edit source" disclosure (no detail tabs);
   // a refused save opens it and focuses the editor.
   await expect(page.getByRole('tab',{name:'Source',exact:true})).toHaveCount(0);
@@ -269,18 +283,107 @@ test('@units-authoring editor guard refused editor save keeps unit text and focu
   await page.getByRole('button',{name:'Return to all models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
   await expect(dirty).toBeHidden();await expect(page.locator('#python-source')).toBeFocused();
   await expect(page.getByRole('heading',{name:'Compound quantities',exact:true})).toBeVisible();
-  const again=await ports(page);await expect(again.getByLabel('Quantity 1 units spelling',{exact:true})).toHaveValue('USD');
+  const again=await ports(page);await expect(again.getByLabel('Quantity 1 units spelling',{exact:true})).toHaveValue('EUR');
 });
 
 test('@units-authoring editor guard Save applies a pending component edit once and skips the separate editor save',async({page})=>{
   await component(page);const {sid,mid}=ids(page),read=async()=>(await (await page.request.get('/api/1/studies/'+sid+'/models/'+mid)).json()).data;
-  await page.getByRole('button',{name:'Edit component',exact:true}).click();
-  const rename=page.getByRole('dialog',{name:'Edit component',exact:true});await rename.getByLabel('Component name',{exact:true}).fill('Energy law renamed');await rename.getByRole('button',{name:'Done',exact:true}).click();
+  const quantities=await ports(page);
+  await quantities.getByLabel('Quantity 1 name',{exact:true}).fill('Renamed input');
+  await closePorts(page);
   const writes:unknown[]=[];page.on('request',r=>{if(r.method()==='POST'&&/\/models\/[^/]+\/edits$/.test(new URL(r.url()).pathname))writes.push(r.postDataJSON());});
   const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
   await page.getByRole('button',{name:'Return to all models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
   const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});await preview.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Models',exact:true})).toBeVisible();
   expect(writes).toHaveLength(1);
-  expect((await read()).instances[1].name).toBe('Energy law renamed');
+  expect(activePorts(await read())[0].name).toBe('Renamed input');
+});
+
+test('@units-authoring monetary basis follows an explicit USD to kUSD successor and preserves history',async({page})=>{
+  await component(page);
+  const {sid,mid}=ids(page),base=`/api/1/studies/${sid}/models/${mid}`;
+  const seeded=await page.request.post('/fixture/price-evidence',{data:{study_id:sid}});
+  expect(seeded.ok(),await seeded.text()).toBe(true);
+  const evidence=await seeded.json();
+  const edit=await ports(page);
+  await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');
+  await edit.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');
+  await edit.getByLabel('Quantity 2 units spelling',{exact:true}).fill('USD');
+  await edit.getByLabel('Quantity 2 definition',{exact:true}).fill('Quoted installed equipment cost');
+  await closePorts(page);await save(page);
+  const original=await snapshot(page);expect(original.schema_version).toBe('5');
+  const target={instance_id:original.instances[1].instance_id,port_id:activePorts(original)[1].port_id};
+  async function saveVersion() {
+    const response=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===base+'/commits');
+    await page.getByRole('button',{name:'Save model version',exact:true}).click();
+    const result=await response;expect(result.ok(),await result.text()).toBe(true);
+    return (await result.json()).data.model_revision_id as string;
+  }
+  async function publishBasis(version:string,year:string,basis:string,changed=false) {
+    await page.getByRole('tab',{name:'Model explanation',exact:true}).click();
+    await page.getByRole('button',{name:'Edit explanation',exact:true}).click();
+    const region=page.getByRole('region',{name:'Price basis · y',exact:true});
+    if(changed) {
+      await expect(region).toContainText('The unit changed. Enter the price basis for kUSD.');
+      await expect(region.getByLabel('Price year · y',{exact:true})).toHaveValue('');
+      await expect(region.getByLabel('Cost basis · y',{exact:true})).toHaveValue('');
+      await expect(region).not.toContainText('Explicit price basis report');
+    }
+    await region.getByLabel('Price year · y',{exact:true}).fill(year);
+    await region.getByLabel('Cost basis · y',{exact:true}).fill(basis);
+    await region.getByRole('button',{name:'Add price evidence',exact:true}).click();
+    const picker=page.getByRole('dialog',{name:'Add evidence to Price basis · y',exact:true});
+    await picker.getByLabel('Find evidence',{exact:true}).fill('Explicit price basis report');
+    await picker.getByRole('button',{name:/^Choose Explicit price basis report/}).click();
+    await picker.getByLabel('Relationship',{exact:true}).selectOption('supports');
+    await picker.getByRole('button',{name:'Attach evidence',exact:true}).click();
+    await page.getByRole('button',{name:'Save for model version',exact:true}).click();
+    const publish=page.getByRole('dialog',{name:'Save explanation version',exact:true});
+    await publish.getByLabel('Model version to explain',{exact:true}).selectOption(version);
+    await publish.getByRole('button',{name:'Save explanation version',exact:true}).click();
+    await expect(publish).toBeHidden();
+    const response=await page.request.get(base+`/revisions/${version}/explanation`);
+    expect(response.ok(),await response.text()).toBe(true);
+    return (await response.json()).data.explanation;
+  }
+  const firstVersion=await saveVersion();
+  const exported=await page.request.get(base+'/export?model_revision_id='+firstVersion);
+  expect(exported.ok(),await exported.text()).toBe(true);
+  const portable=(await exported.json()).data;
+  expect(portable.schema_version).toBe('5');
+  expect(portable.revisions[0].model_revision_id).toBe(firstVersion);
+  expect(activePorts(portable.revisions[0])[1].units).toEqual({kind:'physical',expression:'USD'});
+  await page.getByLabel('Model version',{exact:true}).selectOption(firstVersion);
+  await page.getByRole('button',{name:'Model actions',exact:true}).click();
+  await page.getByRole('button',{name:'Export model',exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download portable model record',exact:true}).click();
+  const downloaded=await readFile((await(await download).path())!,'utf8');
+  expect(JSON.parse(downloaded)).toEqual(portable);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Import model',exact:true}).click();
+  const importing=page.getByRole('dialog',{name:'Import model',exact:true});
+  await importing.getByLabel('Portable model record file',{exact:true}).setInputFiles({name:'monetary-model.json',mimeType:'application/json',buffer:Buffer.from(downloaded)});
+  await importing.getByRole('button',{name:'Preview model import',exact:true}).click();
+  await expect(importing.getByRole('region',{name:'Model import preview',exact:true})).toContainText('This model already exists in this study.');
+  await expect(importing.getByRole('button',{name:'Import model',exact:true})).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.getByLabel('Model version',{exact:true}).selectOption('draft');
+  const first=await publishBasis(firstVersion,'2025','Installed equipment, quoted in USD, excluding tax.');
+  expect(first.content.monetary_quantities).toEqual([{...target,catalogue_expression:'USD',price_year:2025,economic_basis:'Installed equipment, quoted in USD, excluding tax.',evidence_links:[{evidence_version_id:evidence.evidence_version_id,relation:'supports'}]}]);
+  await page.getByRole('tab',{name:'Diagram',exact:true}).click();
+  const successor=await ports(page);
+  await successor.getByLabel('Quantity 2 units spelling',{exact:true}).fill('kUSD');
+  await closePorts(page);await save(page);
+  const secondVersion=await saveVersion();expect(secondVersion).not.toBe(firstVersion);
+  const second=await publishBasis(secondVersion,'2026','Installed equipment, explicitly quoted in thousands of USD, excluding tax.',true);
+  expect(second.content.monetary_quantities).toEqual([{...target,catalogue_expression:'kUSD',price_year:2026,economic_basis:'Installed equipment, explicitly quoted in thousands of USD, excluding tax.',evidence_links:[{evidence_version_id:evidence.evidence_version_id,relation:'supports'}]}]);
+  const retained=(await(await page.request.get(base+`/revisions/${firstVersion}/explanation`)).json()).data.explanation;
+  expect(retained).toEqual(first);
+  await page.getByLabel('Model version',{exact:true}).selectOption(firstVersion);
+  await page.getByRole('tab',{name:'Model explanation',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Price basis',exact:true})).toContainText('y · USD');
+  await expect(page.getByRole('region',{name:'Price basis',exact:true})).toContainText('2025 prices');
 });

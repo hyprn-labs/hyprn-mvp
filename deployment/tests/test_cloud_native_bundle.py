@@ -1,5 +1,8 @@
 """A native archive is self-contained data, never an escape into the build host."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
+
 import importlib.util
 import json
 import os

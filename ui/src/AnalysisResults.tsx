@@ -1,3 +1,4 @@
+import { criterionStatus, evaluationReasons } from './design';
 import { useEffect, useState } from 'react';
 import { message, type HyprnMvpApi } from './api';
 import type {
@@ -5,7 +6,7 @@ import type {
   CalculationVersionRead4,
   CriterionEvaluation1,
   FrozenConfigurationRead7,
-  ModelRevisionRead4,
+  ModelRevisionRead5,
   PublicRunDetail2,
   StudyCriterion1,
 } from './contract';
@@ -24,21 +25,8 @@ import {
   Select,
   StatusTag,
   formatNumber,
-  type Tone,
 } from './design';
 import { unitLabel } from './unitLabels';
-/** Why a criterion reads as it does for a run, in the reader's words. */
-const evaluationReasons: Record<CriterionEvaluation1['reason'], string> = {
-  threshold_comparison: 'Compared with the threshold',
-  measured: 'Measured',
-  criterion_not_bound: 'Criterion not bound',
-  run_not_recorded: 'No results yet',
-  retained_record_invalid: 'Record could not be verified',
-  convergence_unresolved: 'Convergence unresolved',
-  required_output_unavailable: 'Output not computed',
-  invalid_criterion_or_units: 'Value or units invalid',
-};
-
 /** One evaluation cell: shape, word and colour; the value with its units, or "not computed". */
 export function EvaluationCell({
   evaluation,
@@ -51,14 +39,7 @@ export function EvaluationCell({
     evaluation.value === null
       ? 'not computed'
       : formatNumber(evaluation.value) + (showUnits ? ' ' + unitLabel(evaluation.units) : '');
-  const [tone, word]: [Tone, string] =
-    evaluation.outcome === 'met'
-      ? ['ok', 'Met']
-      : evaluation.outcome === 'not_met'
-        ? ['alarm', 'Not met']
-        : evaluation.outcome === 'measured'
-          ? ['inert', 'Measured']
-          : ['advisory', 'Not evaluated'];
+  const [tone, word] = criterionStatus(evaluation.outcome);
   return (
     <span className="calculation-evaluation">
       <StatusTag tone={tone}>{word}</StatusTag>
@@ -82,7 +63,7 @@ export function requirement(criterion: StudyCriterion1) {
 }
 
 /** Names are concise until two quantities actually need component context. */
-export function analysisPorts(model: ModelRevisionRead4 | null) {
+export function analysisPorts(model: ModelRevisionRead5 | null) {
   const ports = model ? modelPorts(model) : [];
   return ports.map((p) => ({
     ...p,
@@ -117,7 +98,7 @@ export function AnalysisResults({
   version: CalculationVersionRead4;
   criteria: StudyCriterion1[];
   names: Record<string, string>;
-  snapshot: ModelRevisionRead4 | null;
+  snapshot: ModelRevisionRead5 | null;
   frozen: FrozenConfigurationRead7;
   refresh: number;
   pinnedRuns?: Record<string, string | null> | null;

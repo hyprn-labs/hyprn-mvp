@@ -199,7 +199,8 @@ def addition_b(monkeypatch):
     scope,store,actor,sid,native=(env[k] for k in ('scope','store','actor','sid','native'))
     source_id=env['rid'];source_config=copy.deepcopy(env['config'])
     def payload(rid):
-        with store.connection() as db:return json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
+        from hyprn_mvp_app.history import run_association
+        with store.connection() as db:return json.loads(run_association(db,rid)['payload'])
     original_ids=[rid for rid,_ in env['sources']]+[source_id]
     originals={rid:canonical(payload(rid)) for rid in original_ids}
     native_originals={rid:canonical(env['snapshot'](native.read_record(payload(rid)['request'],payload(rid)['history']['association']))) for rid in original_ids}

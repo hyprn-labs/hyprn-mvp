@@ -48,7 +48,7 @@ def test_credential_symlinks_and_multiline_values_are_rejected(key_file):
         credential(key_file)
 
 
-def test_agent_has_only_registered_custom_tools():
+def test_agent_cannot_delegate_to_unlisted_or_inline_agents():
     value = agent_definition(
         'explicit-model',
         [
@@ -63,11 +63,8 @@ def test_agent_has_only_registered_custom_tools():
     assert value['tools'][0]['type'] == 'custom'
     assert value['tools'][0]['input_schema']['additionalProperties'] is False
     assert all(value['multiagent'][name]['type'] == 'disabled' for name in ('advisor', 'workflows'))
-    assert value['multiagent']['subagents'] == {
-        'type': 'enabled',
-        'inline_agents': {'type': 'enabled'},
-    }
-    assert 'mcp_servers' not in value and 'skills' not in value
+    assert value['multiagent']['subagents'] == {'type': 'disabled'}
+    assert value['mcp_servers'] == [] and value['skills'] == []
 
 
 def test_session_creation_pins_agent_without_a_session_budget(key_file):
@@ -239,5 +236,76 @@ def test_missing_usage_is_actionable_not_an_internal_attribute_error(key_file, u
             httpx.Response(200, json={'status':'running','budget':None,'usage':usage})))
         with pytest.raises(ProviderError,match='invalid_provider_record'):
             await client.session_account('session_test')
+        await client.close()
+    asyncio.run(exercise())
+
+
+def test_research_defaults_deny_every_other_builtin_and_pins_reviewers():
+    from hyprn_mvp_app.assistant.claude import research_tools
+    pin = {'type': 'agent', 'id': 'agent_source', 'version': 2}
+    value = agent_definition('model', [], 'system', reviewers=[pin], research=True)
+    assert value['tools'] == research_tools()
+    toolset = value['tools'][0]
+    assert toolset['default_config']['enabled'] is False
+    assert {item['name'] for item in toolset['configs']} == {'read', 'web_search', 'web_fetch'}
+    assert value['multiagent']['subagents'] == {
+        'type': 'enabled', 'inline_agents': {'type': 'disabled'}, 'predefined_agents': [pin]}
+
+
+def test_catalogue_refresh_preserves_research_and_rejects_unreviewed_builtins(key_file):
+    from hyprn_mvp_app.assistant.claude import research_tools
+    state = {'status': 'idle', 'agent': {'tools': research_tools()}}
+    writes = []
+    def handler(request):
+        if request.method == 'POST':
+            writes.append(json.loads(request.content))
+            state['agent']['tools'] = writes[-1]['agent']['tools']
+        return httpx.Response(200, json=state)
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        await client.ensure_tools('session_test', [])
+        assert not writes
+        state['agent']['tools'].append({'type': 'agent_toolset_20260401'})
+        with pytest.raises(ProviderError, match='provider_definition_drift'):
+            await client.ensure_tools('session_test', [])
+        await client.close()
+    asyncio.run(exercise())
+
+
+def test_skill_upload_uses_multipart_and_download_keeps_binary_bytes(key_file):
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return (httpx.Response(200, content=b'archive') if request.method == 'GET'
+                else httpx.Response(200, json={'id': 'skill_test', 'latest_version_id': 'skver_test'}))
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        await client.upload_skill(b'archive', 'hyprn-digest')
+        assert await client.skill_content('skill_test', 'skver_test') == b'archive'
+        with pytest.raises(ProviderError, match='exact_skill_version_required'):
+            await client.skill_content('skill_test', 'latest')
+        await client.close()
+    asyncio.run(exercise())
+    assert len(requests) == 2
+    assert requests[0].headers['content-type'].startswith('multipart/form-data;')
+    assert b'name="files[]"; filename="hyprn.zip"' in requests[0].content
+    assert b'application/zip' in requests[0].content
+    assert requests[1].url.path == '/v1/skills/skill_test/versions/skver_test/content'
+
+
+@pytest.mark.parametrize('session_id,thread_id', [
+    ('session_test', 'thread_test'), ('session_other', 'thread_test'), ('session_test', 'thread_other')])
+def test_thread_identity_is_authenticated_and_bound_to_the_requested_session(key_file, session_id, thread_id):
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(lambda request:
+            httpx.Response(200, json={'id': thread_id, 'session_id': session_id,
+                                      'parent_thread_id': 'thread_primary',
+                                      'agent': {'id': 'agent_review', 'version': 3}})))
+        if session_id == 'session_test' and thread_id == 'thread_test':
+            result = await client.thread_agent('session_test', 'thread_test')
+            assert result['agent'] == {'id': 'agent_review', 'version': 3}
+        else:
+            with pytest.raises(ProviderError, match='invalid_provider_record'):
+                await client.thread_agent('session_test', 'thread_test')
         await client.close()
     asyncio.run(exercise())

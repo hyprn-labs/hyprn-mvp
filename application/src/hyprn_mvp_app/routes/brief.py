@@ -38,12 +38,12 @@ def router(deps):
     @r.get('/api/1/studies/{study_id}/brief')
     def brief_state(study_id: str, request: Request, who: Actor):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'StudyBriefState1', briefs.state(who, sid))
+        return result(request, 'StudyBriefStateRead2', briefs.state(who, sid))
 
     @r.post('/api/1/studies/{study_id}/brief/draft')
     def brief_draft(study_id: str, request: Request, who: Actor, body: dict = Body(...)):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'StudyBriefDraft1', briefs.save_draft(who, sid, body))
+        return result(request, 'StudyBriefDraftRead2', briefs.save_draft(who, sid, body))
 
     @r.get('/api/1/studies/{study_id}/brief/versions')
     def brief_versions(study_id: str, request: Request, who: Actor):
@@ -54,16 +54,16 @@ def router(deps):
             limit=positive(query['limit'], 100) if 'limit' in query else 20,
             before=positive(query['before'], 9007199254740991) if 'before' in query else None,
         )
-        return result(request, 'StudyBriefVersionPage1', page)
+        return result(request, 'StudyBriefVersionPageRead2', page)
 
     @r.post('/api/1/studies/{study_id}/brief/versions', status_code=201)
     def brief_save_version(study_id: str, request: Request, who: Actor, body: dict = Body(...)):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'StudyBriefVersionSaved1', briefs.save_version(who, sid, body), 201)
+        return result(request, 'StudyBriefVersionSavedRead2', briefs.save_version(who, sid, body), 201)
 
     @r.get('/api/1/studies/{study_id}/brief/versions/{version_id}')
     def brief_version(study_id: str, version_id: str, request: Request, who: Actor):
         sid, _ = scope(request, who, study_id)
-        return result(request, 'StudyBriefVersion1', briefs.read(who, sid, valid_id(version_id)))
+        return result(request, 'StudyBriefVersionRead2', briefs.read(who, sid, valid_id(version_id)))
 
     return r

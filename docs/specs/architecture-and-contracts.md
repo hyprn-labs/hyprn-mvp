@@ -331,7 +331,7 @@ Commit gets a pure compatibility result for the exact candidate, then allocates 
 
 ### 6.10 Historical reads and exports
 
-Historical reads use application authorization and retained application and AiiDA records only, and work with the modeling service offline or replaced. Re-execution also needs the recorded runtime. Computational record exports carry the full ancestor closure of selected runs within a bounded size and expose only curated diagnostics.
+Historical reads use application authorization and retained application and AiiDA records only, and work with the modeling service offline or replaced. Re-execution also needs the recorded runtime. Computational record exports carry the full ancestor closure of selected runs within a bounded size and expose only curated diagnostics. Monetary exports also retain the exact saved model explanation and its evidence as indexed associated context; see [computational-record interpretation](computational-record-interpretation.md).
 
 ### Sampled analysis versions and estimates
 
@@ -427,10 +427,10 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `modified_runs` | `contracts`, `history`, `readiness` |
 | `modeling` | `contracts`, `store`, `units` |
 | `brief` | `contracts` |
-| `explanations` | `contracts` |
+| `explanations` | `contracts`, `units` |
 | `criterion_evaluation` | — |
-| `calculations` | `brief`, `contracts`, `criterion_evaluation`, `execution_bundle`, `history`, `units` |
-| `study_answer` | `calculation_preparation`, `brief`, `calculation_estimates`, `calculations`, `contracts`, `criterion_evaluation`, `history` |
+| `calculations` | `brief`, `contracts`, `criterion_evaluation`, `execution_bundle`, `history`, `units`, `explanations` |
+| `study_answer` | `calculation_preparation`, `brief`, `calculation_estimates`, `calculations`, `contracts`, `criterion_evaluation`, `history`, `explanations`, `units` |
 | `analysis_execution` | `calculations`, `calculation_estimates`, `contracts`, `history` |
 | `calculation_designs` | `calculations`, `contracts`, `quantity_projection`, `sampling_coordinates`, `readiness` |
 | `calculation_estimates` | `calculation_designs`, `calculations`, `contracts`, `quantity_projection`, `history` |
@@ -438,9 +438,9 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `sampling_coordinates` | `quantity_projection` |
 | `calculation_preparation` | `calculation_estimates`, `calculation_exploration`, `calculations`, `contracts`, `quantity_projection` |
 | `calculation_exploration` | `calculation_estimates`, `calculations`, `contracts`, `history`, `quantity_projection` |
-| `configuration` | `contracts`, `listing`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
+| `configuration` | `contracts`, `listing`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units`, `explanations` |
 | `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
-| `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
+| `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `explanations`, `history`, `locations`, `modified_runs`, `result_bindings`, `units` |
 | `dispatcher` | `agent_runtime`, `analysis_execution`, `calculation_designs`, `calculation_estimates`, `calculation_exploration`, `computational_export`, `configuration`, `contracts`, `database`, `execution`, `execution_bundle`, `hosted_runtime`, `modeling`, `readiness`, `store` |
 | `auth` | `contracts`, `store` |
 | `external_identity` | `auth`, `contracts` |
@@ -451,8 +451,8 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `agent_policy` | `agent_tools`, `contracts` |
 | `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `database`, `edge`, `store`, `identity` |
 | `agent_surface` (package, planned) | `agent_runtime` |
-| `assistant` (package) | `agent_runtime`, `agent_tools`, `contracts`, `identity` |
-| `api` | `assistant`, `agent_tools`, `agent_policy`, `agent_runtime`, `auth`, `brief`, `calculations`, `computational_export`, `configuration`, `contracts`, `database`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `result_bindings`, `routes`, `store`, `study_answer`, `ui` |
+| `assistant` (package) | `agent_runtime`, `agent_tools`, `contracts`, `identity`, `evidence_content` |
+| `api` | `assistant`, `agent_tools`, `agent_policy`, `agent_runtime`, `auth`, `brief`, `calculations`, `computational_export`, `configuration`, `contracts`, `database`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `result_bindings`, `routes`, `store`, `study_answer`, `ui`, `analysis_execution` |
 
 The `assistant` package also owns the durable study conversation projection and
 its provider delivery intents. It uses the store's injected connection, never
@@ -460,6 +460,14 @@ scientific-owner tables. Claude owns reasoning and context; the existing delegat
 runtime owns every tool effect. The API composes this owner with a persistent
 ASGI lifespan. Conversation transport routes are human-only. See
 `docs/agents/embedded-assistant.md` for configuration, recovery and budget semantics.
+
+A study conversation retains append-only provider generations, each pinned to its
+agent definition and reviewer policy. Only a fresh human turn can advance the
+generation, after the previous session is quiet and has no unresolved delivery.
+Accepted work is never replayed into a successor. Every generation retains the
+original billing owner and contributes to that user's cumulative allowance;
+changing agent guidance never resets spending. Migration 0013 creates this ledger
+before application startup.
 
 Rules: each shared capability, and each operation that needs a durable, observable outcome (section 3.1), has one owner with a narrow public interface; no cross-module private access (remaining framework or same-module cases are allowlisted); move pure functions to their owner instead of creating service objects; `store` remains the transaction owner (no repository-per-table, plugin framework or universal resolver); integration never imports persistence or orchestration for helpers. A boundary test pins directions, attested-source coverage and forbidden imports; checks are added only against a concrete regression. In the UI, presentation consumes typed record projections instead of branching on wire versions; the study shell handles navigation and composition while domain controllers own their workflow state behind one editor-guard interface (dirty, save, discard) and one session and access-loss seam.
 

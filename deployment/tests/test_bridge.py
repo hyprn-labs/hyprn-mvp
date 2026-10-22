@@ -261,6 +261,7 @@ def test_serving_drains_one_export_before_observation_and_skips_unready_science(
         def dispatch(self,*args,**kwargs):pytest.fail('Unready scientific dispatch reached')
     class Observation:
         def __init__(self,*args):pass
+        def ready(self):return False
         def refresh(self):
             events.append('observation');store.publish_execution_observation('unavailable','attestation_invalid',1000.)
         def stopped(self):events.append('stopped')
@@ -339,3 +340,74 @@ def test_batch_frame_refuses_invalid_inventory_before_io(items, monkeypatch, cap
     with pytest.raises(ValueError):
         dispatcher.NativeBridge().call('launch_batch', items)
     assert capsys.readouterr().out == ''
+
+
+def test_attestation_reply_is_not_blocked_by_primary_native_work(monkeypatch):
+    import queue
+    import threading
+    import dispatch_bridge
+
+    requests = queue.Queue()
+    replies = queue.Queue()
+    entered = threading.Event()
+    release = threading.Event()
+
+    class Output:
+        def readline(self, _limit):
+            return requests.get(timeout=5)
+
+        def close(self):
+            pass
+
+    class Input:
+        def write(self, raw):
+            replies.put(dispatcher.bridge_decode(raw))
+
+        def flush(self):
+            pass
+
+        def close(self):
+            pass
+
+    class Child:
+        stdout, stdin = Output(), Input()
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout):
+            return 0
+
+    class Owner:
+        def inspect(self, process):
+            entered.set()
+            assert release.wait(5)
+            return process
+
+        def require_attestation(self):
+            return True
+
+    monkeypatch.setattr(dispatch_bridge.subprocess, 'Popen', lambda *a, **kw: Child())
+    result = []
+    thread = threading.Thread(target=lambda: result.append(
+        dispatch_bridge.bridge_child(Owner(), ['synthetic-owner'])))
+    thread.start()
+    try:
+        requests.put(dispatcher.bridge_request('inspect', ['synthetic-process']))
+        assert entered.wait(5)
+        requests.put(dispatcher.bridge_request('require_attestation', []))
+        assert replies.get(timeout=2) == {'data': True, 'channel': 'observation'}
+        release.set()
+        assert replies.get(timeout=2) == {'data': 'synthetic-process'}
+    finally:
+        release.set()
+        requests.put(b'')
+        thread.join(timeout=5)
+    assert not thread.is_alive() and result == [0]
+
+
+def test_bridge_preserves_sanitized_timeout_kind(monkeypatch):
+    monkeypatch.setattr(sys, 'stdin', type('Input', (), {
+        'buffer': io.BytesIO(b'{"error":"native_timeout"}\n')})())
+    with pytest.raises(TimeoutError, match='Native operation exceeded its deadline'):
+        dispatcher.NativeBridge().call('inspect', 'synthetic-process')

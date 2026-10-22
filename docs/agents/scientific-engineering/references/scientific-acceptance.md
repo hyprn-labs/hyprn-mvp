@@ -158,3 +158,86 @@ Before saving the final answer, account for each requested deliverable and ident
 the exact basis, applicable domain, relevant checks, uncertainty and remaining gap.
 Read back saved records. An attractive summary, a successful API response and a met
 criterion do not independently establish scientific acceptability.
+
+## Write for the answer reader
+
+
+The reader must understand the answer without this conversation. Author the saved
+fields for distinct purposes, using connected sentences rather than compressed
+technical noun lists:
+
+- **Outcome:** choose the structured recommendation first. In `outcome.reason`, write
+  one connected evidence-and-reasoning paragraph: decisive result, conditions and the
+  limitation that determines the recommendation. If evidence is insufficient or
+  contested, explain what is missing or conflicting and why it prevents a choice.
+  Do not repeat UI labels, IDs or a bare status as the explanation. Do not invent a
+  winner when several alternatives pass or evidence is insufficient.
+- **Comparison:** cite relevant original runs and outputs with their criterion
+  evaluations. Explain the selection when many runs are available (for example,
+  a reference condition and the smallest margin). A sampling set or surrogate is
+  supporting numerical evidence, not an extra physical outcome in the table.
+- **Justifications:** explain why a cited record supports, challenges or limits a
+  claim. This can concern governing physics, numerical checks, physical validation,
+  evidence quality or surrogate accuracy; it is not just a list of records. State
+  which question the check answers and what it does not establish. Distinguish
+  agreement with the original calculation from agreement with the physical system.
+- **Interpretation:** connect the comparison to its engineering meaning and scope
+  in a few short paragraphs. Preserve material limitations here; do not repeat
+  the table or paste a calculation inventory.
+- **Uncertainties:** name what is unknown in a complete sentence. Give a justified
+  range when available, then explain the causal link to a result, margin or choice:
+  what could change, in which direction, and whether that effect was evaluated.
+  Distinguish an illustrative operating range from measured uncertainty. If no
+  bound is known, say what evidence is missing; do not invent a confidence interval.
+- **Next analysis:** name the next concrete calculation, measurement or source check,
+  the conditions to examine, and the observable to compare. In the resolves field,
+  explain what decision this would enable or what uncertainty it would reduce.
+  Explain unfamiliar terms on first use. Avoid prescriptions such as “validate
+  robustness” or “assess operating point” without saying what to calculate or measure.
+
+All study-specific names, descriptions, reasoning and scientific claims must be
+saved through public authoring operations in their owning records. Never change
+application code, rendering conditions or fixtures to make one study read better.
+The application's layout must work for unrelated studies using the same primitives.
+If a needed distinction cannot be expressed, report that gap rather than inventing
+hidden data or a special-purpose screen.
+
+Give each analysis a short description stating the question it investigates, the
+conditions varied or held fixed, and what its results can establish. This description
+is reused by the saved reader and settings; do not put counts, IDs, button instructions
+or compressed metadata summaries into it. Counts, methods, errors and validation
+outcomes must come from structured platform records, not claims in prose. Keep
+training, method selection and independent validation distinct. Do not rewrite
+immutable records merely to improve their presentation; use an explicit successor
+when the scientific description needs revision. Table ordering, alignment, creation
+actions and contextual help belong to shared platform primitives, not study-specific
+content or agent-generated HTML.
+
+Lead the conclusion with the engineering finding and its conditions. Keep the
+recommendation classification distinct: a useful screening result need not qualify
+a design. Let structured comparison cells carry values and requirements; use
+interpretation to explain causes and consequences rather than reciting the table.
+Give each basis entry a distinct evidential role. Do not repeat validation counts,
+methods or accuracy claims in prose when the platform already displays their saved
+records. Explain an uncertainty as what is unknown, how it could change the answer,
+and what evidence would resolve it; make the next analysis address that gap.
+
+Use plain paragraphs and simple bullet lines; these fields do not render Markdown
+tables or emphasis. Keep units, conditions and useful precision, and link the full
+records instead of repeating IDs. Read the fields together before saving: each
+sentence should add a finding, its reason, a meaningful limit or a next action.
+Improve wording without rerunning unchanged calculations or changing their pins.
+
+Before finishing, read back the saved records and check the public reader journey
+through the requested surface; a browser is not required for an API-only task.
+Follow the evidence links and check agreement of values, units, denominators,
+scenario descriptions, controlled comparisons and claim strength. Revise stale
+references and affected answers together. Keep old records identifiable rather than
+silently replacing their basis. Use concise explanatory prose, appropriate precision,
+and selected comparisons; link full result tables instead of copying every output.
+A reviewer should understand the answer without the conversation or internal IDs.
+
+Report the supported answer, its scope and uncertainty, the unresolved deliverables,
+and what was actually saved/run. Stop when the evidence meets the stated use and
+further work is unlikely to change the decision at the required resolution, or when
+a named gap prevents a stronger answer. Do not invent a numerical confidence score.

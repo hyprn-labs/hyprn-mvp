@@ -59,7 +59,7 @@ puts 'PROJECTION_RESULT='+JSON.generate({'proof'=>proof,'candidate'=>candidate,'
     catalog_section = patch.split('+++ b/config/modeling.units.json\n', 1)[1].split('\n--- ', 1)[0]
     catalog = json.loads('\n'.join(line[1:] for line in catalog_section.splitlines() if line.startswith('+')))
     assert all(unit in result['catalog']['supported_units'] for unit in catalog['supported_units'])
-    assert len(result['catalog']['supported_units']) == 49
+    assert len(result['catalog']['supported_units']) == 61
     assert catalog['engine'] == 'OpenMDAO' and catalog['version'] == '3.45.1'
     assert artifact['schema_version'] == result['legacy']['schema_version'] == '3'
     assert artifact['configuration_digest'] == projected['digest']
@@ -280,10 +280,10 @@ puts 'PROJECTION_RESULT='+JSON.generate({'model'=>m4,'older_model'=>m,'proof'=>p
     assert artifact['configuration_digest'] == result['configuration']['digest']
     assert result['refused'] == 'refused'
     capabilities = result['capabilities']
-    validate('Capabilities3', capabilities)
+    validate('Capabilities4', capabilities)
     assert any(
         c['id'] == 'criteria_free_configuration' and c['version'] == '1' and c['supported']
         for c in capabilities['capabilities']
     )
-    assert capabilities['execution_versions']['artifact_versions'] == ['3', '4']
-    assert capabilities['execution_versions']['bundle_versions'] == ['10', '11']
+    assert capabilities['execution_versions']['artifact_versions'] == ['3', '4', '5']
+    assert capabilities['execution_versions']['bundle_versions'] == ['10', '11', '12']

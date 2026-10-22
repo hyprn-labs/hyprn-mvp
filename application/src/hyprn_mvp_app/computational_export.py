@@ -4,6 +4,8 @@ No native imports, model clients, scientific submission, or current-model reads.
 A request-owned artifact is published only after closure and inventory checks.
 """
 import base64
+from copy import deepcopy
+from functools import cache
 import fcntl
 import hashlib
 import io
@@ -17,12 +19,141 @@ from uuid import UUID
 import zipfile
 from datetime import datetime
 
-from .contracts import DomainError, canonical, data_json, digest, uid, validate
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import ValidationError
+
+from .contracts import DomainError, canonical, data_json, definitions, digest, uid, validate
 from .execution_bundle import result_history_version, validate_assumption_closure
+from .explanations import DEFINITIONS as EXPLANATION_DEFINITIONS, Explanations
 from .history import History, complete_outcome
 from .locations import refuse_location
 from .modified_runs import ModifiedRuns
 from .result_bindings import ResultBindings
+from .units import monetary_expression, port_units
+
+
+def _object(properties):
+    return dict(type='object', properties=properties, required=list(properties),
+                additionalProperties=False)
+
+
+_ID = dict(type='string', format='uuid')
+_DIGEST = dict(type='string', pattern='^[0-9a-f]{64}$')
+DEFINITIONS = {
+    'ModelInterpretationClosure1': _object(dict(
+        schema_version=dict(const='1'),
+        classification=dict(const='associated_scientific_context'),
+        model_revision_id=_ID, model_digest=_DIGEST,
+        explanation={'$ref': '#/$defs/ModelExplanationVersion3'},
+        evidence_records=dict(type='array', maxItems=4096,
+                              items={'$ref': '#/$defs/EvidenceRecordRead'}),
+        digest=_DIGEST,
+    )),
+    'ModelInterpretationIndex1': _object(dict(
+        model_revision_id=_ID, model_digest=_DIGEST, explanation_version_id=_ID,
+        explanation_digest=_DIGEST, closure_digest=_DIGEST,
+        path=deepcopy(definitions()['PayloadFile']['properties']['path']),
+        size=deepcopy(definitions()['PayloadFile']['properties']['size']), sha256=_DIGEST,
+    )),
+}
+# New portable wrapper semantics; historical concrete manifests and native bytes stay frozen.
+DEFINITIONS['ComputationalRecordManifest3'] = deepcopy(
+    definitions()['ComputationalRecordManifest2'])
+DEFINITIONS['ComputationalRecordManifest3']['properties'].update(
+    schema_version=dict(const='3'),
+    interpretations=dict(type='array', minItems=1, maxItems=128,
+                         items={'$ref': '#/$defs/ModelInterpretationIndex1'}),
+)
+DEFINITIONS['ComputationalRecordManifest3']['required'].append('interpretations')
+DEFINITIONS['ComputationalRecordManifestRead3'] = dict(oneOf=[
+    {'$ref': '#/$defs/ComputationalRecordManifest' + str(version)} for version in (1, 2, 3)
+])
+
+
+@cache
+def _portable_validator(name):
+    return Draft202012Validator(
+        {'$defs': definitions() | EXPLANATION_DEFINITIONS | DEFINITIONS,
+         '$ref': '#/$defs/' + name}, format_checker=FormatChecker())
+
+
+def validate_portable(name, value):
+    _portable_validator(name).validate(value)
+    return value
+
+
+def monetary_quantities(model):
+    if model['schema_version'] != '5':
+        return {}
+    return {(instance, port): expression
+            for (instance, _, port), units in port_units(model).items()
+            if (expression := monetary_expression(units)) is not None}
+
+
+def interpretation_evidence_ids(explanation):
+    content = explanation['content']
+    links = list(content['evidence_links'])
+    for item in content['monetary_quantities']:
+        links.extend(item['evidence_links'])
+    return sorted({link['evidence_version_id'] for link in links})
+
+
+def validate_interpretation(closure, model, sid):
+    """Verify associated interpretation without treating it as native execution material."""
+    validate_portable('ModelInterpretationClosure1', closure)
+    explanation = closure['explanation']
+    if (closure['digest'] != digest({k: v for k, v in closure.items() if k != 'digest'})
+            or closure['model_revision_id'] != model['model_revision_id']
+            or closure['model_digest'] != model['digest']
+            or explanation['model_revision_id'] != model['model_revision_id']
+            or explanation['model_digest'] != model['digest']
+            or explanation['model_id'] != model['model_id']
+            or explanation['study_id'] != sid
+            or explanation['digest'] != digest(
+                {k: v for k, v in explanation.items() if k != 'digest'})):
+        raise ValueError('Model interpretation identity mismatch')
+    entries = explanation['content']['monetary_quantities']
+    actual = {(item['instance_id'], item['port_id']): item['catalogue_expression']
+              for item in entries}
+    if len(entries) != len(actual) or actual != monetary_quantities(model) or not actual:
+        raise ValueError('Model interpretation monetary catalogue mismatch')
+    evidence = closure['evidence_records']
+    evidence_ids = [item['evidence_version_id'] for item in evidence]
+    if evidence_ids != interpretation_evidence_ids(explanation):
+        raise ValueError('Model interpretation evidence closure mismatch')
+    for item in evidence:
+        if (item['study_id'] != sid
+                or item.get('resource_scope', {}).get('study_id', sid) != sid):
+            raise ValueError('Foreign model interpretation evidence')
+    context_material(canonical(closure))
+    return closure
+
+
+def interpretation_payloads(records):
+    closures = {}
+    for history, _, _ in records.values():
+        closure = history.get('model_interpretation')
+        if closure is None:
+            continue
+        model = history['model_snapshot']
+        validate_interpretation(closure, model, history['configuration']['study_id'])
+        identity = model['model_revision_id']
+        if identity in closures and closures[identity] != closure:
+            raise ValueError('Conflicting model interpretation')
+        closures[identity] = closure
+    indices, files = [], {}
+    for identity, closure in sorted(closures.items()):
+        path = 'hyprn-mvp/interpretations/' + identity + '.json'
+        raw = canonical(closure)
+        explanation = closure['explanation']
+        index = dict(model_revision_id=identity, model_digest=closure['model_digest'],
+                     explanation_version_id=explanation['explanation_version_id'],
+                     explanation_digest=explanation['digest'], closure_digest=closure['digest'],
+                     path=path, size=len(raw), sha256=sha(raw))
+        validate_portable('ModelInterpretationIndex1', index)
+        indices.append(index)
+        files[path] = raw
+    return indices, files
 
 LIMITS = dict(selected_runs=16, computational_runs=64, logical_paths=4096,
     expanded_bytes=33554432, native_archive_bytes=16777216, wrapper_bytes=33554432,
@@ -240,8 +371,8 @@ def inspect_record(raw, *, native_inventory=None):
     with z:
         if z.getinfo('manifest.json').file_size>LIMITS['metadata_bytes']:raise DomainError('limit_exceeded',413)
         manifest=data_json(z.read('manifest.json'));version=manifest.get('schema_version')
-        if version not in ('1','2'):raise ValueError('Unsupported portable record')
-        validate('ComputationalRecordManifest'+version,manifest)
+        if version not in ('1','2','3'):raise ValueError('Unsupported portable record')
+        validate_portable('ComputationalRecordManifest'+version,manifest)
         if manifest['manifest_digest']!=digest({k:v for k,v in manifest.items() if k!='manifest_digest'}):raise ValueError('Portable manifest digest')
         if manifest['limits']!=LIMITS or manifest['omissions']!=OMISSIONS or manifest['reexecution_prerequisites']!=PREREQUISITES:raise ValueError('Portable policy mismatch')
         inventory=manifest['inventory'];paths=[i['path'] for i in inventory]
@@ -274,6 +405,22 @@ def inspect_record(raw, *, native_inventory=None):
         if (item['size']!=len(value) or item['sha256']!=sha(value) or item['closure_digest']!=closure['digest']
                 or item['approach_digest']!=closure['root_approach_digest'] or identity!=closure['root_approach_version_id']):raise ValueError('Approach payload identity')
         closures[identity]=closure
+    interpretations = {}
+    for item in manifest.get('interpretations', []):
+        identity, path = item['model_revision_id'], item['path']
+        if identity in interpretations or path != 'hyprn-mvp/interpretations/' + identity + '.json':
+            raise ValueError('Duplicate/noncanonical model interpretation index')
+        raw = files[path]
+        closure = data_json(raw)
+        if (item['size'] != len(raw) or item['sha256'] != sha(raw)
+                or item['closure_digest'] != closure['digest']
+                or item['model_digest'] != closure['model_digest']
+                or identity != closure['model_revision_id']
+                or item['explanation_version_id']
+                != closure['explanation']['explanation_version_id']
+                or item['explanation_digest'] != closure['explanation']['digest']):
+            raise ValueError('Model interpretation payload identity')
+        interpretations[identity] = closure
     records={};roles={};sid=None
     for mapping in manifest['runs']:
         rid=mapping['run_id'];role=mapping['role'];context_only=role=='derivation_context_only'
@@ -291,13 +438,18 @@ def inspect_record(raw, *, native_inventory=None):
         validate_scientific_snapshot(frozen)
         if any(mapping[k]!=v for k,v in dict(configuration_revision_id=config['configuration_revision_id'],configuration_digest=config['digest'],model_revision_id=model['model_revision_id']).items()):raise ValueError('Run configuration mapping')
         history=dict(configuration=config,model_snapshot=model,approach_closure=closure)
+        interpretation = interpretations.get(model['model_revision_id'])
+        if version == '3' and bool(monetary_quantities(model)) != (interpretation is not None):
+            raise ValueError('Incomplete model interpretation scope')
+        if interpretation is not None:
+            history['model_interpretation'] = validate_interpretation(interpretation, model, sid)
         if context_only:
             runtime=data_json(files[loc+'runtime.json'])
             payload=dict(bundle=dict(manifest=dict(runtime=runtime)),history={})
         else:
             bundle_manifest=data_json(files[loc+'manifest.json'])
             bundle_files={p[len(loc):]:v for p,v in files.items() if p.startswith(loc) and p!=loc+'manifest.json'}
-            if pin and version=='2':bundle_files['approach/closure.json']=canonical(closure)
+            if pin and version in ('2','3'):bundle_files['approach/closure.json']=canonical(closure)
             request=dict(run_id=rid,bundle_digest=mapping['bundle_digest'])
             validate_retained_bundle(dict(manifest=bundle_manifest,files=bundle_files),request,frozen,raw_snapshot=True)
             result = data_json(files[prefix + 'results.json'])
@@ -335,7 +487,11 @@ def inspect_record(raw, *, native_inventory=None):
     if roles!={r:'selected' if r in selected else 'computational_ancestor' if r in computations else 'derivation_context_only' for r in records}:raise ValueError('Portable run role')
     indices,summary,_=approach_payloads(records)
     if version=='1' and any(h['configuration']['schema_version']=='4' for h,_,_ in records.values()):raise ValueError('Config4 requires portable2')
-    if version=='2' and (indices!=manifest['approaches'] or summary!=manifest['approach_summary']):raise ValueError('Portable approach summary/index mismatch')
+    if version in ('2', '3') and (indices != manifest['approaches']
+                                 or summary != manifest['approach_summary']):
+        raise ValueError('Portable approach summary/index mismatch')
+    if version == '3' and interpretation_payloads(records)[0] != manifest['interpretations']:
+        raise ValueError('Portable model interpretation scope mismatch')
     if native_inventory is not None:
         validate('NativeInventory',native_inventory)
         nodes={n['uuid']:n for n in native_inventory['nodes']}
@@ -388,12 +544,25 @@ class ComputationalRecords:
     def _collect(self,actor,sid,selected):
         """Walk numerical ancestry only; direct derivation parents are context."""
         records={};computations=set();visiting=set();retained_bytes=0
+        interpretation_cache = {}
         def retained(rid,*,context_only=False):
             nonlocal retained_bytes
             if rid not in records:
                 if len(records)>=128:raise DomainError('limit_exceeded',413)
                 records[rid]=ModifiedRuns(self.store).retained(actor,sid,rid)
-                history,payload,_=records[rid]
+                history,payload,witness=records[rid]
+                if monetary_quantities(history['model_snapshot']):
+                    history = dict(history)
+                    model = history['model_snapshot']
+                    mid = model['model_revision_id']
+                    if mid not in interpretation_cache:
+                        interpretation_cache[mid] = self._interpretation(actor, sid, model)
+                        retained_bytes += len(canonical(interpretation_cache[mid]))
+                    closure = interpretation_cache[mid]
+                    if closure['model_digest'] != model['digest']:
+                        raise DomainError('reference_conflict', 409)
+                    history['model_interpretation'] = closure
+                    records[rid] = (history, payload, witness)
                 if context_only:
                     config=history['configuration']
                     retained_bytes+=sum(len(canonical(value)) for value in (config,history['model_snapshot'],
@@ -446,7 +615,31 @@ class ComputationalRecords:
         validate('ArchiveRecordRequest1',preflight)
         stable=dict(roles=roles,records={r:dict(frozen=p['frozen'],bundle=p['bundle'],history=p['history'])
             for r,(_,p,_) in sorted(records.items())})
+        interpretations, _ = interpretation_payloads(records)
+        if interpretations:
+            stable['interpretations'] = interpretations
         return records,roles,preflight,stable
+
+    def _interpretation(self, actor, sid, model):
+        explanation = Explanations(self.store, None).of_model_version(
+            actor, sid, model['model_id'], model['model_revision_id'])['explanation']
+        if explanation is None or explanation['schema_version'] != '3':
+            raise DomainError('incomplete_record', 422)
+        evidence = []
+        with self.store.connection() as db:
+            for version in interpretation_evidence_ids(explanation):
+                record = self.store.evidence_record(db, actor, sid, version)
+                if record is None:
+                    raise DomainError('incomplete_record', 422)
+                evidence.append(record)
+        closure = dict(schema_version='1', classification='associated_scientific_context',
+                       model_revision_id=model['model_revision_id'], model_digest=model['digest'],
+                       explanation=explanation, evidence_records=evidence)
+        closure['digest'] = digest(closure)
+        try:
+            return validate_interpretation(closure, model, sid)
+        except (ValueError, ValidationError) as error:
+            raise DomainError('unsafe_export', 422) from error
 
     def _enqueue(self,actor,sid,kind,body,selected,preview_id=None,expected=None):
         category='computational_record_'+kind
@@ -542,6 +735,9 @@ class ComputationalRecords:
             files[path]=(role,raw)
         put('README.md','readme',README);put('computations.aiida','native_archive',native)
         for path,raw in approach_files.items():put(path,'approach',raw)
+        _, interpretation_files = interpretation_payloads(records)
+        for path, raw in interpretation_files.items():
+            put(path, 'context', raw)
         for rid,(history,payload,_) in sorted(records.items()):
             config=history['configuration'];role=roles[rid];context_only=role=='derivation_context_only'
             # Check the same retained closure at the packaging boundary, including
@@ -600,7 +796,9 @@ class ComputationalRecords:
                 for r in sorted(records) if roles[r]==kind]
         preview=dict(preview_digest=review_digest,selected=labels('selected'),computational_ancestors=labels('computational_ancestor'),
             derivation_context_only=labels('derivation_context_only'),context_count=len(records),
-            evidence_count=len({s['evidence_version_id'] for h,_,_ in records.values() for s in h['configuration']['evidence_snapshots']}),
+            evidence_count=len({s['evidence_version_id'] for h,_,_ in records.values()
+                for s in (h['configuration']['evidence_snapshots']
+                          + h.get('model_interpretation', {}).get('evidence_records', []))}),
             inventory_digest=digest(dict(native=response['inventory'],payload=stable_inventory)),limits=LIMITS,omissions=OMISSIONS,
             classification='inspection_only',reexecution_prerequisites=PREREQUISITES,blockers=[])
         modern=any(h['configuration']['schema_version']=='4' for h,_,_ in records.values())
@@ -613,7 +811,12 @@ class ComputationalRecords:
             native_inventory_digest=response['inventory_digest'],omissions=OMISSIONS,classification='inspection_only',
             reexecution_prerequisites=PREREQUISITES,limits=LIMITS)
         if modern:manifest.update(schema_version='2',approach_summary=summary,approaches=approaches)
-        manifest['manifest_digest']=digest(manifest);validate('ComputationalRecordManifest'+manifest['schema_version'],manifest)
+        interpretations, _ = interpretation_payloads(records)
+        if interpretations:
+            manifest.update(schema_version='3', approaches=approaches, approach_summary=summary,
+                            interpretations=interpretations)
+        manifest['manifest_digest']=digest(manifest)
+        validate_portable('ComputationalRecordManifest'+manifest['schema_version'],manifest)
         manifest_raw=canonical(manifest)
         if len(manifest_raw)>LIMITS['metadata_bytes']:raise DomainError('limit_exceeded',413)
         if expanded+len(manifest_raw)+sum(len(v) for p,(_,v) in files.items() if p!='computations.aiida')>LIMITS['expanded_bytes']:

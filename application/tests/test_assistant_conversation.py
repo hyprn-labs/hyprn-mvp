@@ -57,6 +57,10 @@ class Provider:
     async def remove_session_cap(self, session_id):
         self.caps.append(None)
 
+    async def thread_agent(self, session_id, thread_id):
+        return {'id': thread_id, 'session_id': session_id,
+                'agent': {'id': 'agent_source_review', 'version': 1}}
+
     async def ensure_tools(self, session_id, definitions):
         self.definitions = definitions
 
@@ -197,12 +201,12 @@ def test_chat_names_are_frozen_on_accept_and_replay_never_uses_the_viewer(system
         result = (await client.get(base)).json()['data']
         assert result['messages'][0]['author_display_name'] == 'Guérric <engineer>'
         assert result['messages'][-1]['author_display_name'] is None
-        # Pre-alias turns retain account names, never the current alias.
+        # Once projected, historical attribution cannot be rebuilt from mutable records.
         with store.connection(write=True) as db:
             db.execute('UPDATE assistant_turns SET author_display_name=NULL')
         records.ensure(store)
         result = (await client.get(base)).json()['data']
-        assert result['messages'][0]['author_display_name'] == 'owner'
+        assert result['messages'][0]['author_display_name'] == 'Guérric <engineer>'
         await client.aclose()
         await owner.close()
 
@@ -354,6 +358,7 @@ def test_stop_clears_an_uncertain_turn_without_repeating_its_message(system):
 def test_child_tool_uses_same_study_delegation_and_child_messages_stay_private(system):
     app, owner, provider, store, actor, sid = system
     provider.thread_id = 'thread_review'
+    configure_reviewers(owner)
 
     async def exercise():
         client = await client_for(app)
@@ -632,7 +637,7 @@ def test_tool_bookkeeping_does_not_block_http(system, monkeypatch, boundary):
         entered = asyncio.Event()
         loop = asyncio.get_running_loop()
         target, name = {
-            'authorization': (owner, '_authorize'),
+            'authorization': (owner, 'authorize_turn'),
             'action_intent': (journal, 'intend'),
             'action_completion': (journal, 'complete'),
         }[boundary]
@@ -737,4 +742,589 @@ def test_restart_preserves_blocked_diagnostic_until_explicit_resume(system):
         assert owner.read(actor, sid)['error'] == 'assistant_internal_error'
         assert not provider.sent
         await owner.close()
+    asyncio.run(exercise())
+
+
+def test_public_projection_retains_safe_identity_without_reading_raw_history(system, monkeypatch):
+    _, owner, provider, store, actor, sid = system
+    records.accept(store, actor, sid, uid(), 'Read safely.', owner.settings)
+    event = dict(id='event_private_provider_identity', type='agent.message',
+                 processed_at='2026-10-22T10:00:00Z', _received_at=1,
+                 content=[dict(type='text', text='Visible answer.'),
+                          dict(type='thinking', text='Private reasoning.')])
+    with store.connection(write=True) as db:
+        records.save_event(db, sid, event)
+        records.save_event(db, sid, event)
+    page = owner.read(actor, sid)
+    assert 'event_private_provider_identity' not in json.dumps(page)
+    assert len([m for m in page['messages'] if m['text'] == 'Visible answer.']) == 1
+    assert 'Private reasoning.' not in json.dumps(page)
+    def forbidden(*args):
+        raise AssertionError('Public polling read retained raw events')
+    monkeypatch.setattr(records, 'events', forbidden)
+    assert owner.read(actor, sid) == page
+
+
+def test_public_pages_resume_exactly_and_reject_cross_study_cursor(system):
+    _, owner, _, store, actor, sid = system
+    records.accept(store, actor, sid, uid(), 'Read.', owner.settings)
+    for index in range(205):
+        with store.connection(write=True) as db:
+            records.save_event(db, sid, dict(id='provider_'+str(index), type='agent.message',
+                _received_at=index, content=[dict(type='text', text=str(index))]))
+    page = owner.read(actor, sid)
+    assert len(page['messages']) == 200 and page['has_earlier_messages']
+    assert 'next_cursor' in page
+    assert owner.read(actor, sid, after=page['next_cursor'])['messages'] == []
+    earlier = owner.read(actor, sid, before=page['earlier_cursor'])
+    assert len(earlier['messages']) == 6 and not earlier['has_earlier_messages']
+    other = store.create_study(actor, uid(), 'Other study')['study_id']
+    with pytest.raises(DomainError):
+        owner.read(actor, other, after=page['next_cursor'])
+    with pytest.raises(DomainError):
+        owner.read(uid(), sid, after=page['next_cursor'])
+
+
+def test_provider_poll_uses_persisted_cursor_and_deduplicates_overlapping_page(system, monkeypatch):
+    _, owner, provider, store, actor, sid = system
+    records.accept(store, actor, sid, uid(), 'Read.', owner.settings)
+    _, turn = owner._load(sid)
+    owner._open_runtime(turn)
+    provider.event('agent.message', content=[dict(type='text', text='Answer.')])
+    cursors = []
+    original = provider.events
+    async def recorded(session, since=None):
+        cursors.append(since)
+        async for event in original(session, since):
+            yield event
+    provider.events = recorded
+    def forbidden(*args):
+        raise AssertionError('Provider polling loaded full retained history')
+    monkeypatch.setattr(records, 'events', forbidden)
+    async def exercise():
+        assert len(await owner._history(sid, 'session_test', turn)) == 1
+        assert await owner._history(sid, 'session_test', turn) == []
+        assert cursors == [None, '2026-10-20T10:00:00Z']
+        assert len(owner.read(actor, sid)['messages']) == 2
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_long_raw_history_never_enters_public_poll_result(system, monkeypatch):
+    from contextlib import contextmanager
+    _, owner, _, store, actor, sid = system
+    records.accept(store, actor, sid, uid(), 'Read.', owner.settings)
+    with store.connection(write=True) as db:
+        for index in range(300):
+            records.save_event(db, sid, dict(id='reasoning_'+str(index),
+                type='agent.message', session_thread_id='private_reviewer',
+                _received_at=index, content=[dict(type='text', text='x'*32768)]))
+        retained_bytes = db.execute('SELECT sum(length(payload)) FROM assistant_events').fetchone()[0]
+    decoded = []
+    queries = []
+    original = json.loads
+    connection = store.connection
+    @contextmanager
+    def measured_connection(*args, **kwargs):
+        with connection(*args, **kwargs) as db:
+            db.set_trace_callback(queries.append)
+            yield db
+    def measured(value, *args, **kwargs):
+        decoded.append(len(value))
+        return original(value, *args, **kwargs)
+    monkeypatch.setattr(records.json, 'loads', measured)
+    monkeypatch.setattr(store, 'connection', measured_connection)
+    page = records.public(store, actor, sid, available=True)
+    assert retained_bytes > 9_800_000
+    assert sum(decoded) == 0, 'Public read decoded retained private conversation payloads'
+    assert len(queries) <= 12
+    assert not any('assistant_events' in query for query in queries)
+    assert len(page['messages']) == 1
+
+
+def waiting_analysis(system):
+    _, owner, provider, store, actor, sid = system
+    command, version = uid(), uid()
+    records.accept(store, actor, sid, command, 'Monitor the accepted analysis.', owner.settings)
+    _, turn = owner._load(sid)
+    owner._open_runtime(turn)
+    start = provider.event('user.message', content=[dict(type='text', text='Accepted request.')])
+    event = provider.event('agent.custom_tool_use', name='get_analysis_execution',
+                           input=dict(calculation_version_id=version))
+    provider.event('session.status_idle', stop_reason=dict(type='requires_action'))
+    result = dict(calculation_version_id=version, state='calculating', completed_count=0,
+                  total_count=126, estimate_id=None, reason=None)
+    with store.connection(write=True) as db:
+        records.update(db, sid, provider_id='session_test', provision='accepted', state='waiting')
+        db.execute("UPDATE assistant_turns SET delivery='accepted',provider_event=? WHERE turn_id=?",
+                   (start['id'], command))
+        for value in provider.history:
+            records.save_event(db, sid, dict(value, _received_at=1))
+        db.execute('INSERT INTO assistant_tool_results VALUES(?,?,?,?,?,?)',
+            (sid, event['id'], command, json.dumps(dict(ok=True, content=result,
+                action_id=None, state='complete')), 0, 'waiting'))
+    return turn, result
+
+
+def test_durable_wait_survives_restart_and_expiry_without_inference_polling(system):
+    _, owner, provider, store, actor, sid = system
+    turn, result = waiting_analysis(system)
+    reads = []
+    complete = False
+    def read(human, study, version):
+        assert (human, study, version) == (actor, sid, result['calculation_version_id'])
+        reads.append(version)
+        return dict(result, state='complete' if complete else 'calculating')
+    owner._analysis_reader = read
+    async def exercise():
+        task = asyncio.create_task(owner._pump(sid))
+        for _ in range(100):
+            if reads:
+                break
+            await asyncio.sleep(.01)
+        assert reads and not provider.results and not provider.sent
+        assert owner.read(actor, sid)['state'] == 'waiting'
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        with store.connection(write=True) as db:
+            db.execute('UPDATE agent_delegations SET expires_at=1 WHERE study_id=?', (sid,))
+        nonlocal complete
+        complete = True
+        await owner.start()
+        await drained(owner)
+        assert owner.read(actor, sid)['state'] == 'idle'
+        assert not provider.sent and len(provider.results) == 1
+        assert provider.results[0]['content']['state'] == 'complete'
+        with store.connection() as db:
+            assert db.execute('SELECT count(*) FROM assistant_tool_results').fetchone()[0] == 1
+        await owner.close()
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('revocation', ['delegation', 'membership', 'stop'])
+def test_durable_wait_never_renews_revoked_or_stopped_authority(system, revocation):
+    _, owner, provider, store, actor, sid = system
+    _, result = waiting_analysis(system)
+    reads = []
+    def read(*args):
+        reads.append(args)
+        return dict(result, state='complete')
+    owner._analysis_reader = read
+    with store.connection(write=True) as db:
+        if revocation == 'delegation':
+            db.execute("UPDATE agent_delegations SET revoked_at=1,revoked_reason='explicit' "
+                       'WHERE study_id=?', (sid,))
+        elif revocation == 'membership':
+            db.execute('DELETE FROM memberships WHERE study_id=?', (sid,))
+        else:
+            db.execute('UPDATE assistant_turns SET stopped=1 WHERE study_id=?', (sid,))
+    async def exercise():
+        await owner.start()
+        await drained(owner)
+        assert not reads and not provider.sent and not provider.results
+        with store.connection() as db:
+            assert records.row(db, sid)['state'] == ('idle' if revocation == 'stop' else 'blocked')
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def configure_reviewers(owner):
+    from hyprn_mvp_app.assistant.reviewers import LIMITS
+    owner.configure_reviewers({
+        'source-reviewer': {'id': 'agent_source_review', 'version': 1},
+        'model-reviewer': {'id': 'agent_model_review', 'version': 1},
+        'answer-reviewer': {'id': 'agent_answer_review', 'version': 1},
+    }, LIMITS)
+
+
+@pytest.mark.parametrize('admitted', [False, True])
+def test_reviewer_cannot_invoke_mutations_even_with_a_pinned_identity(system, admitted):
+    app, owner, provider, store, actor, sid = system
+    provider.thread_id = 'thread_review'
+    provider.tool = ('update_study_brief', {})
+    if admitted:
+        configure_reviewers(owner)
+
+    async def exercise():
+        client = await client_for(app)
+        response = await client.post('/api/1/studies/' + sid + '/assistant/messages',
+            json={'command_id': uid(), 'text': 'Review the brief.'})
+        assert response.status_code == 202
+        await drained(owner)
+        assert not provider.results
+        with store.connection() as db:
+            assert not db.execute('SELECT 1 FROM study_brief_drafts WHERE study_id=?', (sid,)).fetchone()
+            assert records.row(db, sid)['error'] == 'reviewer_write_forbidden'
+        await client.aclose()
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_unpinned_reviewer_cannot_read_study_data(system):
+    app, owner, provider, store, actor, sid = system
+    provider.thread_id = 'thread_unknown'
+    async def exercise():
+        client = await client_for(app)
+        await client.post('/api/1/studies/' + sid + '/assistant/messages',
+            json={'command_id': uid(), 'text': 'Review.'})
+        await drained(owner)
+        assert not provider.results
+        with store.connection() as db:
+            assert records.row(db, sid)['error'] == 'reviewer_identity_unapproved'
+        await client.aclose()
+        await owner.close()
+    asyncio.run(exercise())
+
+
+
+def test_reviewer_limits_survive_owner_recreation_and_duplicate_delivery(system):
+    from hyprn_mvp_app.assistant.reviewers import admit
+    app, owner, provider, store, actor, sid = system
+    configure_reviewers(owner)
+    records.accept(store, actor, sid, uid(), 'Review the study.', owner.settings)
+    _, turn = owner._load(sid)
+    owner._open_runtime(turn)
+    async def exercise():
+        await owner._session(owner._load(sid)[0], owner.settings, turn)
+        for number in range(24):
+            event = {'id': 'review_event_' + str(number), 'session_thread_id': 'thread_review',
+                     'name': 'get_study_overview', 'input': {}}
+            assert await admit(owner, sid, turn, 'session_test', event)
+            assert await admit(owner, sid, turn, 'session_test', event)
+        # No in-memory quota state: a fresh conversation owner reads the same admission ledger.
+        replacement = type(owner)(store, owner.runtime, provider, owner.settings)
+        configure_reviewers(replacement)
+        with pytest.raises(ProviderError, match='reviewer_call_limit'):
+            await admit(replacement, sid, turn, 'session_test', {**event, 'id': 'over_limit'})
+        for thread in ('thread_two', 'thread_three'):
+            await admit(replacement, sid, turn, 'session_test',
+                        {**event, 'id': thread, 'session_thread_id': thread})
+        with pytest.raises(ProviderError, match='reviewer_call_limit'):
+            await admit(replacement, sid, turn, 'session_test',
+                        {**event, 'id': 'four', 'session_thread_id': 'thread_four'})
+        owner.runtime.sessions.end(turn['runtime_session'])
+        await owner.close()
+    asyncio.run(exercise())
+
+
+
+@pytest.mark.parametrize('bindings', [None, [], {'source-reviewer': None}])
+def test_reviewer_configuration_rejects_malformed_identity_records(bindings):
+    from hyprn_mvp_app.assistant.reviewers import configured, LIMITS
+    with pytest.raises(ProviderError, match='reviewer_configuration_invalid'):
+        configured(bindings, LIMITS)
+
+
+@pytest.mark.parametrize('mode,expected', [
+    ('fetched', 'retrieved_excerpt'), ('document', 'retrieved_excerpt'),
+    ('search', 'author_supplied'), ('failed', 'author_supplied'),
+    ('unknown_status', 'author_supplied'), ('different_url', 'author_supplied'),
+    ('different_quote', 'author_supplied'), ('denied', 'author_supplied'),
+    ('url_only', 'author_supplied'), ('later_fetch', 'author_supplied'),
+    ('note', 'author_supplied'), ('provider_custom_result', 'author_supplied'),
+])
+def test_evidence_receipt_requires_prior_paired_fetch_and_exact_cited_excerpt(system, mode, expected):
+    from hyprn_mvp_app.assistant import research
+
+    app, owner, provider, store, actor, sid = system
+    url = 'https://example.org/reference'
+    excerpt = 'This is a synthetic quotation for a provenance test.'
+    provider.tool = ('add_evidence', dict(title='Synthetic reference',
+        source_excerpt=dict(excerpt=excerpt, source_reference=url,
+            location='Section 1', explanation='Authored interpretation, not verified truth.'),
+        citations=[url], scope={'kind': 'study'}))
+    if mode == 'note':
+        provider.tool[1].pop('source_excerpt')
+        provider.tool[1]['note'] = 'A human-authored assumption is usable without a fetch.'
+    original_send = provider.send
+
+    def fetch_events():
+        call = provider.event('agent.tool_use', name='web_search' if mode == 'search' else 'web_fetch',
+            input={'url': url + '/other' if mode == 'different_url' else url},
+            evaluated_permission='deny' if mode == 'denied' else 'allow')
+        text = 'Different text.' if mode == 'different_quote' else 'Introduction. ' + excerpt
+        content = [{'type': 'text', 'text': text}]
+        if mode == 'document':
+            content = [{'type': 'document', 'source': {
+                'type': 'text', 'media_type': 'text/plain', 'data': text}}]
+        if mode == 'url_only':
+            content = [{'type': 'document', 'source': {'type': 'url', 'url': url}}]
+        if mode == 'failed':
+            content = [{'type': 'text', 'text': 'url_not_allowed: ' + excerpt}]
+        provider.event('user.custom_tool_result' if mode == 'provider_custom_result'
+                       else 'agent.tool_result', tool_use_id=call['id'],
+                       content=content, is_error=None if mode == 'unknown_status'
+                       else mode == 'failed')
+
+    async def with_fetch(session, event):
+        if mode != 'later_fetch':
+            fetch_events()
+        result = await original_send(session, event)
+        if mode == 'later_fetch':
+            fetch_events()
+        return result
+
+    provider.send = with_fetch
+
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid
+        assert (await client.post(base + '/assistant/messages', json={
+            'command_id': uid(), 'text': 'Save the reference.'})).status_code == 202
+        await drained(owner)
+        assert provider.results[0]['ok'], provider.results
+        version = provider.results[0]['content']['id']
+        response = await client.get(base + '/evidence/' + version + '/source-inspection')
+        assert response.status_code == 200, response.text
+        result = response.json()['data']
+        assert result == research.read(store, actor, sid, version)
+        assert result['basis'] == expected
+        saved = store.evidence_version(actor, sid, version)
+        assert saved['source_refs'] == [url]
+        if expected == 'retrieved_excerpt':
+            assert result['retrieval']['source_url'] == url
+            assert len(result['retrieval']['excerpt_sha256']) == 64
+            assert result['retrieval']['observed_at'].endswith('+00:00')
+            assert 'Authored interpretation' in saved['content']
+            # The public projection leaks neither source bytes nor provider IDs.
+            assert excerpt not in json.dumps(result) and 'event_' not in json.dumps(result)
+        else:
+            assert result['retrieval'] is None
+        if mode == 'fetched':
+            provider.tool = ('revise_evidence', dict(evidence_id=saved['evidence_id'],
+                expected_revision=version, source_excerpt=dict(
+                    excerpt='A different author assertion not returned by the fetch.',
+                    source_reference=url, location='Section 2',
+                    explanation='This revision must not inherit its predecessor receipt.')))
+            assert (await client.post(base + '/assistant/messages', json={
+                'command_id': uid(), 'text': 'Revise the reference.'})).status_code == 202
+            await drained(owner)
+            assert provider.results[-1]['ok'], provider.results[-1]
+            revised = provider.results[-1]['content']['id']
+            assert revised != version
+            assert research.read(store, actor, sid, revised)['basis'] == 'author_supplied'
+            assert research.read(store, actor, sid, version) == result
+        other = store.create_study(actor, uid(), 'Other study')['study_id']
+        with pytest.raises(DomainError) as refused:
+            research.read(store, actor, other, version)
+        assert refused.value.status == 404
+        response = await client.get('/api/1/studies/' + other + '/evidence/'
+                                    + version + '/source-inspection')
+        assert response.status_code == 404
+        outsider = uid()
+        with store.connection(write=True) as db:
+            db.execute('INSERT INTO users(actor_id,username,password_hash) VALUES(?,?,?)',
+                       (outsider, 'outsider', 'synthetic-unused-hash'))
+        with pytest.raises(DomainError):
+            research.read(store, outsider, sid, version)
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+def test_provider_cannot_supply_internal_provenance_or_reviewer_receipts(system):
+    app, owner, provider, store, actor, sid = system
+
+    async def exercise():
+        client = await client_for(app)
+        provider.event('hyprn.evidence_source', evidence_version_id=uid(), retrieval={})
+        response = await client.post('/api/1/studies/' + sid + '/assistant/messages', json={
+            'command_id': uid(), 'text': 'Read the study.'})
+        assert response.status_code == 202
+        await drained(owner)
+        with store.connection() as db:
+            assert records.event(db, sid, 'event_0') is None
+        assert not provider.results
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+class UpgradingProvider(Provider):
+    def __init__(self):
+        super().__init__()
+        self.bindings = []
+        self.correlations = {}
+        self.event_sessions = {}
+        self.current = None
+        self.costs = {}
+        self.states = {}
+        self.unknown_create = False
+        self.result_gate = None
+        self.result_started = None
+
+    async def create_session(self, settings, correlation):
+        self.created.append(correlation)
+        self.bindings.append((settings.agent_id, settings.agent_version, settings.environment_id))
+        session = 'session_generation_' + str(len(self.created))
+        self.correlations[correlation] = session
+        if self.unknown_create:
+            self.unknown_create = False
+            raise ProviderError('provider_unavailable', uncertain=True)
+        return {'id': session}
+
+    async def find_session(self, correlation):
+        session = self.correlations.get(correlation)
+        return {'id': session} if session else None
+
+    async def session_account(self, session):
+        return dict(status=self.states.get(session, 'idle'), spent_cents=self.costs.get(session, 0))
+
+    def event(self, kind, **fields):
+        result = super().event(kind, **fields)
+        self.event_sessions[result['id']] = self.current
+        return result
+
+    async def send(self, session, event):
+        self.current = session
+        return await super().send(session, event)
+
+    async def events(self, session, since=None):
+        for event in list(self.history):
+            if self.event_sessions[event['id']] == session:
+                yield dict(event)
+
+    async def tool_result(self, session, event_id, content, is_error=False):
+        self.current = session
+        if self.result_gate:
+            self.result_started.set()
+            await self.result_gate.wait()
+        return await super().tool_result(session, event_id, content, is_error)
+
+
+def test_definition_upgrade_retains_conversation_history_and_all_user_spending(system):
+    from hyprn_mvp_app.assistant import provider_sessions
+    app, owner, _, store, actor, sid = system
+    provider = owner.provider = UpgradingProvider()
+
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid + '/assistant'
+        assert (await client.post(base + '/messages', json=dict(
+            command_id=uid(), text='Read my study first.'))).status_code == 202
+        await drained(owner)
+        before = (await client.get(base)).json()['data']
+        conversation_id = owner._load(sid)[0]['conversation_id']
+        provider.costs['session_generation_1'] = 1200
+        owner.settings = replace(owner.settings, agent_version=2)
+        assert (await client.post(base + '/messages', json=dict(
+            command_id=uid(), text='Continue with the saved work.'))).status_code == 202
+        await drained(owner)
+        after = (await client.get(base)).json()['data']
+        assert owner._load(sid)[0]['conversation_id'] == conversation_id
+        assert after['messages'][:len(before['messages'])] == before['messages']
+        assert provider.bindings == [('agent_test', 1, 'env_test'), ('agent_test', 2, 'env_test')]
+        assert len(set(provider.created)) == 2 and len(provider.sent) == 2
+        assert 'untrusted historical context' in provider.sent[1]['content'][0]['text']
+        assert 'Read my study first.' in provider.sent[1]['content'][0]['text']
+        assert sid in provider.sent[1]['content'][0]['text']
+        with store.connection() as db:
+            generations = db.execute('SELECT * FROM assistant_provider_sessions '
+                                    'WHERE study_id=? ORDER BY generation', (sid,)).fetchall()
+        assert [row['provider_id'] for row in generations] == [
+            'session_generation_1', 'session_generation_2']
+        assert all(row['billing_actor'] == actor for row in generations)
+        provider.costs['session_generation_2'] = 800
+        spending = (await client.get('/api/1/assistant/budget')).json()['data']
+        assert spending['spent_cents'] == 2000 and spending['remaining_cents'] == 0
+        assert (await client.post(base + '/messages', json=dict(
+            command_id=uid(), text='This must not incur another model request.'))).status_code == 202
+        await drained(owner)
+        assert len(provider.sent) == 2 and len(provider.created) == 2
+        assert (await client.get(base)).json()['data']['state'] == 'blocked'
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+def test_new_definition_waits_for_accepted_turn_without_replaying_its_tool(system):
+    from hyprn_mvp_app.assistant import provider_sessions
+    app, owner, _, store, actor, sid = system
+    provider = owner.provider = UpgradingProvider()
+    owner._reviewer_pins = {('agent_old_reviewer', 1): 'source-reviewer'}
+
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid + '/assistant'
+        provider.result_gate, provider.result_started = asyncio.Event(), asyncio.Event()
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='Read once.'))
+        await asyncio.wait_for(provider.result_started.wait(), 3)
+        owner.settings = replace(owner.settings, agent_version=2)
+        owner._reviewer_pins = {('agent_new_reviewer', 2): 'source-reviewer'}
+        current, turn = owner._load(sid)
+        assert turn['delivery'] == 'accepted'
+        assert await owner._session(current, owner.settings, turn) == 'session_generation_1'
+        assert owner.reviewer_policy(sid) == {('agent_old_reviewer', 1): 'source-reviewer'}
+        provider.result_gate.set()
+        await drained(owner)
+        assert len(provider.results) == len(provider.sent) == 1
+        provider.result_gate = None
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='Continue once.'))
+        await drained(owner)
+        assert len(provider.results) == len(provider.sent) == len(provider.created) == 2
+        assert owner.reviewer_policy(sid) == {('agent_new_reviewer', 2): 'source-reviewer'}
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+def test_ambiguous_successor_creation_reconciles_the_same_correlation_without_recreating(system):
+    app, owner, _, store, actor, sid = system
+    provider = owner.provider = UpgradingProvider()
+
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid + '/assistant'
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='First turn.'))
+        await drained(owner)
+        owner.settings = replace(owner.settings, agent_version=2)
+        provider.unknown_create = True
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='Next turn.'))
+        await drained(owner)
+        assert len(provider.created) == 2 and len(provider.sent) == 1
+        assert (await client.get(base)).json()['data']['state'] == 'blocked'
+        assert (await client.post(base + '/resume', json={})).status_code == 202
+        await drained(owner)
+        assert len(provider.created) == 2 and len(provider.sent) == 2
+        assert len(provider.results) == 2
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('obstruction', ['running', 'unresolved_tool', 'unknown_spending'])
+def test_successor_refuses_busy_unknown_or_unsettled_previous_session(system, obstruction):
+    app, owner, _, store, actor, sid = system
+    provider = owner.provider = UpgradingProvider()
+
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid + '/assistant'
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='Initial turn.'))
+        await drained(owner)
+        owner.settings = replace(owner.settings, agent_version=2)
+        if obstruction == 'running':
+            provider.states['session_generation_1'] = 'running'
+        elif obstruction == 'unresolved_tool':
+            with store.connection(write=True) as db:
+                db.execute("UPDATE assistant_tool_results SET delivery='uncertain' WHERE study_id=?",
+                           (sid,))
+        else:
+            async def unknown(session):
+                raise ProviderError('user_allowance_unknown')
+            provider.session_account = unknown
+        await client.post(base + '/messages', json=dict(command_id=uid(), text='Upgrade now.'))
+        await drained(owner)
+        assert len(provider.created) == len(provider.sent) == 1
+        with store.connection() as db:
+            assert db.execute('SELECT count(*) FROM assistant_provider_sessions '
+                              'WHERE study_id=?', (sid,)).fetchone()[0] == 1
+        await client.aclose()
+        await owner.close()
+
     asyncio.run(exercise())

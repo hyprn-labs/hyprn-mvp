@@ -284,17 +284,25 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     seed_route=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']
     assert set(seed_route)=={'get'}
     assert seed_route['get'].get('security',spec['security'])==[{'session':[]}]
-    # The reviewed seed read is the closed ModifiedRunSeedRead6 union:
-    # the unchanged historical ModifiedRunSeed1-4 union plus the new ModifiedRunSeed6.
+    # The compatibility reader includes monetary history without rewriting its predecessors.
     assert seed_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={
         '$ref':'#/components/schemas/ModifiedRunSeedRead6'}
-    assert spec['components']['schemas']['ModifiedRunSeedRead6'] == {
-        'oneOf': [
-            {'$ref': '#/components/schemas/PreviousModifiedRunSeedRead6'},
-            {'$ref': '#/components/schemas/ModifiedRunSeed7'},
-            {'$ref': '#/components/schemas/ModifiedRunSeed8'},
-        ]
-    }
+    schemas = spec['components']['schemas']
+    def variants(name, ancestors=()):
+        assert name not in ancestors, ('recursive reader', name)
+        branches = schemas[name].get('oneOf')
+        if branches is None:
+            return [name]
+        return [leaf for branch in branches
+                for leaf in variants(branch['$ref'].rsplit('/', 1)[-1], (*ancestors, name))]
+    expected = {f'ModifiedRunSeed{version}' for version in (1, 2, 3, 4, 6, 7, 8, 9)}
+    for name in ('ModifiedRunSeedRead6', 'ModifiedRunSeedRead8', 'ModifiedRunSeedRead9'):
+        leaves = variants(name)
+        assert {leaf.split('Model', 1)[0] for leaf in leaves} == expected
+        assert len(leaves) == len(set(leaves)), ('ambiguous reader', name)
+    for name in ('RunHistoryRead9', 'FrozenConfigurationRead10'):
+        leaves = variants(name)
+        assert len(leaves) == len(set(leaves)), ('ambiguous reader', name)
     assert spec['components']['schemas']['ModifiedRunSeed']=={'oneOf':[
         {'$ref':'#/components/schemas/ModifiedRunSeed1'}, {'$ref':'#/components/schemas/ModifiedRunSeed2'},
         {'$ref':'#/components/schemas/ModifiedRunSeed3'}, {'$ref':'#/components/schemas/ModifiedRunSeed4'}]}

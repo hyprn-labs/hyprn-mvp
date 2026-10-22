@@ -22,7 +22,7 @@ import {
   type EvidenceResourceRef1,
   type EvidenceCreate3,
   type EvidenceRevise3,
-  type ModelRevisionRead4,
+  type ModelRevisionRead5,
   type ConfigurationRevisionRead6,
 } from './api';
 import { EvidenceRecordBody, evidenceAccessLost, evidenceTitle } from './EvidenceView';
@@ -490,7 +490,7 @@ export function EvidencePanel({
 }: {
   api: HyprnMvpApi;
   studyId: string;
-  snapshot?: ModelRevisionRead4 | null;
+  snapshot?: ModelRevisionRead5 | null;
   configuration?: ConfigurationRevisionRead6 | null;
   runId?: string;
   records?: EvidenceRecord[];

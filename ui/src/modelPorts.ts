@@ -1,6 +1,6 @@
-import type { ModelDraftRead4, ModelRevisionRead4 } from './contract';
+import type { ModelDraftRead5, ModelRevisionRead5 } from './contract';
 
-export function modelPorts(model: ModelDraftRead4 | ModelRevisionRead4) {
+export function modelPorts(model: ModelDraftRead5 | ModelRevisionRead5) {
   return model.instances.flatMap((instance) =>
     (
       model.definitions.find((d) => d.definition_version_id === instance.definition_version_id)

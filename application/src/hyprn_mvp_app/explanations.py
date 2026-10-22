@@ -177,6 +177,36 @@ for _name in ('ModelExplanationState', 'ModelVersionExplanation',
               'ModelExplanationVersionPage', 'ModelExplanationVersionSaved'):
     DEFINITIONS[_name + 'Read2'] = _current_refs(DEFINITIONS[_name + '1'])
 
+DEFINITIONS['MonetaryQuantityBasis1'] = _object(dict(
+    instance_id={**_ID, 'maxLength': 36},
+    port_id={**_ID, 'maxLength': 36},
+    catalogue_expression=deepcopy(definitions()['MonetaryUnit1']['properties']['expression']),
+    price_year=dict(type='integer', minimum=1800, maximum=9999),
+    economic_basis=_STATEMENT,
+    evidence_links=dict(type='array', minItems=1, maxItems=64,
+                        items={'$ref': '#/$defs/ApproachEvidenceLink1'}),
+))
+DEFINITIONS['ModelExplanationContent3'] = deepcopy(DEFINITIONS['ModelExplanationContent2'])
+DEFINITIONS['ModelExplanationContent3']['properties'].update(
+    schema_version=dict(const='3'),
+    monetary_quantities=dict(type='array', maxItems=1000,
+                             items={'$ref': '#/$defs/MonetaryQuantityBasis1'}),
+)
+DEFINITIONS['ModelExplanationContent3']['required'].append('monetary_quantities')
+for _name in ('ModelExplanationDraft', 'ModelExplanationVersion', 'ModelExplanationDraftSave'):
+    _schema = deepcopy(DEFINITIONS[_name + '2'])
+    _schema['properties']['content'] = {'$ref': '#/$defs/ModelExplanationContent3'}
+    if 'schema_version' in _schema['properties']:
+        _schema['properties']['schema_version'] = dict(const='3')
+    DEFINITIONS[_name + '3'] = _schema
+    DEFINITIONS[_name + 'Read3'] = dict(oneOf=[
+        {'$ref': '#/$defs/' + _name + str(version)} for version in (1, 2, 3)
+    ])
+for _name in ('ModelExplanationState', 'ModelVersionExplanation',
+              'ModelExplanationVersionPage', 'ModelExplanationVersionSaved'):
+    DEFINITIONS[_name + 'Read3'] = json.loads(
+        json.dumps(DEFINITIONS[_name + 'Read2']).replace('Read2', 'Read3'))
+
 _VALIDATORS = {}
 
 
@@ -249,7 +279,7 @@ def read_stored(row, sid, mid, name, key):
         raise DomainError('resource_not_found', 404)
     try:
         value = json.loads(row['payload'])
-        validate_explanation(name.removesuffix('1') + 'Read2', value, retained=True)
+        validate_explanation(name.removesuffix('1') + 'Read3', value, retained=True)
         if value['study_id'] != sid or value['model_id'] != mid or value[key] != row[key]:
             raise ValueError('Model explanation identity mismatch')
         if name == 'ModelExplanationVersion1' and (
@@ -261,6 +291,39 @@ def read_stored(row, sid, mid, name, key):
         return value
     except (ValueError, KeyError, TypeError) as exc:
         raise DomainError('corrupt_retained_record', 409) from exc
+
+
+def quantity_price_basis(db, sid, model, target):
+    """Read the exact saved model quantity's immutable price basis; never use its draft.
+
+    The caller owns study authorization and supplies an integrity-checked model snapshot.
+    Absence of a required monetary basis is actionable, while a corrupt saved pin is refused.
+    """
+    from .units import monetary_expression, port_units
+    instance = next((i for i in model['instances'] if i['instance_id'] == target['instance_id']), None)
+    key = (target['instance_id'], instance['definition_version_id'], target['port_id']) if instance else None
+    units = port_units(model)
+    if key not in units:
+        raise DomainError('invalid_request', 422, fields=[issue(['monetary_quantities'],
+            'The quantity must belong to the exact model version.')])
+    expression = monetary_expression(units[key])
+    if expression is None:
+        return None
+    row = db.execute('SELECT * FROM model_explanation_versions WHERE study_id=? AND model_id=? '
+                     'AND model_revision_id=?',
+                     (sid, model['model_id'], model['model_revision_id'])).fetchone()
+    if row is None:
+        raise DomainError('invalid_request', 422, fields=[issue(['monetary_quantities'],
+            'Save the monetary price basis for this exact model version before analysis.')])
+    version = read_stored(row, sid, model['model_id'], 'ModelExplanationVersion1', 'explanation_version_id')
+    if version['model_digest'] != model['digest']:
+        raise DomainError('corrupt_retained_record', 409)
+    entries = [item for item in version['content'].get('monetary_quantities', [])
+               if (item['instance_id'], item['port_id']) == (target['instance_id'], target['port_id'])]
+    if len(entries) != 1 or entries[0]['catalogue_expression'] != expression:
+        raise DomainError('corrupt_retained_record', 409)
+    return dict(entries[0], model_revision_id=model['model_revision_id'], model_digest=model['digest'],
+                explanation_version_id=version['explanation_version_id'], explanation_digest=version['digest'])
 
 
 class Explanations:
@@ -346,6 +409,47 @@ class Explanations:
         """Distinct component targets and evidence of this study; with ``model``, every
         component names an instance or definition version of that exact model version."""
         problems = []
+        monetary = content.get('monetary_quantities', [])
+        quantity_ids = [(item['instance_id'], item['port_id']) for item in monetary]
+        if len(quantity_ids) != len(set(quantity_ids)):
+            problems.append(issue(['monetary_quantities'],
+                                  'Each quantity has one explicit monetary basis.'))
+        if model is not None:
+            definitions_by_id = {d['definition_version_id']: d for d in model['definitions']}
+            from .units import monetary_expression
+            quantities = {
+                (instance['instance_id'], port['port_id']): monetary_expression(port['units'])
+                for instance in model['instances']
+                for port in definitions_by_id[instance['definition_version_id']]['ports']
+            }
+            for index, key in enumerate(quantity_ids):
+                if key not in quantities:
+                    problems.append(issue(['monetary_quantities', index],
+                                          'The quantity must belong to this exact model version.'))
+                elif quantities[key] != monetary[index]['catalogue_expression']:
+                    problems.append(issue(['monetary_quantities', index, 'catalogue_expression'],
+                                          'The monetary expression must equal the exact model quantity unit.'))
+            declared = {key: item for key, item in zip(quantity_ids, monetary)}
+            for key, expression in quantities.items():
+                if expression is not None and key not in declared:
+                    problems.append(issue(['monetary_quantities'],
+                                          'Every monetary quantity requires an explicit price basis.'))
+            for connection in model['connections']:
+                source = connection['source_ref']
+                target = connection['target_ref']
+                left = declared.get((source['instance_id'], source['port_id']))
+                right = declared.get((target['instance_id'], target['port_id']))
+                if left and right and (left['price_year'], left['economic_basis']) != (
+                    right['price_year'], right['economic_basis']
+                ):
+                    problems.append(issue(['monetary_quantities'],
+                                          'Connected monetary quantities must have the same price year and economic basis; conversions require an explicit calculation.'))
+        for index, item in enumerate(monetary):
+            for link in item['evidence_links']:
+                if db.execute('SELECT 1 FROM evidence WHERE study_id=? AND evidence_version_id=?',
+                              (sid, link['evidence_version_id'])).fetchone() is None:
+                    problems.append(issue(['monetary_quantities', index, 'evidence_links'],
+                                          'The evidence must belong to this study.'))
         targets = [_target(c) for c in content['components']]
         if len(targets) != len(set(targets)):
             problems.append(issue(['components'], 'Each component is explained once.'))
@@ -395,16 +499,16 @@ class Explanations:
         body = deepcopy(body)
         with self.store.connection() as db:
             self._authorize(db, actor, sid, mid, write=True)
-        validate_explanation('ModelExplanationDraftSaveRead2', body)
+        validate_explanation('ModelExplanationDraftSaveRead3', body)
 
         def operation(db):
             self._authorize(db, actor, sid, mid, write=True)
             previous = self._draft(db, sid, mid)
             self.store.cas(previous['revision'] if previous else None, body['expected_revision'])
-            if previous and previous['schema_version'] == '2' and body['content']['schema_version'] != '2':
+            if previous and int(previous['schema_version']) > int(body['content']['schema_version']):
                 raise DomainError('invalid_request', 422, fields=[issue(
                     ['content', 'schema_version'],
-                    'Use format 2 to preserve the model and component documentation.',
+                    'Use the current format to preserve documentation and quantity conventions.',
                 )])
             self._check(db, sid, body['content'])
             draft = dict(
@@ -419,7 +523,7 @@ class Explanations:
                 updated_by=actor,
                 updated_at=_now(),
             )
-            validate_explanation('ModelExplanationDraftRead2', draft, retained=True)
+            validate_explanation('ModelExplanationDraftRead3', draft, retained=True)
             db.execute(
                 'INSERT INTO model_explanation_drafts VALUES(?,?,?,?) '
                 'ON CONFLICT(study_id,model_id) '
@@ -447,7 +551,7 @@ class Explanations:
         # The exact model version, integrity-checked by the coordinator, read before the owner
         # transaction so no remote call holds the writer.
         model = self.coordinator.read(
-            actor, sid, mid, '/revisions/' + revision, response_schema='ModelRevisionResponse4'
+            actor, sid, mid, '/revisions/' + revision, response_schema='ModelRevisionResponse5'
         )['data']
 
         def operation(db):
@@ -481,7 +585,7 @@ class Explanations:
                 created_at=_now(),
             )
             version['digest'] = digest(version)
-            validate_explanation('ModelExplanationVersionRead2', version, retained=True)
+            validate_explanation('ModelExplanationVersionRead3', version, retained=True)
             db.execute(
                 'INSERT INTO model_explanation_versions VALUES(?,?,?,?,?,?)',
                 (

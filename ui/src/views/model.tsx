@@ -260,7 +260,7 @@ function renderModel(ctx: ViewContext) {
                   <div className="model-save-version">
                     <Button
                       variant="primary"
-                      disabled={busy || !!api.pending}
+                      disabled={busy || loading || !!api.pending}
                       onClick={() =>
                         void perform(() =>
                           modelVersions.saveVersion(study.study_id, model.model_id, {
@@ -277,7 +277,7 @@ function renderModel(ctx: ViewContext) {
                   </div>
                 )}
                 <Button
-                  disabled={busy || !!api.pending}
+                  disabled={busy || loading || !!api.pending}
                   onClick={() =>
                     navigate(
                       () =>

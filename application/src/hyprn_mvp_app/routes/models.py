@@ -25,12 +25,12 @@ def router(deps):
     def new_model(study_id:str,body:NewModel|NewModel3,request:Request,who:Actor):
         valid_id(study_id);data=body.model_dump()
         private=dict(data,expected_revision=None,study_id=study_id)
-        return remote_response(request,coordinator.execute(who,study_id,"create",None,data,private,"/models","CreateRequest","ModelDraftResponse4",association=True))
+        return remote_response(request,coordinator.execute(who,study_id,"create",None,data,private,"/models","CreateRequest","ModelDraftResponse5",association=True))
     @r.post("/api/1/studies/{study_id}/model-imports",status_code=201)
     def import_model(study_id:str,body:ImportModel,request:Request,who:Actor):
         valid_id(study_id);data=body.model_dump()
         private=dict(command_id=body.command_id,expected_revision=None,study_id=study_id,package=body.package,preserve_public_ids=True)
-        return remote_response(request,coordinator.execute(who,study_id,"import",None,data,private,"/imports","Import","ModelDraftResponse4",association=True))
+        return remote_response(request,coordinator.execute(who,study_id,"import",None,data,private,"/imports","Import5","ModelDraftResponse5",association=True))
     @r.get("/api/1/studies/{study_id}/models/{model_id}")
     def model_draft(study_id:str,model_id:str,request:Request,who:Actor):
         result=coordinator.read(who,valid_id(study_id),valid_id(model_id))
@@ -40,11 +40,11 @@ def router(deps):
         return response(request,**coordinator.revisions(who,valid_id(study_id),valid_id(model_id),request.query_params.multi_items()))
     @r.get("/api/1/studies/{study_id}/models/{model_id}/revisions/{revision_id}")
     def revision(study_id:str,model_id:str,revision_id:str,request:Request,who:Actor):
-        result=coordinator.read(who,valid_id(study_id),valid_id(model_id),"/revisions/"+valid_id(revision_id),response_schema="ModelRevisionResponse4")
+        result=coordinator.read(who,valid_id(study_id),valid_id(model_id),"/revisions/"+valid_id(revision_id),response_schema="ModelRevisionResponse5")
         return response(request,**result)
     @r.get("/api/1/studies/{study_id}/models/{model_id}/export")
     def export(study_id:str,model_id:str,model_revision_id:str,request:Request,who:Actor):
-        result=coordinator.read(who,valid_id(study_id),valid_id(model_id),"/export?revision="+valid_id(model_revision_id),response_schema="ModelPackageResponse")
+        result=coordinator.read(who,valid_id(study_id),valid_id(model_id),"/export?revision="+valid_id(model_revision_id),response_schema="ModelPackageResponse5")
         return response(request,**result)
 
     @r.get("/api/1/studies/{study_id}/models/{model_id}/assumption-evidence")
@@ -76,7 +76,7 @@ def router(deps):
         # The endpoint name fixes the operation id of each draft action.
         route.__name__="model_"+action
         r.post("/api/1/studies/{study_id}/models/{model_id}/"+action)(route)
-    for args in [("preview","PreviewRead4","ModelDraftEditResponse4",False),("edits","ApplyRead4","ModelDraftEditResponse4",True),
-                 ("commits","Commit","ModelRevisionResponse4",True),("validate","Validate","ValidationResultResponse",False)]:
+    for args in [("preview","PreviewRead5","ModelDraftEditResponse5",False),("edits","ApplyRead5","ModelDraftEditResponse5",True),
+                 ("commits","Commit","ModelRevisionResponse5",True),("validate","Validate","ValidationResultResponse",False)]:
         modeling_route(*args)
     return r

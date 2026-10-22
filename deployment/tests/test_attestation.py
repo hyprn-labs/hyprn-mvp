@@ -302,7 +302,10 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
         (REPO/criteria_free).read_bytes()).hexdigest()
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 52
+    monetary = 'upstream/whatsopt-patches/110-monetary-units.patch'
+    assert inventories[1][monetary] == inventories[2][monetary] == hashlib.sha256(
+        (REPO/monetary).read_bytes()).hexdigest()
+    assert len(inventories[2]) == 53
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
 

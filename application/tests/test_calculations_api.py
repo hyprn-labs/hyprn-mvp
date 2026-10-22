@@ -495,3 +495,183 @@ def test_member_run_filter_pages_only_that_members_runs_and_rejects_nonmembers(c
         calc, 'analysis-versions/' + vid + '/runs?configuration_revision_id=' + uid(),
     ))
     assert response.status_code == 404
+
+
+def finite_analysis(calc, count=12):
+    members = [calc['config']['configuration_revision_id']]
+    members += [sibling(calc, calc['frozen']) for _ in range(count - 1)]
+    response = create(calc, body(calc, members=members, schema_version='4', estimate_plan=None))
+    assert response.status_code == 201, response.text
+    vid = response.json()['data']['calculation_version_id']
+    endpoint = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    response = calc['client'].post(endpoint, json={})
+    assert response.status_code == 202, response.text
+    return vid, endpoint
+
+
+def test_finite_analysis_admits_only_actor_queue_capacity_and_cancellation_stops_admission(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+
+    vid, endpoint = finite_analysis(calc, 65)
+    owner = AnalysisExecution(calc['store'])
+    submissions = Submissions(calc['store'], None, None)
+    owner.process_one(submissions)
+    progress = calc['client'].get(endpoint).json()['data']
+    assert len([r for r in progress['runs'] if r['run_id']]) == 10
+    assert progress['total_count'] == 65
+    owner.process_one(submissions)
+    assert calc['client'].get(endpoint).json()['data']['runs'] == progress['runs']
+    cancelled = owner.cancel(calc['actor'], calc['sid'], vid)
+    assert cancelled['state'] == 'cancelled'
+    assert not owner.process_one(submissions)
+    assert calc['client'].get(endpoint).json()['data']['runs'] == progress['runs']
+
+
+@pytest.mark.parametrize('code,status,admission_state', [
+    ('backend_unavailable', 503, 'unavailable'),
+    ('attestation_required', 503, 'invalid_attestation'),
+    ('limit_exceeded', 429, 'waiting'),
+])
+def test_transient_admission_refusal_preserves_prior_run_and_recovers_original_command(
+    calc, code, status, admission_state,
+):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    from hyprn_mvp_app.contracts import DomainError
+
+    _, endpoint = finite_analysis(calc, 3)
+    submissions = Submissions(calc['store'], None, None)
+    submit = submissions.submit
+    attempts = []
+
+    def temporarily_unavailable(actor, sid, body, **kwargs):
+        attempts.append(body['command_id'])
+        if len(attempts) == 2:
+            raise DomainError(code, status)
+        return submit(actor, sid, body, **kwargs)
+
+    submissions.submit = temporarily_unavailable
+    AnalysisExecution(calc['store']).process_one(submissions)
+    progress = calc['client'].get(endpoint).json()['data']
+    assert progress['state'] == 'calculating'
+    assert progress['admission_state'] == admission_state
+    first = progress['runs'][0]['run_id']
+    assert first is not None
+    AnalysisExecution(calc['store']).process_one(submissions)
+    recovered = calc['client'].get(endpoint).json()['data']
+    assert recovered['runs'][0]['run_id'] == first
+    assert all(r['run_id'] for r in recovered['runs'])
+    assert attempts[1] == attempts[2]
+
+
+def test_uncertain_existing_run_is_pinned_and_blocks_further_dispatch(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+
+    pending = calc['submit']()['run_id']
+    _, endpoint = finite_analysis(calc, 3)
+    submissions = Submissions(calc['store'], None, None)
+    original = submissions.read
+
+    def uncertain(actor, sid, run_id):
+        result = original(actor, sid, run_id)
+        return dict(result, state='uncertain') if run_id == pending else result
+
+    submissions.read = uncertain
+    AnalysisExecution(calc['store']).process_one(submissions)
+    result = calc['client'].get(endpoint).json()['data']
+    assert result['state'] == 'needs_review'
+    assert result['runs'][0]['run_id'] == pending
+    assert result['runs'][0]['reused']
+    assert not any(r['run_id'] for r in result['runs'][1:])
+
+
+def test_two_analyses_share_one_actor_queue_without_starvation(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+
+    _, first = finite_analysis(calc, 12)
+    _, second = finite_analysis(calc, 12)
+    owner = AnalysisExecution(calc['store'])
+    owner.process_one(Submissions(calc['store'], None, None))
+    counts = [sum(row['run_id'] is not None for row in
+                  calc['client'].get(endpoint).json()['data']['runs'])
+              for endpoint in (first, second)]
+    assert counts == [5, 5]
+
+
+def test_126_member_finite_plan_survives_owner_restart_without_resubmitting(calc, monkeypatch):
+    from types import SimpleNamespace
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    from hyprn_mvp_app.history import History
+
+    vid, endpoint = finite_analysis(calc, 126)
+    submissions = Submissions(calc['store'], None, None)
+    original_read = submissions.read
+    completed = set()
+    accepted = []
+
+    def read(actor, sid, run_id):
+        result = original_read(actor, sid, run_id)
+        return dict(result, state='recorded') if run_id in completed else result
+
+    monkeypatch.setattr(submissions, 'read', read)
+    monkeypatch.setattr(History, 'retained', lambda *args: SimpleNamespace(
+        history={'results': {'execution': {'state': 'finished'}}}))
+    for _ in range(14):
+        # A fresh owner proves receipt recovery; execution here is a lifecycle
+        # double, not evidence of physical values or native throughput.
+        AnalysisExecution(calc['store']).process_one(submissions)
+        progress = calc['client'].get(endpoint).json()['data']
+        newly_accepted = [row['run_id'] for row in progress['runs']
+                          if row['run_id'] and row['run_id'] not in completed]
+        assert len(newly_accepted) <= 10
+        accepted.extend(newly_accepted)
+        with calc['store'].connection(write=True) as db:
+            for run_id in newly_accepted:
+                db.execute("UPDATE execution_operations SET state='recorded' WHERE run_id=?",
+                           (run_id,))
+        completed.update(newly_accepted)
+        if progress['state'] == 'complete':
+            break
+    assert progress['state'] == 'complete'
+    assert progress['completed_count'] == 126
+    assert len(accepted) == len(set(accepted)) == 126
+    assert not AnalysisExecution(calc['store']).process_one(submissions)
+
+
+@pytest.mark.parametrize('different_actor', [False, True])
+def test_distinct_studies_progress_with_actor_scoped_capacity(calc, different_actor):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+
+    other = dict(calc)
+    if different_actor:
+        other['actor'] = uid()
+        with calc['store'].connection(write=True) as db:
+            db.execute('INSERT INTO users(actor_id,username,password_hash) VALUES(?,?,?)', (
+                other['actor'], 'second-engineer',
+                auth_module.password_hash('another correct horse battery staple')))
+        other['client'] = TestClient(calc['client'].app, base_url=ORIGIN)
+        session = other['client'].post('/api/1/session', headers={'Origin': ORIGIN}, json={
+            'username': 'second-engineer', 'password': 'another correct horse battery staple'})
+        assert session.status_code == 200
+        other['client'].headers.update({
+            'Origin': ORIGIN, 'X-CSRF-Token': session.json()['data']['csrf_token']})
+    response = other['client'].post('/api/1/studies', json={
+        'command_id': uid(), 'name': 'Independent study'})
+    assert response.status_code == 201
+    other['sid'] = response.json()['data']['study_id']
+    other.update(seed(other))
+    _, first = finite_analysis(calc, 12)
+    _, second = finite_analysis(other, 12)
+    AnalysisExecution(calc['store']).process_one(Submissions(calc['store'], None, None))
+    counts = [sum(row['run_id'] is not None for row in
+                  owner['client'].get(endpoint).json()['data']['runs'])
+              for owner, endpoint in ((calc, first), (other, second))]
+    assert counts == ([10, 10] if different_actor else [5, 5])
+    if different_actor:
+        assert other['client'].get(first).status_code == 404
+        assert calc['client'].get(second).status_code == 404

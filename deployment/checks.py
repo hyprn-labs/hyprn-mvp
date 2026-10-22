@@ -1914,6 +1914,36 @@ def prepare_image_builder(scope):
     )
 
 
+def hosted_group_input(group):
+    """Validate required artifact inputs before allocating an isolated test scope."""
+    if group == 'platform-backup-set':
+        source = os.environ.get('HYPRN_PLATFORM_ROOT')
+        if not source or not Path(source).is_absolute():
+            raise ValueError('Explicit absolute HYPRN_PLATFORM_ROOT required')
+        platform = fixture.no_symlinks(Path(source))
+        target = fixture.no_symlinks(platform / 'tests/platform/test_backup_set.py')
+        if not target.is_file():
+            raise ValueError('Platform backup-set test missing')
+        return 'artifacts/platform-backup-set-input.json', {
+            'platform': str(platform), 'product': str(REPO)}
+    if group == 'hosted-native-installed':
+        source = os.environ.get('HYPRN_MVP_HOSTED_NATIVE_INPUT')
+        if not source:
+            raise ValueError('Exact native bundle descriptor HYPRN_MVP_HOSTED_NATIVE_INPUT required')
+        import cloud_release
+        value = cloud_release.read_json(fixture.no_symlinks(Path(source)))
+        return 'artifacts/hosted-native-input.json', value
+    if group in ('hosted-artifact', 'hosted-app-installed'):
+        names = ('PLATFORM_ROOT', 'WORKLOAD', 'RELEASE', 'RUNTIME', 'DESIRED', 'PAYLOAD')
+        value = {name.lower(): os.environ.get('HYPRN_MVP_HOSTED_' + name) for name in names}
+        if not all(value.values()):
+            raise ValueError('Built hosted payload and reviewed document paths required')
+        for path in value.values():
+            fixture.no_symlinks(Path(path))
+        return 'artifacts/hosted-artifact-input.json', value
+    return None
+
+
 def run_group(
     group,
     *,
@@ -2012,6 +2042,7 @@ def run_group(
     if group not in CHILD_GROUPS:
         raise ValueError('Group fixture/runner not implemented yet: ' + group)
     require_environment(group)
+    hosted_input = hosted_group_input(group)
     scope = (
         fixture.scope_at(Path(exploration_ui_resume))
         if exploration_ui_resume
@@ -2028,31 +2059,9 @@ def run_group(
     ):
         prepare_image_builder(scope)
     env = fixture.clean_environment(scope)
-    if group == 'platform-backup-set':
-        source = os.environ.get('HYPRN_PLATFORM_ROOT')
-        if not source or not Path(source).is_absolute():
-            raise ValueError('Explicit absolute HYPRN_PLATFORM_ROOT required')
-        platform = fixture.no_symlinks(Path(source))
-        target = fixture.no_symlinks(platform / 'tests/platform/test_backup_set.py')
-        if not target.is_file():
-            raise ValueError('Platform backup-set test missing')
-        fixture.scoped_path(scope, 'artifacts/platform-backup-set-input.json').write_text(
-            json.dumps({'platform': str(platform), 'product': str(REPO)}))
-    if group == 'hosted-native-installed':
-        source = os.environ.get('HYPRN_MVP_HOSTED_NATIVE_INPUT')
-        if not source:
-            raise ValueError('Exact native bundle descriptor HYPRN_MVP_HOSTED_NATIVE_INPUT required')
-        import cloud_release
-        value = cloud_release.read_json(fixture.no_symlinks(Path(source)))
-        fixture.scoped_path(scope, 'artifacts/hosted-native-input.json').write_text(json.dumps(value))
-    if group in ('hosted-artifact', 'hosted-app-installed'):
-        names = ('PLATFORM_ROOT', 'WORKLOAD', 'RELEASE', 'RUNTIME', 'DESIRED', 'PAYLOAD')
-        value = {name.lower(): os.environ.get('HYPRN_MVP_HOSTED_' + name) for name in names}
-        if not all(value.values()):
-            raise ValueError('Built hosted payload and reviewed document paths required')
-        for path in value.values():
-            fixture.no_symlinks(Path(path))
-        fixture.scoped_path(scope, 'artifacts/hosted-artifact-input.json').write_text(json.dumps(value))
+    if hosted_input is not None:
+        path, value = hosted_input
+        fixture.scoped_path(scope, path).write_text(json.dumps(value))
     command = [scope.interpreter, '-B', str(Path(__file__).resolve()), '--' + group + '-child']
     if exploration_ui_resume:
         command.extend(['--exploration-ui-resume', str(scope.root)])

@@ -1,5 +1,8 @@
 """Native owner reads the actual isolated AiiDA profile, never an invented receipt."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
+
 import json
 import os
 from pathlib import Path
@@ -341,7 +344,12 @@ with patch.object(cloud_native,'rebind_request',return_value=(previous,owner)), 
 ''' + '\n'.join('    '+line for line in body.splitlines()))
 
     def test_rebind_preserves_real_native_records_and_requires_new_attestation(self):
-        self.rebind_case('''receipt=cloud_native.rebind(configuration,config,'host-authorized')
+        self.rebind_case('''computer=orm.load_computer(owner['computer_uuid'])
+computer.set_minimum_job_poll_interval(10)
+receipt=cloud_native.rebind(configuration,config,'host-authorized')
+assert orm.load_computer(owner['computer_uuid']).get_minimum_job_poll_interval()==0.2
+poll=json.loads((root/'evidence/execution-polling.json').read_bytes())
+assert poll['previous_seconds']==10 and poll['current_seconds']==0.2
 assert receipt['repository_uuid']==owner['repository_uuid']
 assert receipt['profile_uuid']==owner['profile_uuid']
 assert receipt['computer_uuid']==owner['computer_uuid']
@@ -354,6 +362,26 @@ try: launcher.require_attestation()
 except RuntimeError: pass
 else: raise AssertionError('Old attestation admitted replaced runtime')
 assert not (root/'rebind-pending.json').exists()''')
+
+    def test_rebind_preserves_a_faster_existing_scheduler_interval(self):
+        self.rebind_case('''computer=orm.load_computer(owner['computer_uuid'])
+computer.set_minimum_job_poll_interval(0.1)
+cloud_native.rebind(configuration,config,'host-authorized')
+assert orm.load_computer(owner['computer_uuid']).get_minimum_job_poll_interval()==0.1
+poll=json.loads((root/'evidence/execution-polling.json').read_bytes())
+assert poll['previous_seconds']==poll['current_seconds']==0.1
+assert orm.load_node(saved_uuid).get_dict()['value']==12.5''')
+
+    def test_rebind_refuses_linked_polling_evidence_before_any_write(self):
+        self.rebind_case('''before=(root/'runtime.json').read_bytes()
+(root/'evidence').rename(root/'held-evidence')
+(root/'evidence').symlink_to(root/'held-evidence',target_is_directory=True)
+try: cloud_native.rebind(configuration,config,'host-authorized')
+except ValueError as error: assert 'Unsafe retained inventory destination' in str(error)
+else: raise AssertionError('Linked polling evidence accepted')
+assert (root/'runtime.json').read_bytes()==before
+assert not (root/'rebind-pending.json').exists()
+assert not (root/'held-evidence/execution-polling.json').exists()''')
 
     def test_rebind_refuses_unfinished_native_process_before_metadata_write(self):
         self.rebind_case('''node=orm.CalcJobNode().store()

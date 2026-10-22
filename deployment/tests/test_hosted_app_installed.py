@@ -1,5 +1,8 @@
 """Focused installed application slice; it cannot qualify aggregate host lifecycle."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('baseline')
+
 import json
 import unittest
 

@@ -957,3 +957,26 @@ def test_polish_definition_edits_are_nested_and_versioned():
 def test_only_approved_catalogue_enum_suffix_and_count_changed():
     from test_approach_contracts import test_polish_historical_hashes
     test_polish_historical_hashes()
+
+
+@pytest.mark.parametrize('expression', ['USD', 'kUSD', 'MUSD', 'pax', 'USD/pax', 'USD/kg',
+                                      'USD/m**3', 'USD/h', 'USD/kW', 'USD/(kW*h)', 'USD/J', 'USD/MJ'])
+def test_monetary_expressions_require_successor_unit_declaration(expression):
+    declaration = dict(kind='physical', expression=expression)
+    validate('UnitDeclaration2', declaration)
+    with pytest.raises(ValidationError):
+        validate('UnitDeclaration1', declaration)
+
+
+@pytest.mark.parametrize('expression', ['EUR', 'EUR/kg', 'USD/kWh', 'GBP', 'USD_2025'])
+def test_unsupported_currency_and_aliases_are_not_catalogue_authority(expression):
+    with pytest.raises(ValidationError):
+        validate('UnitDeclaration2', dict(kind='physical', expression=expression))
+
+
+def test_monetary_metadata_binds_expression_numerator_scale_and_denominator():
+    record = dict(expression='kUSD', numerator='USD', scale=1000.0, denominator='')
+    validate('MonetaryUnit1', record)
+    for changes in [dict(numerator='EUR'), dict(scale=1), dict(denominator='kg')]:
+        with pytest.raises(ValidationError):
+            validate('MonetaryUnit1', record | changes)

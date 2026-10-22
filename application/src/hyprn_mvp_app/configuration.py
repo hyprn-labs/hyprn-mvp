@@ -78,8 +78,8 @@ class Configurations:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.coordinator.model.call(actor,sid,'GET','/capabilities',
-                response_schema='CapabilitiesResponseRead3',resources=[sid])
-            caps=validate('CapabilitiesRead3',result['data'],remote=True)
+                response_schema='CapabilitiesResponseRead4',resources=[sid])
+            caps=validate('CapabilitiesRead4',result['data'],remote=True)
             if status!=200:raise DomainError('backend_unavailable',503,outcome='unknown')
         except DomainError:
             if strict:raise
@@ -111,7 +111,10 @@ class Configurations:
             raise DomainError('invalid_configuration',422)
 
         # Version 6 carries no approach closure, which models 2 and 3 require.
-        if configuration['schema_version']=='6' and model['schema_version']!='4':
+        if configuration['schema_version']=='6' and model['schema_version'] not in ('4','5'):
+            raise DomainError('invalid_configuration',422)
+
+        if model['schema_version']=='5' and configuration['schema_version']!='6':
             raise DomainError('invalid_configuration',422)
 
         if configuration['schema_version']=='4' and model['schema_version'] not in ('2','3','4'):
@@ -166,6 +169,31 @@ class Configurations:
         if missing:raise DomainError('invalid_configuration',422,fields=missing)
         return records
 
+    @staticmethod
+    def _price_bases(db, sid, model):
+        """Every monetary occurrence has an exact saved basis before configuration/run."""
+        from .explanations import quantity_price_basis
+        from .units import monetary_expression
+        bases = {}
+        for (instance_id, _, port_id), expression in port_units(model).items():
+            if monetary_expression(expression) is not None:
+                target = dict(instance_id=instance_id, port_id=port_id)
+                bases[(instance_id, port_id)] = quantity_price_basis(db, sid, model, target)
+        return bases
+
+    @staticmethod
+    def _check_price_transfer(source, destination):
+        """Scale conversion is checked by the engine; economic conversions need model code."""
+        if source is None and destination is None:
+            return
+        if source is None or destination is None or (
+            source['price_year'], source['economic_basis']
+        ) != (destination['price_year'], destination['economic_basis']):
+            raise DomainError('invalid_configuration', 422, fields=[dict(
+                path='/inputs', code='monetary_basis_mismatch', element_ref=None,
+                message='Linked monetary results require the same price year and economic basis; '
+                        'a change requires an explicit conversion calculation with evidence.')])
+
     def _recheck3(self,db,actor,sid,request,model,study,pins,candidate=None):
         self.store.authorize(db,actor,sid)
         current=self.store.study_row(db,sid)
@@ -173,6 +201,7 @@ class Configurations:
         if self.store.model_association(db,actor,sid,request['model_id'])!=pins['association']:raise DomainError('reference_conflict')
         checked_model(model,sid,request['model_id'],revision=request['model_revision_id'])
         if model!=pins['model']:raise DomainError('reference_conflict')
+        if self._price_bases(db,sid,model)!=pins['price_bases']:raise DomainError('reference_conflict')
         records=self._evidence3(db,actor,sid,self._uses3(request,model))
         if records!=pins['evidence']:raise DomainError('reference_conflict')
         if candidate is not None:
@@ -219,8 +248,8 @@ class Configurations:
         if len({i['source_run_id'] for i in request['inputs'] if i['kind']=='run_result'})>64:
             raise DomainError('limit_exceeded',413)
         mid=request['model_id'];revision=request['model_revision_id']
-        model=deepcopy(origin[0]['model_snapshot']) if origin else self.coordinator.read(actor,sid,mid,'/revisions/'+revision,response_schema='ModelRevisionResponse4')['data']
-        validate('ModelRevisionRead4',model,remote=True)
+        model=deepcopy(origin[0]['model_snapshot']) if origin else self.coordinator.read(actor,sid,mid,'/revisions/'+revision,response_schema='ModelRevisionResponse5')['data']
+        validate('ModelRevisionRead5',model,remote=True)
         if model['model_id']!=mid or model['model_revision_id']!=revision or model['digest']!=digest({k:v for k,v in model.items() if k!='digest'}):
             raise DomainError('backend_unavailable',503,outcome='unknown')
         self.require_version_pair(request,model)
@@ -234,7 +263,8 @@ class Configurations:
             if hashlib.sha256(raw).hexdigest()!=source['sha256']:raise DomainError('backend_unavailable',503,outcome='unknown')
         checked_model(model,sid,mid,revision=revision)
         with self.store.connection() as db:evidence=self._evidence3(db,actor,sid,self._uses3(request,model))
-        pins=dict(association=association,model=deepcopy(model),evidence=evidence)
+        with self.store.connection() as db:price_bases=self._price_bases(db,sid,model)
+        pins=dict(association=association,model=deepcopy(model),evidence=evidence,price_bases=price_bases)
         snapshots=[evidence_snapshot(evidence[v]) for v in sorted(evidence)]
         for item in request['inputs']:
             if not item['provenance']['statement'].strip():raise DomainError('invalid_configuration',422)
@@ -244,6 +274,10 @@ class Configurations:
             if item['kind']=='literal':resolved.append({k:deepcopy(item[k]) for k in ('target','value','units','provenance')})
             else:
                 source=resolver.resolve(actor,sid,item,records=records);sources[target]=source
+                from .explanations import quantity_price_basis
+                with self.store.connection() as db:
+                    source_basis=quantity_price_basis(db,sid,records[item['source_run_id']][0]['model_snapshot'],item['source_output'])
+                self._check_price_transfer(source_basis,price_bases.get(target))
                 resolved.append(dict(target=deepcopy(item['target']),value=source['value'],units=source['units'],provenance=deepcopy(item['provenance'])))
         scientific=dict(schema_version=PRIVATE_VERSIONS['6'],study_id=sid,model_id=mid,model_revision_id=revision,name=request['name'],inputs=resolved,
             numerical=deepcopy(request['numerical']),context_snapshot=context,
@@ -318,7 +352,7 @@ class Configurations:
                 self.store.model_association(db,actor,sid,request['model_id'],write=True)
                 evidence=self._evidence3(db,actor,sid,self._uses3(request,model))
                 if candidate['evidence_snapshots']!=[evidence_snapshot(evidence[v]) for v in sorted(evidence)]:raise DomainError('reference_conflict')
-                validate('FrozenConfiguration9',retained)
+                validate('FrozenConfigurationRead10',retained)
             return retained
         if body['configuration']['derivation'] is not None and (body['configuration_id'] is not None or body['expected_revision'] is not None):
             raise DomainError('reference_conflict',409)
@@ -346,8 +380,8 @@ class Configurations:
             else:family=uid()
             revision=uid();snapshot=dict(candidate,configuration_id=family,configuration_revision_id=revision,parent_revision_id=parent)
             snapshot['digest']=digest(snapshot);validate('ConfigurationRevision6',snapshot)
-            result=dict(schema_version='9',configuration=snapshot,model_snapshot=model,study_revision=study['revision'])
-            validate('FrozenConfiguration9',result)
+            result=dict(schema_version='10' if model['schema_version']=='5' else '9',configuration=snapshot,model_snapshot=model,study_revision=study['revision'])
+            validate('FrozenConfigurationRead10',result)
             db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(revision,family,sid,json.dumps(result)))
             db.execute('INSERT INTO configuration_families VALUES(?,?,?) ON CONFLICT(configuration_id) DO UPDATE SET head=excluded.head',(family,sid,revision))
             return result

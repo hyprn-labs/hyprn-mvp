@@ -175,7 +175,7 @@ class UnitsJourney(ApproachJourney):
     def validate_seed_contract(self,run_ids):
         """Validate genuine retained seed responses against the advertised operation.
 
-        Every run here is of a configuration 6, so every seed is a ModifiedRunSeed8."""
+        Every run here is of configuration6; exact model5 histories use seed9."""
         from jsonschema import Draft202012Validator,FormatChecker
         spec=json.loads((REPO/'contracts/hyprn-mvp.openapi.yaml').read_text())
         operation=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']['get']
@@ -189,7 +189,8 @@ class UnitsJourney(ApproachJourney):
             envelope=reply.json()
             validator.validate(envelope)
             responses.append(envelope)
-        assert [v['data']['schema_version'] for v in responses]==['8']*len(run_ids)
+        expected = ['9' if self.request('GET', 'runs/' + rid)['history']['history_schema_version'] == '9' else '8' for rid in run_ids]
+        assert [v['data']['schema_version'] for v in responses] == expected
         contract=(REPO/'contracts/hyprn-mvp.openapi.yaml').read_bytes()
         proof=dict(passed=True,responses=responses,
             openapi_sha256=hashlib.sha256(contract).hexdigest())

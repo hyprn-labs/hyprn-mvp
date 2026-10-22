@@ -132,7 +132,9 @@ unit_checks = {
  'src/views/model.tsx': ["schema_version:'3'", 'unresolvedModelUnits', 'Units incomplete',
                          'View quantity'],
  'src/ConfigurationPanel.tsx': ['UnitEditor', 'unitDeclaration', 'resolvedUnit', 'previewConfiguration6', 'commitConfiguration6'],
- 'src/contract.ts': ['UnitCatalog1', 'UnitDeclaration1', 'ModelRevision3', 'ModifiedRunSeed4', 'RunHistory4'],
+ 'src/contract.ts': ['UnitCatalog1', 'UnitDeclaration1', 'ModelRevision3',
+                     'ModifiedRunSeed4', 'RunHistory4', 'UnitCatalog2', 'UnitDeclaration2',
+                     'ModelRevision5', 'ModifiedRunSeed9', 'RunHistory9'],
  'src/exports.ts': ['unitLabel(r.port.units)', 'Not recorded', 'unit_declarations/1'],
 }
 for path in ('VariablesTable.tsx','ChangePreview.tsx','SelectionInspector.tsx','design/graph.tsx'):
@@ -141,7 +143,7 @@ for file,terms in unit_checks.items():
  text=(ROOT/file).read_text()
  for term in terms:assert has(text, term),(file,term)
 unit_route=spec['paths']['/studies/{study_id}/unit-catalog']['get']
-assert 'UnitCatalog1' in json.dumps(unit_route['responses']['200'])
+assert 'UnitCatalog2' in json.dumps(unit_route['responses']['200'])
 native=(ROOT.parent/'deployment/tests/test_units_native.py').read_text()
 assert 'browser=j.browser(records)' in native
 print('Units shared labels, exact active-version resolution and public catalog route present; actual API, browser and native gates remain separate.')

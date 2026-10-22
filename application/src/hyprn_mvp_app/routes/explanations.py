@@ -41,7 +41,7 @@ def router(deps):
     @r.get(BASE + '/explanation')
     def explanation_state(study_id: str, model_id: str, request: Request, who: Actor):
         sid, mid, _ = scope(request, who, study_id, model_id)
-        return result(request, 'ModelExplanationStateRead2', explanations.state(who, sid, mid))
+        return result(request, 'ModelExplanationStateRead3', explanations.state(who, sid, mid))
 
     @r.post(BASE + '/explanation/draft')
     def explanation_draft(
@@ -49,7 +49,7 @@ def router(deps):
     ):
         sid, mid, _ = scope(request, who, study_id, model_id)
         return result(
-            request, 'ModelExplanationDraftRead2', explanations.save_draft(who, sid, mid, body)
+            request, 'ModelExplanationDraftRead3', explanations.save_draft(who, sid, mid, body)
         )
 
     @r.get(BASE + '/explanation/versions')
@@ -62,7 +62,7 @@ def router(deps):
             limit=positive(query['limit'], 100) if 'limit' in query else 20,
             before=positive(query['before'], 9007199254740991) if 'before' in query else None,
         )
-        return result(request, 'ModelExplanationVersionPageRead2', page)
+        return result(request, 'ModelExplanationVersionPageRead3', page)
 
     @r.post(BASE + '/explanation/versions', status_code=201)
     def explanation_save_version(
@@ -70,7 +70,7 @@ def router(deps):
     ):
         sid, mid, _ = scope(request, who, study_id, model_id)
         saved = explanations.save_version(who, sid, mid, body)
-        return result(request, 'ModelExplanationVersionSavedRead2', saved, 201)
+        return result(request, 'ModelExplanationVersionSavedRead3', saved, 201)
 
     @r.get(BASE + '/revisions/{revision_id}/explanation')
     def model_version_explanation(
@@ -78,6 +78,6 @@ def router(deps):
     ):
         sid, mid, _ = scope(request, who, study_id, model_id)
         value = explanations.of_model_version(who, sid, mid, valid_id(revision_id))
-        return result(request, 'ModelVersionExplanationRead2', value)
+        return result(request, 'ModelVersionExplanationRead3', value)
 
     return r

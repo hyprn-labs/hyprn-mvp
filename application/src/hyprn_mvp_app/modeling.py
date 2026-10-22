@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from uuid import UUID
 import httpx
 from .contracts import DomainError, canonical, digest, uid, validate
-from .units import UNIT_CATALOG_BYTES, UNIT_CATALOG_DIGEST, UNIT_ENGINE_SOURCE_SHA256, active_ports
+from .units import UNIT_CATALOG_BYTES, UNIT_CATALOG_DIGEST, UNIT_ENGINE_SOURCE_SHA256, UNIT_ENGINE_LIBRARY_SHA256, active_ports
 from .store import ForeignEvidence
 # Temporary forwarding aliases for test imports only;
 # production code imports these from their owner (application/tests/test_module_boundaries.py).
@@ -60,8 +60,8 @@ class ModelingClient:
 
 
 def checked_model(value,sid,mid,*,revision=None):
-    """Model-record integrity, pure: a backend model draft (``ModelDraftRead4``) of study ``sid``
-    or an immutable revision (``ModelRevisionRead4``, optionally exactly ``revision``) of model
+    """Model-record integrity, pure: a backend model draft (``ModelDraftRead5``) of study ``sid``
+    or an immutable revision (``ModelRevisionRead5``, optionally exactly ``revision``) of model
     ``mid``. Checks the read contract, identity and digest, unique instance and assumption ids,
     assumption owners and citations, source-file hashes and schema-4 capabilities/active ports.
     Returns ``value``; any failure is ``backend_unavailable`` 503 (the backend gave an invalid
@@ -69,7 +69,7 @@ def checked_model(value,sid,mid,*,revision=None):
     configuration replays and write-time rechecks call it on retained snapshots directly.
     """
     immutable="model_revision_id" in value
-    validate("ModelRevisionRead4" if immutable else "ModelDraftRead4",value,remote=True)
+    validate("ModelRevisionRead5" if immutable else "ModelDraftRead5",value,remote=True)
     invalid=value["model_id"]!=mid or (not immutable and value["study_id"]!=sid)
     if immutable:
         invalid |= value["digest"]!=digest({k:v for k,v in value.items() if k!="digest"})
@@ -88,7 +88,7 @@ def checked_model(value,sid,mid,*,revision=None):
         try:raw=base64.b64decode(source["bytes"],validate=True)
         except ValueError:raise DomainError("backend_unavailable",503,outcome="unknown") from None
         invalid |= hashlib.sha256(raw).hexdigest()!=source["sha256"]
-    if value['schema_version']=='4':
+    if value['schema_version'] in ('4', '5'):
         invalid |= 'quantity_definitions/1' not in value['required_capabilities']
         invalid |= any(isinstance(p['units'],dict) for p in value['ports']) and 'unit_declarations/1' not in value['required_capabilities']
         try:active_ports(value)
@@ -105,8 +105,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponseRead3",resources=[sid])
-            caps=validate("CapabilitiesRead3",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead4",resources=[sid])
+            caps=validate("CapabilitiesRead4",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             supported=("1.2" in caps["contract_versions"] and "2" in caps["schema_versions"]
                 and any(c["id"]=="model_assumptions" and c["version"]=="1" and c["supported"] for c in caps["capabilities"]))
@@ -130,8 +130,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponseRead3",resources=[sid])
-            caps=validate("CapabilitiesRead3",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead4",resources=[sid])
+            caps=validate("CapabilitiesRead4",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             if not self.supports_units(caps):raise DomainError("unsupported_capability",422)
         finally:
@@ -142,12 +142,20 @@ class Coordinator:
         return bool(caps and "4" in caps["schema_versions"] and any(
             c["id"]=="quantity_definitions" and c["version"]=="1" and c["supported"] for c in caps["capabilities"]))
 
-    def _require_quantities(self,actor,sid):
+    @staticmethod
+    def supports_monetary(caps):
+        return bool(caps and "1.3" in caps["contract_versions"] and "5" in caps["schema_versions"]
+            and Coordinator.supports_quantities(caps)
+            and any(c["id"] == "unit_declarations" and c["version"] == "2" and c["supported"]
+                    for c in caps["capabilities"]))
+
+    def _require_quantities(self,actor,sid,*,monetary=False):
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
-            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponseRead3",resources=[sid])
+            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponseRead4",resources=[sid])
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
-            if not self.supports_quantities(result["data"]):raise DomainError("unsupported_capability",422)
+            supported=self.supports_monetary if monetary else self.supports_quantities
+            if not supported(result["data"]):raise DomainError("unsupported_capability",422)
         finally:
             with self.store.connection() as db:self.store.authorize(db,actor,sid)
 
@@ -155,10 +163,11 @@ class Coordinator:
         self._require_units(actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/unit-catalog",
-                response_schema="UnitCatalogResponse1",resources=[sid])
-            catalog=validate("UnitCatalog1",result["data"],remote=True)
+                response_schema="UnitCatalogResponse2",resources=[sid])
+            catalog=validate("UnitCatalog2",result["data"],remote=True)
             if (status!=200 or catalog["catalog_digest"]!=UNIT_CATALOG_DIGEST
-                or catalog["engine_source_sha256"]!=UNIT_ENGINE_SOURCE_SHA256):
+                or catalog["engine_source_sha256"]!=UNIT_ENGINE_SOURCE_SHA256
+                or catalog["engine_library_sha256"]!=UNIT_ENGINE_LIBRARY_SHA256):
                 raise DomainError("backend_unavailable",503,outcome="unknown")
             return catalog
         finally:
@@ -196,7 +205,7 @@ class Coordinator:
             raise DomainError("invalid_request",400)
         self._require_assumptions(actor,sid)
         suffix="/revisions/"+model_revision_id if model_revision_id else ""
-        selected=self.read(actor,sid,mid,suffix,response_schema="ModelRevisionResponse4" if model_revision_id else "ModelDraftResponse4")["data"]
+        selected=self.read(actor,sid,mid,suffix,response_schema="ModelRevisionResponse5" if model_revision_id else "ModelDraftResponse5")["data"]
         if draft_revision is not None:self.store.cas(selected["draft_revision"],draft_revision)
         links=[];evidence={}
         with self.store.connection() as db:
@@ -219,8 +228,9 @@ class Coordinator:
     def _request_evidence(self,actor,sid,mid,operation,body):
         """Read native state without a local write lock; never persist a draft copy."""
         versions=set();allow_unknown=operation=="commits"
-        if body.get("schema_version")=="4" or (operation=="import" and body["package"]["schema_version"]=="4"):
-            self._require_quantities(actor,sid)
+        if body.get("schema_version") in ("4", "5") or (operation=="import" and body["package"]["schema_version"] in ("4", "5")):
+            self._require_quantities(actor,sid,monetary=(body.get("schema_version")=="5"
+                or (operation=="import" and body["package"]["schema_version"]=="5")))
         if body.get("schema_version")=="3" or (operation=="import" and body["package"]["schema_version"]=="3"):
             self._require_units(actor,sid)
         if body.get("schema_version")=="2" or (operation=="import" and body["package"]["schema_version"]=="2"):
@@ -230,7 +240,8 @@ class Coordinator:
             self.store.cas(selected["draft_revision"],body["expected_revision"])
             if selected["schema_version"]=="3" and body.get("schema_version")!="3":self._require_units(actor,sid)
             if selected["schema_version"]=="2" and body.get("schema_version")!="2":self._require_assumptions(actor,sid)
-            if selected["schema_version"]=="4" and body.get("schema_version")!="4":self._require_quantities(actor,sid)
+            if selected["schema_version"] in ("4", "5") and body.get("schema_version")!=selected["schema_version"]:
+                self._require_quantities(actor,sid,monetary=selected["schema_version"]=="5")
             old={a["assumption_id"]:a for a in selected.get("assumptions",[])}
             if operation=="commits":
                 versions={l["evidence_version_id"] for a in old.values() for l in a["evidence_links"]}
@@ -247,7 +258,7 @@ class Coordinator:
 
     def _checked_portable_record(self,package,sid,mid,revision):
         # Portable model record (legacy wire name ModelPackage; contracts/README.md legacy table).
-        validate("ModelPackage",package,remote=True)
+        validate("ModelPackageRead5",package,remote=True)
         if (package["model_id"]!=mid or package["model_revision_id"]!=revision
             or package["digest"]!=digest({k:v for k,v in package.items() if k!="digest"})):
             raise DomainError("backend_unavailable",503,outcome="unknown")
@@ -319,7 +330,7 @@ class Coordinator:
             self.authorize_model(actor,sid,row["result"]["response"]["data"]["model_id"],write=retry)
             return row["result"]["status"],row["result"]["response"]
         try:
-            _,lookup=self.model.call(actor,sid,"GET",f"/commands/{command}?study_id={sid}&category=model",response_schema="ReceiptResponse4")
+            _,lookup=self.model.call(actor,sid,"GET",f"/commands/{command}?study_id={sid}&category=model",response_schema="ReceiptResponse5")
             with self.store.connection() as db:self._authorize_request(db,actor,sid,request["target"],write=retry)
             receipt=lookup["data"]
             if receipt["command_id"]!=command:raise DomainError("backend_unavailable",503,outcome="unknown")
@@ -382,7 +393,7 @@ class Coordinator:
         checked_model(selected,sid,request["target"] or selected["model_id"])
         expected_version=request["body"].get("schema_version")
         if request["operation"]=="import":expected_version=request["body"]["package"]["schema_version"]
-        if expected_version in {"3","4"} and selected["schema_version"]!=expected_version:
+        if expected_version in {"3","4","5"} and selected["schema_version"]!=expected_version:
             raise DomainError("backend_unavailable",503,outcome="unknown")
         if request["operation"]=="import" and selected["model_id"]!=request["body"]["package"]["model_id"]:
             raise DomainError("backend_unavailable",503,outcome="unknown")
@@ -418,7 +429,7 @@ class Coordinator:
         self.authorize_model(actor,sid,mid)
         return {"data":page["items"],"next_cursor":page["next_cursor"]}
 
-    def read(self,actor,sid,mid,suffix="",*,method="GET",body=None,request_schema=None,response_schema="ModelDraftResponse4"):
+    def read(self,actor,sid,mid,suffix="",*,method="GET",body=None,request_schema=None,response_schema="ModelDraftResponse5"):
         self.authorize_model(actor,sid,mid)
         versions=set();allow_unknown=False
         if method=="POST" and suffix=="/preview":
@@ -427,13 +438,13 @@ class Coordinator:
         try:
             result=self.model.call(actor,sid,method,"/models/"+mid+suffix,body,
                 request_schema=request_schema,response_schema=response_schema,resources=[mid])[1]
-            if suffix=="/preview" and body.get("schema_version") in {"3","4"} and result["data"]["schema_version"]!=body["schema_version"]:
+            if suffix=="/preview" and body.get("schema_version") in {"3","4","5"} and result["data"]["schema_version"]!=body["schema_version"]:
                 raise DomainError("backend_unavailable",503,outcome="unknown")
         finally:
             with self.store.connection() as db:self._authorize_request(db,actor,sid,mid)
-        if response_schema in {"ModelDraftResponse","ModelDraftEditResponse","ModelRevisionResponse","ModelDraftResponse4","ModelDraftEditResponse4","ModelRevisionResponse4"}:
+        if response_schema in {"ModelDraftResponse","ModelDraftEditResponse","ModelRevisionResponse","ModelDraftResponse5","ModelDraftEditResponse5","ModelRevisionResponse5"}:
             checked_model(result["data"],sid,mid,revision=suffix.removeprefix("/revisions/") if suffix.startswith("/revisions/") else None)
-        if response_schema=="ModelPackageResponse" and suffix.startswith("/export?revision="):
+        if response_schema in ("ModelPackageResponse", "ModelPackageResponse4", "ModelPackageResponse5") and suffix.startswith("/export?revision="):
             self._checked_portable_record(result["data"],sid,mid,suffix.removeprefix("/export?revision="))
         # Preview returns a temporary projected draft, including its revision.
         # The original token is checked above and by the backend's atomic

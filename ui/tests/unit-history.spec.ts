@@ -40,9 +40,9 @@ async function openRevision(page:Page,f:ReaderFixture) {
 
 test('@units-history downloaded CSV distinguishes declarations and absent value units',async({page})=>{
   await seeded(page);
-  // The Variables tab is gone; the Quantities table is always below the canvas and the
-  // Quantities CSV exports its displayed rows.
+  // The canonical component reader owns the quantities table and displayed CSV rows.
   await expect(page.getByRole('tab', { name: 'Variables', exact: true })).toHaveCount(0);
+  await page.getByRole('tab',{name:'Quantities',exact:true}).click();
   await expect(page.getByRole('table', { name: 'Quantities', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Model actions', exact: true }).click();
   await page.getByRole('button', { name: 'Export model', exact: true }).click();
@@ -52,7 +52,7 @@ test('@units-history downloaded CSV distinguishes declarations and absent value 
   expect(csv).toContain('"Not specified"');
   expect(csv).toContain('"Dimensionless"');
   expect(csv).toContain('"m/s"');
-  expect(csv).toContain('"Not recorded"');
+  expect(csv.split('\r\n')[0]).not.toContain('"Value"');
   expect(csv).not.toContain('[object Object]');
   // The CSV exports exactly the displayed columns, including Definition.
   const header = csv.split('\r\n').find((r) => r.startsWith('"Variable",'))!;
@@ -68,6 +68,7 @@ test('@units-history downloaded CSV distinguishes declarations and absent value 
   ).toHaveCount(0);
 });
 
+const importAction=(page:Page)=>page.getByRole('dialog',{name:'Import model',exact:true}).getByRole('button',{name:'Import model',exact:true});
 async function portability(page: Page, f: ReaderFixture) {
   const study = (await (await page.request.get('/api/1/studies/' + f.study_id)).json()).data;
   await page.evaluate(({ study, snapshot }) => (window as any).showPortability(study, snapshot), {
@@ -87,7 +88,7 @@ for(const schema of ['1','2','3'])test('@units-history exact schema '+schema+' m
   await page.getByLabel('Portable model record file',{exact:true}).setInputFiles({name:'model.json',mimeType:'application/json',buffer:Buffer.from(text)});
   await page.getByRole('button',{name:'Preview model import',exact:true}).click();
   await expect(page.getByRole('region',{name:'Model import preview',exact:true})).toContainText('This model already exists in this study.');
-  await expect(page.getByRole('button',{name:'Import model',exact:true})).toBeDisabled();
+  await expect(importAction(page)).toBeDisabled();
 });
 
 async function packageImport(page:Page,f:ReaderFixture,pkg:any) {
@@ -100,9 +101,9 @@ async function packageImport(page:Page,f:ReaderFixture,pkg:any) {
 test('@units-history package3 actual import preserves mixed ancestor bytes and declarations',async({page})=>{
   const f=await seeded(page);
   const study=await packageImport(page,f,f.package);
-  await expect(page.getByRole('button',{name:'Import model',exact:true})).toBeEnabled();
+  await expect(importAction(page)).toBeEnabled();
   const response=page.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname.endsWith('/model-imports'));
-  await page.getByRole('button',{name:'Import model',exact:true}).click();
+  await importAction(page).click();
   expect((await response).status()).toBe(200);
   const selected=(await(await page.request.get('/api/1/studies/'+study.study_id+'/models/'+f.model_id+'/revisions/'+f.before.model_revision_id)).json()).data;
   expect(selected).toEqual(f.before);
@@ -117,8 +118,8 @@ test('@units-history package inspector rejects tamper unsupported versions missi
   const f=await seeded(page);
   const cases:Array<[string,(p:any)=>void,boolean]>=[
     ['does not match its SHA-256',p=>p.source_service='tampered',false],
-    // 43.1 made ModelPackage4 a supported reader version; '5' is the next unsupported one.
-    ['Unsupported or invalid',p=>p.schema_version='5',true],
+    // ModelPackage5 is supported; format 6 remains unknown.
+    ['Unsupported or invalid',p=>p.schema_version='6',true],
     ['Record format 4 requires quantity_definitions/1',p=>p.schema_version='4',true],
     ['requires unit_declarations/1',p=>p.required_capabilities=[],true],
     ['Model version record formats do not match',p=>p.schema_version='2',true],
@@ -136,28 +137,34 @@ test('@units-history package inspector rejects tamper unsupported versions missi
     await page.getByLabel('Portable model record file',{exact:true}).setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(pkg))});
     await page.getByRole('button',{name:'Preview model import',exact:true}).click();
     await expect(page.getByRole('alert').filter({hasText:message}).first()).toBeVisible();
-    await expect(page.getByRole('button',{name:'Import model',exact:true})).toHaveCount(0);
+    await expect(importAction(page)).toHaveCount(0);
   }
   expect(submissions).toBe(0);
 });
 
 async function savedHistory(page:Page) {
   const f=await seeded(page);
-  const frozen=await page.evaluate(async f=>{
-    const api=(window as any).unitsApi,study=await api.study(f.study_id),m=f.after;
-    const incoming=new Set(m.connections.map((c:any)=>c.target_ref.instance_id+'/'+c.target_ref.port_id));
-    const inputs=m.instances.flatMap((i:any)=>m.definitions.find((d:any)=>d.definition_version_id===i.definition_version_id).ports.filter((p:any)=>p.direction==='input'&&!incoming.has(i.instance_id+'/'+p.port_id)).map((p:any)=>({kind:'literal',target:{instance_id:i.instance_id,port_id:p.port_id},value:0,units:typeof p.units==='string'?p.units:p.units.kind==='physical'?p.units.expression:'',provenance:{kind:'manual',statement:'Original exact zero',evidence_version_ids:[]}})));
-    const request={schema_version:'4',study_id:f.study_id,model_id:f.model_id,model_revision_id:m.model_revision_id,name:'Retained unit scenario',inputs,criteria:[],numerical:{mode:'deterministic',initialization:[],solvers:[],derivatives:{method:'none',form:null,check:null},design_variables:[],objectives:[],constraints:[],optimizer:null,uncertainty:null},context_source:{kind:'current_study',expected_study_revision:study.revision},context_override:{schema_version:'1',description:'Original retained scenario',boundary:'Exact original boundary'},notes:['Original note'],derivation:null,assumptions:[],general_context_evidence_version_ids:[],approach_selection:null};
-    const preview=await api.previewConfiguration4(request);
-    return await api.commitConfiguration4({command_id:crypto.randomUUID(),configuration_id:null,expected_revision:null,configuration:request,expected_preview_digest:preview.candidate_digest});
-  },f);
+  const seededConfiguration=await page.request.post('/fixture/historical-configuration',{data:{study_id:f.study_id,model_id:f.model_id,model_revision_id:f.after.model_revision_id}});
+  expect(seededConfiguration.ok(),await seededConfiguration.text()).toBe(true);
+  const frozen=await seededConfiguration.json();
   const response=await page.request.post('/fixture/retain',{data:{study_id:f.study_id,configuration_revision_id:frozen.configuration.configuration_revision_id}});expect(response.ok(),await response.text()).toBe(true);
   return {...f,frozen,run_id:(await response.json()).run_id};
 }
 async function outage(page:Page) {
   const reads:string[]=[];
-  await page.route('**/api/1/studies/*/models/**',route=>{reads.push(route.request().url());return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'backend_unavailable',message:'Modeling unavailable',fields:[],outcome:'unchanged'}})});});
+  await page.route('**/api/1/studies/*/models/**',route=>{
+    const path=new URL(route.request().url()).pathname;
+    // Explanations belong to the application store and remain readable during
+    // a modeling-service outage; do not substitute a mock failure for that API.
+    if (/\/models\/[^/]+\/(?:revisions\/[^/]+\/)?explanation$/.test(path)) return route.continue();
+    reads.push(route.request().url());
+    return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'backend_unavailable',message:'Modeling unavailable',fields:[],outcome:'unchanged'}})});
+  });
   return reads;
+}
+function onlyNavigationMetadata(reads:string[],f:ReaderFixture) {
+  const list=`/api/1/studies/${f.study_id}/models/${f.model_id}/revisions`;
+  expect(reads.filter(value=>new URL(value).pathname!==list)).toEqual([]);
 }
 /** A configuration does not repeat its model's assumptions. One line states how many
  * the exact retained model version records; View model assumptions opens that version read-only in
@@ -167,31 +174,52 @@ async function retainedModelAssumptions(page:Page,f:any,scope:Locator) {
   await expect(scope.getByText(modelAssumptionsLine(f),{exact:true})).toBeVisible();
   await scope.getByRole('button',{name:'View model assumptions',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Model assumptions',exact:true});
+  if (f.explanationBasis) {
+    await dialog.getByRole('tab',{name:'Model explanation',exact:true}).click();
+    await expect(dialog.getByText('No explanation is available for this model version.',{exact:true})).toBeVisible();
+    await expect(dialog).not.toContainText('Changed current draft basis');
+    await dialog.getByRole('tab',{name:'Diagram',exact:true}).click();
+  }
   const details=dialog.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(details.getByRole('region',{name:'Model assumptions',exact:true}).getByText('Revised bounded assumption',{exact:true})).toBeVisible();
-  await dialog.getByRole('button',{name:'Inspect component Energy law',exact:true}).first().click();
+  await dialog.getByRole('button',{name:'1 Energy law',exact:true}).click();
   await expect(details.getByRole('region',{name:'Component · Energy law assumptions',exact:true}).getByText('Original component assumption',{exact:true})).toBeVisible();
+  await details.getByRole('button',{name:'View evidence (1)',exact:true}).first().click();
+  await expect(page.getByRole('region',{name:'Evidence details',exact:true})).toContainText('Retained unit evidence');
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');await expect(dialog).toBeHidden();
 }
 test('@units-history saved run and modified configuration retain exact model3 assumptions during modeling outage',async({page})=>{
-  const f=await savedHistory(page),before=JSON.stringify(f.frozen),reads=await outage(page);
+  const f={...await savedHistory(page),explanationBasis:'Exact retained engineering basis'};
+  await page.evaluate(async f=>{
+    const api=(window as any).unitsApi;
+    const content={schema_version:'1',represents:'Retained model',basis:f.explanationBasis,calculation_logic:'Explicit retained computation',components:[],evidence_links:[]};
+    const draft=await api.saveModelExplanationDraft(f.study_id,f.model_id,{command_id:crypto.randomUUID(),expected_revision:null,content});
+    const saved=await api.saveModelExplanationVersion(f.study_id,f.model_id,{command_id:crypto.randomUUID(),expected_revision:draft.revision,model_revision_id:f.after.model_revision_id});
+    await api.saveModelExplanationDraft(f.study_id,f.model_id,{command_id:crypto.randomUUID(),expected_revision:saved.draft.revision,content:{...content,basis:'Changed current draft basis'}});
+  },f);
+  const before=JSON.stringify(f.frozen),reads=await outage(page);
   await page.goto('/ui/#v=1&view=configurations&study='+f.study_id+'&configuration='+f.frozen.configuration.configuration_revision_id);
-  await retainedModelAssumptions(page,f,page.getByRole('region',{name:'Saved configuration',exact:true}));
+  const saved=page.getByRole('region',{name:'Saved configuration',exact:true});
+  await saved.getByRole('button',{name:'Configuration record details',exact:true}).click();
+  await expect(page.getByLabel('Saved configuration JSON',{exact:true})).toContainText('Original retained scenario');
+  await page.keyboard.press('Escape');
+  await retainedModelAssumptions(page,f,saved);
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+f.run_id);
+  await page.getByRole('tab',{name:'Model',exact:true}).click();
+  const retainedModel=page.locator('#run-panel-1');
+  await retainedModel.getByRole('tab',{name:'Model explanation',exact:true}).click();
+  await expect(retainedModel.getByRole('region',{name:'Basis and reasoning',exact:true})).toContainText(f.explanationBasis);
+  await expect(retainedModel).not.toContainText('Changed current draft basis');
   await page.getByRole('tab',{name:'Configuration',exact:true}).click();
   await retainedModelAssumptions(page,f,page.locator('#run-panel-2'));
-  await page.getByRole('tab',{name:'Evidence',exact:true}).click();
-  // Run › Evidence lists the run's assumptions by owner, built only from its retained versions.
-  await expect(page.locator('#run-panel-3').getByText('Revised bounded assumption',{exact:true})).toBeVisible();
-  await expect(page.locator('#run-panel-3').getByText('Original component assumption',{exact:true})).toBeVisible();
-  await page.locator('#run-panel-3').getByRole('button',{name:'View evidence (1)',exact:true}).first().click();
-  await expect(page.getByRole('region',{name:'Evidence details',exact:true}).getByText('Retained unit evidence',{exact:true})).toBeVisible();await page.keyboard.press('Escape');
+  await expect(page.getByRole('tab',{name:'Evidence',exact:true})).toHaveCount(0);
   const seed=(await(await page.request.get('/api/1/studies/'+f.study_id+'/runs/'+f.run_id+'/modified-run-seed')).json()).data;
   expect(seed.schema_version).toBe('4');expect(seed.model_snapshot).toEqual(f.after);
   await page.getByRole('button',{name:'Create modified run',exact:true}).click();
   await retainedModelAssumptions(page,f,page.getByRole('region',{name:'Configuration assumption owners',exact:true}).filter({visible:true}));
-  await expect(page.locator('.configuration-context:visible p').filter({hasText:/^Original retained scenario$/})).toBeVisible();
-  expect(reads).toEqual([]);
+  expect(seed.source_configuration.context_snapshot).toEqual(f.frozen.configuration.context_snapshot);
+  onlyNavigationMetadata(reads,f);
   const retained=(await(await page.request.get('/api/1/studies/'+f.study_id+'/configurations/'+f.frozen.configuration.configuration_revision_id)).json()).data;
   expect(JSON.stringify(retained)).toBe(before);
 });
@@ -216,7 +244,7 @@ test('@units-history model package3 admits exact model1 and model2 ancestors',as
   const pkg=await rebuildPackage(page,{...f.package,schema_version:'3',model_revision_id:three.model_revision_id,revisions:[one,two,three],required_capabilities:three.required_capabilities});
   const study=await packageImport(page,f,pkg);
   const submitted=page.waitForRequest(r=>r.method()==='POST'&&new URL(r.url()).pathname.endsWith('/model-imports'));
-  await page.getByRole('button',{name:'Import model',exact:true}).click();
+  await importAction(page).click();
   expect((await submitted).postDataJSON().package).toEqual(pkg);
   await expect(page.getByRole('status').filter({hasText:'Model imported'}).first()).toBeVisible();
   for(const r of pkg.revisions)expect((await(await page.request.get('/api/1/studies/'+study.study_id+'/models/'+f.model_id+'/revisions/'+r.model_revision_id)).json()).data).toEqual(r);
@@ -226,52 +254,49 @@ test('@units-history unknown capabilities block and server retains closed schema
   const f=await seeded(page);const unsupported=await reseal(page,{...f.package,required_capabilities:[...f.package.required_capabilities,'future_units/99']});
   await packageImport(page,f,unsupported);
   await expect(page.getByRole('alert').filter({hasText:'Unsupported capabilities: future_units/99'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Import model',exact:true})).toBeDisabled();
+  await expect(importAction(page)).toBeDisabled();
   // Correctly resealed bytes/inventory cannot turn malformed declarations into
   // valid input. Frontend inspection is deliberately not server authority.
   const malformed=structuredClone(f.package);malformed.revisions.at(-1).ports[0].units={kind:'currency'};
   const pkg=await rebuildPackage(page,malformed);
   await page.getByLabel('Portable model record file',{exact:true}).setInputFiles({name:'invalid-units.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(pkg))});
   await page.getByRole('button',{name:'Preview model import',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Import model',exact:true})).toBeEnabled();
+  await expect(importAction(page)).toBeEnabled();
   const response=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/model-imports'));
-  await page.getByRole('button',{name:'Import model',exact:true}).click();expect((await response).status()).toBe(400);
+  await importAction(page).click();expect((await response).status()).toBe(400);
   await expect(page.getByRole('alert').first()).toBeVisible();
 });
 
 async function runModels(page:Page,f:any) {
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+f.run_id);
-  // The run's Model tab (formerly Models) shows the canonical model view; its Quantities
-  // table is always below the canvas (no Variables tab).
+  // The run uses the same canonical component reader as saved models.
   await page.getByRole('tab',{name:'Model',exact:true}).click();
+  await page.locator('#run-panel-1').getByRole('tab',{name:'Quantities',exact:true}).click();
   await expect(page.locator('#run-panel-1').getByRole('table',{name:'Quantities',exact:true})).toBeVisible();
 }
-async function csvDownload(page: Page) {
-  await page.getByRole('button', { name: 'Export model', exact: true }).click();
-  const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Quantities CSV', exact: true }).click();
-  const csv = await readFile((await (await pending).path())!, 'utf8');
-  await page.keyboard.press('Escape');
-  return csv;
-}
-test('@units-history run CSV retains dimensionless zero physical output and absent records',async({page})=>{
-  const f=await savedHistory(page);await outage(page);await runModels(page,f);
-  const csv=await csvDownload(page),rows=csv.split('\r\n');
-  expect(rows.find(r=>r.startsWith('"ratio",'))).toContain('"0"');
-  expect(rows.find(r=>r.startsWith('"ratio",'))).toContain('"Dimensionless"');
-  expect(rows.find(r=>r.startsWith('"flow",'))).toContain('"7"');
-  expect(rows.find(r=>r.startsWith('"flow",'))).toContain('"m/s"');
-  expect(rows.find(r=>r.startsWith('"incoming",'))).toContain('"Not recorded"');
-  // Declared presentation overlay of a partial verified history, not corruption
-  // validation. The backend's corrupt-record admission is proven by the history tests.
+test('@units-history run quantities retain explicit zero physical results and unavailable outputs',async({page})=>{
+  const f=await savedHistory(page);const reads=await outage(page);await runModels(page,f);
+  const table=page.locator('#run-panel-1').getByRole('table',{name:'Quantities',exact:true});
+  const row=(name:string)=>table.getByRole('row').filter({has:page.getByRole('rowheader',{name,exact:true})});
+  await expect(row('ratio').getByRole('cell',{name:'0',exact:true})).toBeVisible();
+  await expect(row('ratio').getByRole('cell',{name:'Dimensionless',exact:true})).toBeVisible();
+  await expect(row('flow').getByRole('cell',{name:'7',exact:true})).toBeVisible();
+  await expect(row('flow').getByRole('cell',{name:'m/s',exact:true})).toBeVisible();
+  await expect(row('incoming').getByRole('cell',{name:'7',exact:true})).toBeVisible();
+  await expect(row('incoming')).toContainText('From Energy law · flow');
+  // Declared presentation overlay of unavailable results. Integrity admission is
+  // covered separately; no absent result may become zero in the actual reader.
   const url='/api/1/studies/'+f.study_id+'/runs/'+f.run_id;
   const detail=await(await page.request.get(url)).json();detail.data.history.results.outputs=[];
   await page.route('**'+url,route=>route.fulfill({json:detail}));
   await page.getByRole('button',{name:'Return to run history',exact:true}).click();
   await page.getByRole('button',{name:'Inspect run '+f.run_id,exact:true}).click();
-  await page.getByRole('tab',{name:'Model',exact:true}).click();await expect(page.locator('#run-panel-1').getByRole('table',{name:'Quantities',exact:true})).toBeVisible();
-  const absent=(await csvDownload(page)).split('\r\n').find(r=>r.startsWith('"flow",'))!;
-  expect(absent).toContain('"not computed"');expect(absent).toContain('"Not recorded"');expect(absent).not.toContain('"0"');
+  await page.getByRole('tab',{name:'Model',exact:true}).click();
+  await page.locator('#run-panel-1').getByRole('tab',{name:'Quantities',exact:true}).click();
+  await expect(row('flow')).toContainText('not computed');
+  await expect(row('flow').getByRole('cell',{name:'0',exact:true})).toHaveCount(0);
+  await expect(row('incoming')).toContainText('not computed');
+  onlyNavigationMetadata(reads,f);
 });
 for(const code of ['missing_results','corrupt_retained_record','unsupported_record_version'])test('@units-history '+code+' keeps unavailable retained context truthful',async({page})=>{
   const f=await savedHistory(page),reads=await outage(page),url='/api/1/studies/'+f.study_id+'/runs/'+f.run_id;
@@ -281,10 +306,10 @@ for(const code of ['missing_results','corrupt_retained_record','unsupported_reco
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+f.run_id);
   const text=code==='missing_results'?'Some results are missing. What is available is shown below.':code==='corrupt_retained_record'?'Part of this run\'s record could not be verified. Verified sections remain visible.':'This run uses a record format this application cannot display.';
   await expect(page.getByRole('alert').filter({hasText:text})).toBeVisible();
-  await expect(page.getByText('No results for this run. Missing values are never shown as zero.',{exact:true})).toBeVisible();
+  await expect(page.getByText('No results for this run.',{exact:true})).toBeVisible();
   await page.getByRole('tab',{name:'Model',exact:true}).click();
   await expect(page.locator('#run-panel-1').getByText('This run\'s model version can\'t be shown. The current model is not shown in its place.',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Create modified run',exact:true})).toHaveCount(0);expect(reads).toEqual([]);
+  await expect(page.getByRole('button',{name:'Create modified run',exact:true})).toHaveCount(0);onlyNavigationMetadata(reads,f);
 });
 test('@units-history light dark narrow and genuine 200 percent keyboard evidence',async({baseURL})=>{
   test.setTimeout(180000);
@@ -426,7 +451,7 @@ test('@units-history light dark narrow and genuine 200 percent keyboard evidence
       await mode(size);
       for (const theme of ['light', 'dark']) {
         await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-        await saved.getByRole('button', { name: 'Record details', exact: true }).focus();
+        await saved.getByRole('button', { name: 'Configuration record details', exact: true }).focus();
         await capture('history-saved-context-' + size + '-' + theme);
         // One model-assumptions line; the retained model version opens read-only
         // in the canonical model view, where the model's assumptions carry their evidence.
@@ -468,14 +493,15 @@ test('@units-history light dark narrow and genuine 200 percent keyboard evidence
           .getByText(modelAssumptionsLine(f), { exact: true })
           .scrollIntoViewIfNeeded();
         await capture('history-run-configuration-' + size + '-' + theme);
-        await page.getByRole('tab', { name: 'Evidence', exact: true }).focus();
-        await page.keyboard.press('Enter');
-        await expect(page.getByRole('tab', { name: 'Evidence', exact: true })).toBeFocused();
-        await page
-          .locator('#run-panel-3')
-          .getByText('Revised bounded assumption', { exact: true })
-          .scrollIntoViewIfNeeded();
+        const open=page.locator('#run-panel-2').getByRole('button',{name:'View model assumptions',exact:true});
+        await open.focus();await page.keyboard.press('Enter');
+        const modelDialog=page.getByRole('dialog',{name:'Model assumptions',exact:true});
+        const evidence=modelDialog.getByRole('region',{name:'Model assumptions',exact:true}).getByRole('button',{name:'View evidence (1)',exact:true}).first();
+        await evidence.focus();await page.keyboard.press('Enter');
+        await expect(page.getByRole('region',{name:'Evidence details',exact:true})).toContainText('Retained unit evidence');
         await capture('history-run-evidence-' + size + '-' + theme);
+        await page.keyboard.press('Escape');await expect(evidence).toBeFocused();
+        await page.keyboard.press('Escape');await expect(open).toBeFocused();
       }
     }
     await mode('desktop');
@@ -493,24 +519,22 @@ test('@units-history light dark narrow and genuine 200 percent keyboard evidence
         await capture('history-modified-assumptions-' + size + '-' + theme);
       }
     }
-    // Comparison remains an isolated actual component consumer; owner-hidden
-    // comparison navigation is not exposed by this test harness.
+    // The transfer surface replaced the obsolete comparison dialog. Exercise
+    // the actual portable export and import inspector at every tested scale.
     await page.unroute('**/api/1/studies/*/models/**');
     await mode('desktop');
-    await comparison(page, f);
-    const unitGroup = page
-      .getByRole('region', { name: 'Comparison', exact: true })
-      .locator('details')
-      .filter({ has: page.locator('summary').filter({ hasText: /^Ports and units/ }) });
-    if ((await unitGroup.getAttribute('open')) === null)
-      await unitGroup.locator('summary').first().click();
+    await portability(page,f);
+    const download=page.waitForEvent('download');
+    await page.getByRole('button',{name:'Download portable model record',exact:true}).click();
+    const portable=JSON.parse(await readFile((await(await download).path())!,'utf8'));
+    expect(portable.revisions).toEqual([f.before]);
+    expect(portable.model_revision_id).toBe(f.before.model_revision_id);
     for (const size of ['desktop', 'narrow', '200']) {
       await mode(size);
       for (const theme of ['light', 'dark']) {
         await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-        const labels = unitGroup.getByText(/Left: Energy law · unknown/);
-        await labels.scrollIntoViewIfNeeded();
-        await capture('history-comparison-' + size + '-' + theme);
+        await page.getByRole('dialog',{name:'Export model',exact:true}).getByRole('button',{name:'Close',exact:true}).focus();
+        await capture('history-portable-export-' + size + '-' + theme);
       }
     }
     await page.keyboard.press('Escape');
@@ -530,8 +554,8 @@ test('@units-history light dark narrow and genuine 200 percent keyboard evidence
       await mode(size);
       for (const theme of ['light', 'dark']) {
         await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-        await page.getByRole('button', { name: 'Cancel', exact: true }).focus();
-        await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+        await page.getByRole('dialog',{name:'Import model',exact:true}).getByRole('button',{name:'Close',exact:true}).focus();
+        await expect(page.getByRole('dialog',{name:'Import model',exact:true}).getByRole('button',{name:'Close',exact:true})).toBeFocused();
         await capture('history-package-inspector-' + size + '-' + theme);
       }
     }

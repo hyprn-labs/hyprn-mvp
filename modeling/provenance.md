@@ -29,6 +29,7 @@ Patches apply in this order, each exactly once with zero fuzz and no reverse app
 | `080-unit-declarations.patch` | Unit accessors and validation, the native materializer, the frozen binding validator and the trusted unit catalog payload | `efa95728b550f32618854903bb47c6c3386137c0bce0f9b066c6cf5faad0085e` |
 | `090-quantity-definitions.patch` | Model-owned quantity descriptions (`Definition4`) and `ModelRevision4` read dispatch; changes only `app/services/modeling_contract.rb` | `18cd7538f928d5fa5ca662d9b486fe11873214336a5595e8348535e93af0243e` |
 | `100-configurations-without-criteria.patch` | Private configuration format 5 without criteria (model format 4 only), its compatibility check and preparation 4 pinning result protocol 3; advertises `criteria_free_configuration/1` and current execution versions 3–4 / 10–11; changes only `app/services/modeling_contract.rb` | `508b72cf47be5f82faa03571962284b8c5af5923067d7e5907817fb77994e227` |
+| `110-monetary-units.patch` | Successor model format 5, preparation 5, finite engine-derived monetary catalogue and discovery format 2; existing source and unit definitions remain unchanged | `643578538b365bc6bbc502283205ea993e08574e83edab30f84958660d034cf2` |
 | `deployment/modeling_policy.rb` | AGPL-3.0-only deployment adaptation (section "Reduced private service") | listed with the deployment source hashes |
 
 The source image is built from the verified original archive and the dependency locks. Every retained file that patches 010–040 create or change is replayed at build time from that archive and the recorded patches, with zero fuzz and no offset; patches 050–100 then apply as listed above. Historical source-image layers are not inputs to the build.
@@ -102,3 +103,22 @@ OpenMDAO 3.45.1 units source. Patch 080 carries the generated 49-entry internal
 catalogue (48 physical spellings plus dimensionless). Existing spellings and
 conversion factors are preserved; no affine conversion or general parser is added.
 The exact schema exception and permitted suffix are recorded in contracts/README.md.
+
+
+## Catalogue-backed monetary successor (2026-10-22)
+
+Patch 110 retains patch 080's exact table for historical provenance and supplies a
+new 61-entry internal catalogue (60 named expressions plus dimensionless). It uses
+OpenMDAO 3.45.1's existing USD and pax base dimensions. No dependency, runtime unit
+registration, exchange rate or inflation rule is introduced. The generator checks
+both units.py (`9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92`)
+and unit_library.ini (`8094fb7d3e8cb65a56311c2ea5ccfbc9c29cb8b4160f1486c39c19dd779a43d3`).
+The new catalogue digest is
+`5abc0ae35d2e2fcc8beb1ca9267e709007c007d51f20f95d735122daeef54885`.
+Its monetary metadata is part of the same digest as its verified conversion pairs.
+
+Monetary authoring explicitly selects model format 5 and UnitDeclaration2. Preparation
+5 and bundle 12 carry that exact model with configuration 6 and result protocol 3.
+Predecessor schema definitions, catalogue digests and artifact readers remain intact.
+The complete patch and this provenance record remain in the modeling service's
+AGPL corresponding-source inventory.

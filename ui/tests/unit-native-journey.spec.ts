@@ -50,44 +50,25 @@ async function expectStepModel(
 }
 async function openRun(page:Page,f:any,row:any){
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+row.run_id);
-  await expect(page.getByRole('button',{name:'Full-precision values',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Output values',exact:true})).toBeVisible();
 }
 
 async function retainedScientificAnswers(page: Page, f: any) {
   const answers = f.scientific_answers;
   if (!answers) return;
-  await page.goto(
-    '/ui/#v=1&view=approach&study=' + f.study_id +
-      '&approach=' + answers.approach_version_id,
-  );
-  const study = page.getByRole('region', {
-    name: 'Answer to the study question', exact: true,
-  });
-  await expect(study).toContainText(answers.study_answer.interpretation);
-  const comparison = page.getByRole('article', {
-    name: 'Direct and retained-result comparison', exact: true,
-  });
-  await comparison.locator('summary').first().click();
-  await expect(comparison).toContainText(answers.revised_case_answer.qualifications[1]);
-  await study.getByText('Answer basis and record details', { exact: true }).click();
-  await study.getByRole('button', {
-    name: 'View case answer version ' + answers.case_answer.answer_version_id.slice(0, 8),
-    exact: true,
-  }).click();
-  await expect(study).toContainText(answers.case_answer.interpretation);
-  await expect(study).not.toContainText(answers.revised_case_answer.qualifications[1]);
-  const basis = study.getByRole('button', {
-    name: 'Run ' + answers.case_answer.basis.run_ids[0].slice(0, 8), exact: true,
-  });
-  await expect(basis.first()).toBeVisible();
-  await page.screenshot({
-    path: join(root, 'evidence/native-persistent-scientific-answers.png'), fullPage: true,
-  });
-  await basis.first().click();
-  await expect(page.getByRole('button', {
-    name: 'Full-precision values', exact: true,
-  })).toBeVisible();
-  expect(page.url()).toContain('run=' + answers.case_answer.basis.run_ids[0]);
+  await page.goto('/ui/#v=1&view=overview&study=' + f.study_id);
+  const study = page.getByRole('region', { name: 'Study answer', exact: true });
+  await expect(study).toContainText(answers.revised_answer.content.interpretation.interpretation);
+  await study.getByRole('combobox', { name: 'Study answer version', exact: true })
+    .selectOption(answers.first_answer.answer_version_id);
+  await expect(study).toContainText(answers.first_answer.content.interpretation.interpretation);
+  await expect(study).not.toContainText(answers.revised_answer.content.interpretation.interpretation);
+  const basis = study.getByRole('button', { name: /^Open run ·/ }).first();
+  await expect(basis).toBeVisible();
+  await page.screenshot({ path: join(root, 'evidence/native-persistent-scientific-answers.png'), fullPage: true });
+  await basis.click();
+  await expect(page.getByRole('region', { name: 'Output values', exact: true })).toBeVisible();
+  expect(page.url()).toContain('run=' + answers.run_id);
 }
 test('@units-producer browser author commit and configuration use the real private producer without execution',async({page})=>{
   test.setTimeout(90000);const f=await fixture(),calls:any[]=[],errors:string[]=[];
@@ -109,11 +90,13 @@ test('@units-producer browser author commit and configuration use the real priva
   await expect(page.getByText('Model version saved · units incomplete. Resolve units in the listed active components before creating a configuration.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
-  await page.getByRole('button',{name:'Edit ports',exact:true}).click();
-  for(const n of [1,2]){await page.getByLabel(`Port ${n} units`,{exact:true}).selectOption('physical');await page.getByLabel(`Port ${n} units spelling`,{exact:true}).fill('J/kg');}
+  await page.getByRole('button',{name:'Component actions',exact:true}).first().click();
+  await page.getByRole('button',{name:'Manage quantities',exact:true}).click();
+  const quantities=page.getByRole('dialog',{name:'Manage quantities',exact:true});
+  for(const n of [1,2]){await quantities.getByLabel(`Quantity ${n} units`,{exact:true}).selectOption('physical');await quantities.getByLabel(`Quantity ${n} units spelling`,{exact:true}).fill('J/kg');}
   await page.keyboard.press('Escape');await page.getByRole('button',{name:'Save component',exact:true}).click();
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Component saved',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Browser compound configuration');
   await page.getByLabel('Energy law · x value',{exact:true}).fill('2');
@@ -125,7 +108,7 @@ test('@units-producer browser author commit and configuration use the real priva
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   const checked=await preview;expect(checked.status()).toBe(200);expect((await checked.json()).data.compatibility.compatible).toBe(true);
   const saved=await committed;expect(saved.status()).toBe(201);const retained=(await saved.json()).data;
-  expect(retained.model_snapshot.schema_version).toBe('4');
+  expect(retained.model_snapshot.schema_version).toBe('5');
   expect(retained.configuration.inputs[0].units).toBe('MJ/kg');expect(retained.configuration.inputs[0].value).toBe(2);
   await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
   expect(calls.some(c=>c.path.endsWith('/unit-catalog')&&c.status===200)).toBe(true);
@@ -144,18 +127,21 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     await openRun(page,f,row);
     const response=await page.request.get('/api/1/studies/'+f.study_id+'/runs/'+row.run_id);
     expect(response.ok()).toBe(true);expect((await response.json()).data.history).toEqual(row.detail.history);
-    await page.getByRole('button',{name:'Full-precision values',exact:true}).focus();await page.keyboard.press('Enter');
-    const table=page.getByRole('region',{name:'Full-precision output values',exact:true});
+    const table=page.getByRole('region',{name:'Output values',exact:true});
     for(const [index,output]of row.detail.history.results.outputs.entries()){
       const cells=table.locator('tbody tr').nth(index).locator('td');
-      await expect(cells.nth(0)).toHaveText(String(output.value));
-      await expect(cells.nth(1)).toHaveText(output.units||'dimensionless');
+      await expect(cells.nth(0).locator('span')).toHaveAttribute('title',`Full precision: ${output.value}`);
+      const scientificUnits:Record<string,string>={'g/cm**3':'g/cm³','kg/m**3':'kg/m³','m**2':'m²','cm**2':'cm²'};
+      await expect(cells.nth(1)).toHaveText(scientificUnits[output.units]??(output.units||'dimensionless'));
     }
-    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Full-precision values',exact:true})).toBeFocused();
-    await page.getByRole('tab',{name:'Model',exact:true}).click();
+    await table.getByRole('button',{name:/^Inspect output /}).first().focus();await page.keyboard.press('Enter');
+    await expect(page.getByRole('tab',{name:'Model',exact:true})).toBeFocused();
+    await expect(page.getByRole('tab',{name:'Model',exact:true})).toHaveAttribute('aria-selected','true');
     await expect(page.locator('#run-panel-1')).not.toContainText('[object Object]');
     await page.getByRole('tab',{name:'Configuration',exact:true}).click();
-    await expect(page.locator('#run-panel-2').getByRole('heading',{name:'Context',exact:true})).toBeVisible();
+    await page.locator('#run-panel-2').getByRole('button',{name:'Configuration record details',exact:true}).click();
+    expect(JSON.parse(await page.getByLabel('Saved configuration JSON',{exact:true}).innerText())).toEqual(row.configuration.configuration);
+    await page.keyboard.press('Escape');
     await expect(page.locator('#run-panel-2').getByRole('region',{name:'Saved configuration inputs',exact:true}).locator('tbody tr')).toHaveCount(row.configuration.configuration.inputs.length);
     if(f.mixed){
       await page.locator('#run-panel-2').getByRole('button',{name:'View modeling approach',exact:true}).click();
@@ -171,8 +157,9 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     const seedResponse=await page.request.get('/api/1/studies/'+f.study_id+'/runs/'+row.run_id+'/modified-run-seed');
     expect(seedResponse.ok()).toBe(true);const seed=(await seedResponse.json()).data;
     expect(seed.model_snapshot).toEqual(row.detail.history.model_snapshot);
+    expect(seed.source_configuration.context_snapshot).toEqual(row.configuration.configuration.context_snapshot);
     if(f.mixed){expect(seed.approach_closure).toEqual(f.mixed.seed.approach_closure);expect(seed.source_configuration).toEqual(row.configuration.configuration);}
-    expect(seed.schema_version).toBe({'8':'8','4':'4'}[row.detail.history.history_schema_version as string]??'3');
+    expect(seed.schema_version).toBe({'9':'9','8':'8','4':'4'}[row.detail.history.history_schema_version as string]??'3');
     await page.getByRole('button',{name:'Create modified run',exact:true}).click();
     await expect(page.getByLabel('Configuration name',{exact:true})).toBeVisible();
     await expect(page.locator('body')).not.toContainText('[object Object]');
@@ -201,7 +188,17 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     await page.screenshot({path:join(root,'evidence/mixed-export-existing-entry.png')});
     await page.keyboard.press('Escape');
   }
-  expect(calls.filter(c=>c.path.includes('/models/'))).toEqual([]);
+  const permittedModelReads=new Set<string>();
+  for(const row of f.records){
+    const model=row.detail.history.model_snapshot;
+    const base='/api/1/studies/'+f.study_id+'/models/'+model.model_id;
+    // Navigation metadata and application-owned explanation reads do not
+    // replace the exact model snapshot retained in the recorded run.
+    permittedModelReads.add(base+'/revisions');
+    permittedModelReads.add(base+'/explanation');
+    permittedModelReads.add(base+'/revisions/'+model.model_revision_id+'/explanation');
+  }
+  expect(calls.filter(c=>c.path.includes('/models/')&&!permittedModelReads.has(c.path))).toEqual([]);
   expect(calls.filter(c=>c.method!=='GET'&&c.path!=='/api/1/session')).toEqual([]);
   expect(errors).toEqual([]);
   await writeFile(join(root,'evidence/native-browser-api-calls.json'),JSON.stringify(calls,null,2));
@@ -225,14 +222,15 @@ test('@units-native @units-mixed-retained retained compound results light dark n
       if(size==='200'){await worker.evaluate(id=>(globalThis as any).chrome.tabs.setZoom(id,2),tab);expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tab)).toBe(2);expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);}
       for(const theme of ['light','dark']){
         await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        await page.getByRole('button',{name:'Full-precision values',exact:true}).focus();await page.keyboard.press('Enter');
-        await expect(page.getByRole('dialog')).toBeVisible();
+        const table=page.getByRole('region',{name:'Output values',exact:true});
+        const inspect=table.getByRole('button',{name:/^Inspect output /}).first();
+        await inspect.focus();
+        await expect(table).toBeVisible();
         await expect.poll(()=>page.locator('.hf-btn:visible').evaluateAll(items=>items.every(item=>{getComputedStyle(item).backgroundColor;return item.getAnimations().every(a=>a.playState!=='running');}))).toBe(true);
         const bounds=await page.evaluate(()=>({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio}));expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width+1);
         geometry.push({size,theme,...bounds});const image=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
         await writeFile(join(root,'evidence/native-exact-'+size+'-'+theme+'.png'),Buffer.from(image.data,'base64'));
         if(size==='narrow'){
-          const table=page.getByRole('region',{name:'Full-precision output values',exact:true});
           await table.evaluate(e=>e.scrollLeft=e.scrollWidth);
           const cells=table.locator('tbody tr').first().locator('td');
           const expectedUnit=f.records[0].detail.history.results.outputs[0].units||'dimensionless';
@@ -241,7 +239,12 @@ test('@units-native @units-mixed-retained retained compound results light dark n
           const scrolled=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
           await writeFile(join(root,'evidence/native-exact-narrow-'+theme+'-units.png'),Buffer.from(scrolled.data,'base64'));
         }
-        await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Full-precision values',exact:true})).toBeFocused();
+        await inspect.focus();await page.keyboard.press('Enter');
+        await expect(page.getByRole('tab',{name:'Model',exact:true})).toBeFocused();
+        const results=page.getByRole('tab',{name:'Results',exact:true});
+        await results.focus();await page.keyboard.press('Enter');
+        await expect(results).toHaveAttribute('aria-selected','true');
+        await expect(table).toBeVisible();
       }
     }
     expect(errors).toEqual([]);await writeFile(join(root,'evidence/native-browser-geometry.json'),JSON.stringify(geometry,null,2));

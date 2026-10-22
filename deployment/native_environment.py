@@ -63,6 +63,10 @@ PLATFORMS = {
 }
 
 
+# Preserve a faster configured/default local scheduler interval; cap slow polling
+# at the interval used by the native fixtures. This is not a measured speedup.
+MAX_JOB_POLL_SECONDS = 0.2
+
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -1000,6 +1004,8 @@ def initialize(root, configuration):
         workdir=str(root / 'aiida-work/{username}'),
     ).store()
     computer.configure(safe_interval=0.1)
+    computer.set_minimum_job_poll_interval(
+        min(computer.get_minimum_job_poll_interval(), MAX_JOB_POLL_SECONDS))
     code = orm.InstalledCode(
         label='hyprn-mvp-scalar',
         computer=computer,

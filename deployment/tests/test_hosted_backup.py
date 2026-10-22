@@ -1,5 +1,8 @@
 """Real stopped-owner files roundtrip; PostgreSQL coherence is not asserted here."""
 
+import live_fence
+setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
+
 from contextlib import contextmanager
 import fcntl
 import hashlib

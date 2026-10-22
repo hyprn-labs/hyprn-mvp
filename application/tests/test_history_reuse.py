@@ -10,10 +10,10 @@ from aiida import orm
 from checks import NATIVE_BACKEND, PROJECTION_SCOPE
 from test_result_dependencies import source, native, linked_bundle, rehash
 from test_results import retained_record
-from test_result_bindings import env6, saved2, prepared2
+from test_result_bindings import env6, saved2, prepared2, bindings
 from test_bridge import wire
 from hyprn_mvp_app.store import canonical, digest, Store, uid, DomainError
-from hyprn_mvp_app.history import History, projection
+from hyprn_mvp_app.history import History, projection, run_association
 from hyprn_mvp_app.execution import Submissions
 from hyprn_mvp_integration.results import retained_bundle
 from aiida.common.links import LinkType
@@ -23,6 +23,33 @@ from aiida.common.links import LinkType
 def env(env6):
     """A configuration 6 with one protocol-3 source run: new configurations are version 6 only."""
     return env6
+
+
+def retained_linked_configuration(env):
+    """Synthetic historical record, not a claim about current authoring support.
+
+    Keep captured producer bytes untouched. Pin a fresh retained configuration
+    to that preparation's authenticated catalogue; current authoring is tested
+    separately and correctly requires the current catalogue.
+    """
+    frozen=copy.deepcopy(saved2(env))
+    catalogs=[]
+    for raw in env['case']['files'].values():
+        try:value=json.loads(raw)
+        except (ValueError,UnicodeError):continue
+        if isinstance(value,dict) and {'catalog_digest','linear_pairs','supported_units'} <= set(value):
+            catalogs.append(value['catalog_digest'])
+    assert len(catalogs)==1
+    config=frozen['configuration']
+    config.update(configuration_id=uid(),configuration_revision_id=uid())
+    for item in config['inputs']:
+        if item['result_binding'] is not None:
+            item['result_binding']['conversion']['catalog_digest']=catalogs[0]
+    config['digest']=digest({key:value for key,value in config.items() if key!='digest'})
+    with env['store'].connection(write=True) as db:
+        db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(
+            config['configuration_revision_id'],config['configuration_id'],env['sid'],json.dumps(frozen)))
+    return frozen
 
 
 def repository(bundle):
@@ -93,7 +120,9 @@ def test_native_hydration_to_app_restart_retains_exact_bytes_without_model(sourc
         Submissions(store,None,bridge).hydrate(actor,sid,rid)
     assert calls==['read_record']
     with store.connection() as db:before=db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0]
-    saved=json.loads(before)['history'];assert saved['schema_version']=='1'
+    with store.connection() as db:
+        saved=json.loads(run_association(db,rid)['payload'])['history']
+    assert saved['schema_version']=='1'
     history=History(Store(store.path)).read(actor,sid,rid)
     assert history['configuration']==payload['frozen']['configuration']
     assert history['bundle']['schema_version']==version
@@ -188,7 +217,7 @@ def test_real_source_disappearance_across_bridge_fails_closed_without_redispatch
     from aiida.tools.graph.deletions import delete_nodes
     import scoped_fixture
     store=env['store'];rid=env['rid'];actor=env['actor'];sid=env['sid']
-    with store.connection() as db:payload=json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
+    with store.connection() as db:payload=json.loads(run_association(db,rid)['payload'])
     bundle=dict(manifest=payload['bundle']['manifest'],files={p:base64.b64decode(b) for p,b in payload['bundle']['files'].items()})
     node=native_record(bundle,payload['request'],env['results'])
     association=dict(store_uuid=native.store_uuid,process_uuid=node.uuid)
@@ -196,7 +225,11 @@ def test_real_source_disappearance_across_bridge_fails_closed_without_redispatch
     payload['history']['digest']=digest({k:v for k,v in payload['history'].items() if k!='digest'})
     save_record(store,rid,payload,association)
     with store.connection() as db:original=db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0]
-    frozen=saved2(env);prepared,files=prepared2(env,frozen)
+    frozen=retained_linked_configuration(env);prepared,files=prepared2(env,frozen)
+    # Prove preparation is valid before the deliberately removed native source.
+    from hyprn_mvp_app.execution_bundle import assemble_bundle
+    assemble_bundle(uid(),prepared,files,frozen,native.bundle_runtime(),
+        bindings(env).dependencies(actor,sid,frozen['configuration'],native))
     count_before=orm.QueryBuilder(backend=NATIVE_BACKEND).append(orm.ProcessNode).count()
     removed=[];native_uuid=node.uuid
     def disappear(actual):

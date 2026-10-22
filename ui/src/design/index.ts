@@ -140,3 +140,5 @@ export { OpenLink } from './navigation';
 export type { OpenLinkProps } from './navigation';
 
 export { AssistantActivity } from './assistant';
+
+export { criterionStatus, evaluationReasons } from './scientific';

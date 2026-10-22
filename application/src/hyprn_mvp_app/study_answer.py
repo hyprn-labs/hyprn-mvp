@@ -257,6 +257,69 @@ for _name in ('State', 'VersionSaved', 'VersionPage'):
     DEFINITIONS[f'StudyAnswer{_name}Read2'] = json.loads(_definition)
 
 
+DEFINITIONS['StudyAnswerDeliverableStatus1'] = _object(dict(
+    deliverable_id=_ID,
+    state=dict(enum=['fulfilled', 'pending', 'unavailable']),
+    explanation=_STATEMENT,
+))
+DEFINITIONS['ScientificReviewItem1'] = _object(dict(
+    state=dict(enum=['checked', 'limited', 'unassessed']),
+    explanation=_TEXT,
+))
+DEFINITIONS['StudyAnswerCompletion1'] = _object(dict(
+    state=dict(enum=['interim', 'complete']),
+    deliverables=dict(type='array', maxItems=32,
+                      items={'$ref': '#/$defs/StudyAnswerDeliverableStatus1'}),
+))
+REVIEW_ASPECTS = ('brief_fidelity', 'source_basis', 'physical_validity', 'sensitivity')
+DEFINITIONS['StudyAnswerScientificReview1'] = _object({
+    key: {'$ref': '#/$defs/ScientificReviewItem1'} for key in REVIEW_ASPECTS
+})
+from .explanations import DEFINITIONS as _EXPLANATION_DEFINITIONS
+DEFINITIONS['StudyAnswerPriceBasis1'] = deepcopy(_EXPLANATION_DEFINITIONS['MonetaryQuantityBasis1'])
+DEFINITIONS['StudyAnswerPriceBasis1']['properties'].update(
+    model_revision_id=_ID, explanation_version_id=_ID,
+    model_digest=dict(type='string', pattern='^[0-9a-f]{64}$'),
+    explanation_digest=dict(type='string', pattern='^[0-9a-f]{64}$'),
+)
+DEFINITIONS['StudyAnswerPriceBasis1']['required'] += [
+    'model_revision_id', 'model_digest', 'explanation_version_id', 'explanation_digest',
+]
+DEFINITIONS['StudyAnswerCell3'] = deepcopy(DEFINITIONS['StudyAnswerCell2'])
+DEFINITIONS['StudyAnswerCell3']['properties']['monetary_basis'] = {
+    'anyOf': [{'$ref': '#/$defs/StudyAnswerPriceBasis1'}, {'type': 'null'}],
+    'description': 'Derived from the saved model explanation; never trusted from the caller.',
+}
+DEFINITIONS['StudyAnswerContent3'] = deepcopy(DEFINITIONS['StudyAnswerContent2'])
+DEFINITIONS['StudyAnswerContent3']['properties'].update(
+    schema_version=dict(const='3'),
+    completion={'$ref': '#/$defs/StudyAnswerCompletion1'},
+    scientific_review={'$ref': '#/$defs/StudyAnswerScientificReview1'},
+    comparison=dict(type='array', maxItems=1024, items={'$ref': '#/$defs/StudyAnswerCell3'}),
+)
+DEFINITIONS['StudyAnswerContent3']['required'] += ['completion', 'scientific_review']
+for _kind in ('Draft', 'Version', 'State', 'DraftSave', 'VersionSaved', 'VersionPage'):
+    _raw = json.dumps(DEFINITIONS[f'StudyAnswer{_kind}2'])
+    for _ref in ('Content', 'Draft', 'Version'):
+        _raw = _raw.replace(f'StudyAnswer{_ref}2', f'StudyAnswer{_ref}3')
+    _schema = json.loads(_raw)
+    if 'schema_version' in _schema['properties']:
+        _schema['properties']['schema_version'] = dict(const='3')
+    DEFINITIONS[f'StudyAnswer{_kind}3'] = _schema
+for _kind in ('Content', 'Draft', 'Version'):
+    DEFINITIONS[f'StudyAnswer{_kind}Read3'] = dict(anyOf=[
+        {'$ref': f'#/$defs/StudyAnswer{_kind}{version}'} for version in (1, 2, 3)
+    ])
+DEFINITIONS['StudyAnswerDraftSaveRead3'] = dict(anyOf=[
+    {'$ref': '#/$defs/StudyAnswerDraftSave2'}, {'$ref': '#/$defs/StudyAnswerDraftSave3'},
+])
+for _kind in ('State', 'VersionSaved', 'VersionPage'):
+    _raw = json.dumps(DEFINITIONS[f'StudyAnswer{_kind}3'])
+    for _ref in ('Draft', 'Version'):
+        _raw = _raw.replace(f'StudyAnswer{_ref}3', f'StudyAnswer{_ref}Read3')
+    DEFINITIONS[f'StudyAnswer{_kind}Read3'] = json.loads(_raw)
+
+
 def current_content(content):
     """An editing copy of old content, retaining limitations and unfinished analysis."""
     value = deepcopy(content)
@@ -273,6 +336,48 @@ def current_content(content):
             value['next_analysis']['statement'], *pending,
         ]))
     return value
+
+
+def publication_content(content):
+    """An editing copy cannot infer completed deliverables from a historical answer."""
+    value = current_content(content)
+    if value['schema_version'] != '3':
+        value.update(schema_version='3', completion=dict(state='interim', deliverables=[]),
+                     scientific_review={key: dict(state='unassessed', explanation='')
+                                        for key in REVIEW_ASPECTS})
+    return value
+
+
+def _completion_problems(content, brief):
+    """Author judgement stays explicit; required exploration has a deterministic gate."""
+    if content['schema_version'] != '3':
+        return []
+    completion = content['completion']
+    required = {d['deliverable_id']: d for d in brief['content'].get('deliverables', [])}
+    supplied = completion['deliverables']
+    ids = [d['deliverable_id'] for d in supplied]
+    problems = []
+    if len(ids) != len(set(ids)) or not set(ids) <= required.keys():
+        problems.append(issue(['completion', 'deliverables'],
+                              'Use each requested brief deliverable at most once.'))
+    if completion['state'] == 'complete':
+        if not required:
+            problems.append(issue(['completion'],
+                                  'Record the requested deliverables in the brief first.'))
+        if set(ids) != required.keys() or any(d['state'] != 'fulfilled' for d in supplied):
+            problems.append(issue(['completion', 'deliverables'],
+                                  'An unfinished deliverable requires an interim answer.'))
+        for aspect, review in content['scientific_review'].items():
+            if review['state'] == 'unassessed' or not review['explanation'].strip():
+                problems.append(issue(['scientific_review', aspect],
+                                      'Explain the scientific check or its remaining limitation.'))
+    for item in supplied:
+        request = required.get(item['deliverable_id'])
+        if (request and request['kind'] == 'interactive_exploration'
+                and item['state'] == 'fulfilled' and content['exploration_basis'] is None):
+            problems.append(issue(['exploration_basis'],
+                                  'A fulfilled exploration requires a prepared, checked basis.'))
+    return problems
 
 
 _VALIDATORS = {}
@@ -436,24 +541,29 @@ class _Citations:
                 return evaluation
         return unresolved([criterion], 'criterion_not_bound')[0]
 
-    def output_name(self, version, run_id, criterion):
+    def output_details(self, version, run_id, criterion):
+        """Derive the label and price basis from one authorized retained-model read."""
+        from .explanations import quantity_price_basis
         binding = next((b for b in version['content']['criterion_bindings']
                         if b['criterion_id'] == criterion['criterion_id']), None)
         if binding is None:
-            return None
+            return None, None
         retained = History(self.store).read(self.actor, self.sid, run_id)
         model = retained.get('model_snapshot')
         if model is None:
-            return None
+            return None, None
         target = binding['output']
         instance = next((i for i in model['instances']
                          if i['instance_id'] == target['instance_id']), None)
         if instance is None:
-            return None
+            return None, None
         definition = next(d for d in model['definitions']
                           if d['definition_version_id'] == instance['definition_version_id'])
-        return next((p['name'] for p in definition['ports']
+        name = next((p['name'] for p in definition['ports']
                      if p['port_id'] == target['port_id']), None)
+        with self.store.connection() as db:
+            basis = quantity_price_basis(db, self.sid, model, target)
+        return name, basis
 
     def estimate(self, estimate_id):
         try:
@@ -495,6 +605,8 @@ def _resolve(citations, content, *, complete):
         {a['alternative_id'] for a in brief['content']['alternatives']} if brief else set()
     )
     criteria = {c['criterion_id']: c for c in brief['content']['criteria']} if brief else {}
+    if brief:
+        problems.extend(_completion_problems(content, brief))
 
     analysis_pins, model_pins = {}, {}
 
@@ -538,10 +650,13 @@ def _resolve(citations, content, *, complete):
             )
         )
 
+    price_bases = {}
     for index, cell in enumerate(content['comparison']):
         path = ['comparison', index]
         cell['evaluation'] = None
         cell['output_name'] = None
+        if content['schema_version'] == '3':
+            cell['monetary_basis'] = None
         criterion = criteria.get(cell['criterion_id'])
         if cell['alternative_id'] not in alternatives:
             problems.append(
@@ -584,7 +699,23 @@ def _resolve(citations, content, *, complete):
                 )
                 continue
         cell['evaluation'] = citations.evaluation(version, cell['run_id'], criterion)
-        cell['output_name'] = citations.output_name(version, cell['run_id'], criterion)
+        cell['output_name'], basis = citations.output_details(
+            version, cell['run_id'], criterion)
+        if basis is not None and content['schema_version'] != '3':
+            problems.append(issue(path,
+                'Use answer format 3 to retain this monetary output’s exact unit, '
+                'price year and economic basis.'))
+            continue
+        if content['schema_version'] == '3':
+            from .units import monetary_basis_key
+            cell['monetary_basis'] = basis
+            key = monetary_basis_key(basis) if basis is not None else None
+            prior = price_bases.setdefault(cell['criterion_id'], key)
+            if prior != key:
+                problems.append(issue(path,
+                    'Compare this criterion using the same monetary unit, price year and '
+                    'economic basis. Currency, inflation or scope changes require an '
+                    'explicit, evidenced model calculation.'))
 
     for index, item in enumerate(content['justifications']):
         path = ['justifications', index]
@@ -745,7 +876,7 @@ class StudyAnswers:
         body = deepcopy(body)
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid, write=True)
-        validate_answer('StudyAnswerDraftSave2', body)
+        validate_answer('StudyAnswerDraftSaveRead3', body)
         replayed = self._replayed(actor, sid, 'answer_draft', body)
         if replayed is not None:
             return replayed
@@ -758,7 +889,7 @@ class StudyAnswers:
                 previous['revision'] if previous else None, body['expected_revision']
             )
             draft = dict(
-                schema_version='2',
+                schema_version=content['schema_version'],
                 study_id=sid,
                 revision=uid(),
                 based_on_version_id=previous['based_on_version_id'] if previous else None,
@@ -766,7 +897,7 @@ class StudyAnswers:
                 updated_by=actor,
                 updated_at=_now(),
             )
-            validate_answer('StudyAnswerDraft2', draft, retained=True)
+            validate_answer('StudyAnswerDraftRead3', draft, retained=True)
             db.execute(
                 'INSERT INTO study_answer_drafts VALUES(?,?,?) ON CONFLICT(study_id) '
                 'DO UPDATE SET revision=excluded.revision,payload=excluded.payload',
@@ -796,7 +927,7 @@ class StudyAnswers:
         self.store.cas(current['revision'] if current else None, body['expected_revision'])
         # Cells are re-read from their runs, so the version stores the evaluations as of now.
         content = current_content(current['content'])
-        validate_answer('StudyAnswerContent2', content)
+        validate_answer('StudyAnswerContentRead3', content)
         content = _resolve(_Citations(self.store, actor, sid), content, complete=True)
         basis = content['exploration_basis']
         if basis is not None:
@@ -836,7 +967,7 @@ class StudyAnswers:
             self.store.cas(draft['revision'] if draft else None, body['expected_revision'])
             latest = self._latest(db, sid)
             version = dict(
-                schema_version='2',
+                schema_version=content['schema_version'],
                 study_id=sid,
                 answer_version_id=uid(),
                 version_number=latest['version_number'] + 1 if latest else 1,
@@ -846,7 +977,7 @@ class StudyAnswers:
                 created_at=_now(),
             )
             version['digest'] = digest(version)
-            validate_answer('StudyAnswerVersion2', version, retained=True)
+            validate_answer('StudyAnswerVersionRead3', version, retained=True)
             db.execute(
                 'INSERT INTO study_answer_versions VALUES(?,?,?,?)',
                 (
@@ -859,7 +990,7 @@ class StudyAnswers:
             # The draft continues from the saved version with a new revision.
             nextdraft = dict(
                 draft,
-                schema_version='2',
+                schema_version=content['schema_version'],
                 revision=uid(),
                 based_on_version_id=version['answer_version_id'],
                 content=deepcopy(content),

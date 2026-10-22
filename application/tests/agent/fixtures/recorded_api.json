@@ -5530,11 +5530,80 @@
  "study_id": "51000000-0000-4000-8000-000000000001",
  "unit_catalog": {
   "affine_conversion": false,
-  "catalog_digest": "9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45",
+  "catalog_digest": "5abc0ae35d2e2fcc8beb1ca9267e709007c007d51f20f95d735122daeef54885",
   "engine": "OpenMDAO",
+  "engine_library_sha256": "8094fb7d3e8cb65a56311c2ea5ccfbc9c29cb8b4160f1486c39c19dd779a43d3",
   "engine_source_sha256": "9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92",
   "engine_version": "3.45.1",
-  "schema_version": "1",
+  "monetary_units": [
+   {
+    "denominator": "",
+    "expression": "USD",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "",
+    "expression": "kUSD",
+    "numerator": "USD",
+    "scale": 1000.0
+   },
+   {
+    "denominator": "",
+    "expression": "MUSD",
+    "numerator": "USD",
+    "scale": 1000000.0
+   },
+   {
+    "denominator": "pax",
+    "expression": "USD/pax",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "kg",
+    "expression": "USD/kg",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "m**3",
+    "expression": "USD/m**3",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "h",
+    "expression": "USD/h",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "kW",
+    "expression": "USD/kW",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "kW*h",
+    "expression": "USD/(kW*h)",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "J",
+    "expression": "USD/J",
+    "numerator": "USD",
+    "scale": 1.0
+   },
+   {
+    "denominator": "MJ",
+    "expression": "USD/MJ",
+    "numerator": "USD",
+    "scale": 1.0
+   }
+  ],
+  "schema_version": "2",
   "supported_units": [
    "m",
    "km",
@@ -5583,7 +5652,19 @@
    "m/s**2",
    "N*m",
    "W/(m*K)",
-   "W/(m**2*K)"
+   "W/(m**2*K)",
+   "USD",
+   "kUSD",
+   "MUSD",
+   "pax",
+   "USD/pax",
+   "USD/kg",
+   "USD/m**3",
+   "USD/h",
+   "USD/kW",
+   "USD/(kW*h)",
+   "USD/J",
+   "USD/MJ"
   ]
  }
 }

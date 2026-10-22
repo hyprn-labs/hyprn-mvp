@@ -154,6 +154,49 @@ def study(api):  # noqa: F811
     return framed(api)
 
 
+def test_completion_requires_requested_work_and_checked_exploration(study):
+    f = study
+    state = f['client'].get(study_path(f, 'brief')).json()['data']
+    required = dict(deliverable_id=uid(), kind='interactive_exploration',
+                    statement='Explore the declared ranges jointly.')
+    brief = dict(state['draft']['content'], schema_version='2', deliverables=[required])
+    written = f['client'].post(study_path(f, 'brief/draft'), json=dict(
+        command_id=uid(), expected_revision=state['draft']['revision'], content=brief,
+    ))
+    assert written.status_code == 200, written.text
+    saved = f['client'].post(study_path(f, 'brief/versions'), json=dict(
+        command_id=uid(), expected_revision=written.json()['data']['revision'],
+    ))
+    assert saved.status_code == 201, saved.text
+    content = answer(f, schema_version='3',
+        brief_version_id=saved.json()['data']['version']['brief_version_id'],
+        completion=dict(state='interim', deliverables=[dict(
+            deliverable_id=required['deliverable_id'], state='pending',
+            explanation='Independent validation is not finished.',
+        )]),
+        scientific_review={key: dict(state='limited', explanation='Explicit screening limit.')
+                           for key in ('brief_fidelity', 'source_basis',
+                                       'physical_validity', 'sensitivity')})
+    response = draft(f, content)
+    assert response.status_code == 200, response.text
+    revision = response.json()['data']['revision']
+    interim = save(f, revision)
+    assert interim.status_code == 201, interim.text
+    frozen = interim.json()['data']['version']
+    assert frozen['content']['completion']['state'] == 'interim'
+    revision = interim.json()['data']['draft']['revision']
+    content['completion']['state'] = 'complete'
+    refused = draft(f, content, revision)
+    assert refused.status_code == 422
+    content['completion']['deliverables'][0]['state'] = 'fulfilled'
+    refused = draft(f, content, revision)
+    assert refused.status_code == 422
+    assert any('exploration_basis' in issue['path']
+               for issue in refused.json()['error']['fields'])
+    unchanged = f['client'].get(answer_path(f)).json()['data']
+    assert unchanged['latest_version'] == frozen
+
+
 def test_a_new_study_has_no_answer_until_one_is_written(api):  # noqa: F811
     state = api['client'].get(answer_path(api))
     assert state.status_code == 200, state.text
@@ -678,3 +721,51 @@ def test_answer_refuses_distinct_analyses_using_two_versions_of_one_model(study)
     published = save(study, written.json()['data']['revision'])
     assert published.status_code == 422, published.text
     assert 'multiple versions of the same model' in published.text
+
+
+
+def test_completed_assessment_preserves_scientific_limits_and_derives_price_basis(study, generated):
+    f = study
+    state = f['client'].get(study_path(f, 'brief')).json()['data']
+    requirement = dict(deliverable_id=uid(), kind='assessment', statement='Assess the saved point.')
+    written = f['client'].post(study_path(f, 'brief/draft'), json=dict(
+        command_id=uid(), expected_revision=state['draft']['revision'],
+        content=dict(state['draft']['content'], schema_version='2', deliverables=[requirement])))
+    assert written.status_code == 200, written.text
+    brief = f['client'].post(study_path(f, 'brief/versions'), json=dict(
+        command_id=uid(), expected_revision=written.json()['data']['revision']))
+    assert brief.status_code == 201, brief.text
+    content = answer(f, schema_version='3',
+        brief_version_id=brief.json()['data']['version']['brief_version_id'],
+        completion=dict(state='complete', deliverables=[dict(
+            deliverable_id=requirement['deliverable_id'], state='fulfilled',
+            explanation='The saved point is assessed; the answer retains its screening limits.')]),
+        scientific_review={key: dict(state='limited', explanation='Only this explicit point is assessed.')
+            for key in ('brief_fidelity', 'source_basis', 'physical_validity', 'sensitivity')})
+    # A caller cannot invent a monetary meaning for the dimensionless recorded output.
+    content['comparison'][0]['monetary_basis'] = dict(instance_id=uid(), port_id=uid(),
+        catalogue_expression='USD', price_year=2025, economic_basis='Invented cost scope',
+        evidence_links=[dict(evidence_version_id=uid(), relation='context')],
+        model_revision_id=uid(), model_digest='a'*64,
+        explanation_version_id=uid(), explanation_digest='b'*64)
+    draft_command, version_command = uid(), uid()
+    response = draft(f, content, command=draft_command)
+    assert response.status_code == 200, response.text
+    saved = save(f, response.json()['data']['revision'], command=version_command)
+    assert saved.status_code == 201, saved.text
+    version = saved.json()['data']['version']
+    assert version['content']['completion']['state'] == 'complete'
+    assert version['content']['comparison'][0]['monetary_basis'] is None
+    assert all(r['state'] == 'limited' for r in version['content']['scientific_review'].values())
+    # Recovery reads must describe the same current-format result as the authoring response.
+    from jsonschema import Draft202012Validator
+    receipt_schema = {**generated, '$ref': '#/components/schemas/PublicReceipt'}
+    for category, command, expected in (
+        ('answer_draft', draft_command, response.json()['data']),
+        ('answer_version', version_command, saved.json()['data']),
+    ):
+        receipt = f['client'].get(study_path(f, f'commands/{command}?category={category}'))
+        assert receipt.status_code == 200, receipt.text
+        record = receipt.json()['data']
+        assert record['result'] == expected
+        Draft202012Validator(receipt_schema).validate(record)

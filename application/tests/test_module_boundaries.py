@@ -94,7 +94,7 @@ INTEGRATION_SEAM = BOUND_INTEGRATION + ('hyprn_mvp_integration.computational_exp
 # image and is never imported by the host-side runtime probe.
 ATTESTED_ROOTS = BOUND_INTEGRATION + ('hyprn_mvp_integration.worker',)
 PROJECT_SOURCES = ('application/src/', 'integration/src/')
-# Reviewed attested project modules (54-entry list; the other 38 entries are the
+# Reviewed attested project modules (55-entry list; the other 39 entries are the
 # deployment/generator/runtime/policy pins and the reviewed WhatsOpt patches).
 ATTESTED_PROJECT_FILES = frozenset({
     'application/src/hyprn_mvp_app/__init__.py',
@@ -122,6 +122,10 @@ ATTESTED_PROJECT_FILES = frozenset({
 # (spec_from_file_location, then module_from_spec and exec_module on that spec),
 # reached only after byte verification of the frozen bundle.
 DYNAMIC_ALLOWLIST = frozenset({
+    # Fixed stat_result identity fields are compared before changing permissions;
+    # these two reads never select or load code.
+    ('integration/src/hyprn_mvp_integration/launcher.py',
+     'worker_input_permissions', 'getattr', 2),
     ('integration/src/hyprn_mvp_integration/calculation.py',
      'ScalarCalculation.define.validate_inputs', '__import__', 1),
     ('integration/src/hyprn_mvp_integration/calculation.py', 'ScalarParser.parse', '__import__', 1),
@@ -360,7 +364,7 @@ def test_attested_project_sources_equal_the_static_launch_path_closure():
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in bound
     assert {'deployment/cloud_native.py', 'deployment/dispatch_bridge.py'} <= bound
-    assert len(bound) == 54
+    assert len(bound) == 55
 
 
 def _execution_source_list():
@@ -598,10 +602,10 @@ print(json.dumps(out))
 def test_a_runtime_recorded_against_a_wider_inventory_refuses_until_rebuilt_and_reattested():
     """A runtime.json recorded against a wider inventory (the current one
     plus the modules unreachable from every launch) fails closed on inventory drift before
-    any docker inspection; only the current 54-entry inventory passes that check (and then
+    any docker inspection; only the current 55-entry inventory passes that check (and then
     reaches the image check, stubbed here)."""
     result = probe(f'REPO={str(REPO)!r}\n' + FAIL_CLOSED_PROBE)
-    assert result['old'] == 56 and result['new'] == 54
+    assert result['old'] == 57 and result['new'] == 55
     assert result['old_error'] == 'RuntimeError: Execution source inventory drift; rebuild before attesting'
     assert result['new_error'] == 'LookupError: image check reached'
     assert result['docker_calls'] == 1
@@ -1137,6 +1141,7 @@ ROUTE_OWNERS = frozenset(
     for m in (
         'assistant',
         'assistant.schema',
+        'assistant.research',
         'store',
         'auth',
         'identity',
@@ -1235,10 +1240,10 @@ LAYERS = {
     'modified_runs': frozenset({'contracts', 'history', 'readiness'}),
     'modeling': frozenset({'contracts', 'store', 'units'}),
     'brief': frozenset({'contracts'}),
-    'explanations': frozenset({'contracts'}),
+    'explanations': frozenset({'contracts', 'units'}),
     'criterion_evaluation': frozenset(),
     'calculations': frozenset(
-        {'brief', 'contracts', 'criterion_evaluation', 'execution_bundle', 'history', 'units'}
+        {'brief', 'contracts', 'criterion_evaluation', 'execution_bundle', 'explanations', 'history', 'units'}
     ),
     'study_answer': frozenset(
         {
@@ -1249,6 +1254,8 @@ LAYERS = {
             'contracts',
             'criterion_evaluation',
             'history',
+            'explanations',
+            'units',
         }
     ),
     'quantity_projection': frozenset({'execution_bundle', 'units'}),
@@ -1273,6 +1280,7 @@ LAYERS = {
             'listing',
             'execution_bundle',
             'history',
+            'explanations',
             'modeling',
             'modified_runs',
             'readiness',
@@ -1297,10 +1305,12 @@ LAYERS = {
             'approach_closure',
             'contracts',
             'execution_bundle',
+            'explanations',
             'history',
             'locations',
             'modified_runs',
             'result_bindings',
+            'units',
         }
     ),
     'dispatcher': frozenset(
@@ -1358,10 +1368,11 @@ LAYERS = {
     'agent_policy': frozenset({'agent_tools', 'contracts'}),
     'agent_runtime': frozenset({'agent_tools', 'auth', 'contracts', 'database', 'edge', 'store', 'identity'}),
     'agent_surface': frozenset({'agent_runtime'}),
-    'assistant': frozenset({'agent_runtime', 'agent_tools', 'contracts', 'identity'}),
+    'assistant': frozenset({'agent_runtime', 'agent_tools', 'contracts', 'identity', 'evidence_content'}),
     'api': frozenset(
         {
             'assistant',
+            'analysis_execution',
             'agent_tools',
             'agent_policy',
             'agent_runtime',
@@ -1489,6 +1500,7 @@ SCHEMA_COMPUTED = {
         'FrozenConfiguration7',
         'FrozenConfiguration8',
         'FrozenConfiguration9',
+        'FrozenConfiguration10',
     ),
     (
         'application/src/hyprn_mvp_app/scientific_configuration.py',
@@ -1525,14 +1537,14 @@ SCHEMA_COMPUTED = {
         'application/src/hyprn_mvp_app/units.py',
         'active_ports',
         (
-            "'ModelRevisionRead4' if isinstance(model, dict) and "
-            "'model_revision_id' in model else 'ModelDraftRead4'"
+            "'ModelRevisionRead5' if isinstance(model, dict) and "
+            "'model_revision_id' in model else 'ModelDraftRead5'"
         ),
-    ): ('ModelRevisionRead4', 'ModelDraftRead4'),
+    ): ('ModelRevisionRead5', 'ModelDraftRead5'),
 }
 SCHEMA_VERSION_GUARDS = {
     ('application/src/hyprn_mvp_app/execution_bundle.py', 'validate_frozen_configuration'): (
-        "version not in (None, '4', '5', '7', '8', '9')",
+        "version not in (None, '4', '5', '7', '8', '9', '10')",
         (
             "frozen['configuration']['schema_version'] == '4' and version != "
             "frozen_version(frozen['model_snapshot'], frozen['approach_closure'])"
@@ -1725,7 +1737,10 @@ def test_every_attested_schema_name_is_a_reviewed_execution_root():
     found = set()
     for path in ATTESTED_PROJECT_FILES:
         found.update(schema_roots(path, (REPO / path).read_text()))
-    assert found == set(EXECUTION_ROOTS)
+    assert found == set(EXECUTION_ROOTS), {
+        'unlisted': sorted(found - set(EXECUTION_ROOTS)),
+        'stale': sorted(set(EXECUTION_ROOTS) - found),
+    }
 
 
 @pytest.mark.parametrize(
@@ -1855,7 +1870,7 @@ print(json.dumps([sorted(application_runtime.hashes()),
     documents = 'contracts/schemas/documents.schema.json'
     assert documents in application
     assert documents not in modeling | execution
-    assert len(modeling) == 24 and len(execution) == 54
+    assert len(modeling) == 25 and len(execution) == 55
     assert {
         'contracts/schemas/model.schema.json',
         'contracts/schemas/execution.schema.json',

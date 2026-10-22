@@ -201,8 +201,10 @@ def create_app(store,auth,model,*,environ=None,registry=None):
     if store is not None and not core:
         settings = Settings.from_environment(deps.environ)
         runtime = Runtime(store, auth, registry or REGISTRY, app, auth.origin, deps.environ)
+        from .analysis_execution import AnalysisExecution
         owner = Conversations(
             store, runtime, Claude(settings.key_file) if settings else None, settings,
+            analysis_reader=AnalysisExecution(store).read,
         )
         app.state.assistant = owner
         app.router.add_event_handler('startup', owner.start)

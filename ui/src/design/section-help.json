@@ -149,5 +149,12 @@
       "The prepared analysis declares the ranges and fixed values available here. Load point selects an existing calculated combination. Sliders explore within the prepared domain without rerunning the model.",
       "Estimates use the saved surrogate and its validation limits. Validation tests agreement at independent points; it does not guarantee physical validity or the same error at every combination."
     ]
+  },
+  "scientificReview": {
+    "title": "Scientific review",
+    "paragraphs": [
+      "The author records how the answer addresses the brief, what sources support it, where the model applies and how sensitive the conclusions are. Each aspect includes its remaining limits.",
+      "This review does not certify the model. Agreement between a surrogate and its model establishes numerical accuracy against that model, not physical validity. Source retrieval confirms access to material, not the truth of its claims."
+    ]
   }
 }

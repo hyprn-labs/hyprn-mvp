@@ -13,6 +13,13 @@
 !deployment/images/
 !deployment/images/install_python.py
 !deployment/managed_assistant.py
+!deployment/managed_skill.py
+!docs/
+!docs/agents/
+!docs/agents/scientific-engineering/
+!docs/agents/scientific-engineering/SKILL.md
+!docs/agents/scientific-engineering/references/
+!docs/agents/scientific-engineering/references/*.md
 !editions/
 !editions/cloud/
 !editions/cloud/src/

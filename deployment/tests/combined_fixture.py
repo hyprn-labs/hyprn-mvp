@@ -244,7 +244,8 @@ class Journey:
         self.events.append(dict(dispatch=rid,command=command,exit=status,seconds=time.monotonic()-start))
         assert status==(77 if options.get('fault') else 0)
     def payload(self,rid):
-        with self.store.connection() as db:return json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
+        from hyprn_mvp_app.history import run_association
+        with self.store.connection() as db:return json.loads(run_association(db,rid)['payload'])
 
     def recorded_without_criteria(self,detail):
         """A run of a configuration 6 keeps execution only: history 8 and results 3 carry no

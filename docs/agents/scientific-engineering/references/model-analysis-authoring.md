@@ -10,7 +10,7 @@ settings. There is no separate Analysis details primitive.
 | UI location | Content and owner | Appropriate detail |
 |---|---|---|
 | Study brief | Question, criteria, global assumptions and limits | The decision and scope the work must address, including unanswered parts. |
-| Models → Diagram → Component | Component name; `component_details[]` in model explanation format 2 stores the instance description and limits | What this transformation represents, its local governing relation and applicability. Keep adopted conditions in scoped assumptions and cite their evidence. |
+| Models → Diagram → Component | Component name; `component_details[]` in model explanation content stores the instance description and limits | What this transformation represents, its local governing relation and applicability. Keep adopted conditions in scoped assumptions and cite their evidence. |
 | Component → Python | Definition source and declared function interface | The actual implementation. Document non-obvious conventions and algorithm choices; do not hide scenario inputs or investigation settings in code. |
 | Component → Quantities | Quantity definitions and units | Physical meaning, sign and reference conventions. Definitions do not assign configuration values or duplicate source code. |
 | Models → Model explanation → What the model represents | `represents` | System boundary, intended use, fidelity and important exclusions. |
@@ -49,6 +49,10 @@ Then explain the assembled model and save an exact model version. Model persiste
 and explanation persistence are separate: save/read back the explanation for the
 intended exact model version using the current explanation workflow. A saved draft
 does not establish that an immutable version has its explanation.
+
+For monetary quantities, first save the model explanation with each exact quantity,
+catalogue expression, price year, economic basis and evidence. The catalogue determines
+currency, scale and denominator; do not infer conversions or use dimensionless money.
 
 Configuration and analysis creation require the intended saved model version.
 Check the selected version; never choose “latest” simply to enable creation.

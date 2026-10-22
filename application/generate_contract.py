@@ -16,9 +16,11 @@ from hyprn_mvp_app.calculation_preparation import (
 )
 from hyprn_mvp_app.calculation_exploration import DEFINITIONS as CALCULATION_EXPLORATION_DEFINITIONS
 from hyprn_mvp_app.explanations import DEFINITIONS as EXPLANATION_DEFINITIONS
+from hyprn_mvp_app.computational_export import DEFINITIONS as COMPUTATIONAL_RECORD_DEFINITIONS
 from hyprn_mvp_app.study_answer import DEFINITIONS as STUDY_ANSWER_DEFINITIONS
 from hyprn_mvp_app.agent_runtime.schema import RECORD_KINDS
 from hyprn_mvp_app.assistant.schema import DEFINITIONS as ASSISTANT_DEFINITIONS
+from hyprn_mvp_app.assistant.research import DEFINITIONS as SOURCE_INSPECTION_DEFINITIONS
 from hyprn_mvp_app.store import RECOVERY_VALUES
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -42,13 +44,18 @@ schemas.update(rewrite(CALCULATION_ESTIMATE_DEFINITIONS))
 schemas.update(rewrite(CALCULATION_EXPLORATION_DEFINITIONS))
 schemas.update(rewrite(CALCULATION_PREPARATION_DEFINITIONS))
 schemas.update(rewrite(EXPLANATION_DEFINITIONS))
+schemas.update(rewrite(COMPUTATIONAL_RECORD_DEFINITIONS))
 schemas.update(rewrite(STUDY_ANSWER_DEFINITIONS))
 schemas.update(rewrite(ASSISTANT_DEFINITIONS))
+schemas.update(rewrite(SOURCE_INSPECTION_DEFINITIONS))
 # Current HTTP reads include new retained formats; authored historical schemas stay frozen.
 _PUBLIC_READ_SUCCESSORS = {
+    'ComputationalRecordManifestRead': 'ComputationalRecordManifestRead3',
     'ApproachClosureRead3': 'ApproachClosureRead4',
-    'FrozenConfigurationRead7': 'FrozenConfigurationRead9',
-    'RunHistoryRead6': 'RunHistoryRead8',
+    'FrozenConfigurationRead7': 'FrozenConfigurationRead10',
+    'FrozenConfigurationRead9': 'FrozenConfigurationRead10',
+    'RunHistoryRead6': 'RunHistoryRead9',
+    'RunHistoryRead8': 'RunHistoryRead9',
     'ApproachSavedRead3': 'ApproachSavedRead4',
     'ApproachVersionSavedRead3': 'ApproachVersionSavedRead4',
     'ApproachPreviewRead3': 'ApproachPreviewRead4',
@@ -56,7 +63,8 @@ _PUBLIC_READ_SUCCESSORS = {
     'ApproachReceiptRead2': 'ApproachReceiptRead3',
     'ApproachCommandResultRead2': 'ApproachCommandResultRead3',
     'ConfigurationPreviewRead6': 'ConfigurationPreviewRead8',
-    'ModifiedRunSeedRead6': 'ModifiedRunSeedRead8',
+    'ModifiedRunSeedRead6': 'ModifiedRunSeedRead9',
+    'ModifiedRunSeedRead8': 'ModifiedRunSeedRead9',
     'ResultSource': 'ResultSource2',
     'ResultSourcePage': 'ResultSourcePage3',
 }
@@ -156,7 +164,7 @@ schemas['ApplicationCapabilities'] = obj(
     )
 )
 # Shared StoredError keeps its diagnostic/status/text bounds.
-model_result={"anyOf":[obj(dict(data=ref("ModelDraftRead4"))),obj(dict(data=ref("ModelDraftRead4"),created_ids=ref("CreatedIds"),diagnostics=array(ref("Diagnostic")))),obj(dict(data=ref("ModelRevisionRead4")))]}
+model_result={"anyOf":[obj(dict(data=ref("ModelDraftRead5"))),obj(dict(data=ref("ModelDraftRead5"),created_ids=ref("CreatedIds"),diagnostics=array(ref("Diagnostic")))),obj(dict(data=ref("ModelRevisionRead5")))]}
 run_states=["accepted_run","prepared","preparation_failed","dispatching","recorded","uncertain"]
 sha={"type":"string","pattern":"^[0-9a-f]{64}$"}
 boolean={"type":"boolean"}
@@ -280,20 +288,20 @@ schemas['PublicReceipt']['properties'].update(recovery=recovery_enum,retry_after
 schemas['PublicReceipt']['required'].append('recovery')
 schemas['PublicReceipt']['properties']['result']['anyOf'].append(ref('ScientificAnswer1'))
 schemas['PublicReceipt']['properties']['result']['anyOf'] += [
-    ref('StudyBriefDraft1'),
-    ref('StudyBriefVersionSaved1'),
+    ref('StudyBriefDraftRead2'),
+    ref('StudyBriefVersionSavedRead2'),
 ]
 schemas['PublicReceipt']['properties']['result']['anyOf'] += [
     ref('CalculationVersionRead4'),
     ref('ReferenceMarkState1'),
 ]
 schemas['PublicReceipt']['properties']['result']['anyOf'] += [
-    ref('ModelExplanationDraftRead2'),
-    ref('ModelExplanationVersionSavedRead2'),
+    ref('ModelExplanationDraftRead3'),
+    ref('ModelExplanationVersionSavedRead3'),
 ]
 schemas['PublicReceipt']['properties']['result']['anyOf'] += [
-    ref('StudyAnswerDraft1'),
-    ref('StudyAnswerVersionSaved1'),
+    ref('StudyAnswerDraftRead3'),
+    ref('StudyAnswerVersionSavedRead3'),
 ]
 schemas['ReceiptError'] = copy.deepcopy(schemas['Error'])
 schemas['ReceiptError']['properties']['error']['properties'].update(
@@ -308,7 +316,7 @@ schemas['PublicConfigurationPreview']=ref('ConfigurationPreview8')
 # Preserve the earlier concrete public reader; implemented import/export now
 # uses ModelPackage with the qualified native Model4 branch.
 schemas["PublicModelPackageRead3"]={"oneOf":[ref("ModelPackage1"),ref("ModelPackage2"),ref("ModelPackage3")]}
-schemas["ImportModel"]["properties"]["package"]=ref("ModelPackage")
+schemas["ImportModel"]["properties"]["package"]=ref("ModelPackageRead5")
 schemas['SubmitRun']['properties'].update(command_id=uuid, configuration_revision_id=uuid)
 
 
@@ -369,8 +377,14 @@ for path,methods in spec["paths"].items():
                 'No session ceiling or automatic reset. Unknown usage is null, not zero.'
             )
         elif path.startswith('/studies/{study_id}/assistant'):
-            schema = ref('AssistantConversationRead3')
+            schema = ref('AssistantConversationRead4')
             status = '200' if method == 'get' else '202'
+            if method == 'get' and path.endswith('/assistant'):
+                op['parameters'] += [
+                    dict(name=name, **{'in': 'query'}, required=False, schema=uuid,
+                         description='Study-scoped message cursor; use at most one direction.')
+                    for name in ('after', 'before')
+                ]
             for parameter in op['parameters']:
                 if parameter['in'] == 'path':
                     parameter['schema'] = uuid
@@ -409,25 +423,25 @@ for path,methods in spec["paths"].items():
         ):
             name, request_name = {
                 ('/studies/{study_id}/models/{model_id}/explanation', 'get'): (
-                    'ModelExplanationStateRead2',
+                    'ModelExplanationStateRead3',
                     None,
                 ),
                 ('/studies/{study_id}/models/{model_id}/explanation/draft', 'post'): (
-                    'ModelExplanationDraftRead2',
-                    'ModelExplanationDraftSaveRead2',
+                    'ModelExplanationDraftRead3',
+                    'ModelExplanationDraftSaveRead3',
                 ),
                 ('/studies/{study_id}/models/{model_id}/explanation/versions', 'get'): (
-                    'ModelExplanationVersionPageRead2',
+                    'ModelExplanationVersionPageRead3',
                     None,
                 ),
                 ('/studies/{study_id}/models/{model_id}/explanation/versions', 'post'): (
-                    'ModelExplanationVersionSavedRead2',
+                    'ModelExplanationVersionSavedRead3',
                     'ModelExplanationVersionSave1',
                 ),
                 (
                     '/studies/{study_id}/models/{model_id}/revisions/{revision_id}/explanation',
                     'get',
-                ): ('ModelVersionExplanationRead2', None),
+                ): ('ModelVersionExplanationRead3', None),
             }[(path, method)]
             schema = ref(name)
             if request_name:
@@ -466,11 +480,11 @@ for path,methods in spec["paths"].items():
             )
         elif path.startswith('/studies/{study_id}/brief'):
             name,request_name={
-                ('/studies/{study_id}/brief','get'):('StudyBriefState1',None),
-                ('/studies/{study_id}/brief/draft','post'):('StudyBriefDraft1','StudyBriefDraftSave1'),
-                ('/studies/{study_id}/brief/versions','get'):('StudyBriefVersionPage1',None),
-                ('/studies/{study_id}/brief/versions','post'):('StudyBriefVersionSaved1','StudyBriefVersionSave1'),
-                ('/studies/{study_id}/brief/versions/{version_id}','get'):('StudyBriefVersion1',None),
+                ('/studies/{study_id}/brief','get'):('StudyBriefStateRead2',None),
+                ('/studies/{study_id}/brief/draft','post'):('StudyBriefDraftRead2','StudyBriefDraftSaveRead2'),
+                ('/studies/{study_id}/brief/versions','get'):('StudyBriefVersionPageRead2',None),
+                ('/studies/{study_id}/brief/versions','post'):('StudyBriefVersionSavedRead2','StudyBriefVersionSave1'),
+                ('/studies/{study_id}/brief/versions/{version_id}','get'):('StudyBriefVersionRead2',None),
             }[(path,method)]
             schema=ref(name)
             if request_name:op['requestBody']['content']['application/json']['schema']=ref(request_name)
@@ -489,18 +503,18 @@ for path,methods in spec["paths"].items():
             )
         elif path.startswith('/studies/{study_id}/answer/') or path == '/studies/{study_id}/answer':
             name, request_name = {
-                ('/studies/{study_id}/answer', 'get'): ('StudyAnswerStateRead2', None),
+                ('/studies/{study_id}/answer', 'get'): ('StudyAnswerStateRead3', None),
                 ('/studies/{study_id}/answer/draft', 'post'): (
-                    'StudyAnswerDraft2',
-                    'StudyAnswerDraftSave2',
+                    'StudyAnswerDraftRead3',
+                    'StudyAnswerDraftSaveRead3',
                 ),
-                ('/studies/{study_id}/answer/versions', 'get'): ('StudyAnswerVersionPageRead2', None),
+                ('/studies/{study_id}/answer/versions', 'get'): ('StudyAnswerVersionPageRead3', None),
                 ('/studies/{study_id}/answer/versions', 'post'): (
-                    'StudyAnswerVersionSavedRead2',
+                    'StudyAnswerVersionSavedRead3',
                     'StudyAnswerVersionSave1',
                 ),
                 ('/studies/{study_id}/answer/versions/{version_id}', 'get'): (
-                    'StudyAnswerVersionRead2',
+                    'StudyAnswerVersionRead3',
                     None,
                 ),
             }[(path, method)]
@@ -569,9 +583,11 @@ for path,methods in spec["paths"].items():
                     None,
                 ),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution', 'get'):
-                    ('AnalysisExecutionRead1', None),
+                    ('AnalysisExecutionRead2', None),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution', 'post'):
-                    ('AnalysisExecution1', 'AnalysisLaunch1'),
+                    ('AnalysisExecution2', 'AnalysisLaunch1'),
+                ('/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation', 'post'):
+                    ('AnalysisExecutionRead2', 'AnalysisLaunch1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/runs', 'get'): (
                     'CalculationRunPage1',
                     None,
@@ -680,12 +696,12 @@ for path,methods in spec["paths"].items():
                 'categories calculation_create, calculation_version and reference_mark; no other query '
                 'fields are accepted.')
         elif path.endswith("/unit-catalog"):
-            schema=ref("UnitCatalog1")
+            schema=ref("UnitCatalog2")
             op["description"]="Study-authorized finite physical guidance from the private model3 backend. Reauthorize after I/O; validate pinned source/catalog digests and the 16384-byte private response bound. No query fields, fallback catalog or browser-to-private access. Unsupported capability422; corrupt/outage503."
         elif path.endswith("/models"):
-            schema=array(ref("Association")) if method=="get" else ref("ModelDraftRead4");status="200" if method=="get" else "201"
+            schema=array(ref("Association")) if method=="get" else ref("ModelDraftRead5");status="200" if method=="get" else "201"
             if method=="post":op["requestBody"]["content"]["application/json"]["schema"]=ref("PublicNewModel")
-        elif path.endswith("/model-imports"):schema=ref("ModelDraftRead4");status="201"
+        elif path.endswith("/model-imports"):schema=ref("ModelDraftRead5");status="201"
         elif "/models/" in path:
             if path.endswith("/assumption-evidence"):
                 schema=ref("AssumptionEvidenceResolution1")
@@ -694,10 +710,10 @@ for path,methods in spec["paths"].items():
                     if parameter["name"]=="model_revision_id":parameter["schema"]=uuid
                     elif parameter["name"]=="draft_revision":parameter["schema"]={"type":"string","minLength":1,"maxLength":4096,"pattern":r"\S"}
             elif path.endswith("/edits") or path.endswith("/preview"):
-                op["requestBody"]["content"]["application/json"]["schema"]=ref("ApplyRead4" if path.endswith("/edits") else "PreviewRead4")
-                schema=ref("ModelDraftRead4")
+                op["requestBody"]["content"]["application/json"]["schema"]=ref("ApplyRead5" if path.endswith("/edits") else "PreviewRead5")
+                schema=ref("ModelDraftRead5")
             elif path.endswith("/commits"):
-                op["requestBody"]["content"]["application/json"]["schema"]=ref("Commit");schema=ref("ModelRevisionRead4")
+                op["requestBody"]["content"]["application/json"]["schema"]=ref("Commit");schema=ref("ModelRevisionRead5")
             elif path.endswith("/validate"):
                 op["requestBody"]["content"]["application/json"]["schema"]=ref("Validate");schema=ref("ValidationResult")
             elif path.endswith("/revisions"):
@@ -706,9 +722,9 @@ for path,methods in spec["paths"].items():
                     if parameter["name"]=="limit":parameter["schema"]={"type":"integer","minimum":1,"maximum":100,"default":50}
                     elif parameter["name"]=="cursor":parameter["schema"]=uuid
                 op["description"]="Immutable summaries in stored insertion order; cursor belongs to this authorized model. Unknown or repeated query fields are invalid."
-            elif "/revisions/" in path:schema=ref("ModelRevisionRead4")
-            elif path.endswith("/export"):schema=ref("ModelPackage")
-            else:schema=ref("ModelDraftRead4")
+            elif "/revisions/" in path:schema=ref("ModelRevisionRead5")
+            elif path.endswith("/export"):schema=ref("ModelPackageRead5")
+            else:schema=ref("ModelDraftRead5")
         elif path.endswith("/configurations/preview"):
             op["requestBody"]["content"]["application/json"]["schema"]=ref("PublicConfigurationRequest")
             schema=ref("PublicConfigurationPreview")
@@ -763,6 +779,7 @@ for path,methods in spec["paths"].items():
                     elif name=="legacy_scope":parameter["schema"]={"anyOf":[uuid,{"enum":["null"]}]}
                     elif parameter["in"]=="query":parameter["schema"]=uuid
                 op["description"]="Default heads returns one current version per family in stable family insertion order; versions returns immutable rows newest first. Opaque cursor binds actor, study, view, filters and insertion high-water. Unknown/repeated fields and incompatible filters are invalid. Revision requires model; instance requires model and revision; port requires model, revision and instance. Configuration/run filters cannot combine with model filters. legacy_scope is an exact legacy UUID or the literal null; legacy records have no inferred typed scope."
+        elif path.endswith('/source-inspection'):schema=ref('EvidenceSourceInspection1')
         elif "/evidence/" in path:schema=ref("EvidenceRecord")
         elif path.endswith('/modified-run-seed'):schema=ref('ModifiedRunSeedRead6')
         elif path.endswith("/runs"):
@@ -785,7 +802,7 @@ for path,methods in spec["paths"].items():
             response['properties']['next_cursor'] = nullable(uuid)
             response['required'].append('next_cursor')
         if path.endswith(('/edits', '/preview')) and '/models/' in path:
-            response = ref('ModelDraftEditResponse4')
+            response = ref('ModelDraftEditResponse5')
         op['responses'] = {
             str(code): {
                 'description': 'Typed error; inspect outcome before retry',
@@ -947,9 +964,16 @@ def public_views():
             }
         if isinstance(value, list):return [old_refs(v) for v in value]
         return value
-    # Only the new successor definitions need their embedded predecessor links frozen.
+    for old in _PUBLIC_READ_SUCCESSORS:
+        schemas['Previous'+old] = old_refs(schemas['Previous'+old])
+    # Freeze predecessor links in both named successors and public compatibility aliases.
+    # Otherwise a successor can reach itself through an upgraded predecessor alias,
+    # making a valid new record satisfy two branches of a closed oneOf union.
+    successors = {new: old_refs(copy.deepcopy(schemas[new]))
+                  for new in set(_PUBLIC_READ_SUCCESSORS.values())}
+    schemas.update(successors)
     for old, new in _PUBLIC_READ_SUCCESSORS.items():
-        schemas[old] = old_refs(copy.deepcopy(schemas[new]))
+        schemas[old] = copy.deepcopy(successors[new])
 public_views()
 
 # Additive domain aliases preserve immutable serialized schemas and receipt categories.

@@ -1,7 +1,7 @@
 import type { HyprnMvpApi } from './api';
 import { Button, Panel, Tabs, TextInput } from './design';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { EvidenceSnapshot, PortRead3, PortRef } from './contract';
+import type { EvidenceSnapshot, PortRead4, PortRef } from './contract';
 import { GraphView, project, type Node, type RevealTarget, type Snapshot } from './GraphView';
 import { XdsmView } from './XdsmView';
 import { QuantitiesTable, type VariableContext } from './VariablesTable';
@@ -90,7 +90,7 @@ export function ModelView({
     links: focus?.links ?? new Set<string>(),
   };
   const needle = search.trim().toLocaleLowerCase();
-  const findings: Array<{ node: Node; port: PortRead3 | undefined }> = needle
+  const findings: Array<{ node: Node; port: PortRead4 | undefined }> = needle
     ? projection.nodes.flatMap((n) => [
         ...(`${n.instance.name} ${n.instance.instance_id}`.toLocaleLowerCase().includes(needle)
           ? [{ node: n, port: undefined }]

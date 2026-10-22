@@ -14,7 +14,7 @@ import scoped_fixture as guard
 ROOT = Path(__file__).resolve().parents[2]
 PATCHES = ('040-modeling-contract.patch', '050-native-generation.patch',
            '060-ui-discovery.patch', '070-assumptions-evidence.patch', '080-unit-declarations.patch', '090-quantity-definitions.patch',
-           '100-configurations-without-criteria.patch')
+           '100-configurations-without-criteria.patch', '110-monetary-units.patch')
 
 
 def current_scope():

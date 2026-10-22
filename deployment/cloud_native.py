@@ -279,21 +279,37 @@ def rebind(configuration, config_path, authorization):
                         (Path('launch-worker'), wrapper(configuration, config_path).encode())]
         # Validate destinations before starting; a partial operation retains its
         # pending marker and cannot be mistaken for a completed owner operation.
-        for relative, _raw in replacements:
+        for relative, _raw in [*replacements, (Path('evidence/execution-polling.json'), b'')]:
             target = root / relative
             for part in (target, *target.parents):
                 if part == root.parent:
                     break
                 if part.is_symlink() or (part.exists() and part.stat().st_uid != os.getuid()):
                     raise ValueError('Unsafe retained inventory destination')
+        import native_environment
+        computer = orm.load_computer(pinned['computer_uuid'])
+        previous_poll = computer.get_minimum_job_poll_interval()
         with pending.open('x') as stream:
-            json.dump({'previous': owner, 'configuration_sha256': hashlib.sha256(canonical(configuration)).hexdigest()}, stream)
+            json.dump({'previous': owner,
+                       'previous_minimum_job_poll_interval': previous_poll,
+                       'configuration_sha256': hashlib.sha256(
+                           canonical(configuration)).hexdigest()}, stream)
             stream.flush()
             os.fsync(stream.fileno())
         for relative, raw in replacements:
             target = root / relative
             target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             replace_record(target, raw, mode=0o700 if relative == Path('launch-worker') else 0o600)
+        # This is an owner deployment setting, not a change to any scientific
+        # record. The pending journal retains its old value for recovery.
+        poll_seconds = min(previous_poll, native_environment.MAX_JOB_POLL_SECONDS)
+        computer.set_minimum_job_poll_interval(poll_seconds)
+        replace_record(root / 'evidence' / 'execution-polling.json', canonical({
+            'computer_uuid': pinned['computer_uuid'],
+            'previous_seconds': previous_poll,
+            'current_seconds': poll_seconds,
+            'release_sha256': configuration['release_sha256'],
+        }))
         execution_home(configuration, create=True)
         launcher.fingerprint()
         # The old containment evidence remains available, but cannot match this
