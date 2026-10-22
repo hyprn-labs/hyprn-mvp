@@ -49,13 +49,18 @@ class PrivateTransport:
             definitions=[definition],instances=[dict(instance_id=i,definition_version_id=definition['definition_version_id'],name=n) for i,n in [(root,'Root'),(child,'Child')]])
     def __call__(self,method,path,raw,headers):
         assert headers['Authorization'].startswith('Bearer ')
-        with sqlite3.connect(self.store.path,timeout=0) as db:
-            db.execute('BEGIN IMMEDIATE');db.rollback()
-        body=json.loads(raw) if raw else None
-        self.calls.append((method,path,deepcopy(body)))
-        if self.hook:self.hook(method,path,body)
-        response=lambda data,**extra:dict(schema_version='1',request_id=uid(),data=deepcopy(data),**extra)
-        if path.endswith('/capabilities'):return 200,response(self.caps)
+        with sqlite3.connect(self.store.path, timeout=getattr(self, 'lock_probe_timeout', 0)) as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.rollback()
+        body = json.loads(raw) if raw else None
+        self.calls.append((method, path, deepcopy(body)))
+        if self.hook:
+            self.hook(method, path, body)
+        response = lambda data, **extra: dict(
+            schema_version='1', request_id=uid(), data=deepcopy(data), **extra
+        )
+        if path.endswith('/capabilities'):
+            return 200, response(self.caps)
         if '/commands/' in path:
             command=path.split('/commands/')[1].split('?')[0]
             receipt=self.receipts.get(command)
@@ -485,3 +490,19 @@ def test_store_model_association_authorizes_before_lookup_and_never_discloses(en
     # The Coordinator's model authorization is the same read.
     with pytest.raises(DomainError) as coordinated:env['coord'].authorize_model(who,sid,target,write=write)
     assert (coordinated.value.code,coordinated.value.status)==expected
+
+
+def test_model_list_uses_current_backend_name_without_mutating_saved_versions(env):
+    e = env
+    client = e['client']
+    path = f"/api/1/studies/{e['sid']}/models"
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.json()['data'][0]['name'] == 'Exact model'
+    e['transport'].draft['name'] = 'Renamed engineering model'
+    renamed = client.get(path).json()['data'][0]
+    assert renamed['model_id'] == e['mid']
+    assert renamed['name'] == client.get(path + '/' + e['mid']).json()['data']['name']
+    e['transport'].calls.clear()
+    assert client.get(path, params={'limit': 0}).status_code == 400
+    assert e['transport'].calls == []

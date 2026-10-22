@@ -1,0 +1,15 @@
+{
+  "source": "Product-owner supplied hyprn-logo.zip, 2026-10-17",
+  "archive_sha256": "1f85448ee3ab946ebd9a7ec39c45ccc0fb2b5af4ff3e8e3b1e2c96d200594ec6",
+  "authorization": "Owner requested adaptation and repository integration. Product brand assets; no third-party dependency.",
+  "originals_sha256": {
+    "hyprn-mark-color-on-light.svg": "0d83239f1ce7dfad3b91ffeb179482e78f21d621b7bb3b632c66319de2844bc6",
+    "hyprn-mark-color-on-dark.svg": "1c57d481936f2fecce1ee538818226acdfb4e45bd2510adf65499b201b752b32",
+    "hyprn-wordmark-carbon.png": "117b00437eaa40da25011eb010552545d5846297b4b96f4dd059096675e0d788",
+    "hyprn-horizontal-color-on-light.png": "1fe8b575ff9fbf2c594160c336f2533e9de5d6c805cd995c51d27f9522e0087b",
+    "hyprn-horizontal-color-on-dark.png": "ba12dee06f07ba0d3b6a5c982a2d5dbf38e4c4b364c97ceb085172e9da00eb9a",
+    "hyprn-app-icon-graphite-1024.png": "189a92b26ab1b7697f8c814b0d24a9dbb50c3ff91da6d89ca35b11a05643d610",
+    "favicon-32.png": "1e560829d6a1abda1e9f2889bff321d8a9afa0dbc529a50e352a9a3a4c612342",
+    "apple-touch-icon-180.png": "6fe44fcbdac8d25b4b623bc7489488b837b6ce7a992b6997fabe75a771a87bac"
+  }
+}

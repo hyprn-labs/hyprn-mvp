@@ -113,19 +113,6 @@ test('stale proposal remains reviewable until deliberate re-preview and rename',
   await page.screenshot({ path: evidencePath('batch-authoring.png'), fullPage: true });
 });
 
-test('global metadata paste rejects indexed invalid rows and applies one selected instance', async ({ page }) => {
-  const f = await fixture(page); await add(page, 'Scale', 'x', 'y'); const before = await f.read();
-  const instance = before.instances.find((i: any) => i.name === 'Scale'); const definition = before.definitions.find((d: any) => d.definition_version_id === instance.definition_version_id);
-  await page.getByRole('tab', { name: 'Variables', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Port metadata paste', exact: true }).fill('port_id\tvalue\n' + definition.ports[0].port_id + '\t0');
-  await page.getByRole('button', { name: 'Preview port metadata', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Variables view' }).getByRole('alert')).toContainText('Row 1'); expect(await f.read()).toEqual(before);
-  await page.getByRole('textbox', { name: 'Port metadata paste', exact: true }).fill('port_id\tname\n' + definition.ports[0].port_id + '\tReadable input');
-  await page.getByRole('button', { name: 'Preview port metadata', exact: true }).click(); await apply(page);
-  const after = await f.read(); const updated = after.instances.find((i: any) => i.instance_id === instance.instance_id);
-  expect(after.definitions.find((d: any) => d.definition_version_id === updated.definition_version_id).ports[0].name).toBe('Readable input');
-  await page.screenshot({ path: evidencePath('batch-variables-paste.png'), fullPage: true });
-});
 
 test('invalid batch has no partial effect and advertised limits reject before a request', async ({ page }) => {
   const f = await fixture(page); await add(page, 'Scale', 'x', 'y'); const before = await f.read();
@@ -143,7 +130,7 @@ test('invalid batch has no partial effect and advertised limits reject before a 
   expect(requests).toBe(0);
 });
 
-test('frozen configuration survives a guarded source save and table paste preserves dirty text', async ({ page }) => {
+test('frozen configuration survives a guarded source save', async ({ page }) => {
   const f = await fixture(page); await add(page, 'Scale', 'x', 'y');
   const model = await f.read(), sid = model.study_id;
   const headers = { 'X-CSRF-Token': f.csrf, Origin: servedOrigin() };
@@ -163,12 +150,8 @@ test('frozen configuration survives a guarded source save and table paste preser
   const original = JSON.stringify((await (await page.request.get(path)).json()).data);
   const source = 'outputs["y"] = inputs["x"] + 19\n';
   await page.getByRole('textbox', { name: 'Python source', exact: true }).fill(source);
-  await page.getByRole('tab', { name: 'Variables', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Port metadata paste', exact: true }).fill(`port_id\tname\n${input.port_id}\tMust stay local`);
-  await page.getByRole('button', { name: 'Preview port metadata', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Variables view' }).getByRole('alert')).toContainText('Save or discard');
   await expect(page.getByRole('textbox', { name: 'Python source', exact: true })).toHaveValue(source);
-  await page.getByRole('button', { name: 'Reload model', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh model', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await apply(page);
   await expect(page.getByRole('dialog')).not.toBeVisible();

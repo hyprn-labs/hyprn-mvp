@@ -1,7 +1,7 @@
-import type { FrozenConfigurationRead7, RunHistoryItem } from './contract';
+import type { FrozenConfigurationRead7, RunHistoryItem2 } from './contract';
 
 // Presentation only: IDs remain the navigation and grouping authority.
-export function runLabel(run: RunHistoryItem): string {
+export function runLabel(run: RunHistoryItem2): string {
   return run.configuration_name?.trim() ? run.configuration_name : 'Run';
 }
 export function configurationCounts(records: FrozenConfigurationRead7[]): string {

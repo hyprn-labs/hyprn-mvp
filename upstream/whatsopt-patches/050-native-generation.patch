@@ -603,10 +603,10 @@
 +    add.call('licenses/author.txt',package['license_notices'].join("\n")+"\n",'text/plain','license')
 +    raise Failure.new(413,'limit_exceeded') if files.size>1000 || files.sum { |f| f['size'] }>32*1024*1024
 +    entrypoint={'protocol'=>'hyprn_mvp.openmdao.program/1','module_path'=>'generated/entry.py','factory'=>'build_model','bindings_path'=>'generated/bindings.json','source_map_path'=>'generated/source-map.json'}
-+    artifact={'schema_version'=>'2','preparation_id'=>preparation_id,'model_id'=>model.public_id,'model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'configuration_revision_id'=>c['configuration_revision_id'],'configuration_digest'=>cd,'required_capabilities'=>m['required_capabilities'],'generator_identity'=>identity,'dependency_requirements'=>[{'name'=>'openmdao','version'=>'3.45.1'},{'name'=>'numpy','version'=>'2.5.3'}],'model_package_manifest'=>package,'files'=>files.sort_by { |f| f['path'] },'license_notices'=>[{'kind'=>'model_author','path'=>'licenses/author.txt'},{'kind'=>'generated_code','path'=>'licenses/whatsopt.txt'},{'kind'=>'generated_code','path'=>'licenses/generated.txt'}],'entrypoint'=>entrypoint,'result_protocol_version'=>'1'}
++    artifact={'schema_version'=>'3','preparation_id'=>preparation_id,'model_id'=>model.public_id,'model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'configuration_revision_id'=>c['configuration_revision_id'],'configuration_digest'=>cd,'required_capabilities'=>m['required_capabilities'],'generator_identity'=>identity,'dependency_requirements'=>[{'name'=>'openmdao','version'=>'3.45.1'},{'name'=>'numpy','version'=>'2.5.3'}],'model_package_manifest'=>package,'files'=>files.sort_by { |f| f['path'] },'license_notices'=>[{'kind'=>'model_author','path'=>'licenses/author.txt'},{'kind'=>'generated_code','path'=>'licenses/whatsopt.txt'},{'kind'=>'generated_code','path'=>'licenses/generated.txt'}],'entrypoint'=>entrypoint,'result_protocol_version'=>'2'}
 +    artifact['executable_content_digest']=self.class.digest({'protocol'=>entrypoint['protocol'],'model_digest'=>m['digest'],'configuration_digest'=>cd,'generator_identity'=>identity,'files'=>artifact['files'].select { |f| f['path'].start_with?('generated/') }.map { |f| f.slice('path','size','sha256') }})
      artifact['prepared_digest']=self.class.digest(artifact)
-+    check('PreparedModelArtifact',artifact)
++    check('PreparedModelArtifact3',artifact)
      store_revision(preparation_id,model.public_id,'preparation',{'manifest'=>artifact,'bytes'=>bytes})
      artifact
    end

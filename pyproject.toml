@@ -5,7 +5,9 @@
 # conflicting dependency groups in one uv.lock:
 #
 #   contract  application/requirements.lock, which contains integration/test-requirements.lock
-#   native    the reviewed native development set (aiida-core 2.9.3 and its closure, pytest)
+#   native    the reviewed native development set (aiida-core 2.9.3 and its closure, pytest) and
+#             ruff, the Python formatter and linter of the style ratchet (deployment/style_ratchet.py),
+#             because ./hyprn-mvp dev check runs the test-group runner in this environment
 #
 # Every distribution is pinned exactly, so the lock holds exactly the reviewed versions; a
 # version moves only after a dependency audit (docs/operations/dependency-audit.md).
@@ -20,6 +22,16 @@ dependencies = []
 
 [dependency-groups]
 contract = [
+  "PyJWT==2.15.1",
+  "cryptography==50.0.2",
+  "cffi==2.1.1",
+  "pycparser==3.1",
+  "pg8000==1.31.5",
+  "scramp==1.4.17",
+  "asn1crypto==1.5.1",
+  "python-dateutil==2.9.0.post0",
+  "six==1.17.0",
+
   "annotated-doc==0.0.5",
   "annotated-types==0.8.0",
   "anyio==4.15.1",
@@ -50,6 +62,7 @@ contract = [
   "uvicorn==0.54.0",
 ]
 native = [
+  "PyJWT==2.15.1",
   "aiida-core==2.9.3",
   "aio-pika==9.5.8",
   "aiormq==6.9.4",
@@ -123,6 +136,7 @@ native = [
   "requests==2.34.2",
   "rfc8785==0.1.4",
   "rpds-py==2026.9.1",
+  "ruff==0.16.10",
   "shortuuid==1.0.13",
   "sniffio==1.3.1",
   "sqlalchemy==2.1.4",
@@ -157,3 +171,19 @@ required-environments = [
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
   "sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
+
+# Formatter and linter of the style ratchet (deployment/style_ratchet.py). The
+# ratchet passes explicit file paths and --no-cache, so no cache folder is written into the
+# checkout. Only the three readability rules are selected: `select` replaces ruff's default set.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+preview = false
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E501", "E702", "E703"]
+
+[tool.ruff.format]
+quote-style = "single"
+line-ending = "lf"

@@ -13,7 +13,8 @@ import scoped_fixture as guard
 
 ROOT = Path(__file__).resolve().parents[2]
 PATCHES = ('040-modeling-contract.patch', '050-native-generation.patch',
-           '060-ui-discovery.patch', '070-assumptions-evidence.patch', '080-unit-declarations.patch', '090-quantity-definitions.patch')
+           '060-ui-discovery.patch', '070-assumptions-evidence.patch', '080-unit-declarations.patch', '090-quantity-definitions.patch',
+           '100-configurations-without-criteria.patch')
 
 
 def current_scope():
@@ -27,6 +28,7 @@ def stage_sources():
     stage = guard.scoped_path(scope, 'artifacts/units-model-' + str(uuid.uuid4()))
     stage.mkdir()
     stage_native_inputs(stage)
+    apply_display_name_policy(stage / 'modeling_contract.rb')
     for patch, path in [('050-native-generation.patch', 'app/services/native_materializer.rb'),
                         ('050-native-generation.patch', 'app/services/native_program.rb'),
                         ('040-modeling-contract.patch', 'config/modeling.units.json')]:
@@ -42,6 +44,17 @@ def stage_sources():
     image = json.loads((ROOT/'deployment/pins.json').read_text())['modeling_producer']['image']
     assert image.startswith('sha256:') and len(image) == 71
     return scope, stage, image
+
+
+def apply_display_name_policy(service):
+    """A read-only adapter overlay must retain the image's deployment naming policy."""
+    text = service.read_text()
+    original = "native=Analysis.create!(name:body['name'],public:false)"
+    replacement = "native=Analysis.create!(name:'model_'+model_id.delete('-'),public:false)"
+    policy = (ROOT / 'deployment/modeling_policy.rb').read_text()
+    assert original in policy and replacement in policy
+    assert text.count(original) == 1
+    service.write_text(text.replace(original, replacement))
 
 
 def mounts(stage):

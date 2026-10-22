@@ -42,10 +42,9 @@ def _record(tmp_path,catalog,version='4',failed=False):
         v=deepcopy(f['approach_closure']['approach_versions'][0]);v['study_id']=sid
         v['content']['original_question']=dict(text='Recorded original',attribution=dict(kind='human',label=None))
         v['content']['elaboration']=dict(text='Recorded explanation',attribution=dict(kind='unknown',label=None))
-        cs=sample(D['ApproachCase1']);cs.update(title='Repeated case name',binding_id=v['content']['model_bindings'][0]['binding_id'])
-        v['content']['cases']=[cs];signed(v)
+        signed(v)
         closure=build_closure(v,resolution(models=[m]),study_id=sid)
-        f['approach_closure']=closure;c['approach_binding'].update(approach_digest=v['digest'],closure_digest=closure['digest'],case_id=cs['case_id'])
+        f['approach_closure']=closure;c['approach_binding'].update(approach_digest=v['digest'],closure_digest=closure['digest'])
     if version=='2':
         c['schema_version']='3';c.pop('approach_binding');f.pop('schema_version');f.pop('approach_closure')
     if version=='mixed':
@@ -53,7 +52,7 @@ def _record(tmp_path,catalog,version='4',failed=False):
         link(v,m);link(v,extra)
         closure=build_closure(v,resolution(models=[m,extra]),study_id=sid)
         f.update(schema_version='5',approach_closure=closure)
-        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'],case_id=None)
+        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'])
     repin(case)
     with store.connection(write=True) as db:
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(c['configuration_revision_id'],c['configuration_id'],sid,json.dumps(f)))
@@ -173,9 +172,9 @@ def test_retained_integrity_consults_only_the_single_pairing_table(tmp_path,cata
     from hyprn_mvp_app import execution_bundle
     e=record(tmp_path,catalog,version);h=read(e);before=deepcopy(h)
     pair=(h.get('history_schema_version','1'),h['bundle']['schema_version'],h['configuration']['schema_version'],h['model_snapshot']['schema_version'])
-    assert pair in execution_bundle.RETAINED_PAIRINGS
+    assert pair in execution_bundle.RESULT_PAIRINGS
     assert metadata(e['rid'],h)==dict(schema_version='1',results_digest=digest(h['results']))
-    monkeypatch.setattr(history_module,'RETAINED_PAIRINGS',execution_bundle.RETAINED_PAIRINGS-{pair})
+    monkeypatch.setattr(history_module,'RESULT_PAIRINGS',execution_bundle.RESULT_PAIRINGS-{pair})
     assert metadata(e['rid'],h)==dict(schema_version='1',results_digest=None)
     assert h==before
 
@@ -220,7 +219,7 @@ def test_legacy_http_same_read_outage_auth_and_repeat_preservation(api,monkeypat
     before=logical_rows(e['store'])
     files={str(p):p.read_bytes() for p in e['store'].path.parent.rglob('*') if p.is_file()}
     first=client.get(url);assert first.status_code==200
-    data=first.json()['data'];assert len(seen)==1 and data['history']==seen[0]
+    data=first.json()['data'];assert len(seen)==1 and data['history']['record_view']['source_sha256']==digest(seen[0])
     assert data['retained_integrity']==dict(schema_version='1',results_digest=digest(seen[0]['results']))
     assert client.get(url).json()['data']==data and len(seen)==2
     assert logical_rows(e['store'])==before
@@ -280,7 +279,7 @@ def test_current_and_historical_http_share_exact_history(tmp_path,catalog,versio
         seed=seed_response.json()['data'];validate('ModifiedRunSeed6',seed)
         assert seed['source_configuration']==expected['configuration'] and seed['approach_closure']==expected['approach_closure']
         assert calls==[expected,expected];calls.pop()
-    data=response.json()['data'];assert calls==[expected] and data['history']==expected
+    data=response.json()['data'];assert calls==[expected] and data['history']['record_view']['source_sha256']==digest(expected)
     assert data['retained_integrity']['results_digest']==digest(expected['results']) and logical_rows(e['store'])==rows
     from jsonschema import Draft202012Validator,FormatChecker
     schemas=json.loads((Path(__file__).resolve().parents[2]/'contracts/hyprn-mvp.openapi.yaml').read_text())['components']['schemas']
@@ -300,13 +299,13 @@ def test_findings_guard_is_closed_app_only_and_fail_closed(tmp_path):
 
 
 @pytest.mark.parametrize('version',['3','4','6','6legacy','6mixed'])
-def test_case_context_authoritative_absence_without_history_fetch(tmp_path,catalog,version,monkeypatch):
+def test_configuration_name_absence_without_history_fetch(tmp_path,catalog,version,monkeypatch):
     e=record(tmp_path,catalog,version)
     monkeypatch.setattr(History,'read',lambda *a,**k:pytest.fail('Run list fetched full history'))
     rows=History(e['store']).list(e['actor'],e['sid'])
-    assert len(rows)==1 and rows[0]['case_context']==dict(state='unlinked')
+    assert len(rows)==1 and rows[0]['configuration_name']==e['payload']['frozen']['configuration']['name']
     replace_configuration(e['store'],e['payload']['frozen']['configuration']['configuration_revision_id'],'{}')
-    assert History(e['store']).list(e['actor'],e['sid'])[0]['case_context']==dict(state='unavailable')
+    assert History(e['store']).list(e['actor'],e['sid'])[0]['configuration_name'] is None
 
 
 @pytest.mark.parametrize('fault',['unit','value','model_tag','manifest_tag','missing_manifest_tag','quantities','claim','closure'])
@@ -324,24 +323,15 @@ def test_history6_integrity_never_promotes_tampered_metadata(tmp_path,catalog,fa
     assert metadata(e['rid'],h)['results_digest'] is None
 
 
-def test_history6_case_versions_and_null_are_distinct_from_missing(tmp_path,catalog,monkeypatch):
-    from hyprn_mvp_app.history import case_projection
+def test_history6_list_names_come_from_exact_configuration_without_full_history(tmp_path,catalog,monkeypatch):
+    from hyprn_mvp_app.history import configuration_name_projection
     e=record(tmp_path,catalog,'6linked');f=e['payload']['frozen'];c=f['configuration']
     monkeypatch.setattr(History,'read',lambda *a,**k:pytest.fail('Full history in list'))
-    first=History(e['store']).list(e['actor'],e['sid'])[0]['case_context']
-    assert first['case_name']=='Repeated case name' and first['case_id']==c['approach_binding']['case_id']
-    changed=deepcopy(f);v=changed['approach_closure']['approach_versions'][0]
-    v['approach_version_id']=uid();v['version_number']+=1;signed(v)
-    closure=build_closure(v,resolution(models=[f['model_snapshot']]),study_id=e['sid'])
-    changed['approach_closure']=closure;cc=changed['configuration']
-    cc['approach_binding'].update(approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'])
-    cc['digest']=digest({k:v for k,v in cc.items() if k!='digest'})
-    second=case_projection(json.dumps(changed),e['sid'],c['configuration_revision_id'])[1]
-    assert second['case_name']==first['case_name'] and second['approach_version_id']!=first['approach_version_id']
-    cc['approach_binding']['case_id']=None;cc['digest']=digest({k:v for k,v in cc.items() if k!='digest'})
-    empty=case_projection(json.dumps(changed),e['sid'],c['configuration_revision_id'])[1]
-    assert empty['state']=='linked' and empty['case_id'] is empty['case_name'] is None
-    assert case_projection(None,e['sid'],c['configuration_revision_id'])[1]==dict(state='unavailable')
+    first=History(e['store']).list(e['actor'],e['sid'])[0]
+    assert first['configuration_name']==c['name']
+    assert 'case_context' not in first
+    assert configuration_name_projection(json.dumps(f),e['sid'],c['configuration_revision_id'])==c['name']
+    assert configuration_name_projection(None,e['sid'],c['configuration_revision_id']) is None
     with e['store'].connection(write=True) as db:db.execute('DELETE FROM memberships WHERE actor_id=?',(e['actor'],))
     from hyprn_mvp_app.store import DomainError
     with pytest.raises(DomainError):History(e['store']).list(e['actor'],e['sid'])

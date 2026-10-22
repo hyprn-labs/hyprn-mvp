@@ -46,7 +46,10 @@ def retain(store,node,preflight,actor):
         db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(config['configuration_id'],sid,config['configuration_revision_id']))
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(config['configuration_revision_id'],config['configuration_id'],sid,json.dumps(payload['frozen'])))
         db.execute('INSERT INTO receipts VALUES(?,?,?,?,?,?,?,?,?)',(sid,'run',item['request']['command_id'],actor,item['request']['payload_digest'],'committed','{}',None,None))
-        db.execute('INSERT INTO run_associations VALUES(?,?,?,?,?,?)',(rid,sid,config['configuration_revision_id'],item['request']['command_id'],item['association']['store_uuid'],node.uuid))
+        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                   'command_id,store_uuid,process_uuid) VALUES(?,?,?,?,?,?)',
+                   (rid,sid,config['configuration_revision_id'],item['request']['command_id'],
+                    item['association']['store_uuid'],node.uuid))
         db.execute('INSERT INTO outbox VALUES(?,?,?)',(rid,'recorded',json.dumps(payload)))
     return dict(store=store,actor=actor,sid=sid,rid=rid,payload=payload,node=node,preflight=preflight)
 

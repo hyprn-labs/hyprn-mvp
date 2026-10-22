@@ -114,13 +114,17 @@ def legacy_fixture(kind='chain', multiplier=2, downstream=None):
     prepared['prepared_digest']=digest(prepared)
     return dict(prepared=prepared,files=files,frozen=dict(configuration=configuration,model_snapshot=model,study_revision=uid()),targets=targets)
 
-def fixture(kind='chain', multiplier=2, downstream=None):
-    """Read exact producer outputs as inert bytes; no test graph generator."""
+def fixture(kind='chain', multiplier=2, downstream=None, *, current=False, protocol3=False):
+    """Read exact captured producer bytes; historical admission is explicit by default.
+
+    ``protocol3``: configuration 6 (no criteria) on Model4, preparation 4, result protocol 3."""
     import copy
     import gzip
     import json
     from pathlib import Path
-    data=json.loads(gzip.decompress((Path(__file__).parent/'fixtures/native-programs.json.gz').read_bytes()))
+    name = ('native-programs-protocol3.json.gz' if protocol3
+            else 'native-programs.json.gz' if current else 'native-programs-protocol1.json.gz')
+    data=json.loads(gzip.decompress((Path(__file__).parent/'fixtures'/name).read_bytes()))
     key='chain3' if kind=='chain' and multiplier==3 else kind
     if downstream is not None:
         matches=[name for name,case in data['cases'].items()
@@ -138,3 +142,22 @@ def runtime_fixture():
                 files={'locks/worker.lock':b'openmdao==3.45.1 --hash=sha256:'+b'c'*64+b'\nnumpy==2.5.3 --hash=sha256:'+b'd'*64+b'\n',
                        'licenses/runtime.txt':b'Independent test fixture; never authorize a runtime with this fixture.'},
                 licenses=['licenses/runtime.txt'])
+
+
+def current_fixture(kind='chain', multiplier=2, downstream=None):
+    """Current native execution uses the actual current producer capture, never relabeled bytes."""
+    case = fixture(kind, multiplier, downstream, current=True)
+    if (case['prepared']['schema_version'], case['prepared']['result_protocol_version']) != (
+        '3',
+        '2',
+    ):
+        raise ValueError('Recapture native programs with the current pinned producer')
+    return case
+
+
+def criteria_free_fixture(kind='chain', multiplier=2, downstream=None):
+    """A captured configuration 6 case: preparation 4 pinning result protocol 3."""
+    case = fixture(kind, multiplier, downstream, protocol3=True)
+    if (case['prepared']['schema_version'], case['prepared']['result_protocol_version']) != ('4', '3'):
+        raise ValueError('Recapture protocol-3 native programs with the current pinned producer')
+    return case

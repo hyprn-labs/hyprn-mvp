@@ -15,10 +15,29 @@ node_modules/
 # Local stores, logs, scratch and secrets (never in the repository)
 *.sqlite3
 *.sqlite3-*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
 *.log
 *.local.*
 .env
 .env.*
+!.env.example
+!.env.*.example
 credentials/
+secrets/
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*service_account*.json
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
 # OS
 .DS_Store

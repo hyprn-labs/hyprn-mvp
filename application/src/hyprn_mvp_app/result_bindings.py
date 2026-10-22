@@ -7,7 +7,7 @@ import base64
 from copy import deepcopy
 import json
 
-from .history import History, complete_outcome
+from .history import History, complete_outcome, last_run_position, runs_by_position
 from .contracts import DomainError, canonical, check_digest, digest, validate
 from .execution_bundle import finite, port_key
 # Temporary forwarding alias for test imports only; production code imports it from its owner
@@ -64,12 +64,25 @@ class ResultBindings:
             units = port_units(model)[(instance['instance_id'],instance['definition_version_id'],port['port_id'])]
             if units != output['units']:
                 raise ValueError('Source units mismatch')
-            value = dict(source_run_id=rid, source_output=deepcopy(target), results_digest=digest(results),
-                source_configuration_digest=config['digest'], value=output['value'], units=output['units'],
-                labels=dict(run_name=config['name'], model_name=None, model_revision_id=model['model_revision_id'],
-                    instance_name=instance['name'], output_name=port['name']),
-                outcomes={k:deepcopy(results[k]) for k in ('execution','criteria','applicability')}, native_availability='not_rechecked')
-            validate('ResultSource', value)
+            value = dict(
+                source_run_id=rid,
+                source_output=deepcopy(target),
+                results_digest=digest(results),
+                source_configuration_digest=config['digest'],
+                value=output['value'],
+                units=output['units'],
+                labels=dict(
+                    run_name=config['name'],
+                    model_name=None,
+                    model_revision_id=model['model_revision_id'],
+                    instance_name=instance['name'],
+                    output_name=port['name'],
+                ),
+                outcomes={k: deepcopy(results[k]) for k in ('execution', 'criteria') if k in results},
+                native_availability='not_rechecked',
+            )
+            # Results 3 carry no criteria; their source reports the execution outcome only.
+            validate('ResultSource3' if results['schema_version'] == '3' else 'ResultSource2', value)
             return value
         except (StopIteration, ValueError, KeyError, TypeError, DomainError):
             raise DomainError('source_result_unavailable', 409) from None
@@ -89,7 +102,7 @@ class ResultBindings:
             raise DomainError('invalid_request', 400)
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid)
-            maximum = db.execute('SELECT COALESCE(MAX(rowid),0) FROM run_associations WHERE study_id=?',(sid,)).fetchone()[0]
+            maximum = last_run_position(db, sid)
             high, position, offset = maximum, 0, 0
             if cursor is not None:
                 try:
@@ -102,7 +115,7 @@ class ResultBindings:
                     if any(type(n) is not int for n in (high,position,offset)) or not 0<=position<=high<=maximum or not 0<=offset<=1000:raise ValueError()
                 except (ValueError,TypeError,KeyError,UnicodeError):
                     raise DomainError('invalid_request',400) from None
-            rows=db.execute('SELECT rowid,run_id FROM run_associations WHERE study_id=? AND rowid>=? AND rowid<=? ORDER BY rowid LIMIT 100',(sid,position,high)).fetchall()
+            rows=runs_by_position(db,sid,position,high,100)
         items=[];next_cursor=None
         for row in rows:
             start=offset if row['rowid']==position else 0
@@ -130,7 +143,7 @@ class ResultBindings:
 
     def verify_configuration(self, actor, sid, configuration):
         version=configuration.get('schema_version')
-        if version not in ('2','3','4'):raise ValueError('Unsupported result-bound configuration version')
+        if version not in ('2','3','4','6'):raise ValueError('Unsupported result-bound configuration version')
         validate('ConfigurationRevision'+version,configuration)
         check_digest(configuration)
         if len({i['result_binding']['source_run_id'] for i in configuration['inputs'] if i.get('result_binding')})>64:

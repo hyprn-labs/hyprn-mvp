@@ -22,7 +22,6 @@ def assert_science(proof):
     pin = history["configuration"]["approach_binding"]
     assert pin == proof["saved"]["configuration"]["approach_binding"]
     assert pin["approach_version_id"] == proof["version"]["version"]["approach_version_id"]
-    assert pin["case_id"] == proof["case_id"]
     assert history["configuration"]["model_revision_id"] == fixture.ORIGINAL.downstream_revision
     value = history["configuration"]["inputs"][0]
     binding = value["result_binding"]

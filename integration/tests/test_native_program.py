@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from execution_fixtures import fixture, uid
+from execution_fixtures import criteria_free_fixture, current_fixture as fixture, uid
 from hyprn_mvp_app.store import digest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,7 +103,11 @@ def execute_case(case):
     from hyprn_mvp_integration.calculation import NativeExecution
     native = NativeExecution.from_environment()
     native.require_attestation()
-    bundle = assemble_bundle(uid(), case['prepared'], case['files'], case['frozen'], native.bundle_runtime())
+    # A configuration 6 bundle always carries its (here empty) resolved result dependencies.
+    dependencies = (dict(schema_version='1', sources=[], mappings=[])
+                    if case['frozen']['configuration']['schema_version'] == '6' else None)
+    bundle = assemble_bundle(uid(), case['prepared'], case['files'], case['frozen'], native.bundle_runtime(),
+                             dependencies)
     request = dict(run_id=bundle['manifest']['run_id'], scope=case['frozen']['configuration']['study_id'],
                    command_id=uid(), payload_digest=digest({'proof':'native-program'}),
                    bundle_digest=bundle['manifest']['bundle_digest'])
@@ -125,7 +129,7 @@ def test_native_affine_conversion_rejected_without_available_output():
     record, _ = execute_case(case)
     assert record['exit_status'] == 301
     assert record['results']['execution']['message'] == 'ValueError'
-    assert record['results']['completeness']['available'] == 0
+    assert all(output['availability'] != 'available' for output in record['results']['outputs'])
     assert all(o['value'] is None for o in record['results']['outputs'])
 
 
@@ -152,7 +156,8 @@ def test_native_mapping_and_direct_manual_sql_reference_agree(tmp_path):
     import base64
     import os
     from modeling.tests.test_native_generation import BOOT, native
-    case = fixture('mapping')
+    # The current producer generator: the case captured by the pinned producer image.
+    case = criteria_free_fixture('mapping')
     model = case['frozen']['model_snapshot']
     assert case['capture']['draft_edit_invariance']
     assert len(model['definitions']) == 2 and len(model['instances']) == 3

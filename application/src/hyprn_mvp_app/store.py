@@ -1,5 +1,6 @@
 """Application-owned records and local transactions. Editable models live remotely."""
 from __future__ import annotations
+from .evidence_content import read_content
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from uuid import UUID
 # canonical/digest/uid/DomainError here is a temporary test-import alias; production code
 # imports them from contracts (test_module_boundaries.py).
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
+from .locations import refuse_location
+from . import identity
 
 
 # ---- Exact evidence: one owner for the stored-version read and snapshot creation.
@@ -114,7 +117,7 @@ CREATE TABLE IF NOT EXISTS receipts(
 CREATE TABLE IF NOT EXISTS run_associations(
  run_id TEXT PRIMARY KEY, study_id TEXT NOT NULL REFERENCES studies(study_id),
  configuration_revision_id TEXT NOT NULL REFERENCES configurations(configuration_revision_id),
- command_id TEXT NOT NULL, store_uuid TEXT, process_uuid TEXT,
+ command_id TEXT NOT NULL, store_uuid TEXT, process_uuid TEXT, accepted_at TEXT,
  UNIQUE(study_id,command_id), UNIQUE(store_uuid,process_uuid)
 );
 CREATE TABLE IF NOT EXISTS outbox(
@@ -148,22 +151,6 @@ CREATE TRIGGER IF NOT EXISTS immutable_configuration_update BEFORE UPDATE ON con
  BEGIN SELECT RAISE(ABORT,'immutable configuration'); END;
 CREATE TRIGGER IF NOT EXISTS immutable_configuration_delete BEFORE DELETE ON configurations
  BEGIN SELECT RAISE(ABORT,'immutable configuration'); END;
-CREATE TABLE IF NOT EXISTS approach_drafts(
- approach_id TEXT PRIMARY KEY, study_id TEXT UNIQUE NOT NULL REFERENCES studies(study_id),
- revision TEXT NOT NULL, payload TEXT NOT NULL,
- UNIQUE(approach_id,study_id)
-);
-CREATE TABLE IF NOT EXISTS approach_versions(
- approach_version_id TEXT PRIMARY KEY, approach_id TEXT NOT NULL,
- study_id TEXT NOT NULL REFERENCES studies(study_id),
- version_number INTEGER NOT NULL CHECK(version_number>0), payload TEXT NOT NULL,
- UNIQUE(approach_id,version_number),
- FOREIGN KEY(approach_id,study_id) REFERENCES approach_drafts(approach_id,study_id)
-);
-CREATE TRIGGER IF NOT EXISTS immutable_approach_version_update BEFORE UPDATE ON approach_versions
- BEGIN SELECT RAISE(ABORT,'immutable approach version'); END;
-CREATE TRIGGER IF NOT EXISTS immutable_approach_version_delete BEFORE DELETE ON approach_versions
- BEGIN SELECT RAISE(ABORT,'immutable approach version'); END;
 -- Study-wide archive (presentation) state. Additive: no column on populated
 -- ``studies``, no revision change. A study without a row is not archived. Restore sets
 -- archived=0; rows are never deleted. Every transition's actor and outcome is also the
@@ -180,7 +167,7 @@ CREATE TRIGGER IF NOT EXISTS study_archive_no_delete BEFORE DELETE ON study_arch
 CREATE TABLE IF NOT EXISTS agent_actors(
  actor_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='agent'),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),
- surface TEXT NOT NULL CHECK(surface IN ('local_mcp','remote_mcp','claude_managed','openai_agents')),
+ surface TEXT NOT NULL CHECK(surface IN ('claude_managed','openai_agents')),
  display_name TEXT NOT NULL, created_at REAL NOT NULL,
  UNIQUE(delegator_actor_id,surface)
 );
@@ -190,7 +177,7 @@ CREATE TABLE IF NOT EXISTS agent_actors(
 CREATE TABLE IF NOT EXISTS agent_delegations(
  delegation_id TEXT PRIMARY KEY, agent_actor_id TEXT NOT NULL REFERENCES agent_actors(actor_id),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),
- surface TEXT NOT NULL CHECK(surface IN ('local_mcp','remote_mcp','claude_managed','openai_agents')),
+ surface TEXT NOT NULL CHECK(surface IN ('claude_managed','openai_agents')),
  study_id TEXT NOT NULL REFERENCES studies(study_id),
  role_ceiling TEXT NOT NULL CHECK(role_ceiling IN ('reader','writer')),
  allowed_effects TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL,
@@ -207,17 +194,10 @@ CREATE TABLE IF NOT EXISTS agent_api_sessions(
  actor_id TEXT NOT NULL REFERENCES agent_actors(actor_id),
  read_only INTEGER NOT NULL CHECK(read_only IN (0,1)), expires_at REAL NOT NULL
 );
--- Tool tokens: audience ``/mcp`` only, one delegation each, stored as hashes.
-CREATE TABLE IF NOT EXISTS agent_tool_tokens(
- token_hash TEXT PRIMARY KEY, token_id TEXT UNIQUE NOT NULL,
- delegation_id TEXT NOT NULL REFERENCES agent_delegations(delegation_id),
- audience TEXT NOT NULL CHECK(audience='/mcp'), client_label TEXT NOT NULL,
- created_at REAL NOT NULL, expires_at REAL NOT NULL, revoked_at REAL
-);
 """
 
 # ---- Agent principals: closed vocabularies shared by ``store`` and ``auth``.
-AGENT_SURFACES=frozenset({'local_mcp','remote_mcp','claude_managed','openai_agents'})
+AGENT_SURFACES=frozenset({'claude_managed','openai_agents'})
 # Effects a delegation may hold. No effect deletes a saved record, archives, restores or
 # manages access: those are human-only and have no effect name at all.
 AGENT_EFFECTS=frozenset({'read','draft','record','submit','outside_study','review'})
@@ -234,12 +214,86 @@ def agent_effects(raw):
     """The effects of a stored delegation (canonical JSON array) as a frozenset."""
     return frozenset(json.loads(raw))
 
+# ---- Receipt recovery: how a client recovers after a lost reply, decided once, here. Every
+# receipt read carries one ``recovery`` value; no client keeps a table of receipt states or
+# categories (ADR-0004). A run is never resent: its lifecycle is read from the run.
+RECEIPT_RETRY_AFTER_S=2
+RECOVERY_VALUES=("adopt","wait","resend_same_command","uncertain","refused")
+# Run receipt states whose result is the run (its lifecycle is read from the run itself).
+RUN_RESULT_STATES=frozenset({"accepted_run","prepared","preparation_failed","dispatching","recorded"})
+
+def receipt_recovery(category,receipt):
+    """The recovery of a reader who may see the scope, for the receipt of ``category``
+    (``None`` when it is missing): ``recovery`` and, with ``wait``, ``retry_after_s``.
+
+    ``adopt``: the result is the outcome (``committed``; a run's accepted states);
+    ``refused``: the stored rejection is the outcome; ``uncertain``: never resend (an
+    uncertain run, or any state this table does not name); ``resend_same_command``: send the
+    same command id and body again (a model ``pending_remote`` receipt, whose owner re-queries
+    the modeling service first; a missing receipt of any category but ``run``, the mutation
+    route re-checking authorization and exact idempotency); ``wait``: read again after
+    ``retry_after_s`` (another ``pending_remote`` receipt; a missing run receipt, since a
+    run is never resent)."""
+    wait=dict(recovery="wait",retry_after_s=RECEIPT_RETRY_AFTER_S)
+    if receipt is None:
+        return wait if category=="run" else dict(recovery="resend_same_command")
+    state=receipt["state"]
+    if state=="committed" or category=="run" and state in RUN_RESULT_STATES:
+        return dict(recovery="adopt")
+    if state=="rejected":return dict(recovery="refused")
+    if state=="pending_remote" and category!="run":
+        return dict(recovery="resend_same_command") if category=="model" else wait
+    return dict(recovery="uncertain")
+
+class ReceiptMissing(DomainError):
+    """No receipt in a scope the reader may see: today's ``resource_not_found`` 404 (code,
+    message and outcome unchanged), carrying the recovery for the error envelope. ``data()`` is
+    unchanged, so nothing new is ever persisted from it."""
+    def __init__(self,category):
+        super().__init__("resource_not_found",404)
+        self.recovery=receipt_recovery(category,None)
+
+def _evidence_written(record):
+    """The evidence version an evidence command wrote, for attribution."""
+    return [("evidence_version",record["evidence_id"],record["evidence_version_id"])]
+
+
 class Store:
+    schema_profile = "full"
+
+    @classmethod
+    def postgres(cls, request, authentication, *, background=None, artifact_root=None):
+        """Complete hosted composition; never initializes or migrates a schema."""
+        from .database import PostgreSQL
+        from .migrations import verify
+        result = cls.__new__(cls)
+        result.database = PostgreSQL(request, authentication, background)
+        result.artifact_root = artifact_root
+        try:
+            with result.database.connection() as db:
+                verify(db)
+        except BaseException:
+            result.database.close()
+            raise
+        result.schema_profile = result.database.schema_profile
+        return result
+
+    def verify_schema(self):
+        """Owners verify the entire migration ledger instead of performing startup DDL."""
+        from .migrations import verify
+        if hasattr(self, 'database'):
+            with self.connection() as db:
+                verify(db)
+            return True
+        return False
+
     def __init__(self, path):
         original=Path(path).absolute()
+        # The one location rule (synced folders on every operating system, symbolic links in
+        # the path or a parent, Windows-mounted drives), the same the installation loader
+        # applies to the data root; refused before anything is created.
+        refuse_location(original, what='Application storage')
         self.path = original.resolve()
-        if "CloudStorage" in self.path.parts or any(p.is_symlink() for p in (original, *original.parents) if p != Path("/tmp")):
-            raise ValueError("Application storage must be off-cloud")
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd=os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.close(fd)
@@ -249,12 +303,22 @@ class Store:
         # Additive, idempotent migration. Historical records and observation
         # values remain untouched; pre-existing rows simply have no runtime.
         with self.connection(write=True) as db:
+            identity.ensure(db)
             columns={row['name'] for row in db.execute('PRAGMA table_info(execution_observation)')}
             if 'runtime_json' not in columns:
                 db.execute('ALTER TABLE execution_observation ADD COLUMN runtime_json TEXT')
+            # Runs accepted before the acceptance time was recorded keep NULL.
+            association_columns={
+                row['name'] for row in db.execute('PRAGMA table_info(run_associations)')}
+            if 'accepted_at' not in association_columns:
+                db.execute('ALTER TABLE run_associations ADD COLUMN accepted_at TEXT')
 
     @contextmanager
     def connection(self, write=False):
+        if hasattr(self, "database"):
+            with self.database.connection(write=write) as db:
+                yield db
+            return
         db=sqlite3.connect(self.path, timeout=15, isolation_level=None)
         db.row_factory=sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
@@ -267,6 +331,56 @@ class Store:
             raise
         finally: db.close()
 
+    @contextmanager
+    def authentication_connection(self, *, write=False):
+        """Read-only hosted credential authority; local edition retains its owner store."""
+        if hasattr(self, "database"):
+            with self.database.connection(authentication=True, write=write) as db:
+                yield db
+        else:
+            with self.connection(write=write) as db:
+                yield db
+
+    def background_jobs(self, category, identity=None):
+        """Discover identity only through the process's narrowly granted queue function."""
+        with self.database.background_connection() as db:
+            return db.execute('SELECT * FROM hyprn_background_jobs(?,?)',
+                              (category, identity)).fetchall()
+
+    @contextmanager
+    def background_actor(self, category, identity=None):
+        """Bind one discovered actor. All subsequent SQL retains ordinary row policies."""
+        if not hasattr(self, 'database'):
+            yield True
+            return
+        from .database import actor_scope
+        jobs = self.background_jobs(category, identity)
+        if not jobs:
+            yield False
+            return
+        with actor_scope(jobs[0]['actor_id'], request_boundary=True):
+            yield True
+
+    def assistant_accounts(self):
+        """Provider-account metadata for server-side accounting, never conversation text."""
+        if hasattr(self, 'database'):
+            with self.database.background_connection() as db:
+                return db.execute('SELECT * FROM hyprn_assistant_accounts()').fetchall()
+        with self.connection() as db:
+            return db.execute('SELECT * FROM assistant_conversations').fetchall()
+
+    def lock_path(self, suffix):
+        """Fixed process lock names share the explicitly configured storage root."""
+        if suffix not in {'.dispatch.lock', '.calculation-samples.lock'}:
+            raise ValueError('Unknown owner lock')
+        if not hasattr(self, 'database'):
+            return self.path.with_suffix(suffix)
+        if self.artifact_root is None:
+            raise ValueError('Hosted artifact root must be configured explicitly')
+        root = refuse_location(Path(self.artifact_root).absolute(), what='Application artifacts')
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return root / suffix
+
     def publish_execution_observation(self, status, reason, observed_at, runtime=None):
         """Trusted dispatcher only; no public write route or arbitrary payload."""
         from .readiness import runtime_identity, valid_observation_time
@@ -276,6 +390,11 @@ class Store:
                 (status=='unavailable' and reason in ('executor_unavailable','attestation_invalid') and runtime is None)):
             raise ValueError('Invalid observation status')
         raw=canonical(runtime_identity(runtime)).decode() if runtime is not None else None
+        if hasattr(self, 'database'):
+            with self.database.background_connection(write=True) as db:
+                db.execute('SELECT hyprn_publish_observation(?,?,?,?)',
+                           (status, reason, observed_at, raw))
+            return
         with self.connection(write=True) as db:
             db.execute('INSERT INTO execution_observation(singleton,status,reason,observed_at,expires_at,runtime_json) VALUES(1,?,?,?,?,?) '
                        'ON CONFLICT(singleton) DO UPDATE SET status=excluded.status,reason=excluded.reason,'
@@ -398,22 +517,20 @@ class Store:
         return self._delegation_row(db.execute("SELECT * FROM agent_delegations WHERE delegation_id=?",(delegation,)).fetchone())
 
     def revoke_delegation(self,db,delegation_id,reason):
-        """End delegation ``delegation_id``: its tool tokens are revoked and its agent API
+        """End delegation ``delegation_id``: its agent API
         sessions deleted in the same transaction. Idempotent; returns whether it was live."""
         if not isinstance(reason,str) or not 1<=len(reason)<=64:raise DomainError("invalid_request",400)
         now=time.time()
         changed=db.execute("UPDATE agent_delegations SET revoked_at=?,revoked_reason=? WHERE delegation_id=? AND revoked_at IS NULL",
                            (now,reason,delegation_id)).rowcount
-        db.execute("UPDATE agent_tool_tokens SET revoked_at=? WHERE delegation_id=? AND revoked_at IS NULL",(now,delegation_id))
         db.execute("DELETE FROM agent_api_sessions WHERE delegation_id=?",(delegation_id,))
         return bool(changed)
 
     def revoke_all_agent_credentials(self,db,reason):
-        """End every live delegation with its tool tokens and agent API sessions (owner
+        """End every live delegation with its agent API sessions (owner
         recovery)."""
         for row in db.execute("SELECT delegation_id FROM agent_delegations WHERE revoked_at IS NULL").fetchall():
             self.revoke_delegation(db,row["delegation_id"],reason)
-        db.execute("UPDATE agent_tool_tokens SET revoked_at=? WHERE revoked_at IS NULL",(time.time(),))
         db.execute("DELETE FROM agent_api_sessions")
 
     def _delegated_studies(self,db,agent_actor_id):
@@ -454,7 +571,9 @@ class Store:
         """The ``studies`` row of ``sid`` as a dict, read in the caller's ``db`` (for CAS on the
         study revision inside a command). Not authorized here: the caller has already
         authorized in the same transaction. Unknown studies are ``resource_not_found`` 404."""
-        row=db.execute("SELECT * FROM studies WHERE study_id=?",(sid,)).fetchone()
+        row=db.execute(
+            "SELECT study_id,revision,name,description,boundary FROM studies WHERE study_id=?",
+            (sid,)).fetchone()
         if row is None: raise DomainError("resource_not_found",404)
         return dict(row)
 
@@ -489,7 +608,9 @@ class Store:
             if delegated is not None:
                 return [self.study_row(db,sid) for sid in delegated]
             return [dict(r) for r in db.execute(
-                "SELECT s.* FROM studies s JOIN memberships m USING(study_id) WHERE m.actor_id=? ORDER BY s.study_id",(actor,))]
+                "SELECT s.study_id,s.revision,s.name,s.description,s.boundary FROM studies s "
+                "JOIN memberships m USING(study_id) WHERE m.actor_id=? ORDER BY s.study_id",
+                (actor,))]
 
     # ---- Study archive. Archive is study-wide presentation state: it hides a study
     # from the default listing and nothing else. It is not access control (every read and
@@ -517,7 +638,8 @@ class Store:
                 return [dict(self.study_row(db,sid),archived=self.study_archived(db,sid)) for sid in delegated
                         if self.study_archived(db,sid)==bool(archived)]
             return [dict(r,archived=bool(r["archived"])) for r in db.execute(
-                "SELECT s.*,COALESCE(a.archived,0) AS archived FROM studies s JOIN memberships m USING(study_id) "
+                "SELECT s.study_id,s.revision,s.name,s.description,s.boundary,"
+                "COALESCE(a.archived,0) AS archived FROM studies s JOIN memberships m USING(study_id) "
                 "LEFT JOIN study_archive a USING(study_id) WHERE m.actor_id=? AND COALESCE(a.archived,0)=? "
                 "ORDER BY s.study_id",(actor,int(bool(archived))))]
 
@@ -561,14 +683,42 @@ class Store:
     # uses ``command_receipt`` (test_module_boundaries pins both facts).
     _receipt=command_receipt
 
+    def command_receipts(self, db, scope, category, commands):
+        """Read a bounded set in one transaction; callers authorize the scope first."""
+        commands = list(dict.fromkeys(commands))
+        if len(commands) > 10000:
+            raise DomainError('limit_exceeded', 413)
+        rows = db.execute(
+            'SELECT * FROM receipts WHERE scope=? AND category=? '
+            'AND command_id IN (SELECT value FROM json_each(?))',
+            (scope, category, json.dumps(commands)),
+        ).fetchall()
+        result = {}
+        for row in rows:
+            value = dict(row)
+            for key in ('result', 'error', 'request'):
+                value[key] = json.loads(value[key]) if value[key] is not None else None
+            result[value['command_id']] = value
+        return result
+
     def receipt(self,actor,study,category,command):
+        row=self.visible_receipt(actor,study,category,command)
+        if row is None:raise DomainError("resource_not_found",404)
+        return row
+
+    def visible_receipt(self,actor,study,category,command):
+        """``receipt`` for the receipt reads: the same authorization and the same scoped 404
+        for a reader who may not see the scope (a non-member, a foreign study, an agent outside
+        its pre-study rules, a created study the reader no longer belongs to), but ``None``
+        for a missing receipt in a scope the reader may see."""
         with self.connection() as db:
             if study:self.authorize(db,actor,study)
             agent=None if study else self.agent_actor(db,actor)
-            if agent is not None and category!="study_create":raise DomainError("resource_not_found",404)
+            if agent is not None and category!="study_create":
+                raise DomainError("resource_not_found",404)
             row=self.command_receipt(db,self._scope(actor,study),category,command)
+            if row is None:return None
             if agent is not None:return self._agent_pre_study_outcome(db,agent,row)
-            if row is None:raise DomainError("resource_not_found",404)
             # Pre-study receipts also re-check membership in the created study.
             if not study and row["result"] and "study_id" in row["result"]:
                 self.authorize(db,actor,row["result"]["study_id"])
@@ -588,8 +738,34 @@ class Store:
                 if row["error"]:raise DomainError(**row["error"])
             return row
 
+    # The agent runtime's attribution recorder, set by the composition root (``api``), which
+    # ``store`` cannot import. An agent actor's write is refused while it is unset, so no
+    # agent-written record is ever stored without saying which agent wrote it.
+    attribution_recorder=None
+
+    def attribute(self,db,actor,study,category,command,records):
+        """Record in the caller's transaction that the agent ``actor`` wrote ``records``
+        (``(record_kind, record_id, version_id)`` triples) through receipt (``study``,
+        ``category``, ``command``); a human actor's write records nothing. The entry names the
+        agent and its delegating user, so an agent-written record never reads as person-written."""
+        agent=self.agent_actor(db,actor)
+        if agent is None:return
+        if self.attribution_recorder is None:
+            raise DomainError("internal_error",500,outcome="unknown")
+        for kind,record_id,version_id in records:
+            # A pre-study command (``study`` None) creates one study: the entry's study is it.
+            self.attribution_recorder(db,dict(
+                study_id=study or record_id,record_kind=kind,record_id=record_id,
+                version_id=version_id,command_category=category,command_id=command,
+                agent_actor_id=actor,agent_display_name=agent["display_name"],
+                delegator_actor_id=agent["delegator_actor_id"]))
+
     def command(self,actor,study,category,command,payload,operation,*,owner=False,receipt_state="committed",request=None,
-                delegation_id=None):
+                delegation_id=None,attribute=None):
+        """Run ``operation(db)`` once under receipt (scope, ``category``, ``command``) and return
+        its result; a repeat with the same payload returns the stored outcome. ``attribute``
+        maps an accepted result to the ``(record_kind, record_id, version_id)`` triples an agent
+        actor wrote, recorded in the same transaction (``attribute``)."""
         error=None
         with self.connection(write=True) as db:
             if study:self.authorize(db,actor,study,write=True,owner=owner)
@@ -621,6 +797,8 @@ class Store:
                 (scope,category,command,actor,digest(dict(major="1",scope=scope,category=category,payload=payload)),state,
                  json.dumps(result) if result is not None else None,
                  json.dumps(error.data()) if error else None,json.dumps(request) if request else None))
+            if error is None and attribute is not None:
+                self.attribute(db,actor,study,category,command,attribute(result))
         if error:raise error
         return result
 
@@ -638,23 +816,14 @@ class Store:
         def apply(db):
             agent=self.agent_actor(db,actor)
             sid=uid()
-            db.execute("INSERT INTO studies VALUES(?,?,?,?,?)",(sid,uid(),name,"",""))
+            db.execute(
+                "INSERT INTO studies(study_id,revision,name,description,boundary) VALUES(?,?,?,?,?)",
+                (sid,uid(),name,"",""))
             db.execute("INSERT INTO memberships VALUES(?,?,?)",(sid,agent["delegator_actor_id"] if agent else actor,"owner"))
             return self.study_row(db,sid)
         return self.command(actor,None,"study_create",command,dict(operation="create_study",name=name),apply,
-                            delegation_id=delegation_id)
-
-    def update_study(self,actor,sid,command,expected,changes):
-        if not changes or set(changes)-{"name","description","boundary"}:
-            raise DomainError("invalid_request",400)
-        def apply(db):
-            row=self.study_row(db,sid);self.cas(row["revision"],expected)
-            row.update(changes);row["revision"]=uid()
-            db.execute("UPDATE studies SET revision=?,name=?,description=?,boundary=? WHERE study_id=?",
-                       (row["revision"],row["name"],row["description"],row["boundary"],sid))
-            return row
-        return self.command(actor,sid,"study",command,
-                            dict(operation="update_study",target=sid,expected_revision=expected,changes=changes),apply)
+                            delegation_id=delegation_id,
+                            attribute=lambda r:[("study",r["study_id"],None)])
 
     def set_membership(self,actor,sid,command,expected,target,role):
         if role not in {"owner","writer","reader",None}:raise DomainError("invalid_request",400)
@@ -680,7 +849,9 @@ class Store:
                 row=db.execute('SELECT payload FROM configurations WHERE study_id=? AND configuration_revision_id=?',
                     (sid,scope['configuration_revision_id'])).fetchone()
                 if row is None:raise DomainError('resource_not_found',404)
-                if kind=='criterion' and not any(c['criterion_id']==scope['criterion_id'] for c in json.loads(row['payload'])['configuration']['criteria']):
+                configuration=json.loads(row['payload'])['configuration']
+                # Configuration 6 carries no criteria to scope evidence to.
+                if kind=='criterion' and (configuration['schema_version']=='6' or not any(c['criterion_id']==scope['criterion_id'] for c in configuration['criteria'])):
                     raise DomainError('resource_not_found',404)
                 return
             if kind=='run':
@@ -690,7 +861,7 @@ class Store:
             self._association(db,sid,scope['model_id'])
         # The exact remote revision is immutable. No local write lock spans I/O.
         if coordinator is None:raise DomainError('backend_unavailable',503,outcome='unknown')
-        model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],response_schema='ModelRevisionResponse')['data']
+        model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],response_schema='ModelRevisionResponse4')['data']
         if (model['model_id']!=scope['model_id'] or model['model_revision_id']!=scope['model_revision_id']
             or model['digest']!=digest({k:v for k,v in model.items() if k!='digest'})):
             raise DomainError('backend_unavailable',503,outcome='unknown')
@@ -739,7 +910,7 @@ class Store:
         kind=scope['kind'];model=None;config=None
         if 'frozen' in local:
             config=local['frozen']['configuration'];model=local['frozen']['model_snapshot']
-            validate('ConfigurationRevision',config)
+            validate('ConfigurationRevisionRead6',config)
             if (config['study_id']!=sid or config['configuration_revision_id']!=
                 scope.get('configuration_revision_id',local.get('run_revision')) or
                 config['digest']!=digest({k:v for k,v in config.items() if k!='digest'})):
@@ -747,11 +918,11 @@ class Store:
         elif 'model_id' in local:
             if coordinator is None:raise DomainError('backend_unavailable',503,outcome='unknown')
             model=coordinator.read(actor,sid,scope['model_id'],'/revisions/'+scope['model_revision_id'],
-                                   response_schema='ModelRevisionResponse')['data']
+                                   response_schema='ModelRevisionResponse4')['data']
             # Own a detached immutable copy, never a mutable adapter response alias.
             model=json.loads(canonical(model))
         if model is not None:
-            validate('ModelRevision',model,remote=True)
+            validate('ModelRevisionRead4',model,remote=True)
             expected=config if config is not None else scope
             if (model['model_id']!=expected['model_id'] or model['model_revision_id']!=expected['model_revision_id'] or
                 model['digest']!=digest({k:v for k,v in model.items() if k!='digest'})):
@@ -786,7 +957,7 @@ class Store:
             if config is not None:
                 label('configuration',config['configuration_id'],config['configuration_revision_id'],config['name'])
                 if kind=='criterion':
-                    criterion=exact(config['criteria'],criterion_id=scope['criterion_id'])
+                    criterion=exact([] if config['schema_version']=='6' else config['criteria'],criterion_id=scope['criterion_id'])
                     label('criterion',criterion['criterion_id'],config['configuration_revision_id'],
                           endpoint(criterion['target'])+' '+criterion['operator']+' '+str(criterion['threshold'])+' '+criterion['units'])
                 if kind=='run':
@@ -870,7 +1041,7 @@ class Store:
                 if 'legacy_scope' in values:
                     legacy=values['legacy_scope']
                     if legacy!='null':identifier(legacy)
-                    clauses.append("json_extract(payload,'$.scope') IS ?");params.append(None if legacy=='null' else legacy)
+                    clauses.append("json_extract(payload,'$.scope') IS NOT DISTINCT FROM ?");params.append(None if legacy=='null' else legacy)
             elif kind is not None or selected:
                 clauses.append("json_extract(payload,'$.evidence_schema_version') IN ('2','3')")
                 if kind is not None:
@@ -915,6 +1086,7 @@ class Store:
     def add_evidence(self,actor,sid,command,note,*,coordinator=None):
         with self.connection() as db:self.authorize(db,actor,sid,write=True)
         validate('EvidenceCreate3' if note.get('evidence_schema_version')=='3' else 'EvidenceCreate',dict(command_id=command,**note))
+        read_content(note["content"])
         payload=dict(operation="create_evidence",note=note)
         previous=self.replay(actor,sid,"evidence",command,payload)
         if previous:return previous["result"]
@@ -931,11 +1103,13 @@ class Store:
                        (result["evidence_version_id"],result["evidence_id"],sid,json.dumps(result)))
             if resolved:db.execute('INSERT INTO evidence_families VALUES(?,?,?)',(result['evidence_id'],sid,result['evidence_version_id']))
             return result
-        return self.command(actor,sid,"evidence",command,payload,apply)
+        return self.command(actor,sid,"evidence",command,payload,apply,
+                            attribute=_evidence_written)
 
     def revise_evidence(self,actor,sid,family,command,expected,note,*,coordinator=None):
         with self.connection() as db:self.authorize(db,actor,sid,write=True)
         validate('EvidenceRevise3',dict(note,command_id=command,expected_revision=expected))
+        read_content(note['content'])
         payload=dict(operation='revise_evidence',family_id=family,expected_revision=expected,note=note)
         previous=self.replay(actor,sid,'evidence',command,payload)
         if previous:return previous['result']
@@ -952,7 +1126,8 @@ class Store:
             db.execute('INSERT INTO evidence_families VALUES(?,?,?) ON CONFLICT(evidence_id) DO UPDATE SET head=excluded.head',
                        (family,sid,result['evidence_version_id']))
             return result
-        return self.command(actor,sid,'evidence',command,payload,apply)
+        return self.command(actor,sid,'evidence',command,payload,apply,
+                            attribute=_evidence_written)
 
     def _evidence_payload(self,db,sid,version):
         """Stored payload text of ``version`` in the caller's authorized connection.

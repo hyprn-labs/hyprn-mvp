@@ -18,8 +18,9 @@ import zipfile
 from datetime import datetime
 
 from .contracts import DomainError, canonical, data_json, digest, uid, validate
-from .execution_bundle import validate_assumption_closure
+from .execution_bundle import result_history_version, validate_assumption_closure
 from .history import History, complete_outcome
+from .locations import refuse_location
 from .modified_runs import ModifiedRuns
 from .result_bindings import ResultBindings
 
@@ -79,16 +80,17 @@ def safe_path(value):
 
 
 def checked_root(path):
-    path=Path(path).absolute()
-    if '..' in path.parts or any(p.is_symlink() for p in (path,*path.parents)):
-        raise ValueError('Owned non-symlink artifact root required')
-    if any(p in path.parts for p in ('CloudStorage','Google Drive','GoogleDrive')):
-        raise ValueError('Off-cloud artifact root required')
-    return path
+    # The one location rule of the application store (synced folders, symbolic links,
+    # Windows-mounted drives) applies to the record root beside it.
+    return refuse_location(Path(path).absolute(), what='Computational record root')
 
 
 def records_for_store(store):
     """One server-owned artifact location shared by dispatcher and web reader."""
+    if hasattr(store, 'database'):
+        if store.artifact_root is None:
+            raise ValueError('Hosted computational record root must be configured explicitly')
+        return ComputationalRecords(store, checked_root(store.artifact_root))
     return ComputationalRecords(store,checked_root(store.path.parent/'computational-records'))
 
 
@@ -298,7 +300,9 @@ def inspect_record(raw, *, native_inventory=None):
             if pin and version=='2':bundle_files['approach/closure.json']=canonical(closure)
             request=dict(run_id=rid,bundle_digest=mapping['bundle_digest'])
             validate_retained_bundle(dict(manifest=bundle_manifest,files=bundle_files),request,frozen,raw_snapshot=True)
-            result=data_json(files[prefix+'results.json']);validate('RetainedResults',result)
+            result = data_json(files[prefix + 'results.json'])
+            validate('RetainedResultsRead3', result)
+            result_history_version(bundle_manifest['schema_version'], result['schema_version'])
             if result['run_id']!=rid or result['bundle_digest']!=mapping['bundle_digest'] or digest(result)!=mapping['results_digest']:raise ValueError('Portable result identity')
             complete_outcome(result,model,config)
             history['results']=result
@@ -465,7 +469,8 @@ class ComputationalRecords:
             db.execute('INSERT INTO computational_record_requests VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (rid,sid,actor,kind,body['command_id'],digest(payload),json.dumps(selected),preview_id,expected,'queued',0,json.dumps(dict(schema_version='2')) if modern else '{}',None,None,None))
             return self._public(self._row(db,actor,sid,rid))
-        return self.store.command(actor,sid,category,body['command_id'],payload,apply)
+        return self.store.command(actor,sid,category,body['command_id'],payload,apply,
+            attribute=lambda saved:[('computational_record',saved['request_id'],None)])
 
     def enqueue_preview(self,actor,sid,body):
         validate('RecordPreviewRequest',body)
@@ -633,6 +638,10 @@ class ComputationalRecords:
         return raw,preview,digest(stable),records
 
     def process_one(self,archive_record,request_id=None):
+        with self.store.background_actor('export', request_id) as admitted:
+            return self._process_one(archive_record, request_id) if admitted else False
+
+    def _process_one(self,archive_record,request_id=None):
         """One bounded item under the artifact-root owned lock; no native defaults."""
         checked_root(self.root)
         fd=os.open(self.root/'owner.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)

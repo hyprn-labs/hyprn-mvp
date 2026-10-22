@@ -17,7 +17,7 @@ async function fixture(page: Page) {
     ports: [...ins.split(',').filter(Boolean).map(s => ({ s, direction: 'input' })), ...outs.split(',').map(s => ({ s, direction: 'output' }))].map((p, n) => ({ temp_key: `p${n}`, name: p.s, code_symbol: p.s, direction: p.direction, value_type: 'real_scalar', units: '' })),
     source: { encoding: 'base64', media_type: 'text/x-python', bytes: source.toString('base64'), sha256: hash } }, { kind: 'instantiate', temp_key: `i${i}`, version_ref: { temp_key: `d${i}` } }]);
   const response = await page.request.post(path + '/edits', { headers: { 'X-CSRF-Token': csrf, Origin: servedOrigin() }, data: { command_id: crypto.randomUUID(), expected_revision: (await read()).draft_revision, edits } }); expect(response.ok()).toBeTruthy();
-  await page.getByRole('button', { name: 'Reload model', exact: true }).click(); await expect(page.getByRole('button', { name: 'Select Producer', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh model', exact: true }).click(); await expect(page.getByRole('button', { name: 'Select Producer', exact: true })).toBeVisible();
   let writes = 0; page.on('request', r => { if (r.url().endsWith(path + '/edits') && r.method() === 'POST') writes++; });
   return { read, path, get writes() { return writes; } };
 }
@@ -46,7 +46,7 @@ test('queued connections survive preview dismissal and navigation cancellation, 
 test('rename and add-component drafts are guarded, retained and saved in one preview; filters stay local', async ({ page }) => {
   const f = await fixture(page); await page.getByText('Model name', { exact: true }).click(); await page.getByLabel('Rename model', { exact: true }).fill('Reviewed model');
   await page.getByLabel('New component name').fill('Third'); await page.getByLabel('Output symbols').fill('result');
-  await page.getByRole('button', { name: 'Reload model', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh model', exact: true }).click();
   const dirty = page.getByRole('dialog', { name: 'Unsaved changes', exact: true }); await expect(dirty).toBeVisible(); await dirty.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(page.getByLabel('Rename model', { exact: true })).toHaveValue('Reviewed model'); await expect(page.getByLabel('New component name')).toHaveValue('Third');
   await page.getByRole('button', { name: 'Configurations', exact: true }).click(); await dirty.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -67,6 +67,6 @@ test('lost batch acknowledgement retains queued edits and reconciles one origina
   const receipt = page.waitForRequest(r => r.url().includes(`/commands/${command}?category=model`));
   await page.getByRole('button', { name: 'Check original command', exact: true }).click(); await receipt;
   await expect(page.getByText(/Original command: committed/)).toBeVisible(); expect(f.writes).toBe(1); expect((await f.read()).connections).toHaveLength(2);
-  await page.getByRole('button', { name: 'Reload model', exact: true }).click(); await page.getByRole('dialog', { name: 'Unsaved changes', exact: true }).getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh model', exact: true }).click(); await page.getByRole('dialog', { name: 'Unsaved changes', exact: true }).getByRole('button', { name: 'Discard changes', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Remove queued row/ })).toHaveCount(0); expect(f.writes).toBe(1);
 });

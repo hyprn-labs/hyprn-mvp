@@ -23,7 +23,7 @@ from aiida import orm
 from aiida.common.links import LinkType
 from checks import PROJECTION_SCOPE as SCOPE, NATIVE_BACKEND as BACKEND
 import scoped_fixture as guard
-from combined_fixture import NativeJourney
+from combined_fixture import NativeJourney, brief_constraint
 from hyprn_mvp_app.store import canonical, digest, uid
 from hyprn_mvp_app.dispatcher import encode_record
 from hyprn_mvp_integration.calculation import NativeExecution
@@ -52,7 +52,9 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         mid=draft['model_id'];mp='models/'+mid
         source=b"# <%= File.write('/store/forbidden-candidate-import', 'bad') %>\noutputs['force'] = inputs['mass'] * inputs['velocity'] / inputs['duration']\n"
         units={'mass':'kg','velocity':'m/s','duration':'s','force':'N'}
-        ports=[dict(temp_key=k,direction='output' if k=='force' else 'input',name=k,code_symbol=k,value_type='real_scalar',units=u) for k,u in units.items()]
+        # Model4 ports declare typed units.
+        ports=[dict(temp_key=k,direction='output' if k=='force' else 'input',name=k,code_symbol=k,
+            value_type='real_scalar',units=dict(kind='physical',expression=u)) for k,u in units.items()]
         def add(key,owner,text,relation=None):
             return dict(kind='add_assumption',temp_key=key,owner=owner,statement=text,evidence_links=[] if relation is None else [dict(evidence_version_id=eid,relation=relation)])
         edits=[dict(kind='create_definition',temp_key='force',definition_kind='explicit_component',name='Force',ports=ports,
@@ -62,7 +64,7 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
             add('first_assumption',dict(kind='instance',instance_temp_key='first'),'First instance: constant mass','supports'),
             add('second_assumption',dict(kind='instance',instance_temp_key='second'),'Second instance: calibration questioned','challenges'),
             add('uncited',dict(kind='model'),'Uncited idealization'),add('model',dict(kind='model'),'Model boundary','context')]
-        edit_body=dict(schema_version='2',command_id=uid(),expected_revision=draft['draft_revision'],edits=edits)
+        edit_body=dict(schema_version='4',command_id=uid(),expected_revision=draft['draft_revision'],edits=edits)
         draft=req('POST',mp+'/edits',edit_body)
         assert req('POST',mp+'/edits',edit_body)==draft
         req('POST',mp+'/edits',edit_body|{'edits':[]},409)
@@ -70,8 +72,9 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         children=[i for i in draft['instances'] if i['instance_id']!=draft['root_instance_id']]
         assert len(children)==2 and len({i['definition_version_id'] for i in children})==1
         defid=next(d['definition_id'] for d in draft['definitions'] if d['definition_version_id']==children[0]['definition_version_id'])
-        draft=req('POST',mp+'/edits',dict(schema_version='2',command_id=uid(),expected_revision=draft['draft_revision'],edits=[dict(kind='set_annotation',element_ref=defid,text='Definition note, distinct from assumptions')]))
+        draft=req('POST',mp+'/edits',dict(schema_version='4',command_id=uid(),expected_revision=draft['draft_revision'],edits=[dict(kind='set_annotation',element_ref=defid,text='Definition note, distinct from assumptions')]))
         model=req('POST',mp+'/commits',dict(command_id=uid(),expected_revision=draft['draft_revision']))
+        assert model['schema_version']=='4'
         assert len(model['assumptions'])==4 and model['annotations'][-1]['text'].startswith('Definition note')
         before_model=canonical(model)
         assert j.canary()['candidate_side_effect'] is False
@@ -103,9 +106,9 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         definition=next(d for d in model['definitions'] if d['definition_id']==defid)
         portmap={p['code_symbol']:p for p in definition['ports']}
         def target(i,k):return dict(instance_id=i['instance_id'],port_id=portmap[k]['port_id'])
-        candidate=dict(schema_version='3',study_id=j.sid,model_id=mid,model_revision_id=model['model_revision_id'],name='Original force',
+        # A configuration request 6 carries explicit inputs and assumptions, never a criterion.
+        candidate=dict(schema_version='6',study_id=j.sid,model_id=mid,model_revision_id=model['model_revision_id'],name='Original force',
             inputs=[dict(kind='literal',target=target(i,k),value=v,units=units[k],provenance=dict(kind='manual',statement=f'Explicit {k}: {v} {units[k]}',evidence_version_ids=[eid])) for i,values in zip(children,[(2,3,2),(4,5,2)]) for k,v in zip(('mass','velocity','duration'),values)],
-            criteria=[dict(criterion_id=uid(),target=target(children[0],'force'),operator='eq',threshold=3,units='N',evidence_version_ids=[eid])],
             numerical=dict(mode='deterministic',initialization=[],solvers=[],design_variables=[],objectives=[],constraints=[],optimizer=None,uncertainty=None,derivatives=dict(method='none',form=None,check=None)),
             context_source=dict(kind='current_study',expected_study_revision=j.study['revision']),notes=['Configuration note'],
             assumptions=[dict(assumption_id=uid(),statement='Configuration-specific steady acceleration',evidence_links=[dict(evidence_version_id=eid,relation='supports')])],
@@ -133,7 +136,7 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
             assert count()==n and j.canary()['candidate_side_effect'] is False
             j.dispatch(rid);detail=req('GET','runs/'+rid)
             assert detail['state']=='recorded' and not detail['history']['errors'],detail
-            assert detail['history']['results']['execution']['state']=='finished'
+            j.recorded_without_criteria(detail)
             assert count()==n+1
             j.dispatch(rid);assert count()==n+1
             assert req('POST','runs',body,202)['run_id']==rid
@@ -145,8 +148,6 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         def values(detail):return {o['target']['instance_id']:o['value'] for o in detail['history']['results']['outputs']}
         saved=save(candidate);rid,detail,node=execute(saved)
         assert values(detail)=={children[0]['instance_id']:3,children[1]['instance_id']:10}
-        assert detail['history']['results']['applicability']['state']=='unassessed'
-        assert detail['history']['results']['criteria'][0]['outcome']=='met'
         original_detail=deepcopy(detail['history'])
         e2body=dict(command_id=uid(),expected_revision=eid,**evidence('Force report E2'))
         family='evidence-families/'+e1['evidence_id']+'/versions'
@@ -156,12 +157,12 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         req('POST',family,e2body|{'title':'Changed payload'},409)
         assert req('GET','evidence/'+eid)==e1
         old_assumption=draft['assumptions'][0]
-        draft=req('POST',mp+'/edits',dict(schema_version='2',command_id=uid(),expected_revision=draft['draft_revision'],edits=[dict(kind='update_assumption',assumption_id=old_assumption['assumption_id'],statement='Later first-instance assumption',evidence_links=old_assumption['evidence_links'])]))
+        draft=req('POST',mp+'/edits',dict(schema_version='4',command_id=uid(),expected_revision=draft['draft_revision'],edits=[dict(kind='update_assumption',assumption_id=old_assumption['assumption_id'],statement='Later first-instance assumption',evidence_links=old_assumption['evidence_links'])]))
         new_model=req('POST',mp+'/commits',dict(command_id=uid(),expected_revision=draft['draft_revision']))
         assert new_model['digest']!=model['digest'] and new_model['assumptions'][1:]==model['assumptions'][1:]
         assert canonical(req('GET',mp+'/revisions/'+model['model_revision_id']))==before_model
         seed=req('GET','runs/'+rid+'/modified-run-seed')
-        assert seed['schema_version']=='2'
+        assert seed['schema_version']=='8'
         modified=seed['configuration'];modified['name']='Explicit modified force'
         assert modified['model_revision_id']==model['model_revision_id']
         assert modified['assumptions']==candidate['assumptions']
@@ -174,6 +175,13 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
         assert second_node.uuid!=node.uuid
         assert values(second_detail)=={children[0]['instance_id']:9,children[1]['instance_id']:10}
         assert not second_node.base.links.get_incoming(link_type=LinkType.CALL_CALC).all()
+        # The force criterion is a brief criterion judged in a calculation over both runs.
+        force=brief_constraint('First-instance force','eq',3,'N')
+        brief=j.brief_version([force])
+        binding=(force['criterion_id'],target(children[0],'force'))
+        evaluated=j.evaluate([saved,updated],brief,[binding])
+        assert evaluated[rid][force['criterion_id']]['outcome']=='met'
+        assert evaluated[second][force['criterion_id']]['outcome']=='not_met'
         # Real post-claim fault must never allocate or redispatch a replacement.
         uncertain_body=dict(command_id=uid(),configuration_revision_id=updated['configuration']['configuration_revision_id'])
         uncertain=req('POST','runs',uncertain_body,202);n=count()
@@ -235,7 +243,7 @@ def test_actual_native_assumptions_evidence_journey(monkeypatch):
             after=canonical(payload);native=canonical(encode_record(original_read(payload['request'],payload['history']['association'])))
             assert after==before['payload'] and native==before['native']
             hashes[key]={kind:hashlib.sha256(value).hexdigest() for kind,value in before.items()}
-        proof=dict(passed=True,public_http=True,private_production_http_jwt=True,cumulative_patch='070-assumptions-evidence.patch',
+        proof=dict(passed=True,public_http=True,private_production_http_jwt=True,cumulative_patch='100-configurations-without-criteria.patch',
             independent_analytical_values={'original':[3,10],'modified':[9,10]},units='N',
             original_run=rid,modified_run=second,original_process=node.uuid,modified_process=second_node.uuid,
             fresh_process_count=count(),original_hashes_before_and_after=hashes,model_sha256=hashlib.sha256(before_model).hexdigest(),

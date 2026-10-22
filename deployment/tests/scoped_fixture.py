@@ -165,7 +165,10 @@ def allocate_scope(scope):
     with (scope.root / 'scope.json').open('x') as output:
         json.dump(scope.record(), output, indent=2)
         output.write('\n')
-    return validate_scope(scope)
+    validate_scope(scope)
+    import check_storage
+    check_storage.register(scope)
+    return scope
 
 
 def scoped_path(scope, relative):
@@ -191,6 +194,8 @@ def clean_environment(scope):
         'HYPRN_MVP_TEST_SCOPE_PROFILE': scope.profile,
         **({'HYPRN_MVP_TEST_SCOPE_URL': scope.url} if scope.url is not None else {}),
         **PASS_THROUGH,
+        **({'HYPRN_MVP_CHECK_SESSION': os.environ['HYPRN_MVP_CHECK_SESSION']}
+           if os.environ.get('HYPRN_MVP_CHECK_SESSION') else {}),
     }
 
 
@@ -300,7 +305,7 @@ def worker_wrapper_text(scope):
 
 
 def prepare_worker_fixture(scope, backend):
-    """Same reviewed builder/attestor, fresh root, code and unique image tag."""
+    """Same reviewed builder/attestor, fresh root and ownership, reusable image."""
     import hashlib, shlex, shutil, sys
     validate_scope(scope)
     from hyprn_mvp_integration import launcher
@@ -337,13 +342,11 @@ def prepare_worker_fixture(scope, backend):
     return code
 
 
-def build_derived_image(scope, base, context, role, recipe, *, evidence=None):
-    """Build a scoped test image that extends the verified image id ``base``.
+def build_derived_image(scope, base, context, role, recipe, *, evidence=None, disposable=False):
+    """Reuse exact derived-image inputs; container/store ownership stays scoped.
 
-    BuildKit cannot build FROM a bare image id, so a transient tag names ``base`` for this one
-    build and is removed afterwards (a tag that became the base's only reference stays, so the
-    base is never deleted). The image carries the scope label and the tag
-    hyprn-mvp-<role>:<first 16 hex of the build-input digest>, and must extend the base's layers.
+    Changed code, recipe or base requires a different image. Scope UUIDs do not.
+    An image must still extend the verified base layers before it can be used.
     """
     import hashlib, subprocess, uuid
     validate_scope(scope)
@@ -352,11 +355,26 @@ def build_derived_image(scope, base, context, role, recipe, *, evidence=None):
         return subprocess.run(['docker',*args],env=clean_environment(scope),capture_output=True,text=True,check=True).stdout.strip()
     info=json.loads(docker('image','inspect',base))[0]
     if info['Id']!=base:raise ValueError('Base image identity mismatch')
-    files=sorted((str(p.relative_to(context)),hashlib.sha256(p.read_bytes()).hexdigest())
-                 for p in context.rglob('*') if p.is_file() and p.name!='Dockerfile')
-    body=recipe+'LABEL org.hyprn-mvp.test-scope="'+scope.run_uuid+'"\n'
+    files=[]
+    for p in sorted(context.rglob('*')):
+        no_symlinks(p)
+        if p == context/'Dockerfile':continue
+        if not (p.is_file() or p.is_dir()):raise ValueError('Unsupported image context entry')
+        files.append((str(p.relative_to(context)),p.stat().st_mode & 0o7777,
+                      hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None))
+    body=recipe
+    if disposable:body += 'LABEL org.hyprn-mvp.test-scope="'+scope.run_uuid+'"\n'
     digest=hashlib.sha256(json.dumps(dict(base=base,recipe=body,files=files),sort_keys=True).encode()).hexdigest()
+    body += 'LABEL org.hyprn-mvp.derived-inputs=\"'+digest+'\"\n'
     tag='hyprn-mvp-'+role+':'+digest[:16]
+    cached=subprocess.run(['docker','image','inspect',tag],env=clean_environment(scope),capture_output=True,text=True)
+    if cached.returncode==0:
+        image=json.loads(cached.stdout)[0]
+        if (image.get('Config',{}).get('Labels') or {}).get('org.hyprn-mvp.derived-inputs')==digest:
+            if image['RootFS']['Layers'][:len(info['RootFS']['Layers'])]!=info['RootFS']['Layers']:
+                raise ValueError('Cached image does not extend its base image')
+            if evidence is not None:Path(evidence).write_text(json.dumps(dict(reused=True,inputs_sha256=digest,image=image['Id']))+'\n')
+            return image['Id']
     reference='hyprn-mvp-build-base:'+uuid.uuid4().hex[:16]
     (context/'Dockerfile').write_text('FROM '+reference+'\n'+body)
     command=['docker','build','--network=none','--pull=false','-t',tag,str(context)]
@@ -390,7 +408,7 @@ def change_worker_fixture_identity(scope):
     context=scoped_path(scope,'artifacts/changed-image');context.mkdir()
     image=build_derived_image(scope,runtime['worker_image'],context,'worker',
                               'LABEL org.hyprn-mvp.attempt="'+scope.run_uuid+'"\n',
-                              evidence=root/'evidence/changed-image-build.json')
+                              evidence=root/'evidence/changed-image-build.json', disposable=True)
     if image==runtime['worker_image']:raise ValueError('Fixture image identity did not change')
     runtime['worker_image']=image
     (root/'evidence/runtime-before-change.json').write_text(json.dumps(original,indent=2)+'\n')

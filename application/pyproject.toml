@@ -1,9 +1,14 @@
+[build-system]
+requires = ["flit_core==4.1.0"]
+build-backend = "flit_core.buildapi"
+
 [project]
 name = "hyprn-mvp-app"
 version = "0.1.0"
 description = "Independent HYPRN MVP application ownership and public API"
 requires-python = ">=3.12"
 dependencies = [
+  "pg8000==1.31.5",
   "fastapi==0.143.0",
   "pydantic==2.14.0",
   "uvicorn==0.54.0",

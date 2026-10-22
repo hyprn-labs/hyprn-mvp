@@ -4,7 +4,7 @@ import base64
 import copy
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from test_api import api, model_revision, candidate, post, uid, configuration_request, configuration_commit
+from test_api import api, model4_revision, candidate, post, uid, configuration_request, configuration_commit
 from hyprn_mvp_app.store import DomainError
 from test_submission import submission,accepted
 
@@ -185,8 +185,9 @@ def test_native_preparation_command_namespace_and_old_response_refusal():
     with pytest.raises(ValueError,match='Unsupported preparation version'):
         StaticPreparation(OldProducer())(uid(),sid,command,case['frozen'])
     assert len(calls)==1
-    assert calls[0][4]['command_id']==str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact2:'+sid))
-    assert calls[0][4]['command_id']!=str(uuid5(UUID(command),'hyprn_mvp.prepare.v1:'+sid))
+    # The private preparation command lives in its own versioned namespace, never an earlier one.
+    assert calls[0][4]['command_id']==str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact3:'+sid))
+    assert calls[0][4]['command_id'] not in {str(uuid5(UUID(command),'hyprn_mvp.prepare.'+old+':'+sid)) for old in ('v1','artifact2')}
 
 def test_capabilities_declare_verified_native_program_versions(api):
     capabilities=api[0].get('/api/1/capabilities').json()['data']
@@ -194,9 +195,18 @@ def test_capabilities_declare_verified_native_program_versions(api):
     assert 'native_program_execution_pending_attestation' not in capabilities['unavailable']
 
 def configured(api):
-    s,m=model_revision(api);sid=s['study_id']
+    """A saved configuration 6 (no criteria) of a Model4 version of the private service."""
+    s,m=model4_revision(api);sid=s['study_id']
     frozen=post(api[0],f'/studies/{sid}/configurations',configuration_commit(api,configuration_request(api,s,m)),201)['data']
+    assert frozen['schema_version']=='9' and 'criteria' not in frozen['configuration']
     return sid,frozen
+
+def light_status(c,sid,rid):
+    from test_public_contract import check
+    response=c.get(f'/api/1/studies/{sid}/run-status',params={'run_id':rid});check(response)
+    assert response.status_code==200,response.text
+    [item]=response.json()['data']
+    return item
 
 def test_public_run_atomic_replay_conflict_authorization_and_status(api):
     from test_public_contract import check
@@ -210,6 +220,8 @@ def test_public_run_atomic_replay_conflict_authorization_and_status(api):
     status_response=c.get(f"/api/1/studies/{sid}/runs/{run['run_id']}")
     check(status_response)
     assert status_response.json()['data']==run
+    # Nothing is recorded yet: criteria are an unavailable value with a reason, never an outcome.
+    assert light_status(c,sid,run['run_id'])['criteria']==dict(value=None,reason='not_recorded')
     check(c.get(run['receipt_url']))
     assert c.get(run['receipt_url']).json()['data']['result']['run_id']==run['run_id']
     post(c,f'/studies/{sid}/runs',{**body,'configuration_revision_id':uid()},409)
@@ -231,9 +243,30 @@ def test_static_prepare_exact_manifest_same_command_response_loss(api):
     first,files=prepare(actor,sid,command,frozen)
     second,again=prepare(actor,sid,command,frozen)
     assert first==second and files==again
+    # A configuration without criteria is prepared only under result protocol 3.
+    assert (first['schema_version'],first['result_protocol_version'])==('4','3')
     assert first['model_package_manifest']['revisions'][-1]==frozen['model_snapshot']
     validate_preparation(first,files,frozen)
     from hyprn_mvp_app.store import digest
     tampered=json.loads(json.dumps(first));tampered['model_package_manifest']['license_notices'].append('invented')
     tampered['prepared_digest']=digest({k:v for k,v in tampered.items() if k!='prepared_digest'})
     with pytest.raises(ValueError):validate_preparation(tampered,files,frozen)
+
+def test_recorded_criteria_free_run_reports_criteria_as_evaluated_in_calculations(api):
+    """A recorded run of a configuration 6 has results 3 without criteria: its light status
+    reports criteria as an unavailable value evaluated in Calculations, never a met or failed
+    outcome and never an empty list."""
+    from criteria_free import bind_case, insert_case, record_run
+    c,store,_,_,transport,actor=api
+    s=post(c,'/studies',dict(command_id=uid(),name='Recorded study'),201)['data'];sid=s['study_id']
+    case=bind_case('chain',sid,study_revision=s['revision']);insert_case(store,sid,case)
+    rid,results=record_run(store,actor,sid,case)
+    assert results['schema_version']=='3' and 'criteria' not in results
+    before=len(transport.calls)
+    item=light_status(c,sid,rid)
+    assert item['state']=='recorded' and item['criteria']==dict(value=None,reason='evaluated_in_calculations')
+    assert item['facets']['execution']==dict(value=results['execution'],reason=None)
+    detail=c.get(f'/api/1/studies/{sid}/runs/{rid}').json()['data']
+    assert detail['history']['history_schema_version']=='8' and 'criteria' not in detail['history']['results']
+    # Recorded reads are local: they never contact the private modeling service.
+    assert len(transport.calls)==before

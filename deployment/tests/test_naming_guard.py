@@ -46,7 +46,8 @@ NEW_LABEL = 'org.' + 'hyprn-mvp.'
 NEW_EXTENSION = 'x-' + 'hyprn-mvp-'
 CONTRACT_FILES = frozenset({'contracts/' + 'hyprn-mvp' + '.openapi.yaml', 'contracts/modeling.openapi.yaml'})
 # Closed lists: standard variables, and tool variables that belong to a third-party tool.
-STANDARD_VARIABLES = frozenset({'HOME', 'PATH', 'TMPDIR', 'DOCKER_HOST', 'CI', 'LANG'})
+STANDARD_VARIABLES = frozenset({'HOME', 'PATH', 'TMPDIR', 'DOCKER_HOST', 'CI', 'LANG',
+                                'WSL_DISTRO_NAME'})  # set by Windows Subsystem for Linux
 STANDARD_PREFIXES = ('XDG_', 'PLAYWRIGHT_', 'LC_')
 TOOL_VARIABLES = frozenset({
     'AIIDA_PATH',  # AiiDA configuration folder of the scoped native profile

@@ -30,6 +30,10 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
     const page = context.pages()[0] ?? await context.newPage(); fixturePage = page;
     await guardOrigin(page);
     const state = await harness(page); runFixture(state);
+    (state.model.definitions[0] as any).quantity_definitions = [{
+      port_id: state.model.definitions[0].ports[0].port_id,
+      statement: 'Explicit quantity meaning retained in the model and readable at browser zoom.',
+    }];
     for (const input of state.detail.history.configuration.inputs) input.provenance.evidence_version_ids = [];
     state.configurations = [{ configuration: state.detail.history.configuration, model_snapshot: state.detail.history.model_snapshot }];
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -67,6 +71,9 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
     expect(page.viewportSize()).toBeNull();
 
     async function check(name: string, target: Locator) {
+      expect(
+        await worker.evaluate(id => (globalThis as any).chrome.tabs.getZoom(id), tabId),
+      ).toBe(2);
       await expect(target).toBeVisible();
       await target.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
       await expect(target).toBeFocused();
@@ -88,16 +95,22 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
     const button = (name: string) => page.getByRole('button', { name, exact: true });
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme });
-      await button('Home').click();
+      // On Studies, Home is the current-location marker rather than a button.
+      if (await button('Home').count()) await button('Home').click();
       await check('home-' + theme, button('New study'));
       await page.keyboard.press('Enter'); await check('new-study-' + theme, page.getByLabel('New study name'));
-      await button('Cancel').click(); await button('Profile').click();
+      await button('Cancel').click(); await button('Settings').click();
       await check('profile-' + theme, button('Sign out'));
       await button('Home').click(); await button('Open study Scalar model study').click();
-      await check('overview-approach-' + theme, button('View modeling approach'));
-      await check('overview-' + theme, button('Edit'));
-      await page.keyboard.press('Enter'); await check('study-dialog-' + theme, page.getByLabel('Description', { exact: true }));
-      await page.keyboard.press('Escape');
+      // Both readers add focusable controls asynchronously; tab-order checks start after both load.
+      await expect(button('Edit answer')).toBeEnabled();
+      await check('overview-' + theme, button('Edit brief'));
+      await page.keyboard.press('Enter');
+      await check(
+        'study-dialog-' + theme,
+        page.getByLabel('Study question', { exact: true }),
+      );
+      await button('Cancel editing').click();
       await button('Models').click(); await check('models-' + theme, button('New model'));
       await page.goto(origin + '/ui/#v=1&study=' + sid + '&model=' + mid + '&view=model');
       await expect(page.getByRole('heading', { name: 'Response chain', exact: true })).toBeVisible();
@@ -107,7 +120,8 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
         const tab = view === 'Quantities' ? page.getByRole('region', { name: 'Quantities table', exact: true }) : page.getByRole('tab', { name: view, exact: true });
         if (view !== 'Quantities') { await tab.focus(); await page.keyboard.press('Enter'); await check('model-' + view.toLowerCase() + '-' + theme, tab); }
         if (view === 'Quantities') {
-          const table = page.locator('.quantities-scroll').first();
+          await page.getByRole('tab', {name: 'Quantities', exact: true}).click();
+          const table = page.getByRole('region', {name: 'Quantities table', exact: true}).first();
           const dimensions = await table.evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, overflow: getComputedStyle(el).overflowX, tabindex: el.getAttribute('tabindex') }));
           expect(dimensions.overflow).toBe('auto');
           if (dimensions.scroll > dimensions.width) {
@@ -119,42 +133,126 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
             expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width);
           }
           observations.push({ name: 'local-table-scroll-' + theme, dimensions });
+          const action = table.getByRole('button', { name: 'Edit quantity' }).last();
+          await check('quantity-action-' + theme, action);
+          await action.click();
+          await expect(page.getByRole('dialog', { name: 'Edit quantity' })).toBeVisible();
+          await button('Done').click();
         }
       }
+      await page.getByRole('tab', { name: 'Graph', exact: true }).click();
+      await page.locator('.connected-graph [data-instance="a"]').click();
+      await page.getByRole('tab', {name: 'Component', exact: true}).click();
       // Details stack What it computes · Why · Assumptions with Edit and Edit ports; no tabs, no ports table.
       await expect(details(page).getByRole('tab')).toHaveCount(0); await expect(details(page).locator('table')).toHaveCount(0);
-      for (const name of ['Edit ports', 'Add assumption']) {
-        const control = details(page).getByRole('button', { name, exact: true }); await control.scrollIntoViewIfNeeded();
+      for (const name of ['Edit component', 'Add assumption']) {
+        await page.getByRole('tab', {name: 'Component', exact: true}).click();
+        const control = details(page).getByRole('button', { name, exact: true });
+        await control.scrollIntoViewIfNeeded();
         await check('details-' + name.toLowerCase().replace(' ', '-') + '-' + theme, control);
-        if (name === 'Edit ports') {
-          // Quantities table at genuine 200%: Unit (column 5) stays on one readable line;
-          // the definition (column 4) wraps inside its own cell.
+        if (name === 'Edit component') {
+          // Quantities at genuine 200%: Unit stays on one readable line;
+          // the definition wraps inside its own cell.
+          await page.getByRole('tab', {name: 'Quantities', exact: true}).click();
           const ports = page.getByRole('table', { name: 'Quantities', exact: true });
-          await expect(ports.locator('thead th')).toHaveText(['Quantity', 'Component', 'Direction', 'Definition', 'Unit']);
-          const rows = await ports.evaluate(t => [...t.querySelectorAll('tbody tr')].map(tr => { const cell = (n: number) => { const e = tr.children[n] as HTMLElement, r = document.createRange(); r.selectNodeContents(e); return { text: e.textContent, lines: r.getClientRects().length, fits: e.scrollWidth <= e.clientWidth, textRight: r.getBoundingClientRect().right, cellRight: e.getBoundingClientRect().right }; }; return { definition: cell(3), units: cell(4) }; }));
+          await expect(ports.locator('thead th')).toHaveText([
+            'Quantity',
+            'Direction',
+            'Definition',
+            'Unit',
+            'Actions',
+          ]);
+          const rows = await ports.evaluate((t) =>
+            [...t.querySelectorAll('tbody tr')].map((tr) => {
+              const cell = (n: number) => {
+                const e = tr.children[n] as HTMLElement,
+                  r = document.createRange();
+                r.selectNodeContents(e);
+                return {
+                  text: e.textContent,
+                  lines: r.getClientRects().length,
+                  fits: e.scrollWidth <= e.clientWidth,
+                  textRight: r.getBoundingClientRect().right,
+                  cellRight: e.getBoundingClientRect().right,
+                };
+              };
+              return { definition: cell(2), units: cell(3) };
+            }),
+          );
           expect(rows.length).toBeGreaterThan(0);
-          for (const row of rows) { expect(row.units.lines, JSON.stringify(row)).toBe(1); expect(row.units.fits, JSON.stringify(row)).toBe(true); expect(row.definition.fits, JSON.stringify(row)).toBe(true); expect(row.definition.textRight, JSON.stringify(row)).toBeLessThanOrEqual(row.definition.cellRight + 1); }
+          for (const row of rows) {
+            expect(row.units.lines, JSON.stringify(row)).toBe(1);
+            expect(row.units.fits, JSON.stringify(row)).toBe(true);
+            expect(row.definition.fits, JSON.stringify(row)).toBe(true);
+            expect(row.definition.textRight, JSON.stringify(row)).toBeLessThanOrEqual(
+              row.definition.cellRight + 1,
+            );
+          }
           observations.push({ name: 'port-table-' + theme, rows });
-          await ports.scrollIntoViewIfNeeded(); const shot = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false }); await writeFile(join(evidence, 'details-port-table-' + theme + '-200.png'), Buffer.from(shot.data, 'base64'));
+          await ports.scrollIntoViewIfNeeded();
+          const shot = await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: false,
+          });
+          await writeFile(
+            join(evidence, 'details-port-table-' + theme + '-200.png'),
+            Buffer.from(shot.data, 'base64'),
+          );
         }
       }
-      await button('Configurations').click(); await check('configurations-' + theme, button('New configuration'));
+      await button('Analyses').click(); await page.getByRole('tab', {name:'Configurations',exact:true}).click(); await check('configurations-' + theme, button('New configuration'));
       await page.getByRole('button', { name: 'Open configuration', exact: true }).click();
-      await check('configuration-saved-' + theme, button('Copy configuration to draft'));
-      await button('Copy configuration to draft').click();
+      await check('configuration-saved-' + theme, button('Create new version'));
+      await button('Create new version').click();
       await check('configuration-new-' + theme, page.getByLabel('Configuration name', { exact: true }));
-      await button('Add evidence').first().click(); await expect(page.getByRole('dialog').locator('.evidence-record')).toHaveCount(1); await check('evidence-picker-' + theme, page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }));
+      await button('Input tools').click();
+      await page.getByRole('dialog', { name: 'Input tools and model binding' }).getByRole('button', { name: 'Add evidence', exact: true }).click(); await expect(page.getByRole('dialog').locator('.evidence-record')).toHaveCount(1); await check('evidence-picker-' + theme, page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }));
       await page.keyboard.press('Escape');
-      await button('Runs').click();
+      await button('Close Input tools and model binding').click();
+      await button('Analyses').click(); await page.getByRole('tab', {name:'Runs',exact:true}).click();
       if (await page.getByRole('dialog', { name: 'Unsaved changes' }).isVisible()) await button('Discard changes').click();
       await check('runs-' + theme, button('Inspect run run-fixture'));
       await button('Inspect run run-fixture').click();
-      for (const name of ['Results', 'Model', 'Configuration', 'Evidence']) {
-        const tab = page.getByRole('tab', { name, exact: true }); await tab.focus(); await page.keyboard.press('Enter');
+      for (const name of ['Results', 'Model', 'Configuration']) {
+        const tab = page.getByRole('tab', { name, exact: true });
+        await tab.focus();
+        await page.keyboard.press('Enter');
         await check('run-' + name.split(' ')[0].toLowerCase() + '-' + theme, tab);
       }
-      await button('Evidence').click();
+      await page.goto(origin + '/ui/#v=1&study=' + sid + '&view=evidence');
       await check('evidence-' + theme, page.getByLabel('Filter evidence', { exact: true }));
+      await page.goto(origin + '/ui/?specimen');
+      await worker.evaluate(id => (globalThis as any).chrome.tabs.setZoom(id, 2), tabId);
+      await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
+      expect(
+        await worker.evaluate((id) => (globalThis as any).chrome.tabs.getZoom(id), tabId),
+      ).toBe(2);
+      await check(
+        'specimen-assistant-' + theme,
+        page.getByRole('button', { name: 'Hide assistant', exact: true }),
+      );
+      await page.getByRole('button', { name: 'Hide assistant', exact: true }).click();
+      await check(
+        'specimen-page-recipe-' + theme,
+        page.getByRole('button', { name: 'Return to specimen list', exact: true }),
+      );
+      await check(
+        'specimen-context-' + theme,
+        page.getByRole('button', { name: 'Close Specimen context', exact: true }),
+      );
+      await page.getByRole('button', { name: 'Open recipe dialog', exact: true }).click();
+      await check(
+        'specimen-dialog-' + theme,
+        page
+          .getByRole('dialog', { name: 'Recipe dialog', exact: true })
+          .getByRole('button', { name: 'Done', exact: true }),
+      );
+      await page.keyboard.press('Escape');
+      await login(page);
+      await worker.evaluate(id => (globalThis as any).chrome.tabs.setZoom(id, 2), tabId);
+      await expect.poll(() => page.evaluate(() => innerWidth)).toBe(720);
+
     }
     expect(state.unknown).toEqual([]);
     expect(state.writes).toEqual([]);

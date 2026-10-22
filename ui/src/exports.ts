@@ -243,4 +243,14 @@ export async function diagramPng(svg: ReturnType<typeof diagramSvg>) {
   const url = URL.createObjectURL(new Blob([svg.text], { type: 'image/svg+xml' }));
   try { const image = new Image(); image.src = url; await image.decode(); const canvas = document.createElement('canvas'); canvas.width = svg.width; canvas.height = svg.height; const context = canvas.getContext('2d'); if (!context) throw new Error('PNG rendering is unavailable.'); context.drawImage(image, 0, 0); return await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG rendering failed.')), 'image/png')); } finally { URL.revokeObjectURL(url); }
 }
-export function diagramHtml(svg: string) { return `<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>HYPRN MVP read-only diagram</title><style>body{font:16px sans-serif;color:#17212b;background:white;margin:24px}svg{max-width:100%;height:auto}</style><h1>Read-only engineering diagram</h1><p>The model state and displayed scope are identified below. This file contains no executable source or external assets.</p>${svg}</html>`; }
+export function diagramHtml(svg: string) {
+  return '<!doctype html><html lang="en"><meta charset="utf-8">' +
+    '<meta http-equiv="Content-Security-Policy" ' +
+    "content=\"default-src 'none'; style-src 'unsafe-inline'; " +
+    "base-uri 'none'; form-action 'none'\">" +
+    '<title>HYPRN read-only diagram</title>' +
+    '<style>body{font:16px sans-serif;color:#17212b;background:white;margin:24px}' +
+    'svg{max-width:100%;height:auto}</style><h1>Read-only engineering diagram</h1>' +
+    '<p>The model state and displayed scope are identified below. ' +
+    'This file contains no executable source or external assets.</p>' + svg + '</html>';
+}

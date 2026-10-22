@@ -29,11 +29,17 @@ EXECUTION_SOURCES = (
     'integration/src/hyprn_mvp_integration/__init__.py',
     'integration/src/hyprn_mvp_integration/launcher.py',
     'integration/src/hyprn_mvp_integration/worker.py',
+    'integration/src/hyprn_mvp_integration/exploration.py',
+    'integration/src/hyprn_mvp_integration/surrogate.py',
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/calculation.py',
     # Exactly the modules reachable from a launch; modules unreachable from every launch
     # path (execution, modeling, result_bindings, store) are never part of the inventory.
     'integration/src/hyprn_mvp_integration/computational_export.py',
+    # The installation loader and the location rule it applies: the launcher takes its root,
+    # owner, native profile, engine endpoint and probed home folder from the installation.
+    'integration/src/hyprn_mvp_integration/installation.py',
+    'application/src/hyprn_mvp_app/locations.py',
     'application/src/hyprn_mvp_app/__init__.py',
     'application/src/hyprn_mvp_app/scientific_configuration.py',
     'application/src/hyprn_mvp_app/units.py',
@@ -44,6 +50,11 @@ EXECUTION_SOURCES = (
     'application/src/hyprn_mvp_app/execution_bundle.py',
     'deployment/execution_runtime.py',
     'deployment/worker.Dockerfile',
+    'deployment/images/engine.Dockerfile', 'deployment/images/install_python.py',
+    'deployment/images/build_engine.py', 'deployment/locks/tools.json',
+    'deployment/locks/engine-sources.json', 'deployment/locks/build-backend.json',
+    'upstream/engine-packaging/openmdao_extensions.patch',
+    'upstream/engine-packaging/wop.patch', 'upstream/engine-packaging/xdsmjs.patch',
     'deployment/pins.json',
 )
 SOURCE_PATHS = tuple(sorted(set(EXECUTION_SOURCES) | set(model.source_hashes())))
@@ -52,7 +63,7 @@ SOURCE_PATHS = tuple(sorted(set(EXECUTION_SOURCES) | set(model.source_hashes()))
 @pytest.fixture(scope='module')
 def attested():
     scope = guard.validate_scope(runner.PROJECTION_SCOPE)
-    runtime = worker.build_worker(root=scope.root)
+    runtime = worker.build_worker(root=scope.root, no_cache=True)
     evidence = launcher.attest(root=scope.root)
     assert evidence['passed'] and evidence['candidate_executions'] == 0
     assert all(evidence['access_checks'].values())
@@ -65,7 +76,11 @@ def test_units_attestation_current_worker_bytes_and_inventory(attested):
     assert runtime.get('source_hashes') == expected
     assert launcher.require_attestation(root=scope.root) == evidence
     # Inspect bytes inside the immutable image, not merely its source labels.
-    script = "import hashlib,json;from pathlib import Path;print(json.dumps({n:hashlib.sha256(Path('/opt/hyprn_mvp_integration',n).read_bytes()).hexdigest() for n in ('worker.py','results.py','__init__.py')}))"
+    script = (
+        "import hashlib,json;from pathlib import Path;print(json.dumps({n:hashlib.sha256("
+        "Path('/opt/hyprn_mvp_integration',n).read_bytes()).hexdigest() for n in "
+        "('worker.py','results.py','exploration.py','surrogate.py','__init__.py')}))"
+    )
     output = launcher.command(['docker','run','--rm','--pull=never','--network=none',
         '--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user=65534:65534',
         '--memory=256m','--pids-limit=32','--cpus=0.5',runtime['worker_image'],'python','-B','-c',script])
@@ -220,6 +235,8 @@ def test_units_attestation_source_change_during_build_never_publishes_runtime(mo
     calls = iter([current,changed])
     monkeypatch.setattr(launcher,'execution_source_hashes',lambda:next(calls))
     def command(*args):
+        if args[:2] == ('docker', 'run'):
+            return '3.12.15'
         if args[:3] == ('docker','image','inspect'):
             if args[3] == worker.ENGINE:
                 return json.dumps([{'Id':worker.ENGINE,'Architecture':'arm64',
@@ -228,7 +245,12 @@ def test_units_attestation_source_change_during_build_never_publishes_runtime(mo
         assert args[:2] == ('docker','tag')
         return ''
     monkeypatch.setattr(worker,'run',command)
-    monkeypatch.setattr(worker.subprocess,'run',lambda *a,**kw:CompletedProcess(a[0],0,'synthetic build',''))
+    monkeypatch.setattr(worker, 'build_engine', lambda *a, **kw: {'image': worker.ENGINE})
+    def build_or_probe(*args, **kwargs):
+        if args[0][:3] == ['docker', 'image', 'inspect']:
+            return CompletedProcess(args[0], 1, '', 'cache miss')
+        return CompletedProcess(args[0], 0, 'synthetic build', '')
+    monkeypatch.setattr(worker.subprocess, 'run', build_or_probe)
     with pytest.raises(RuntimeError,match='source changed during worker build'):
         worker.build_worker(root=scope.root)
     assert not (scope.root/'runtime.json').exists()
@@ -256,20 +278,83 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
         ('application/src/hyprn_mvp_app/units.py', 'application/src/hyprn_mvp_app/history.py',
          'application/src/hyprn_mvp_app/modified_runs.py', 'ui/src/UnitEditor.tsx',
          'ui/src/unitLabels.ts', 'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json'),
-        ('upstream/whatsopt-patches/080-unit-declarations.patch', 'modeling/generate_unit_catalog.py',
+        ('deployment/images/whatsopt-source.Dockerfile',
+         'deployment/locks/upstream.json', 'deployment/locks/whatsopt-gems.json',
+         'upstream/whatsopt-patches/005-model-source-baseline.patch',
+         'upstream/whatsopt-patches/080-unit-declarations.patch',
+         'modeling/generate_unit_catalog.py',
          'contracts/schemas/model.schema.json', 'contracts/schemas/execution.schema.json'),
         SOURCE_PATHS,
     )
     for inventory, paths in zip(inventories, required):
         for path in paths:
             assert inventory[path] == hashlib.sha256((REPO/path).read_bytes()).hexdigest()
+    documents = 'contracts/schemas/documents.schema.json'
+    assert documents in inventories[0]
+    assert documents not in inventories[1] and documents not in inventories[2]
     # Every reviewed patch, including the quantity-definitions patch, is bound by the native
     # and the execution inventories alike.
     assert inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == hashlib.sha256(
         (REPO/'upstream/whatsopt-patches/090-quantity-definitions.patch').read_bytes()).hexdigest()
     assert inventories[2]['upstream/whatsopt-patches/090-quantity-definitions.patch'] == inventories[1]['upstream/whatsopt-patches/090-quantity-definitions.patch']
+    criteria_free = 'upstream/whatsopt-patches/100-configurations-without-criteria.patch'
+    assert inventories[1][criteria_free] == inventories[2][criteria_free] == hashlib.sha256(
+        (REPO/criteria_free).read_bytes()).hexdigest()
     # The execution inventory is exactly the launch closure: modules unreachable from every
     # launch path (execution, modeling, result_bindings, store) are never bound.
-    assert len(inventories[2]) == 34
+    assert len(inventories[2]) == 52
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
+
+
+def test_units_attestation_imports_the_worker_package_as_the_worker_user(attested):
+    scope, runtime, evidence = attested
+    package = REPO / 'integration/src/hyprn_mvp_integration/__init__.py'
+    assert evidence['cases']['worker_import']['exit_code'] == 0
+    assert evidence['worker_import'] == {
+        'package': hashlib.sha256(package.read_bytes()).hexdigest(),
+        'worker': runtime['worker_sha256'],
+        'results': runtime['results_sha256'],
+        'exploration': hashlib.sha256(package.with_name('exploration.py').read_bytes()).hexdigest(),
+        'surrogate': hashlib.sha256(package.with_name('surrogate.py').read_bytes()).hexdigest(),
+    }
+
+
+def test_units_attestation_refuses_a_worker_that_cannot_read_its_own_code(attested, monkeypatch):
+    """Package files only root can read (a umask-077 build without explicit modes) pass every
+    resource canary; the worker-user import probe alone refuses them. The forced
+    fault build restores the shared image tags and scoped records afterwards."""
+    scope, _, evidence = attested
+    records = [scope.root / 'runtime.json', scope.root / 'evidence/containment.json']
+    before = [path.read_bytes() for path in records]
+    original_image = json.loads(before[0])['worker_image']
+    original_tags = json.loads(worker.run('docker', 'image', 'inspect', original_image))[0]['RepoTags']
+    engine_build = worker.build_engine(scope.root)
+    monkeypatch.setattr(worker, 'build_engine', lambda *args, **kwargs: engine_build)
+    broken_image = None
+
+    class RootOnly(type(Path())):
+        def chmod(self, mode, *args, **kwargs):
+            return super().chmod(0o400 if mode == 0o444 else mode, *args, **kwargs)
+
+    monkeypatch.setattr(worker, 'Path', RootOnly)
+    try:
+        broken_image = worker.build_worker(root=scope.root, no_cache=True)['worker_image']
+        with pytest.raises(RuntimeError, match='Containment failed'):
+            launcher.attest(root=scope.root)
+        failed = json.loads(records[1].read_bytes())
+        cases = failed['cases']
+        assert not failed['passed'] and failed['worker_import'] == {}
+        assert cases['worker_import']['exit_code'] != 0
+        assert 'PermissionError' in cases['worker_import']['output']
+        assert all(cases[name]['exit_code'] == 0 for name in ('access', 'file_bound', 'pids'))
+    finally:
+        for tag in original_tags:
+            worker.run('docker', 'tag', original_image, tag)
+        if broken_image and broken_image != original_image:
+            tags = json.loads(worker.run('docker', 'image', 'inspect', broken_image))[0]['RepoTags'] or []
+            for tag in tags:
+                worker.run('docker', 'image', 'rm', '--no-prune', tag)
+        for path, raw in zip(records, before):
+            path.write_bytes(raw)
+    assert launcher.require_attestation(root=scope.root) == evidence

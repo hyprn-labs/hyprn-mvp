@@ -23,13 +23,13 @@ test('served records are inspected through public reads only', async ({ page }) 
     const models = await read(`/studies/${study.study_id}/models`);
     if (models.length) {
       await page.goto(`/ui/#v=1&study=${study.study_id}&model=${models[0].model_id}&view=model`);
-      await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Refresh model', exact: true })).toBeVisible();
       for (const view of ['Graph', 'XDSM', 'Variables']) {
         await page.getByRole('tab', { name: view, exact: true }).click();
         await page.screenshot({ path: evidencePath('model-' + view.toLowerCase() + '.png'), animations: 'disabled' });
       }
-      await page.getByRole('button', { name: 'Import', exact: true }).click();
-      await expect(page.getByRole('dialog', { name: 'Import', exact: true }).getByRole('button', { name: 'Choose file' })).toBeVisible();
+      await page.getByRole('button', { name: 'Import model', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Import model', exact: true }).getByRole('button', { name: 'Choose file' })).toBeVisible();
       await page.keyboard.press('Escape');
     }
     const configurations = await read(`/studies/${study.study_id}/configurations`);

@@ -1,101 +1,9 @@
 {
   "description": "Named UI controls and the browser spec test that proves each one. ui/check_ui_contract.py fails when a spec file is missing or no test title in it contains the named text. A mapping is not behavioural evidence: the browser groups that run these specs are.",
   "controls": {
-    "approach-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading actual Overview entry, question editing, version restore and immutable reads"
-    },
-    "approach-02": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading historical retry keeps the exact selected version during an outage"
-    },
-    "approach-03": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading actual Overview entry, question editing, version restore and immutable reads"
-    },
-    "approach-04": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method proposed steps and cases persist through actual draft and version commands"
-    },
-    "approach-05": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method exact repeated-instance references and parallel connections select all matching steps"
-    },
-    "approach-06": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method exact repeated-instance references and parallel connections select all matching steps"
-    },
-    "approach-07": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history retained interpretation source evidence and prior basis survive later edits and outage"
-    },
-    "approach-08": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-assumptions explicit handoff"
-    },
-    "approach-09": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-assumptions local method assumptions save without model mutation"
-    },
-    "approach-10": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-assumptions contextual evidence and exact model assumptions retain ownership"
-    },
-    "approach-11": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-assumptions explicit handoff"
-    },
-    "approach-12": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-assumptions contextual evidence and exact model assumptions retain ownership"
-    },
-    "approach-13": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-controller separates local draft and immutable version with public receipts"
-    },
-    "approach-14": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-controller version acknowledgement recovery does not create a duplicate version"
-    },
-    "approach-15": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading stale draft compares explanation fields before explicit reapplication"
-    },
-    "approach-16": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-controller definite stale retry unlocks recovery without losing local edits"
-    },
-    "approach-17": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method proposed steps and cases persist through actual draft and version commands"
-    },
-    "approach-18": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration two cases save independent inputs criteria pins and immutable interpretation"
-    },
-    "approach-19": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration exact pin change remove and copy preserve assumptions and context"
-    },
-    "approach-20": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration failed run usage and modified seed keep change remove exact interpretation"
-    },
-    "approach-21": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history retained interpretation source evidence and prior basis survive later edits and outage"
-    },
     "approach-22": {
       "spec": "result-bindings.spec.ts",
       "test": "@retained source inspection keeps unsaved form and exact binding"
-    },
-    "approach-23": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history export scope matches real typed preview status and created portable manifest"
-    },
-    "approach-24": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method prior configuration and failed run rationale are exact retained basis"
     },
     "units-01": {
       "spec": "unit-authoring.spec.ts",
@@ -127,7 +35,7 @@
     },
     "units-08": {
       "spec": "unit-configuration.spec.ts",
-      "test": "explicit input and criterion intents use the public catalog and Request4"
+      "test": "explicit input units use the public catalog; configuration 6 carries no criteria"
     },
     "units-09": {
       "spec": "unit-configuration.spec.ts",
@@ -139,23 +47,11 @@
     },
     "units-11": {
       "spec": "unit-model-reading.spec.ts",
-      "test": "approach references resolve occurrence through exact definition version"
+      "test": "saved model revision requires explicit new version and preserves draft"
     },
     "units-12": {
       "spec": "unit-authoring.spec.ts",
       "test": "new ports remain unspecified in saved drafts and read-only versions; configurations blocked"
-    },
-    "editor-guard-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading editor guard open approach editor blocks Save with its own copy; Keep and Discard follow the list"
-    },
-    "editor-guard-02": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading editor guard Save writes the approach draft before leaving; a refused save keeps edits and returns focus"
-    },
-    "editor-guard-03": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading editor guard refused study context save keeps the dialog and its transition; Discard restores the saved context"
     },
     "editor-guard-04": {
       "spec": "assumptions-evidence.spec.ts",
@@ -171,55 +67,11 @@
     },
     "editor-guard-07": {
       "spec": "unit-authoring.spec.ts",
-      "test": "@units-authoring editor guard Save applies an authored port paste once and skips the separate editor save"
-    },
-    "run-outcomes-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history completed runs show Execution and Criteria only, met and not met, with not computed outputs kept"
-    },
-    "run-outcomes-02": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history bounded failure diagnostic is readable beside truthful results"
+      "test": "@units-authoring editor guard Save applies a pending component edit once and skips the separate editor save"
     },
     "run-outcomes-03": {
       "spec": "evidence-workspace.spec.ts",
       "test": "run outcomes are Execution and Criteria only; unread, unresulted and unknown states are never success"
-    },
-    "session-access-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration picker denial confirmed after the dialog closed mid-flight still clears retained context"
-    },
-    "session-access-02": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration configuration host denial clears the picker display and keeps the pin and draft"
-    },
-    "session-access-03": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration saved configuration record clears on a denied availability read"
-    },
-    "session-access-04": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history queued run status backoff stops after a confirmed denial and clears case context"
-    },
-    "session-access-05": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history late successful run status reply cannot repopulate after a confirmed denial"
-    },
-    "session-access-06": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history failed run history refresh after revocation clears listed case labels and stays cleared"
-    },
-    "session-access-07": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-history Findings confirmed denial clears the approach reader and its cases panel"
-    },
-    "session-access-08": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-controller approach version page denial survives a version switch and late replies cannot repopulate"
-    },
-    "session-access-09": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration sign-out clears approach reading positions and Workspace return state"
     },
     "assumptions-01": {
       "spec": "assumptions-evidence.spec.ts",
@@ -237,10 +89,6 @@
       "spec": "modified-runs.spec.ts",
       "test": "@modified inherited context notes, stale review and exact origin save"
     },
-    "model-view-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method canonical model view explains each component with its linked method step and lists quantities once"
-    },
     "model-view-02": {
       "spec": "model-configuration-run.spec.ts",
       "test": "run Model tab and saved configuration View model version reuse the canonical model view with values"
@@ -249,29 +97,9 @@
       "spec": "assumptions-evidence.spec.ts",
       "test": "@ae-configuration configuration lists its own assumptions and links once to the model assumptions"
     },
-    "approach-page-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading Overview and the approach page share one study question box and its Study details dialog"
-    },
-    "approach-page-02": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-method method step explains in two tabs with one implementation line and opens the canonical model version"
-    },
-    "approach-page-03": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-configuration Cases & results shows each case once with its runs and Study limits opens Limits"
-    },
-    "approach-page-04": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading Overview reads the exact saved version and fences outage and revoked reads"
-    },
     "evidence-index-01": {
       "spec": "assumptions-evidence.spec.ts",
-      "test": "@ae-configuration Evidence page lists current assumptions by owner with sources, partial and denied states"
-    },
-    "evidence-index-02": {
-      "spec": "assumptions-evidence.spec.ts",
-      "test": "@ae-configuration run Evidence tab lists the retained assumptions by owner and opens their owners"
+      "test": "@ae-evidence referenced library preserves exact membership with partial reads and confirmed denial"
     },
     "evidence-index-03": {
       "spec": "assumptions-evidence.spec.ts",
@@ -281,17 +109,45 @@
       "spec": "assumptions-evidence.spec.ts",
       "test": "@ae-configuration export status read clears on a confirmed denial"
     },
-    "evidence-index-05": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-controller access loss reported by another host clears a clean controller and keeps unsaved edits hidden under the guard"
+    "attribution-01": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "Home marks agent-created studies, active and archived, and no person-created study"
     },
-    "home-archive-01": {
-      "spec": "approach.spec.ts",
-      "test": "@approach-reading Home archives a study for everyone, lists it under Archived and restores it; a reader cannot archive and nothing is deleted"
+    "attribution-02": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "a study heading names the agent that created it; a person-created study has none"
     },
-    "home-archive-02": {
-      "spec": "result-bindings.spec.ts",
-      "test": "@retained Overview recent records show name and id8 with Execution and Criteria, no identity disclosures, the study name once and one notices link"
+    "attribution-03": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "Overview marks a description an agent wrote, not one a person wrote since"
+    },
+    "attribution-04": {
+      "spec": "agent-attribution.spec.ts",
+      "test": "model headings and Record details name the agent that wrote the draft or version"
+    },
+    "brief-01": {
+      "spec": "brief.spec.ts",
+      "test": "an engineer frames the decision"
+    },
+    "brief-02": {
+      "spec": "brief.spec.ts",
+      "test": "unsaved brief edits are guarded"
+    },
+    "answer-01": {
+      "spec": "study-answer.spec.ts",
+      "test": "answers cite analyses and retain exact history"
+    },
+    "answer-02": {
+      "spec": "study-answer.spec.ts",
+      "test": "fresh briefs appear and missing evidence stays explicit"
+    },
+    "calculation-01": {
+      "spec": "calculations.spec.ts",
+      "test": "each run reads against the brief criteria"
+    },
+    "calculation-02": {
+      "spec": "calculations.spec.ts",
+      "test": "samples expose their design, points, runs and estimates"
     }
   }
 }

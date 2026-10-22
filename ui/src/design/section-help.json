@@ -1,0 +1,153 @@
+{
+  "studyBrief": {
+    "title": "Study brief",
+    "paragraphs": [
+      "The brief defines the question, required outputs, criteria, assumptions and limits. It sets what the study must answer; it does not establish that the model is valid.",
+      "Saved answers and analyses refer to exact saved versions. Changing the brief does not rewrite their basis."
+    ]
+  },
+  "studyAnswer": {
+    "title": "Study answer",
+    "paragraphs": [
+      "The answer brings together a conclusion, comparisons and their supporting analyses. Interpretation, uncertainties and next analysis explain what the results mean and what remains unresolved.",
+      "Exploring different inputs does not change the saved conclusion or its cited records."
+    ]
+  },
+  "exploration": {
+    "title": "Explore the answer",
+    "paragraphs": [
+      "Change independent inputs to explore the prepared response. Calculated values come from recorded model runs; estimated values come from a surrogate that passed its saved validation limits.",
+      "Sliders do not rerun the model. Choose the plot axis independently of the selected input values. Why opens the recorded basis of a result."
+    ]
+  },
+  "model": {
+    "title": "Model",
+    "paragraphs": [
+      "Components contain Python calculations and named input and output quantities. Connections pass outputs to other components; independent inputs must be supplied explicitly.",
+      "A saved model version fixes the components, connections and source code used by its configurations and runs. Create new version starts an editable successor."
+    ]
+  },
+  "modelExplanation": {
+    "title": "Model explanation",
+    "paragraphs": [
+      "This records why the model was chosen, how it works and which assumptions and evidence support it. It explains the exact model version shown, rather than replacing its executable calculations. Describe governing equations, assumptions and applicability here. Sampling design, accuracy targets and numerical checks belong to the analysis."
+    ]
+  },
+  "inputs": {
+    "title": "Inputs and provenance",
+    "paragraphs": [
+      "A configuration supplies one complete set of independent input values to an exact model version. Units and provenance show what each value means and where it came from.",
+      "Inputs linked to an earlier result retain that recorded source. Editing a successor does not change a saved configuration or its runs."
+    ]
+  },
+  "analysisResults": {
+    "title": "Results",
+    "paragraphs": [
+      "Each row is one configuration: a combination of input values. Outputs come from its recorded run. The arrows beside the point and execution status open the configuration and run.",
+      "Completed describes execution, not scientific validity or whether criteria were met. In sampled analyses, all points are calculated by the model: training fits the surrogate, method selection chooses its method, and independent validation assesses its accuracy."
+    ]
+  },
+  "surrogate": {
+    "title": "Surrogate validation",
+    "paragraphs": [
+      "A surrogate estimates outputs without running the model again. Training points fit it. One reserved point per group chooses the method; independent validation points test its accuracy.",
+      "At each validation point, the absolute difference between estimated and calculated output must be no greater than the absolute allowance plus the relative allowance multiplied by the magnitude of the calculated output. The sum has the output\u2019s units. Passing these checks does not establish physical validity or guarantee the same accuracy everywhere.",
+      "Max. error is the largest absolute error; RMSE is the root mean square error. Both use the output\u2019s units. Points counts independent validation results, excluding training and method selection. Unavailable results are reported explicitly. Allowed error adds the fixed allowance to a percentage of the magnitude of the calculated output, as written on two lines. Result reports whether those saved validation limits passed."
+    ]
+  },
+  "sampling": {
+    "title": "Sampling settings",
+    "paragraphs": [
+      "Sampling generates combinations across all selected input ranges; fixed inputs keep their declared values. Training points fit the surrogate, while reserved points support method selection and independent validation.",
+      "The method controls where combinations are placed. The seed makes the generated design reproducible. The saved settings remain fixed when the analysis runs."
+    ]
+  },
+  "errorLimits": {
+    "title": "Surrogate error limits",
+    "paragraphs": [
+      "The absolute allowance has the output\u2019s units. The relative allowance is a percentage of the magnitude of the calculated output. Add those two amounts to obtain the permitted error at each validation point.",
+      "Use zero for either allowance to rely only on the other. At a calculated value of zero, only the absolute allowance contributes. Only outputs that pass independent validation can be published for exploration."
+    ]
+  },
+  "runOutputs": {
+    "title": "Outputs",
+    "paragraphs": [
+      "These are the outputs recorded by this run, with their units. A missing output is not computed, never zero. Execution status and duration describe the run; they do not establish that the results are scientifically valid.",
+      "The Model and Configuration tabs show the exact code and inputs used. A new run does not alter this record."
+    ]
+  },
+  "assumptions": {
+    "title": "Assumptions",
+    "paragraphs": [
+      "Assumptions state conditions accepted for this object\u2019s calculations or interpretation. Evidence supports each statement where available; an assumption is not a measured fact.",
+      "Check whether these conditions hold before applying the results to a different situation."
+    ]
+  },
+  "quantities": {
+    "title": "Quantities",
+    "paragraphs": [
+      "Quantities are the named inputs and outputs of model components, with units and definitions. Connections determine which inputs are supplied by another component and which remain independent.",
+      "In a model, declarations are not calculated values. A configuration supplies inputs; a run records outputs. Editing a quantity belongs to the editable model version."
+    ]
+  },
+  "evidence": {
+    "title": "Evidence",
+    "paragraphs": [
+      "Evidence records a source, excerpt or authored note supporting a statement. Source references and locations let you check that support.",
+      "An attached source does not automatically support every claim or value. Review the specific passage and its relationship to the assertion."
+    ]
+  },
+  "analysisSettings": {
+    "title": "Analysis settings",
+    "paragraphs": [
+      "An analysis fixes a model version and either a selected set of configurations or a sampling design. Sampling combines input ranges and fixed values to generate configurations.",
+      "Surrogate settings define allowed errors before execution. Saved settings are read-only; Create new version starts a successor without changing existing runs or the saved answer."
+    ]
+  },
+  "graph": {
+    "title": "How to read the graph",
+    "paragraphs": [
+      "Arrows connect component outputs to inputs. Inputs without incoming connections need values in a configuration. A saved model fixes the components, connections and source code used by its runs.",
+      "Drag the background to pan. With the diagram focused, use the arrow keys to pan. Scroll normally to reach Quantities. Fit model shows the complete diagram. Layout does not set numerical order."
+    ]
+  },
+  "answerComparison": {
+    "title": "Alternatives comparison",
+    "paragraphs": [
+      "Each alternative is compared with the requirements in the answer\u2019s saved brief. Values and criterion results come from the exact cited runs; the source arrow opens their analysis.",
+      "Meeting a requirement does not by itself establish physical validity or qualify a design."
+    ]
+  },
+  "answerBasis": {
+    "title": "Answer basis",
+    "paragraphs": [
+      "These records support the conclusion and comparisons. Each entry explains what its cited analysis, run or evidence establishes. A challenge or contextual relationship is labelled explicitly.",
+      "An analysis may include many calculated points and a validated surrogate. Its saved version fixes the basis; moving sliders does not revise the answer."
+    ]
+  },
+  "interpretation": {
+    "title": "Interpretation",
+    "paragraphs": [
+      "Interpretation explains why the results matter for the study question, including the assumptions under which the conclusion holds. It is authored reasoning, distinct from calculated values."
+    ]
+  },
+  "uncertainties": {
+    "title": "Uncertainties",
+    "paragraphs": [
+      "These are unresolved issues that could change the conclusion. Each should explain the uncertain quantity or assumption and its effect on the decision. Surrogate agreement with a model does not resolve uncertainty in the model itself."
+    ]
+  },
+  "nextAnalysis": {
+    "title": "Next analysis",
+    "paragraphs": [
+      "These are proposed next steps to resolve a named uncertainty or extend the answer\u2019s scope. They have not been executed unless a recorded analysis is explicitly cited."
+    ]
+  },
+  "explorationDomain": {
+    "title": "Input ranges",
+    "paragraphs": [
+      "The prepared analysis declares the ranges and fixed values available here. Load point selects an existing calculated combination. Sliders explore within the prepared domain without rerunning the model.",
+      "Estimates use the saved surrogate and its validation limits. Validation tests agreement at independent points; it does not guarantee physical validity or the same error at every combination."
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyprn-mvp.local/deployment/config.schema.json",
+  "title": "HYPRN MVP installation configuration, version 1",
+  "description": "One closed JSON object, stored 0600 in a 0700 folder owned by the user, with no symbolic link in any component. The stdlib loader integration/src/hyprn_mvp_integration/installation.py enforces this schema and, beyond it, the file safety rules, duplicate-key refusal, the caller's edition, the core location rule for data_root and upstream.cache (application/src/hyprn_mvp_app/locations.py), upstream.cache inside data_root and data_root not the home folder or one of its parents. Never in the configuration: secrets, worker policy or limits, image ids.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "edition", "installation_id", "owner_username", "host_home", "data_root", "ports", "origin", "docker", "release", "agent", "upstream"],
+  "properties": {
+    "schema": {"const": "hyprn_mvp.installation/1"},
+    "edition": {"enum": ["local"]},
+    "installation_id": {
+      "description": "Canonical lower-case version 4 UUID, fixed at first setup.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "owner_username": {
+      "description": "The owner's sign-in name; setup proposes the operating-system account's short name.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$"
+    },
+    "host_home": {"$ref": "#/$defs/AbsolutePath", "description": "The account's home folder, which the worker containment probe proves absent inside the worker."},
+    "data_root": {"$ref": "#/$defs/AbsolutePath"},
+    "studies_root": {"$ref": "#/$defs/AbsolutePath", "description": "Optional study-folder root; the shared location refusals apply."},
+    "ports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app"],
+      "properties": {"app": {"type": "integer", "minimum": 1024, "maximum": 65535}}
+    },
+    "origin": {
+      "description": "http://127.0.0.1:<ports.app>; the loader checks that the port is ports.app.",
+      "type": "string",
+      "pattern": "^http://127\\.0\\.0\\.1:[1-9][0-9]{3,4}$"
+    },
+    "docker": {
+      "description": "The container engine discovered at setup.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "engine"],
+      "properties": {
+        "endpoint": {"type": "string", "pattern": "^unix:///(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[^\\u0000]*[^/\\u0000]$"},
+        "engine": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._:()+/-]{0,127}$"}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "require_review", "immutable"],
+      "properties": {
+        "mode": {"enum": ["checkout", "frozen"]},
+        "require_review": {"type": "boolean"},
+        "immutable": {"type": "boolean"}
+      }
+    },
+    "agent": {
+      "description": "Setup writes enabled true and token_ttl_hours 8 unless the user chooses otherwise.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "token_ttl_hours"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "token_ttl_hours": {"type": "integer", "minimum": 1, "maximum": 168}
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cache"],
+      "properties": {"cache": {"$ref": "#/$defs/AbsolutePath", "description": "Inside data_root."}}
+    }
+  },
+  "$defs": {
+    "AbsolutePath": {
+      "description": "An absolute normalized path below /: no . or .. component, no repeated or trailing separator, no NUL.",
+      "type": "string",
+      "pattern": "^/(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[^\\u0000]*[^/\\u0000]$"
+    }
+  }
+}

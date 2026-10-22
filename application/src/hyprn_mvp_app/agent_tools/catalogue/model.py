@@ -1,0 +1,1412 @@
+"""Model and quantities (tooling spec section 4.4). The modeling service owns model
+composition, drafts and saved versions; HYPRN MVP's ``modeling`` module serves them through the
+public API. These tools read them, create models, edit drafts by component and port names (the
+tool translates each operation into the exact edit batch, so the agent never handles temporary
+keys, source hashes or definition pins), validate statically and save versions. Saved versions
+are numbered by their place in the owner's stored order (oldest first): "Model version 3" is the
+third saved version. No tool executes or imports model code."""
+
+import base64
+import binascii
+import hashlib
+import json
+
+from ..projections import (
+    CURSOR_SCHEMA,
+    LIMIT_SCHEMA,
+    UUID_SCHEMA,
+    ModelView,
+    cap,
+    clip,
+    command_id,
+    decode_cursor,
+    encode_cursor,
+    label,
+    missing,
+    read,
+    ref,
+    report,
+    send,
+    study_path,
+    untrusted,
+    uuid_schema,
+)
+from ..spec import SURFACES, ToolError, ToolSpec
+
+MODELS = ('GET', '/api/1/studies/{study_id}/models')
+MODEL = ('GET', '/api/1/studies/{study_id}/models/{model_id}')
+REVISIONS = ('GET', '/api/1/studies/{study_id}/models/{model_id}/revisions')
+REVISION = ('GET', '/api/1/studies/{study_id}/models/{model_id}/revisions/{revision_id}')
+EVIDENCE = ('GET', '/api/1/studies/{study_id}/models/{model_id}/assumption-evidence')
+REVISION_PAGE = 100
+MAX_REVISION_PAGES = 20
+SOURCE_LINES = 400
+SOURCE_CHARS = 16000
+OWNERS = ('modeling',)
+
+
+def version_label(revision_id, number):
+    return label('model_version', revision_id, 'Model version ' + str(number), number=number)
+
+
+async def _draft(ctx, model_id):
+    path = study_path(ctx, 'models', model_id)
+    return (await read(ctx, path, next_step='Call list_models.'))['data']
+
+
+async def _revisions(ctx, model_id):
+    """Every saved version of a model in the owner's order, with ``complete`` false when more
+    than the bounded number of pages exist."""
+    path = study_path(ctx, 'models', model_id, 'revisions')
+    items, cursor = [], None
+    for _ in range(MAX_REVISION_PAGES):
+        params = {'limit': str(REVISION_PAGE)}
+        if cursor is not None:
+            params['cursor'] = cursor
+        body = await read(ctx, path, params, next_step='Call list_models.')
+        items.extend(body['data'])
+        cursor = body.get('next_cursor')
+        if cursor is None:
+            return items, True
+    return items, False
+
+
+def _versions_summary(revisions, complete):
+    if not revisions:
+        return {'count': 0, 'latest': missing('no_saved_version')}
+    return {
+        'count': len(revisions),
+        'complete': complete,
+        'latest': version_label(revisions[-1]['model_revision_id'], len(revisions))
+        if complete
+        else missing('more_versions_than_read'),
+    }
+
+
+async def list_models(arguments, ctx):
+    """One page of the study's models with their names, draft revision tokens and versions."""
+    limit = arguments.get('limit', 10)
+    cursor = arguments.get('cursor')
+    params = {'limit': str(limit)}
+    if cursor is not None:
+        params['cursor'] = decode_cursor('list_models', cursor)
+    body = await read(ctx, study_path(ctx, 'models'), params)
+    models = []
+    for association in body['data']:
+        model_id = association['model_id']
+        draft = await _draft(ctx, model_id)
+        revisions, complete = await _revisions(ctx, model_id)
+        models.append(
+            dict(
+                ref('model', model_id, draft['name']),
+                revision_token=draft['draft_revision'],
+                versions=_versions_summary(revisions, complete),
+            )
+        )
+    after = body.get('next_cursor')
+    return cap(
+        {
+            'models': models,
+            'next_cursor': None if after is None else encode_cursor('list_models', after),
+        },
+        [('models', 'models', 'list_models with a smaller limit')],
+    )
+
+
+LIST_MODELS = ToolSpec(
+    name='list_models',
+    title='List the models of the study',
+    description=(
+        "Returns one page of the study's models: name and id, the revision_token of the "
+        'working draft (pass it back as expected_revision when you edit the draft) and the '
+        'saved versions (count, and the latest as "Model version N" with its id). limit: '
+        'items per page (1 to 25, default 10); cursor: the next_cursor of the previous page, '
+        'passed back unchanged. Read one model with get_model. '
+        'Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {'limit': LIMIT_SCHEMA, 'cursor': CURSOR_SCHEMA},
+    },
+    effect='read',
+    stage='read_only',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='none',
+    activity_label='Read: models',
+    handler=list_models,
+    api_operations=(MODELS, MODEL, REVISIONS),
+)
+
+
+def _port(view, instance_id, port_id):
+    port = view.ports[(instance_id, port_id)]
+    meaning = port['meaning']
+    value = dict(
+        ref('port', port_id, port['port']),
+        direction=port['direction'],
+        unit=port['unit'],
+    )
+    if meaning is not None:
+        value['meaning'] = untrusted('quantity meaning', text=meaning)
+    else:
+        value['meaning'] = missing(
+            'not_declared' if port['meanings_declared'] else 'not_recorded_by_this_model_version'
+        )
+    return value
+
+
+def _source(model, definition, limit_lines):
+    files = {f['sha256']: f for f in model.get('source_files', ())}
+    texts = []
+    for digest in definition.get('source_refs', ()):
+        entry = files.get(digest)
+        if entry is None:
+            continue
+        try:
+            texts.append(base64.b64decode(entry['bytes'], validate=True).decode('utf-8', 'replace'))
+        except (binascii.Error, ValueError):
+            continue
+    if not texts:
+        return missing('no_source_recorded')
+    lines = '\n'.join(texts).split('\n')
+    shown = '\n'.join(lines[:limit_lines])
+    truncated = len(lines) > limit_lines or len(shown) > SOURCE_CHARS
+    result = untrusted('component source', text=shown[:SOURCE_CHARS])
+    result['lines'] = len(lines)
+    result['truncated'] = truncated
+    if truncated:
+        result['note'] = (
+            'Shown up to ' + str(limit_lines) + ' lines; the source has ' + str(len(lines)) + '.'
+        )
+    return result
+
+
+def model_projection(model, name, include_source_for=()):
+    """Components with their ports, connections, assumptions, free inputs, outputs and
+    warnings of one stored model draft or version; source only for the named components."""
+    view = ModelView(model)
+    names = {i['instance_id']: i['name'] for i in model['instances']}
+    wanted = set(include_source_for)
+    known = {i['name'] for i in view.components}
+    if wanted - known:
+        raise ToolError(
+            'invalid_input',
+            'include_source_for names a component this model does not have.',
+            fields=(
+                {'path': 'include_source_for', 'problem': 'must name components of the model'},
+            ),
+            next_step='Call get_model without include_source_for to see the component names.',
+        )
+    targeted = {
+        (c['target_ref']['instance_id'], c['target_ref']['port_id']) for c in model['connections']
+    }
+    components, free_inputs, outputs, warnings, sources = [], [], [], [], []
+    for instance in view.components:
+        definition = view.definitions.get(instance['definition_version_id'])
+        if definition is None:
+            continue
+        iid = instance['instance_id']
+        ports = [_port(view, iid, p['port_id']) for p in definition['ports']]
+        components.append(
+            dict(
+                ref('component', iid, instance['name']),
+                definition=ref(
+                    'definition',
+                    definition['definition_id'],
+                    definition['name'],
+                    definition_version_id=definition['definition_version_id'],
+                    definition_kind=definition['kind'],
+                ),
+                inputs=[p for p in ports if p['direction'] == 'input'],
+                outputs=[p for p in ports if p['direction'] == 'output'],
+            )
+        )
+        for port in definition['ports']:
+            key = (iid, port['port_id'])
+            entry = view.quantity_ref({'instance_id': iid, 'port_id': port['port_id']}, 'quantity')
+            entry['unit'] = view.ports[key]['unit']
+            if port['direction'] == 'input' and key not in targeted:
+                free_inputs.append(entry)
+            elif port['direction'] == 'output':
+                outputs.append(entry)
+            if view.ports[key]['unit'] == 'unspecified':
+                warnings.append(dict(entry, warning='unspecified_unit'))
+            if view.ports[key]['meanings_declared'] and view.ports[key]['meaning'] is None:
+                warnings.append(dict(entry, warning='missing_quantity_meaning'))
+        if instance['name'] in wanted:
+            sources.append(
+                dict(
+                    ref('component', iid, instance['name']),
+                    source=_source(model, definition, SOURCE_LINES),
+                )
+            )
+    connections = [
+        ref(
+            'connection',
+            c['connection_id'],
+            _arrow(view, c),
+            missing='port_not_in_model',
+        )
+        for c in model['connections']
+    ]
+    assumptions = [
+        dict(
+            ref('model_assumption', a['assumption_id'], a['statement']),
+            owner='model'
+            if a['owner']['kind'] == 'model'
+            else ref('component', a['owner']['instance_id'], names.get(a['owner']['instance_id'])),
+            evidence=[
+                dict(
+                    ref(
+                        'evidence_version',
+                        link['evidence_version_id'],
+                        None,
+                        missing='call_read_evidence',
+                    ),
+                    relation=link['relation'],
+                )
+                for link in a['evidence_links']
+            ],
+        )
+        for a in model.get('assumptions', ())
+    ]
+    projection = {
+        'model': ref('model', model['model_id'], name),
+        'components': components,
+        'connections': connections,
+        'assumptions': assumptions
+        if 'assumptions' in model
+        else missing('not_recorded_by_this_model_version'),
+        'free_inputs': free_inputs,
+        'outputs': outputs,
+        'warnings': warnings,
+    }
+    if wanted:
+        projection['source'] = sources
+    return projection
+
+
+def _arrow(view, connection):
+    source, target = view.path(connection['source_ref']), view.path(connection['target_ref'])
+    if source is None or target is None:
+        return None
+    return source + ' -> ' + target
+
+
+MODEL_PRIORITIES = [
+    ('source', 'component source', 'get_model with include_source_for naming fewer components'),
+    ('warnings', 'warnings', 'get_model again after fixing the listed warnings'),
+    ('assumptions', 'model assumptions', 'get_assumption_evidence'),
+    ('connections', 'connections', 'the model page in HYPRN MVP'),
+    ('outputs', 'outputs', 'the components list of this result'),
+    ('free_inputs', 'free inputs', 'the components list of this result'),
+    ('components', 'components', 'the model page in HYPRN MVP'),
+]
+
+
+async def get_model(arguments, ctx):
+    """One model's draft, latest saved version or an exact saved version."""
+    model_id = arguments['model_id']
+    which = arguments.get('which', 'draft')
+    version_id = arguments.get('model_version_id')
+    if (which == 'version') != (version_id is not None):
+        raise ToolError(
+            'invalid_input',
+            'model_version_id is given exactly when which is "version".',
+            fields=({'path': 'model_version_id', 'problem': 'must match which'},),
+            next_step='Call get_model again with a matching which and model_version_id.',
+        )
+    draft = await _draft(ctx, model_id)
+    head = {}
+    if which == 'draft':
+        model = draft
+        head['revision_token'] = draft['draft_revision']
+        head['version'] = missing('working_draft')
+    else:
+        revisions, complete = await _revisions(ctx, model_id)
+        ids = [r['model_revision_id'] for r in revisions]
+        if which == 'latest':
+            if not revisions or not complete:
+                head['version'] = missing(
+                    'no_saved_version' if not revisions else 'more_versions_than_read'
+                )
+                return dict({'model': ref('model', model_id, draft['name'])}, **head)
+            version_id = ids[-1]
+        if version_id in ids:
+            head['version'] = version_label(version_id, ids.index(version_id) + 1)
+        else:
+            head['version'] = label('model_version', version_id, 'Saved model version')
+        path = study_path(ctx, 'models', model_id, 'revisions', version_id)
+        model = (await read(ctx, path, next_step='Call list_model_versions.'))['data']
+    projection = model_projection(model, draft['name'], arguments.get('include_source_for', ()))
+    projection.update(head)
+    return cap(projection, MODEL_PRIORITIES)
+
+
+GET_MODEL = ToolSpec(
+    name='get_model',
+    title='Read a model',
+    description=(
+        'Returns one model: its components (instance name, definition, input and output '
+        'ports with unit and quantity meaning), connections as "A.out -> B.in", model and '
+        'component assumptions, free inputs (unconnected inputs a configuration must set), '
+        'outputs and warnings (unspecified units, missing quantity meanings). which: "draft" '
+        '(default) reads the working draft and returns its revision_token; "latest" the '
+        'latest saved version; "version" the saved version model_version_id. '
+        'include_source_for: up to 3 component names whose Python source to include, at most '
+        '400 lines each with a truncation note; source is never executed. Names, meanings '
+        "and source are the authors', inside untrusted_content blocks. "
+        'Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id'],
+        'properties': {
+            'model_id': uuid_schema('The model, from list_models.'),
+            'which': {
+                'type': 'string',
+                'enum': ['draft', 'latest', 'version'],
+                'description': 'Which state of the model to read (default "draft").',
+            },
+            'model_version_id': uuid_schema('The saved version, only with which "version".'),
+            'include_source_for': {
+                'type': 'array',
+                'items': {'type': 'string', 'minLength': 1, 'maxLength': 4096},
+                'maxItems': 3,
+                'uniqueItems': True,
+                'description': 'Component names whose source to include.',
+            },
+        },
+    },
+    effect='read',
+    stage='read_only',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='none',
+    activity_label='Read: model',
+    handler=get_model,
+    api_operations=(MODEL, REVISIONS, REVISION),
+)
+
+
+async def list_model_versions(arguments, ctx):
+    """One page of a model's saved versions, numbered in the owner's stored order."""
+    model_id = arguments['model_id']
+    limit = arguments.get('limit', 10)
+    position = None
+    if arguments.get('cursor') is not None:
+        position = decode_cursor('list_model_versions:' + model_id, arguments['cursor'])
+    draft = await _draft(ctx, model_id)
+    params = {'limit': str(limit)}
+    offset = 0
+    if position is not None:
+        params['cursor'], offset = position['after'], position['offset']
+    path = study_path(ctx, 'models', model_id, 'revisions')
+    body = await read(ctx, path, params, next_step='Call list_models.')
+    versions = []
+    for n, item in enumerate(body['data'], offset + 1):
+        parent = item['parent_model_revision_id']
+        versions.append(
+            dict(
+                version_label(item['model_revision_id'], n),
+                parent=label('model_version', parent, 'Previous saved version')
+                if parent
+                else missing('first_version'),
+            )
+        )
+    after = body.get('next_cursor')
+    next_cursor = None
+    if after is not None:
+        next_cursor = encode_cursor(
+            'list_model_versions:' + model_id, {'after': after, 'offset': offset + len(versions)}
+        )
+    return {
+        'model': ref('model', model_id, draft['name']),
+        'versions': versions,
+        'next_cursor': next_cursor,
+    }
+
+
+LIST_MODEL_VERSIONS = ToolSpec(
+    name='list_model_versions',
+    title='List the saved versions of a model',
+    description=(
+        'Returns one page of the saved versions of a model, oldest first, as "Model version '
+        'N" with id and the version it was saved from. Saved versions never change; read one '
+        'with get_model (which "version"). model_id: the model, from list_models. limit: items '
+        'per page (1 to 25, default 10); cursor: the next_cursor of the previous page for the '
+        'same model, passed back unchanged. Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id'],
+        'properties': {
+            'model_id': uuid_schema('The model, from list_models.'),
+            'limit': LIMIT_SCHEMA,
+            'cursor': CURSOR_SCHEMA,
+        },
+    },
+    effect='read',
+    stage='read_only',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='none',
+    activity_label='Read: model versions',
+    handler=list_model_versions,
+    api_operations=(MODEL, REVISIONS),
+)
+
+
+async def get_assumption_evidence(arguments, ctx):
+    """Which evidence supports each model assumption of the draft or of a saved version."""
+    model_id = arguments['model_id']
+    which = arguments.get('which', 'draft')
+    version_id = arguments.get('model_version_id')
+    if (which == 'version') != (version_id is not None):
+        raise ToolError(
+            'invalid_input',
+            'model_version_id is given exactly when which is "version".',
+            fields=({'path': 'model_version_id', 'problem': 'must match which'},),
+            next_step='Call get_assumption_evidence again with a matching which.',
+        )
+    draft = await _draft(ctx, model_id)
+    if which == 'draft':
+        params = {'draft_revision': draft['draft_revision']}
+        statements = {a['assumption_id']: a['statement'] for a in draft.get('assumptions', ())}
+        head = {'version': missing('working_draft'), 'revision_token': draft['draft_revision']}
+    else:
+        params = {'model_revision_id': version_id}
+        path = study_path(ctx, 'models', model_id, 'revisions', version_id)
+        saved = (await read(ctx, path, next_step='Call list_model_versions.'))['data']
+        statements = {a['assumption_id']: a['statement'] for a in saved.get('assumptions', ())}
+        head = {'version': label('model_version', version_id, 'Saved model version')}
+    path = study_path(ctx, 'models', model_id, 'assumption-evidence')
+    data = (await read(ctx, path, params))['data']
+    records = {e['evidence_version_id']: e for e in data['evidence']}
+    assumptions = {}
+    for link in data['links']:
+        entry = assumptions.setdefault(
+            link['assumption_id'],
+            dict(
+                ref(
+                    'model_assumption',
+                    link['assumption_id'],
+                    statements.get(link['assumption_id']),
+                    missing='call_get_model',
+                ),
+                evidence=[],
+            ),
+        )
+        record = records.get(link['evidence_version_id'])
+        if link['status'] == 'resolved' and record is not None:
+            evidence = ref(
+                'evidence_version',
+                link['evidence_version_id'],
+                record.get('title'),
+                missing='no_title_recorded',
+            )
+        else:
+            evidence = ref(
+                'evidence_version', link['evidence_version_id'], None, missing='unavailable'
+            )
+        evidence['status'] = link['status']
+        entry['evidence'].append(evidence)
+    projection = dict(
+        {'model': ref('model', model_id, draft['name'])},
+        **head,
+        assumptions=list(assumptions.values()),
+    )
+    return cap(projection, [('assumptions', 'assumptions', 'get_model and read_evidence')])
+
+
+GET_ASSUMPTION_EVIDENCE = ToolSpec(
+    name='get_assumption_evidence',
+    title='See which evidence supports each model assumption',
+    description=(
+        'Returns, for each model and component assumption, the evidence versions it cites '
+        'with their titles and whether each is still available in the study. which: "draft" '
+        '(default) for the working draft, or "version" for the saved version model_version_id. '
+        'model_id: the model, from list_models. Read the evidence itself with read_evidence. '
+        'Guidance: get_playbook("evidence").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id'],
+        'properties': {
+            'model_id': uuid_schema('The model, from list_models.'),
+            'which': {
+                'type': 'string',
+                'enum': ['draft', 'version'],
+                'description': 'The working draft (default) or a saved version.',
+            },
+            'model_version_id': uuid_schema('The saved version, only with which "version".'),
+        },
+    },
+    effect='read',
+    stage='read_only',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='none',
+    activity_label='Read: assumption evidence',
+    handler=get_assumption_evidence,
+    api_operations=(MODEL, REVISION, EVIDENCE),
+)
+
+# ---- Writes ------------------------------------------------------------------------------
+
+STUDY = ('GET', '/api/1/studies/{study_id}')
+CREATE = ('POST', '/api/1/studies/{study_id}/models')
+IMPORT = ('POST', '/api/1/studies/{study_id}/model-imports')
+PREVIEW = ('POST', '/api/1/studies/{study_id}/models/{model_id}/preview')
+EDITS = ('POST', '/api/1/studies/{study_id}/models/{model_id}/edits')
+COMMITS = ('POST', '/api/1/studies/{study_id}/models/{model_id}/commits')
+VALIDATE = ('POST', '/api/1/studies/{study_id}/models/{model_id}/validate')
+CAPABILITIES = ('GET', '/api/1/capabilities')
+OPS = (
+    'add_component',
+    'update_component',
+    'connect',
+    'disconnect',
+    'rename_component',
+    'remove_component',
+    'rename_model',
+    'add_assumption',
+    'update_assumption',
+    'remove_assumption',
+)
+# The fields each operation needs and may carry (besides ``op``).
+OP_FIELDS = {
+    'add_component': (('name', 'inputs', 'outputs', 'source'), ()),
+    'update_component': (('component',), ('source', 'set_meanings', 'clear_meanings', 'set_quantities', 'remove_quantities')),
+    'connect': (('from', 'to'), ()),
+    'disconnect': (('from', 'to'), ()),
+    'rename_component': (('component', 'name'), ()),
+    'remove_component': (('component',), ()),
+    'rename_model': (('name',), ()),
+    'add_assumption': (('statement',), ('component', 'evidence')),
+    'update_assumption': (('assumption_id', 'statement'), ('evidence',)),
+    'remove_assumption': (('assumption_id',), ()),
+}
+NAME = {'type': 'string', 'minLength': 1, 'maxLength': 200}
+PORT_PATH = {
+    'type': 'string',
+    'minLength': 3,
+    'maxLength': 300,
+    'description': 'A port as "<component name>.<port name>".',
+}
+UNIT = {
+    'type': 'string',
+    'minLength': 1,
+    'maxLength': 64,
+    'description': 'A unit of the unit vocabulary (get_capabilities), "dimensionless" or '
+    '"unspecified".',
+}
+PORTS = {
+    'type': 'array',
+    'maxItems': 64,
+    'items': {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['name', 'unit'],
+        'properties': {
+            'name': dict(NAME, description='The port name, also its symbol in the source.'),
+            'unit': UNIT,
+            'symbol': dict(NAME, description='The Python symbol in the source, when it differs.'),
+        },
+    },
+}
+EVIDENCE_LINKS = {
+    'type': 'array',
+    'maxItems': 64,
+    'items': {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['evidence_version_id', 'relation'],
+        'properties': {
+            'evidence_version_id': dict(UUID_SCHEMA),
+            'relation': {'type': 'string', 'enum': ['supports', 'challenges', 'context']},
+        },
+    },
+}
+OPERATION = {
+    'type': 'object',
+    'additionalProperties': False,
+    'required': ['op'],
+    'properties': {
+        'op': {'type': 'string', 'enum': list(OPS)},
+        'name': NAME,
+        'component': dict(NAME, description='An existing component (instance) name.'),
+        'inputs': PORTS,
+        'outputs': PORTS,
+        'source': {
+            'type': 'string',
+            'minLength': 1,
+            'maxLength': 200000,
+            'description': 'Python compute BODY: read inputs[code_symbol], write outputs[code_symbol]. No def compute wrapper.',
+        },
+        'set_meanings': {
+            'type': 'array',
+            'maxItems': 64,
+            'items': {
+                'type': 'object',
+                'additionalProperties': False,
+                'required': ['port', 'meaning'],
+                'properties': {
+                    'port': NAME,
+                    'meaning': {'type': 'string', 'minLength': 1, 'maxLength': 4096},
+                },
+            },
+        },
+        'clear_meanings': {'type': 'array', 'maxItems': 64, 'items': NAME},
+        'set_quantities': {
+            'type': 'array', 'maxItems': 64,
+            'description': 'Create quantities or update an existing one by current name. '
+                           'Definitions are versioned; connections must remain valid.',
+            'items': {
+                'type': 'object', 'additionalProperties': False,
+                'required': ['name', 'unit', 'direction'],
+                'properties': {'name': NAME, 'unit': UNIT, 'symbol': NAME,
+                               'current_name': NAME,
+                               'direction': {'type': 'string', 'enum': ['input', 'output']}},
+            },
+        },
+        'remove_quantities': {'type': 'array', 'maxItems': 64, 'items': NAME},
+        'from': PORT_PATH,
+        'to': PORT_PATH,
+        'statement': {'type': 'string', 'minLength': 1, 'maxLength': 4096},
+        'evidence': EVIDENCE_LINKS,
+        'assumption_id': dict(UUID_SCHEMA),
+    },
+}
+
+
+def _units(text):
+    if text in ('dimensionless', 'unspecified'):
+        return {'kind': text}
+    return {'kind': 'physical', 'expression': text}
+
+
+def _source_file(text):
+    """The source object of a component's Python text: base64 bytes with their SHA-256."""
+    raw = text.encode('utf-8')
+    return dict(
+        encoding='base64',
+        media_type='text/x-python',
+        bytes=base64.b64encode(raw).decode('ascii'),
+        sha256=hashlib.sha256(raw).hexdigest(),
+    )
+
+
+def _refused(field, problem, message='The operation does not match the model draft.'):
+    return ToolError(
+        'invalid_input',
+        message,
+        fields=({'path': field, 'problem': problem},),
+        next_step='Call get_model, fix the listed operation and call edit_model again.',
+    )
+
+
+class Draft:
+    """The draft's components, definitions and connections by name, and the components added
+    by earlier operations of the same batch (by their temporary keys)."""
+
+    def __init__(self, model):
+        self.model = model
+        self.view = ModelView(model)
+        self.instances = {}
+        for instance in model['instances']:
+            self.instances.setdefault(instance['name'], []).append(instance)
+        self.added = {}
+
+    def instance(self, name, field):
+        found = self.instances.get(name, [])
+        if len(found) != 1:
+            names = sorted(i['name'] for i in self.view.components)
+            raise _refused(
+                field,
+                'must be one of: ' + ', '.join(names)[:480]
+                if names
+                else 'the model has no components yet',
+            )
+        return found[0]
+
+    def definition(self, instance):
+        return self.view.definitions[instance['definition_version_id']]
+
+    def ref(self, path, field, direction):
+        """The edit reference of "<component>.<port>": an existing port, or a port of a component
+        added earlier in this batch."""
+        component, _, port = path.rpartition('.')
+        if component in self.added:
+            added = self.added[component]
+            keys = added['ports'].get(port)
+            if keys is None or keys[1] != direction:
+                raise _refused(field, 'must name an ' + direction + ' of the added component')
+            return dict(
+                instance_temp_key=added['instance'],
+                definition_temp_key=added['definition'],
+                port_temp_key=keys[0],
+            )
+        instance = self.instance(component, field)
+        for item in self.definition(instance)['ports']:
+            if item['name'] == port and item['direction'] == direction:
+                return dict(instance_id=instance['instance_id'], port_id=item['port_id'])
+        raise _refused(field, 'must name an ' + direction + ' port of that component')
+
+
+def translate(model, operations):
+    """The ``Edit4`` batch of the operations against the draft, and for each edit the index of
+    the operation it came from (to map refused fields back to ``operations[i]``)."""
+    draft, edits, origins = Draft(model), [], []
+
+    def emit(index, edit):
+        edits.append(edit)
+        origins.append(index)
+
+    for n, item in enumerate(operations):
+        field = f'operations[{n}]'
+        op = item['op']
+        needed, optional = OP_FIELDS[op]
+        missing_fields = [key for key in needed if key not in item]
+        extra = [key for key in item if key != 'op' and key not in needed + optional]
+        if missing_fields or extra:
+            raise ToolError(
+                'invalid_input',
+                'An operation carries exactly the fields of its op.',
+                fields=tuple(
+                    {'path': field + '.' + key, 'problem': 'required for ' + op}
+                    for key in missing_fields
+                )
+                + tuple(
+                    {'path': field + '.' + key, 'problem': 'not used by ' + op} for key in extra
+                ),
+                next_step='Fix the listed fields and call edit_model again.',
+            )
+        if op == 'add_component':
+            if item['name'] in draft.instances or item['name'] in draft.added:
+                raise _refused(field + '.name', 'a component of that name already exists')
+            definition, instance = f'd{n}', f'c{n}'
+            ports, keys = [], {}
+            for direction, key in (('input', 'inputs'), ('output', 'outputs')):
+                for m, port in enumerate(item[key]):
+                    if port['name'] in keys:
+                        raise _refused(f'{field}.{key}[{m}].name', 'port names are unique')
+                    temp = f'p{n}_{len(ports)}'
+                    keys[port['name']] = (temp, direction)
+                    ports.append(
+                        dict(
+                            temp_key=temp,
+                            direction=direction,
+                            name=port['name'],
+                            code_symbol=port.get('symbol', port['name']),
+                            value_type='real_scalar',
+                            units=_units(port['unit']),
+                        )
+                    )
+            # The component takes its definition's name when it is placed.
+            emit(
+                n,
+                dict(
+                    kind='create_definition',
+                    temp_key=definition,
+                    definition_kind='explicit_component',
+                    name=item['name'],
+                    ports=ports,
+                    source=_source_file(item['source']),
+                ),
+            )
+            emit(
+                n, dict(kind='instantiate', temp_key=instance, version_ref={'temp_key': definition})
+            )
+            draft.added[item['name']] = dict(definition=definition, instance=instance, ports=keys)
+        elif op == 'update_component':
+            instance = draft.instance(item['component'], field + '.component')
+            definition = draft.definition(instance)
+            ports = {p['name']: p['port_id'] for p in definition['ports']}
+            changes = []
+            if 'source' in item:
+                changes.append(dict(kind='set_source', source=_source_file(item['source'])))
+            for m, entry in enumerate(item.get('set_quantities', ())):
+                current = entry.get('current_name', entry['name'])
+                previous = next((p for p in definition['ports'] if p['name'] == current), None)
+                fields = dict(name=entry['name'], code_symbol=entry.get('symbol', entry['name']),
+                              units=_units(entry['unit']))
+                if previous:
+                    if previous['direction'] != entry['direction']:
+                        raise _refused(field + '.set_quantities', 'direction cannot be changed')
+                    changes.append(dict(kind='update_port', port_id=previous['port_id'],
+                                        fields=fields))
+                elif 'current_name' in entry:
+                    raise _refused(field + '.set_quantities', 'current_name must exist')
+                else:
+                    changes.append(dict(kind='create_port', temp_key=f'q{n}_{m}', **fields,
+                                        direction=entry['direction'], value_type='real_scalar'))
+            for port in item.get('remove_quantities', ()):
+                if port not in ports:
+                    raise _refused(field + '.remove_quantities', 'must name an existing quantity')
+                changes.append(dict(kind='remove_port', port_id=ports[port]))
+            for m, entry in enumerate(item.get('set_meanings', ())):
+                if entry['port'] not in ports:
+                    raise _refused(
+                        f'{field}.set_meanings[{m}].port', 'must name a port of the component'
+                    )
+                changes.append(
+                    dict(
+                        kind='set_quantity_definition',
+                        port_id=ports[entry['port']],
+                        statement=entry['meaning'],
+                    )
+                )
+            for m, port in enumerate(item.get('clear_meanings', ())):
+                if port not in ports:
+                    raise _refused(
+                        f'{field}.clear_meanings[{m}]', 'must name a port of the component'
+                    )
+                changes.append(dict(kind='clear_quantity_definition', port_id=ports[port]))
+            if not changes:
+                raise _refused(field, 'give source, quantity edits or meaning edits')
+            temp, pinned = f'r{n}', definition['definition_version_id']
+            emit(
+                n,
+                dict(
+                    kind='revise_definition',
+                    temp_key=temp,
+                    definition_id=definition['definition_id'],
+                    expected_definition_version_id=pinned,
+                    changes=changes,
+                ),
+            )
+            # Every component on the old definition version moves to the revised one in the same
+            # batch, so no instance is left on a superseded version.
+            for other in model['instances']:
+                if other['definition_version_id'] == pinned:
+                    emit(
+                        n,
+                        dict(
+                            kind='replace_local_instance_version',
+                            instance_id=other['instance_id'],
+                            expected_definition_version_id=pinned,
+                            version_ref={'temp_key': temp},
+                        ),
+                    )
+        elif op == 'connect':
+            emit(
+                n,
+                dict(
+                    kind='connect',
+                    temp_key=f'k{n}',
+                    source_ref=draft.ref(item['from'], field + '.from', 'output'),
+                    target_ref=draft.ref(item['to'], field + '.to', 'input'),
+                ),
+            )
+        elif op == 'disconnect':
+            source = draft.ref(item['from'], field + '.from', 'output')
+            target = draft.ref(item['to'], field + '.to', 'input')
+            found = [
+                c
+                for c in model['connections']
+                if c['source_ref'] == source and c['target_ref'] == target
+            ]
+            if not found:
+                raise _refused(field, 'no connection joins those ports')
+            emit(n, dict(kind='disconnect', connection_id=found[0]['connection_id']))
+        elif op == 'rename_component':
+            instance = draft.instance(item['component'], field + '.component')
+            emit(
+                n,
+                dict(
+                    kind='rename_instance', instance_id=instance['instance_id'], name=item['name']
+                ),
+            )
+        elif op == 'remove_component':
+            instance = draft.instance(item['component'], field + '.component')
+            emit(n, dict(kind='remove_instance', instance_id=instance['instance_id']))
+        elif op == 'rename_model':
+            emit(n, dict(kind='rename_model', name=item['name']))
+        elif op == 'add_assumption':
+            if 'component' not in item:
+                owner = {'kind': 'model'}
+            elif item['component'] in draft.added:
+                owner = {
+                    'kind': 'instance',
+                    'instance_temp_key': draft.added[item['component']]['instance'],
+                }
+            else:
+                owner = {
+                    'kind': 'instance',
+                    'instance_id': draft.instance(item['component'], field + '.component')[
+                        'instance_id'
+                    ],
+                }
+            emit(
+                n,
+                dict(
+                    kind='add_assumption',
+                    temp_key=f'a{n}',
+                    owner=owner,
+                    statement=item['statement'],
+                    evidence_links=[dict(link) for link in item.get('evidence', ())],
+                ),
+            )
+        elif op == 'update_assumption':
+            emit(
+                n,
+                dict(
+                    kind='update_assumption',
+                    assumption_id=item['assumption_id'],
+                    statement=item['statement'],
+                    evidence_links=[dict(link) for link in item.get('evidence', ())],
+                ),
+            )
+        else:
+            emit(n, dict(kind='remove_assumption', assumption_id=item['assumption_id']))
+    return edits, origins
+
+
+def model_field(origins):
+    """The tool input path of a refused edit field: the operation the edit came from."""
+
+    def field(pointer):
+        parts = str(pointer).split('/')[1:]
+        if len(parts) > 1 and parts[0] == 'edits' and parts[1].isdecimal():
+            index = int(parts[1])
+            if index < len(origins):
+                return f'operations[{origins[index]}]'
+        if parts and parts[0] == 'expected_revision':
+            return 'expected_revision'
+        return 'operations'
+
+    return field
+
+
+def _diagnostics(items, origins=()):
+    mapper = model_field(origins)
+    return [
+        {
+            'field': mapper(item.get('path', '')),
+            'code': item['code'],
+            'problem': clip(item['message'], 512)[0],
+        }
+        for item in items[:50]
+    ]
+
+
+def _pending(reply_data):
+    return 'command_id' in reply_data and reply_data.get('state') == 'pending_remote'
+
+
+async def create_model(arguments, ctx):
+    """Create an empty model; the tool reads the study revision model creation advances."""
+    study = (await read(ctx, study_path(ctx), missing='access_lost'))['data']
+    body = dict(
+        command_id=command_id(ctx),
+        name=arguments['name'],
+        template='empty',
+        expected_revision=study['revision'],
+    )
+    data = (
+        await send(
+            ctx,
+            'POST',
+            study_path(ctx, 'models'),
+            body,
+            tool='create_model',
+            conflict_step='Call create_model again.',
+        )
+    )['data']
+    if _pending(data):
+        raise ToolError(
+            'pending',
+            'The model is still being created; nothing more to do now.',
+            next_step='Call list_models in a moment; do not create it again.',
+            retryable=False,
+        )
+    report(ctx, 'model_draft', data['model_id'], name=data['name'])
+    return dict(
+        model=ref('model', data['model_id'], data['name']),
+        revision_token=data['draft_revision'],
+        next_step='Add components with edit_model.',
+    )
+
+
+async def _edit_format(ctx, model):
+    """The model edit request format: 4 wherever the service advertises it, since a format 4
+    edit upgrades an earlier draft and only a format 4 model version can be configured; a
+    format 4 draft keeps format 4; otherwise format 3."""
+    formats = (await read(ctx, '/api/1/capabilities'))['data']['model_formats']['edit_request']
+    return '4' if '4' in formats or model.get('schema_version') == '4' else '3'
+
+
+async def edit_model(arguments, ctx):
+    """Translate name-based operations into one model edit batch on the draft the agent read;
+    with preview_only, show the result without changing the draft."""
+    model_id = arguments['model_id']
+    model = await _draft(ctx, model_id)
+    if model['draft_revision'] != arguments['expected_revision']:
+        raise ToolError(
+            'conflict',
+            'The model draft changed since you read it; nothing was written.',
+            fields=({'path': 'expected_revision', 'problem': 'is not the current draft revision'},),
+            next_step='Call get_model, apply your change to what it returns and pass its '
+            'revision_token as expected_revision.',
+        )
+    edits, origins = translate(model, arguments['operations'])
+    preview = arguments.get('preview_only', False)
+    body = dict(
+        expected_revision=arguments['expected_revision'],
+        edits=edits,
+        schema_version=await _edit_format(ctx, model),
+    )
+    if not preview:
+        body['command_id'] = command_id(ctx)
+    reply = await send(
+        ctx,
+        'POST',
+        study_path(ctx, 'models', model_id, 'preview' if preview else 'edits'),
+        body,
+        tool='edit_model',
+        conflict_step='Call get_model again and reapply your operations.',
+        field_map=model_field(origins),
+    )
+    data = reply['data']
+    if _pending(data):
+        raise ToolError(
+            'pending',
+            'The edit is still being applied; nothing more to do now.',
+            next_step='Call get_model in a moment; do not repeat the edit.',
+        )
+    if not preview:
+        report(ctx, 'model_draft', model_id, name=data['name'])
+    projection = model_projection(data, data['name'])
+    projection.update(
+        preview_only=preview,
+        revision_token=None if preview else data['draft_revision'],
+        diagnostics=_diagnostics(reply.get('diagnostics', ()), origins),
+    )
+    if preview:
+        projection['note'] = 'Nothing was changed; call edit_model without preview_only to apply.'
+    return cap(projection, MODEL_PRIORITIES)
+
+
+async def validate_model(arguments, ctx):
+    """Static validation of the draft or a saved version; no code is executed."""
+    model_id = arguments['model_id']
+    version = arguments.get('model_version_id')
+    if version is None:
+        model = await _draft(ctx, model_id)
+        body = {'draft_revision': model['draft_revision']}
+    else:
+        body = {'model_revision_id': version}
+    result = (
+        await send(
+            ctx,
+            'POST',
+            study_path(ctx, 'models', model_id, 'validate'),
+            body,
+            tool='validate_model',
+            conflict_step='Call validate_model again.',
+        )
+    )['data']
+    return dict(
+        checked='draft' if version is None else 'model_version',
+        valid=not result['diagnostics'],
+        diagnostics=_diagnostics(result['diagnostics']),
+        note='Static validation only: no code was executed.',
+    )
+
+
+async def commit_model_version(arguments, ctx):
+    """Validate the draft the agent checked and save it as the next model version."""
+    model_id, expected = arguments['model_id'], arguments['expected_revision']
+    checked = (
+        await send(
+            ctx,
+            'POST',
+            study_path(ctx, 'models', model_id, 'validate'),
+            {'draft_revision': expected},
+            tool='commit_model_version',
+            conflict_step='Call get_model and save again with its revision_token.',
+        )
+    )['data']
+    blocking = checked['diagnostics']
+    if blocking:
+        raise ToolError(
+            'invalid_input',
+            'The draft has validation errors; nothing was saved.',
+            fields=tuple(
+                {'path': d['field'], 'problem': d['problem']} for d in _diagnostics(blocking)[:20]
+            ),
+            next_step='Fix the draft with edit_model, then save again.',
+        )
+    data = (
+        await send(
+            ctx,
+            'POST',
+            study_path(ctx, 'models', model_id, 'commits'),
+            dict(command_id=command_id(ctx), expected_revision=expected),
+            tool='commit_model_version',
+            conflict_step='Call get_model and save again with its revision_token.',
+        )
+    )['data']
+    if _pending(data):
+        raise ToolError(
+            'pending',
+            'The version is still being saved; nothing more to do now.',
+            next_step='Call list_model_versions in a moment; do not save it again.',
+        )
+    revisions, complete = await _revisions(ctx, model_id)
+    number = len(revisions) if complete else None
+    report(ctx, 'model_version', model_id, version_id=data['model_revision_id'], number=number)
+    return dict(
+        model_version=version_label(data['model_revision_id'], number)
+        if number
+        else label('model_version', data['model_revision_id'], 'Saved model version'),
+        next_step='Pin it in a configuration with save_configuration.',
+    )
+
+
+MODEL_ID = uuid_schema('The model, from list_models.')
+DRAFT_TOKEN = {
+    'type': 'string',
+    'minLength': 1,
+    'maxLength': 4096,
+    'description': 'The revision_token of the model draft you read (get_model or list_models).',
+}
+
+CREATE_MODEL = ToolSpec(
+    name='create_model',
+    title='Create a model',
+    description=(
+        'Creates an empty model in the study (name: 1 to 200 characters, readable by a '
+        'reviewer) and returns its id and draft revision_token. Add components, connections '
+        'and assumptions with edit_model, check with validate_model, then save a version with '
+        'commit_model_version. Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['name'],
+        'properties': {'name': dict(NAME, description='The model name.')},
+    },
+    effect='draft',
+    stage='authoring',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='receipt:model',
+    activity_label='Created: model',
+    handler=create_model,
+    api_operations=(STUDY, CREATE),
+    attribution_kind='model_draft',
+)
+
+EDIT_MODEL = ToolSpec(
+    name='edit_model',
+    title='Change a model draft',
+    description=(
+        'Changes a model draft with up to 64 operations applied together, by component and '
+        'port names. expected_revision: the revision_token of the draft you read (a stale one '
+        'changes nothing). Each operation has op and its fields: add_component (name, inputs '
+        'and outputs as [{name, unit, symbol?}], source: Python compute body); '
+        'update_component (component; source, set_meanings [{port, meaning}] and/or '
+        'clear_meanings [port], set_quantities [{name, unit, direction, symbol?, current_name?}], '
+        'remove_quantities [name]; every component on the same definition moves to the revised '
+        'version); connect and disconnect (from "A.out", to "B.in"); rename_component '
+        '(component, name); remove_component (component); rename_model (name); add_assumption '
+        '(statement, component for a component assumption, evidence [{evidence_version_id, '
+        'relation}]); update_assumption (assumption_id, statement, evidence); '
+        'remove_assumption (assumption_id). unit: a unit of the vocabulary, "dimensionless" or '
+        '"unspecified". Give each new port its meaning afterwards with update_component. '
+        'preview_only: return the resulting draft without changing it. Returns the new '
+        'revision_token and the draft. No code is executed. Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id', 'expected_revision', 'operations'],
+        'properties': {
+            'model_id': MODEL_ID,
+            'expected_revision': DRAFT_TOKEN,
+            'operations': {
+                'type': 'array',
+                'minItems': 1,
+                'maxItems': 64,
+                'items': OPERATION,
+                'description': 'The operations, applied together in order.',
+            },
+            'preview_only': {
+                'type': 'boolean',
+                'description': 'Show the result without changing the draft (default false).',
+            },
+        },
+    },
+    effect='draft',
+    stage='authoring',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='receipt:model',
+    activity_label='Changed: model draft',
+    handler=edit_model,
+    api_operations=(MODEL, CAPABILITIES, PREVIEW, EDITS),
+    attribution_kind='model_draft',
+)
+
+VALIDATE_MODEL = ToolSpec(
+    name='validate_model',
+    title='Validate a model',
+    description=(
+        'Checks a model draft, or a saved model version (model_version_id), statically and '
+        'returns its diagnostics, each with the field it concerns. Static validation only: no '
+        'code is executed, so it proves neither that the source runs nor that it is physically '
+        'right. Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id'],
+        'properties': {
+            'model_id': MODEL_ID,
+            'model_version_id': uuid_schema('A saved version to check instead of the draft.'),
+        },
+    },
+    effect='read',
+    stage='authoring',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='none',
+    activity_label='Checked: model',
+    handler=validate_model,
+    api_operations=(MODEL, VALIDATE),
+)
+
+COMMIT_MODEL_VERSION = ToolSpec(
+    name='commit_model_version',
+    title='Save a model version',
+    description=(
+        'Validates the model draft you checked and saves it as the next model version, which '
+        'never changes afterwards; configurations pin model versions. expected_revision: the '
+        'revision_token of the draft you checked. A draft with validation diagnostics is not '
+        'saved; fix it with edit_model first. Returns the model version id and number. '
+        'Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['model_id', 'expected_revision'],
+        'properties': {'model_id': MODEL_ID, 'expected_revision': DRAFT_TOKEN},
+    },
+    effect='record',
+    stage='authoring',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='receipt:model',
+    activity_label='Saved: model version',
+    handler=commit_model_version,
+    api_operations=(VALIDATE, COMMITS, REVISIONS),
+    attribution_kind='model_version',
+)
+
+
+async def import_model(arguments, ctx):
+    """Import an exported portable model record as a new model of this study."""
+    try:
+        package = json.loads(
+            arguments['portable_record'],
+            parse_constant=_not_finite,
+            object_pairs_hook=_unique_keys,
+        )
+    except (ValueError, RecursionError):
+        raise ToolError(
+            'invalid_input',
+            'The portable record is not strict JSON.',
+            fields=({'path': 'portable_record', 'problem': 'must be the exact exported JSON'},),
+            next_step='Pass the exported portable model record unchanged.',
+        ) from None
+    study = (await read(ctx, study_path(ctx), missing='access_lost'))['data']
+    body = dict(command_id=command_id(ctx), expected_revision=study['revision'], package=package)
+    data = (
+        await send(
+            ctx,
+            'POST',
+            study_path(ctx, 'model-imports'),
+            body,
+            tool='import_model',
+            conflict_step='Call import_model again.',
+            field_map=lambda pointer: 'portable_record',
+        )
+    )['data']
+    if _pending(data):
+        raise ToolError(
+            'pending',
+            'The model is still being imported; nothing more to do now.',
+            next_step='Call list_models in a moment; do not import it again.',
+        )
+    report(ctx, 'model_draft', data['model_id'], name=data['name'])
+    return dict(
+        model=ref('model', data['model_id'], data['name']),
+        revision_token=data['draft_revision'],
+        next_step='Read it with get_model.',
+    )
+
+
+def _not_finite(_):
+    raise ValueError('non-finite number')
+
+
+def _unique_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate key')
+        result[key] = value
+    return result
+
+
+IMPORT_MODEL = ToolSpec(
+    name='import_model',
+    title='Import a portable model record',
+    description=(
+        'Imports an exported portable model record (the exact JSON text of a model export, '
+        'unchanged) as a new model of this study, keeping its public ids, and returns the model '
+        'id and draft revision_token. Use it only with a record the user gave you; never edit '
+        'the record. Guidance: get_playbook("model").'
+    ),
+    input_schema={
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['portable_record'],
+        'properties': {
+            'portable_record': {
+                'type': 'string',
+                'minLength': 2,
+                'maxLength': 250000,
+                'description': 'The exported portable model record, as JSON text.',
+            }
+        },
+    },
+    effect='draft',
+    stage='authoring',
+    surfaces=SURFACES,
+    owners=OWNERS,
+    outcome='receipt:model',
+    activity_label='Imported: model',
+    handler=import_model,
+    api_operations=(STUDY, IMPORT),
+    attribution_kind='model_draft',
+)
+
+TOOLS = (
+    LIST_MODELS,
+    GET_MODEL,
+    LIST_MODEL_VERSIONS,
+    GET_ASSUMPTION_EVIDENCE,
+    CREATE_MODEL,
+    EDIT_MODEL,
+    VALIDATE_MODEL,
+    COMMIT_MODEL_VERSION,
+    IMPORT_MODEL,
+)

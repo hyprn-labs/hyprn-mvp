@@ -76,6 +76,8 @@ def retain_failure(store,actor,sid,run_id,case,*,complete=False,uncertain=False)
     class RetainedFailure:
         def require_attestation(self):return True # Explicit test double, no runtime certification.
         def bundle_runtime(self):return runtime_fixture()
+        def launch_budgeted(self, bundle, request, wall_seconds):
+            return self.launch(bundle, request)
         def launch(self,bundle,request):
             if uncertain:raise OSError('Declared lost launch response; execution state unknown')
             self.record=dict(store_uuid=uid(),process_uuid=uid(),process_state='finished',exit_status=1,request=deepcopy(request),bundle=deepcopy(bundle),results=None,assessment=None,artifacts={},errors=[dict(code='missing_results',partial=True)])
@@ -138,3 +140,51 @@ def synthetic_archive(preflight,records):
         for sha,raw in sorted(repository_bytes.items()):z.writestr('repo/'+sha,raw)
     raw=out.getvalue()
     return dict(schema_version='1',origin_store_uuid=preflight['origin_store_uuid'],inventory=inventory,inventory_digest=digest(inventory),archive_sha256=hashlib.sha256(raw).hexdigest(),archive_size=len(raw),archive_base64=base64.b64encode(raw).decode())
+
+
+class SamplingModels(Models):
+    """Declared read/compatibility transport for input-first sampling browser tests.
+
+    Snapshots originate in the scoped fixture's captured records. Input values still go
+    through the public configuration preview and commit, never through this transport.
+    """
+
+    def call(self, method, path, raw, headers):
+        from criteria_free import CRITERIA_FREE_CAPABILITY
+        from hyprn_mvp_app.modeling import UNIT_CATALOG_DIGEST
+        if path.endswith('/capabilities'):
+            transport = PrivateTransport(self.store, uid())
+            caps = transport.caps
+            caps['contract_versions'] += ['1.3', '1.4']
+            caps['schema_versions'] += ['3', '4']
+            base = caps['capabilities'][0]
+            caps['capabilities'] += [
+                dict(base, id='resolved_configuration', version='3'),
+                dict(base, id='unit_declarations'), dict(base, id='quantity_definitions'),
+                deepcopy(CRITERIA_FREE_CAPABILITY),
+            ]
+            return 200, dict(schema_version='1', request_id=uid(), data=caps)
+        if '/models/' in path:
+            mid = path.split('/models/')[1].split('/')[0]
+            if mid not in self.transports:
+                with self.store.connection() as db:
+                    records = [json.loads(r[0]) for r in db.execute(
+                        'SELECT payload FROM configurations'
+                    )]
+                for frozen in records:
+                    model = frozen['model_snapshot']
+                    if model['model_id'] != mid:
+                        continue
+                    transport = self.transports.setdefault(mid, PrivateTransport(
+                        self.store, frozen['configuration']['study_id']))
+                    transport.revisions[model['model_revision_id']] = deepcopy(model)
+                    transport.draft = {k: deepcopy(v) for k, v in model.items() if k not in {
+                        'model_revision_id', 'parent_model_revision_id',
+                        'originating_draft_revision', 'digest'}}
+                    transport.draft.update(study_id=transport.sid, name='Response model',
+                                           draft_revision=model['originating_draft_revision'])
+        status, response = super().call(method, path, raw, headers)
+        if path.endswith('/configuration-compatibility'):
+            for interpretation in response['data']['input_interpretations']:
+                interpretation['conversion']['catalog_digest'] = UNIT_CATALOG_DIGEST
+        return status, response

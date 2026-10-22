@@ -10,7 +10,7 @@ async function login(page: Page) {
   await page.getByLabel('Username', { exact: true }).fill('owner');
   await page.getByLabel('Password', { exact: true }).fill(ownerPassword());
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
 }
 async function data(page: Page, path: string) { const r = await page.request.get(path); expect(r.ok()).toBeTruthy(); return (await r.json()).data; }
 async function apply(page: Page) { const d = page.getByRole('dialog', { name: 'Preview changes', exact: true }); await d.getByRole('button', { name: 'Apply changes', exact: true }).click(); await expect(d).toHaveCount(0); }
@@ -22,7 +22,7 @@ test('real simplified authoring and evidence configuration retain exact records 
   const traffic: { method: string; url: string }[] = [];
   page.on('request', r => { if (['fetch', 'xhr'].includes(r.resourceType())) traffic.push({ method: r.method(), url: r.url() }); });
   await login(page);
-  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.locator('.profile-page dd')).toHaveText('owner');
   await page.getByRole('button', { name: 'Home', exact: true }).focus(); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'New study', exact: true }).click();

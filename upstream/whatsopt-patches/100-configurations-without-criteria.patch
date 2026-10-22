@@ -1,0 +1,87 @@
+--- a/app/services/modeling_contract.rb
++++ b/app/services/modeling_contract.rb
+@@ -9,7 +9,7 @@
+ # Immutable definition/model/preparation snapshots and receipts share the same SQL DB.
+ class ModelingContract
+   UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+-  CAPABILITIES = {'quantity_definitions'=>true,'unit_declarations'=>true,'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
++  CAPABILITIES = {'criteria_free_configuration'=>true,'quantity_definitions'=>true,'unit_declarations'=>true,'model_assumptions'=>true,'model_revision_listing'=>true,'model_rename'=>true,'flat_explicit_scalar'=>true,'local_definition_revision'=>true,'explicit_connections'=>true,'portable_model_package'=>true,'pure_configuration_compatibility'=>true,'static_preparation'=>true,'resolved_configuration'=>true,'nested_composition'=>false,'implicit_components'=>false,'numerical_feedback'=>false,'selective_rebind'=>false,'coupled_solvers'=>false,'derivatives'=>false,'optimization'=>false,'uncertainty'=>false}
+   SCHEMA = JSON.parse(File.read(Rails.root.join('config/modeling.schema.json'))).fetch('$defs')
+   UNITS = JSON.parse(File.read(Rails.root.join('config/modeling.units.json')))
+   # Explicit intent is authoritative. Incomplete read-only versions are permitted;
+@@ -206,7 +206,7 @@
+     readonly=method=='GET' || path.end_with?('/preview','/validate','/configuration-compatibility')
+     authorize(readonly ? 'read' : 'write')
+     if path=='/capabilities' && method=='GET'
+-      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2','1.3'],'schema_versions'=>['1','2','3','4'],'service_build'=>'whatsopt-597f5abf/modeling-1.3-quantity1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['3'],'bundle_versions'=>['10'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1','2'],'historical_bundle_versions'=>['1','2','3','4','5','6','8']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
++      return [200,{'data'=>{'contract_versions'=>['1','1.1','1.2','1.3'],'schema_versions'=>['1','2','3','4'],'service_build'=>'whatsopt-597f5abf/modeling-1.3-quantity1','generator_identity'=>generator,'execution_versions'=>{'artifact_versions'=>['3','4'],'bundle_versions'=>['10','11'],'program_protocols'=>['hyprn_mvp.openmdao.program/1'],'historical_artifact_versions'=>['1','2'],'historical_bundle_versions'=>['1','2','3','4','5','6','8']},'unit_compatibility'=>UNITS.slice('engine','version','supported_units').merge('affine_conversion'=>false),'capabilities'=>CAPABILITIES.map { |k,v| {'id'=>k,'version'=>%w[model_revision_listing model_rename].include?(k) ? '1.1' : (k=='resolved_configuration' ? '3' : '1'),'supported'=>v,'limits'=>{'json_bytes'=>2097152,'source_bytes'=>262144,'edits'=>256,'elements'=>1000,'depth'=>32}} }}}]
+     end
+     if path=='/unit-catalog' && method=='GET'
+       catalog={'schema_version'=>'1','catalog_digest'=>UNITS.fetch('catalog_digest'),'engine'=>UNITS.fetch('engine'),'engine_version'=>UNITS.fetch('version'),'engine_source_sha256'=>UNITS.fetch('source_sha256'),'supported_units'=>UNITS.fetch('supported_units').reject(&:empty?),'affine_conversion'=>false}
+@@ -246,7 +246,7 @@
+     return [200,{'data'=>revision(path.split('/')[4],resource)}] if method=='GET' && action=='revisions'
+     return [200,{'data'=>export_package(model,query['revision'])}] if method=='GET' && action=='export'
+     raise Failure.new(404,'resource_not_found') unless method=='POST'
+-    type={'preview'=>'PreviewRead4','edits'=>'ApplyRead4','commits'=>'Commit','validate'=>'Validate','configuration-compatibility'=>'Compatibility','prepare-execution'=>'Prepare'}[action]
++    type={'preview'=>'PreviewRead4','edits'=>'ApplyRead4','commits'=>'Commit','validate'=>'Validate','configuration-compatibility'=>'Compatibility2','prepare-execution'=>'Prepare2'}[action]
+     raise Failure.new(404,'resource_not_found') unless type
+     check(type,body)
+     if action=='preview'
+@@ -617,15 +617,17 @@
+   def configuration_type(c)
+     case c['schema_version']
+     when '1' then c.key?('configuration_revision_id') ? 'ConfigurationRevision1' : 'ConfigurationCandidate1'
+-    when '2','3' then (c.key?('configuration_revision_id') ? 'ModelingConfigurationRevision' : 'ModelingConfiguration')+c['schema_version']
++    when '2','3','5' then (c.key?('configuration_revision_id') ? 'ModelingConfigurationRevision' : 'ModelingConfiguration')+c['schema_version']
+     else raise Failure.new(422,'unsupported_capability')
+     end
+   end
+   def compatible(m,c)
+     type=configuration_type(c)
+     check(type,c)
+-    raise Failure.new(422,'invalid_configuration') if %w[3 4].include?(m['schema_version']) && c['schema_version']!='3'
+-    if c['schema_version']=='3'
++    raise Failure.new(422,'invalid_configuration') if %w[3 4].include?(m['schema_version']) && !%w[3 5].include?(c['schema_version'])
++    # Version 5 carries no criteria and no approach; it requires model format 4.
++    raise Failure.new(422,'invalid_configuration') if c['schema_version']=='5' && m['schema_version']!='4'
++    if %w[3 5].include?(c['schema_version'])
+       # Full app projection equality/closure is checked by its owner. Here only
+       # frozen opaque data is admitted; no evidence-library lookup is possible.
+       evidence=c['evidence_snapshots'];ids=evidence.map { |e| e['evidence_version_id'] }
+@@ -635,10 +637,10 @@
+     unresolved=unit_readiness(m)
+     unless unresolved.empty?
+       result={'schema_version'=>'1','model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'candidate_digest'=>self.class.digest(c),'compatible'=>false,'diagnostics'=>unresolved,'required_capabilities'=>m['required_capabilities'],'validator_identity'=>'modeling-contract/1-static'}
+-      return %w[2 3].include?(c['schema_version']) ? result.merge('schema_version'=>'2','input_interpretations'=>[]) : result
++      return %w[2 3 5].include?(c['schema_version']) ? result.merge('schema_version'=>'2','input_interpretations'=>[]) : result
+     end
+     result=compatible_literal(m,c)
+-    return result unless %w[2 3].include?(c['schema_version'])
++    return result unless %w[2 3 5].include?(c['schema_version'])
+     interpretations=[]
+     c['inputs'].each do |input|
+       begin
+@@ -677,7 +679,7 @@
+         problems << 'input target does not exist'
+       end
+     end
+-    c['criteria'].each_with_index do |criterion,index|
++    (c['schema_version']=='5' ? [] : c['criteria']).each_with_index do |criterion,index|
+       begin
+         p=port(m,criterion['target'])
+         issue=configuration_unit_issue(criterion['units'],p,"criteria/#{index}/units")
+@@ -793,10 +795,12 @@
+     add.call('licenses/author.txt',package['license_notices'].join("\n")+"\n",'text/plain','license')
+     raise Failure.new(413,'limit_exceeded') if files.size>1000 || files.sum { |f| f['size'] }>32*1024*1024
+     entrypoint={'protocol'=>'hyprn_mvp.openmdao.program/1','module_path'=>'generated/entry.py','factory'=>'build_model','bindings_path'=>'generated/bindings.json','source_map_path'=>'generated/source-map.json'}
+-    artifact={'schema_version'=>'3','preparation_id'=>preparation_id,'model_id'=>model.public_id,'model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'configuration_revision_id'=>c['configuration_revision_id'],'configuration_digest'=>cd,'required_capabilities'=>m['required_capabilities'],'generator_identity'=>identity,'dependency_requirements'=>[{'name'=>'openmdao','version'=>'3.45.1'},{'name'=>'numpy','version'=>'2.5.3'}],'model_package_manifest'=>package,'files'=>files.sort_by { |f| f['path'] },'license_notices'=>[{'kind'=>'model_author','path'=>'licenses/author.txt'},{'kind'=>'generated_code','path'=>'licenses/whatsopt.txt'},{'kind'=>'generated_code','path'=>'licenses/generated.txt'}],'entrypoint'=>entrypoint,'result_protocol_version'=>'2'}
++    # Configuration 5 (no criteria) runs under result protocol 3 in preparation 4.
++    current=c['schema_version']=='5'
++    artifact={'schema_version'=>current ? '4' : '3','preparation_id'=>preparation_id,'model_id'=>model.public_id,'model_revision_id'=>m['model_revision_id'],'model_digest'=>m['digest'],'configuration_revision_id'=>c['configuration_revision_id'],'configuration_digest'=>cd,'required_capabilities'=>m['required_capabilities'],'generator_identity'=>identity,'dependency_requirements'=>[{'name'=>'openmdao','version'=>'3.45.1'},{'name'=>'numpy','version'=>'2.5.3'}],'model_package_manifest'=>package,'files'=>files.sort_by { |f| f['path'] },'license_notices'=>[{'kind'=>'model_author','path'=>'licenses/author.txt'},{'kind'=>'generated_code','path'=>'licenses/whatsopt.txt'},{'kind'=>'generated_code','path'=>'licenses/generated.txt'}],'entrypoint'=>entrypoint,'result_protocol_version'=>current ? '3' : '2'}
+     artifact['executable_content_digest']=self.class.digest({'protocol'=>entrypoint['protocol'],'model_digest'=>m['digest'],'configuration_digest'=>cd,'generator_identity'=>identity,'files'=>artifact['files'].select { |f| f['path'].start_with?('generated/') }.map { |f| f.slice('path','size','sha256') }})
+     artifact['prepared_digest']=self.class.digest(artifact)
+-    check('PreparedModelArtifact3',artifact)
++    check(current ? 'PreparedModelArtifact4' : 'PreparedModelArtifact3',artifact)
+     store_revision(preparation_id,model.public_id,'preparation',{'manifest'=>artifact,'bytes'=>bytes})
+     artifact
+   end

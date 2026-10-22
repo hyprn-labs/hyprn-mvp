@@ -99,7 +99,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponse"
+                  "$ref": "./schemas/model.schema.json#/$defs/CapabilitiesResponseRead3"
                 }
               }
             }
@@ -559,12 +559,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/model.schema.json#/$defs/Compatibility"
+                "$ref": "./schemas/model.schema.json#/$defs/Compatibility2"
               }
             }
           }
         },
-        "description": "Closed Compatibility request selects ConfigurationCandidate1, ModelingConfiguration2 or ModelingConfiguration3. Version3 requires advertised resolved_configuration/3 support; never send the full application ConfigurationRequest3. Frozen typed evidence is retained; app-owned assumptions, general attachment IDs, context source, derivation and result bindings are excluded by exact projection. CompatibilityResult2 and numerical unit interpretations are unchanged."
+        "description": "Closed Compatibility2 request selects ConfigurationCandidate1, ModelingConfiguration2, ModelingConfiguration3 or ModelingConfiguration5. Version3 requires advertised resolved_configuration/3 support; version5 (no criteria) requires advertised criteria_free_configuration/1 support; never send the full application ConfigurationRequest3. Frozen typed evidence is retained; app-owned assumptions, general attachment IDs, context source, derivation and result bindings are excluded by exact projection. CompatibilityResult2 and numerical unit interpretations are unchanged."
       }
     },
     "/models/{model_id}/prepare-execution": {
@@ -598,7 +598,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse"
+                  "$ref": "./schemas/model.schema.json#/$defs/PreparedModelArtifactResponse4"
                 }
               }
             }
@@ -609,12 +609,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/model.schema.json#/$defs/Prepare"
+                "$ref": "./schemas/model.schema.json#/$defs/Prepare2"
               }
             }
           }
         },
-        "description": "Closed Prepare request selects ConfigurationRevision1, ModelingConfigurationRevision2 or ModelingConfigurationRevision3 with its exact private projection digest. Version3 requires advertised support. PreparedModelArtifact2 binds that private digest and exact ModelRevision1/2; its package pins ModelPackage1/2. Envelope1 and generated program protocol1 are unchanged. Native static generation never executes candidate code."
+        "description": "Closed Prepare2 request selects ConfigurationRevision1, ModelingConfigurationRevision2, ModelingConfigurationRevision3 or ModelingConfigurationRevision5 with its exact private projection digest. Version3 and version5 require advertised support. PreparedModelArtifact4 pins result protocol3 for version5; PreparedModelArtifact3 pins result protocol2 and binds that private digest and exact ModelRevision1/2; its package pins ModelPackage1/2. Envelope1 and generated program protocol1 are unchanged. Native static generation never executes candidate code."
       }
     },
     "/preparations/{preparation_id}/files/{file_id}": {

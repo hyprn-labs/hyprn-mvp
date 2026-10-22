@@ -30,7 +30,7 @@ async function fixture(page: Page, empty = false) {
     m = (await post(base + '/' + m.model_id + '/edits', { command_id: crypto.randomUUID(), expected_revision: m.draft_revision, edits: ['a', 'b'].map(key => ({ kind: 'rename_instance', instance_id: ids[key].instance_id, name: 'Repeated thermal component' })) })).data;
   }
   await page.evaluate(hash => { window.location.hash = hash; }, `v=1&study=${s.study_id}&model=${m.model_id}&view=model`);
-  await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh model', exact: true })).toBeVisible();
   return { s, m, ids, base: '/api/1' + base + '/' + m.model_id };
 }
 

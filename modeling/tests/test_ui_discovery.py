@@ -4,6 +4,7 @@ Use the existing audited producer image, overlay the repository adapter patches
 and schema read-only, and initialize a new tmpfs database for every invocation.
 Evidence is written only in the test's own scratch scope, allocated by deployment/checks.py.
 """
+from hyprn_mvp_app.contracts import authored_schema
 import hashlib
 import json
 from pathlib import Path
@@ -289,7 +290,7 @@ insist(signed_get(session,scope,url)[0]==404,'signed cross-study read allowed')
 puts 'DISCOVERY_RESULT='+JSON.generate(first[1])
 """)
     from jsonschema import Draft202012Validator, FormatChecker
-    schema = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+    schema = authored_schema()
     Draft202012Validator({**schema, '$ref': '#/$defs/RevisionListResponse'},
                          format_checker=FormatChecker()).validate(result)
 

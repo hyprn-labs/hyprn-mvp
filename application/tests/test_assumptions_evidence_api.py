@@ -1,9 +1,11 @@
 """Guarded assumptions-and-evidence API expectations over the public contract.
 
 generated_ and public_ are disjoint runner selections. Evidence operations use
-real storage. Diagnostic/configuration3 dispatch doubles are labeled explicitly;
+real storage. Diagnostic/configuration dispatch doubles are labeled explicitly;
 real dispatch and native resolution are proven by the native execution tests.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from legacy_study_support import seed_legacy_context
 import json
 import importlib.util
 from pathlib import Path
@@ -93,18 +95,62 @@ def public_refs(value):
     return value
 
 
+RECORD_VIEW = {'$ref': '#/components/schemas/RecordView1'}
+
+
+def without_record_views(value):
+    """Remove only the public record-view markers the generator adds to objects that reach a
+    projected retained result; every other byte of the definition is compared exactly."""
+    if isinstance(value, dict):
+        result = {key: without_record_views(item) for key, item in value.items()}
+        properties = result.get('properties')
+        if result.get('type') == 'object' and isinstance(properties, dict) and properties.get('record_view') == RECORD_VIEW:
+            result['properties'] = {key: item for key, item in properties.items() if key != 'record_view'}
+        return result
+    if isinstance(value, list):
+        return [without_record_views(item) for item in value]
+    return value
+
+
 def test_generated_preserves_shared_concrete_variants_and_read_unions(generated):
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())['$defs']
+    shared = authored_schema()['$defs']
     schemas = generated['components']['schemas']
+    # A public read alias widened to its successor keeps the exact authored predecessor under
+    # a Previous alias, and the widened alias is exactly the successor with its predecessor
+    # links pointing at that frozen Previous alias.
+    widened = {name.removeprefix('Previous') for name in schemas if name.startswith('Previous')}
+    assert widened and widened <= set(shared)
+    def frozen_links(value):
+        if isinstance(value, dict):
+            return {key: ('#/components/schemas/Previous' + item.removeprefix('#/components/schemas/')
+                          if key == '$ref' and item.removeprefix('#/components/schemas/') in widened
+                          else frozen_links(item)) for key, item in value.items()}
+        if isinstance(value, list):
+            return [frozen_links(item) for item in value]
+        return value
+    successors = {old: [name for name in schemas if name not in widened and name != 'Previous' + old
+                        and frozen_links(schemas[name]) == schemas[old]] for old in widened}
+    assert all(successors.values()), successors
     for name, definition in shared.items():
         if name in {'EvidenceSnapshotLegacy', 'Error'}:
             continue  # Equivalent paired-scope normalization and public error additions.
-        assert schemas[name] == public_refs(definition), name
+        if name == 'RetainedResults':
+            continue  # The documented public projection of format-1 results, checked below.
+        actual = schemas['Previous' + name] if name in widened else schemas[name]
+        assert without_record_views(actual) == public_refs(definition), name
+    retained = schemas['RetainedResults']
+    projected = public_refs(shared['RetainedResults'])
+    for key in ('convergence', 'optimization', 'completeness', 'applicability'):
+        projected['properties'].pop(key)
+        projected['required'].remove(key)
+    assert retained['properties']['record_view'] == RECORD_VIEW and 'record_view' in retained['required']
+    assert {k: v for k, v in retained['properties'].items() if k != 'record_view'} == projected['properties']
+    assert [k for k in retained['required'] if k != 'record_view'] == projected['required']
 
 
 def test_generated_snapshot_normalization_preserves_validation(generated):
     from jsonschema import Draft202012Validator, FormatChecker
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+    shared = authored_schema()
     plain = dict(evidence_version_id=uid(), kind='note', content='Exact legacy bytes', source_refs=[])
     scope = dict(scope_version='1', kind='study', study_id=uid())
     record3 = {**plain, 'evidence_schema_version':'3', 'evidence_id':uid(), 'study_id':scope['study_id'],
@@ -136,18 +182,27 @@ def test_generated_only_registered_routes_and_current_endpoint_versions(generate
     assert generated['components']['schemas']['PublicEvidenceCreate']['oneOf'] == [
         {'$ref':'#/components/schemas/EvidenceCreate1'}, {'$ref':'#/components/schemas/EvidenceCreate2'}, {'$ref':'#/components/schemas/EvidenceCreate3'}]
     seed = generated['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']['get']
-    # The public seed endpoint returns exactly the shared seed read union: every earlier seed
-    # version plus the current one, never a narrower set.
+    # The public seed endpoint returns exactly the seed read union: every earlier seed version
+    # plus the current ones, never a narrower set.
     assert seed['responses']['200']['content']['application/json']['schema']['properties']['data'] == {
         '$ref':'#/components/schemas/ModifiedRunSeedRead6'}
     assert generated['components']['schemas']['ModifiedRunSeedRead6'] == {'oneOf':[
+        {'$ref':'#/components/schemas/PreviousModifiedRunSeedRead6'}, {'$ref':'#/components/schemas/ModifiedRunSeed7'},
+        {'$ref':'#/components/schemas/ModifiedRunSeed8'}]}
+    assert generated['components']['schemas']['PreviousModifiedRunSeedRead6'] == {'oneOf':[
         {'$ref':'#/components/schemas/ModifiedRunSeed'}, {'$ref':'#/components/schemas/ModifiedRunSeed6'}]}
     assert generated['components']['schemas']['ModifiedRunSeed']['oneOf'] == [
         {'$ref':'#/components/schemas/ModifiedRunSeed' + version} for version in ('1', '2', '3', '4')]
-    for name, branches in {'PublicConfigurationRequest':['ConfigurationCandidate1','ConfigurationRequest2','ConfigurationRequest3','ConfigurationRequest4'],
-                          'PublicConfigurationCommit':['ConfigurationCommit1','ConfigurationCommit2','ConfigurationCommit3','ConfigurationCommit4'],
-                          'PublicConfigurationPreview':['CompatibilityResult1','ConfigurationPreview2','ConfigurationPreview3','ConfigurationPreview4','ConfigurationPreview6']}.items():
-        assert generated['components']['schemas'][name]['oneOf'] == [{'$ref':'#/components/schemas/'+b} for b in branches]
+    # New configurations are written only as version 6: no criteria and no approach binding.
+    for name, current in {'PublicConfigurationRequest':'ConfigurationRequest6',
+                          'PublicConfigurationCommit':'ConfigurationCommit6',
+                          'PublicConfigurationPreview':'ConfigurationPreview8'}.items():
+        assert generated['components']['schemas'][name] == {'$ref':'#/components/schemas/'+current}
+    for name in ('ConfigurationRequest6', 'ConfigurationPreview8'):
+        properties = generated['components']['schemas'][name]['properties']
+        assert not {'criteria', 'approach_selection', 'approach_closure'} & set(properties), name
+    commit = generated['components']['schemas']['ConfigurationCommit6']['properties']['configuration']
+    assert commit == {'$ref':'#/components/schemas/ConfigurationRequest6'}
     for route in ('/studies/{study_id}/evidence', '/studies/{study_id}/evidence-families/{evidence_id}/versions'):
         operation=generated['paths'][route]['get']
         cursor=next(p for p in operation['parameters'] if p['name']=='cursor')
@@ -157,7 +212,7 @@ def test_generated_only_registered_routes_and_current_endpoint_versions(generate
 
 def test_generated_private_protocol_matrix_and_refs():
     private = json.loads((ROOT / 'contracts/modeling.openapi.yaml').read_text())
-    shared = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())['$defs']
+    shared = authored_schema()['$defs']
     matrix = private['x-hyprn-mvp-protocol-matrix']
     assert matrix['envelope_version'] == '1'
     assert matrix['contract_versions'] == ['1.2', '1.3']
@@ -181,12 +236,19 @@ def test_generated_private_protocol_matrix_and_refs():
         elif isinstance(value, list):
             for child in value: check(child)
     check(private)
-    for route, request in (('configuration-compatibility', 'Compatibility'), ('prepare-execution', 'Prepare')):
+    # The private request schemas accept the criteria-free projection (version 5) beside every
+    # earlier projection, so retained configurations still prepare unchanged.
+    for route, request in (('configuration-compatibility', 'Compatibility2'), ('prepare-execution', 'Prepare2')):
         op = private['paths']['/models/{model_id}/' + route]['post']
         assert op['requestBody']['content']['application/json']['schema']['$ref'].endswith('/' + request)
-        expected = 'ModelingConfiguration3' if request == 'Compatibility' else 'ModelingConfigurationRevision3'
-        field = 'configuration_candidate' if request == 'Compatibility' else 'configuration_snapshot'
-        assert {'$ref':'#/$defs/' + expected} in shared[request]['properties'][field]['oneOf']
+        prefix = 'ModelingConfiguration' if request == 'Compatibility2' else 'ModelingConfigurationRevision'
+        field = 'configuration_candidate' if request == 'Compatibility2' else 'configuration_snapshot'
+        accepted = shared[request]['properties'][field]['oneOf']
+        previous = shared[request.removesuffix('2')]['properties'][field]['oneOf']
+        assert accepted == previous + [{'$ref':'#/$defs/' + prefix + '5'}]
+        assert {'$ref':'#/$defs/' + prefix + '3'} in accepted
+        criteria_free = shared[prefix + '5']['properties']
+        assert not {'criteria', 'approach_closure', 'approach_selection'} & set(criteria_free)
 
 
 def test_generated_object_constraint_unions_preserve_base_and_required():
@@ -329,11 +391,16 @@ def test_public_heads_versions_pagination_and_query_binding(api):
     assert versions.status_code == 200 and versions.json()['data'] == originals[:1]
 
 
-def test_public_recorded_labels_do_not_follow_study_rename(api):
+def test_public_recorded_labels_preserve_historical_study_names(api):
     original = create_evidence(api)
-    study_url = '/api/1/studies/' + api['sid']
-    renamed = api['client'].patch(study_url, json=dict(command_id=uid(), expected_revision=api['study']['revision'], name='Renamed study'))
-    assert renamed.status_code == 200
+    seed_legacy_context(
+        api['store'],
+        api['actor'],
+        api['sid'],
+        uid(),
+        api['study']['revision'],
+        dict(name='Renamed study'),
+    )
     reread = api['client'].get(path(api, 'evidence/' + original['evidence_version_id']))
     assert reread.status_code == 200 and reread.json()['data'] == original
     assert any(label['name'] == api['study']['name'] for label in original['recorded_context']['resource_labels'])
@@ -500,23 +567,26 @@ def test_public_pending_features_unavailable_and_evidence_capability_truthful(ap
     response=api['client'].get(path(api,'models/'+mid+'/assumption-evidence')+'?draft_revision=exact-token')
     assert response.status_code==422 and response.json()['error']['code']=='unsupported_capability'
     from test_assumptions_evidence_contracts import sample,D
-    body=sample(D['ConfigurationRequest3']);body['study_id']=api['sid']
+    body=sample(D['ConfigurationRequest6']);body['study_id']=api['sid']
     commit=dict(command_id=uid(),configuration_id=None,expected_revision=None,expected_preview_digest='a'*64,configuration=body)
     for url,value in ((path(api,'configurations/preview'),body),(path(api,'configurations'),commit)):
         response=api['client'].post(url,json=value)
         assert response.status_code==422 and response.json()['error']['code']=='unsupported_capability'
+    # An earlier request version is refused as a record version before any capability probe.
+    earlier=sample(D['ConfigurationRequest3']);earlier['study_id']=api['sid']
+    for url,value in ((path(api,'configurations/preview'),earlier),(path(api,'configurations'),dict(commit,configuration=earlier))):
+        response=api['client'].post(url,json=value)
+        assert response.status_code==422 and response.json()['error']['code']=='unsupported_record_version'
     with api['store'].connection() as db:
         assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==0
 
 
-def test_public_configuration3_closed_dispatch_double_preserves_request(api,monkeypatch):
-    # Only the typed API dispatch seam; actual closure implementation is11.3.
+def test_public_configuration_closed_dispatch_double_preserves_request(api,monkeypatch):
+    # Only the typed API dispatch seam: a version 6 request reaches the owner unchanged.
     from hyprn_mvp_app.configuration import Configurations
     from test_assumptions_evidence_contracts import sample,D
-    body=sample(D['ConfigurationRequest3']);body['study_id']=api['sid']
+    body=sample(D['ConfigurationRequest6']);body['study_id']=api['sid']
     calls=[]
-    monkeypatch.setattr(Configurations,'_preview3',lambda *_:None,raising=False)
-    monkeypatch.setattr(Configurations,'_commit3',lambda *_:None,raising=False)
     def preview(self,actor,sid,value):
         calls.append(('preview',actor,sid,value));return ({'dispatch':'preview'},None,None)
     def commit(self,actor,sid,value):
@@ -526,8 +596,17 @@ def test_public_configuration3_closed_dispatch_double_preserves_request(api,monk
     assert api['client'].post(path(api,'configurations/preview'),json=body).status_code==200
     assert api['client'].post(path(api,'configurations'),json=command).status_code==201
     assert calls==[('preview',api['actor'],api['sid'],body),('commit',api['actor'],api['sid'],command)]
-    for url,value in ((path(api,'configurations/preview'),{**body,'evidence_version_ids':[]}),(path(api,'configurations'),{**command,'unexpected':True})):
+    criterion=sample(D['Criterion'])
+    for url,value in ((path(api,'configurations/preview'),{**body,'evidence_version_ids':[]}),
+                      (path(api,'configurations/preview'),{**body,'criteria':[criterion]}),
+                      (path(api,'configurations/preview'),{**body,'approach_selection':None}),
+                      (path(api,'configurations'),{**command,'unexpected':True}),
+                      (path(api,'configurations'),{**command,'configuration':{**body,'criteria':[criterion]}})):
         assert api['client'].post(url,json=value).status_code==400
+    for url,value in ((path(api,'configurations/preview'),{**body,'schema_version':'4','approach_selection':None,'criteria':[]}),
+                      (path(api,'configurations'),{**command,'configuration':{**body,'schema_version':'3','criteria':[]}})):
+        response=api['client'].post(url,json=value)
+        assert response.status_code==422 and response.json()['error']['code']=='unsupported_record_version'
     assert len(calls)==2
 
 
@@ -559,13 +638,18 @@ async function main() {
   assert.equal(api.pending.body.command_id,'original');
   await assert.rejects(api.reviseEvidence('study','family',{...command,expected_revision:'head'}),/original command/);
   assert.equal(sent.length,1);
-  global.fetch=async(url)=>{assert.equal(url,'/api/1/studies/study/commands/original?category=evidence');return response({command_id:'original',state:'committed',result:{title:'Original'},error:null});};
+  const adopted={command_id:'original',state:'committed',result:{title:'Original'},error:null,
+    recovery:'adopt'};
+  global.fetch=async(url)=>{
+    assert.equal(url,'/api/1/studies/study/commands/original?category=evidence');
+    return response(adopted);
+  };
   const receipt=await api.reconcile();assert.equal(receipt.result.title,'Original');assert.equal(api.pending,null);
   const abort=new AbortController();
   global.fetch=async(_url, options)=>new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason)));
   const mutation=api.reviseEvidence('study','family',{...command,expected_revision:'head'},abort.signal);
   abort.abort();await assert.rejects(mutation);assert.equal(api.pending.path,'/studies/study/evidence-families/family/versions');
-  global.fetch=async()=>response({command_id:'original',state:'committed',result:{title:'Original'},error:null});await api.reconcile();
+  global.fetch=async()=>response(adopted);await api.reconcile();
   const stale=new AbortController();let deliver;
   global.fetch=async()=>({ok:true,status:200,json:()=>new Promise(resolve=>{deliver=resolve;})});
   const read=api.evidenceVersion('study','version',stale.signal);await new Promise(resolve=>setImmediate(resolve));
@@ -589,3 +673,35 @@ main().catch(error=>{console.error(error);process.exitCode=1;});
     result=subprocess.run(['node',str(script)],env=guard.clean_environment(SCOPE),capture_output=True,text=True)
     (SCOPE.root/'evidence/client-runtime.log').write_text(result.stdout+result.stderr)
     assert result.returncode==0,result.stdout+result.stderr
+
+
+def test_public_structured_excerpt_roundtrip_revision_and_rejection(api):
+    """Public writes preserve quotation/locator separately, with immutable original bytes."""
+    from hyprn_mvp_app.evidence_content import PREFIX, read_content, write_content
+    body = evidence_body(api)
+    parts = dict(excerpt='The reference temperature is 293.15 K.',
+                 source_reference='Fixture report', location='p. 7, Table 2',
+                 explanation='This supports the reference temperature only; it does not establish operating temperature.')
+    body['content'] = write_content(parts)
+    first = api['client'].post(path(api, 'evidence'), json=body)
+    assert first.status_code == 201, first.text
+    original = first.json()['data']
+    assert read_content(original['content']) == parts
+    revised = dict(body, command_id=uid(), expected_revision=original['evidence_version_id'])
+    revised['content'] = write_content(dict(parts, explanation='A revised interpretation.'))
+    response = api['client'].post(path(api, 'evidence-families/' + original['evidence_id'] + '/versions'), json=revised)
+    assert response.status_code == 201, response.text
+    assert api['client'].get(path(api, 'evidence/' + original['evidence_version_id'])).json()['data'] == original
+    assert api['client'].post(path(api, 'evidence'), json=body).json()['data'] == original
+    schema = json.loads((ROOT / 'contracts/schemas/evidence-content.schema.json').read_text())
+    from jsonschema import Draft202012Validator
+    Draft202012Validator(schema).validate(parts)
+    for bad in [dict(parts, location=''), dict(parts, excerpt=False), dict(parts, invented=True),
+                {k: v for k, v in parts.items() if k != 'source_reference'}]:
+        assert not Draft202012Validator(schema).is_valid(bad)
+        reply = api['client'].post(path(api, 'evidence'), json=dict(body, command_id=uid(), content=PREFIX + json.dumps(bad)))
+        assert reply.status_code == 400, reply.text
+        assert reply.json()['error']['fields'][0]['path'] == '/content'
+    duplicate = PREFIX + '{"excerpt":"x","excerpt":"y","source_reference":"r","location":"p. 1","explanation":"z"}'
+    assert api['client'].post(path(api, 'evidence'), json=dict(body, command_id=uid(), content=duplicate)).status_code == 400
+    assert read_content('An older mixed note mentioning p. 7.') is None

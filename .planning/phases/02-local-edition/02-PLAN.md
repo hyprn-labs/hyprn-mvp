@@ -101,6 +101,13 @@ Output: the `./hyprn-mvp` entry point and `hyprn_mvp_local` CLI, the installatio
 
 ## How this plan is executed
 
+**Pending-work amendment (2026-10-14):** read
+[DELIVERY-PLAN.md](../../DELIVERY-PLAN.md) before dispatch. Its A–D waves, named
+slices and explicit dependency replacements govern pending work; unchanged task
+actions, invariants and acceptance remain binding. The waves below retain the
+original phase structure. Completed checkpoints are unchanged; an original task
+closes only after all its slices pass. Broader portability/docs complete in E.
+
 - One numbered task per fresh executor context. Each task stages explicit paths, ends with atomic commits and a checkpoint `phases/02-local-edition/checkpoints/<task>.md` in the planning directory (commits; exact commands with counts and every failure; lock, image and attestation identities; scratch scopes released; remaining risks), and is verified by the orchestrating session before a dependent task starts.
 - Tests use scratch installations only: configuration and data root inside `<scratch root>/hyprn-mvp-test-<uuid>`, a random free port, a scratch credential store. No task touches a user installation.
 - From task 2.1 on, `./hyprn-mvp dev check <group>` runs a test group (it wraps `deployment/checks.py` in the locked environment).

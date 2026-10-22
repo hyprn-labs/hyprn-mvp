@@ -18,7 +18,7 @@ Within a study, an engineer can:
 1. upload source files and get the exact bytes back later, after restarts;
 2. organize exact versions into collections without copying files;
 3. read the extracted text, search titles, tags, annotations and text, and open a search hit at its exact page and passage;
-4. annotate a passage and cite it (supports, challenges or gives context) in evidence attached to an assumption, model, configuration, approach step or case;
+4. annotate a passage and cite it (supports, challenges or gives context) in evidence attached to an assumption, model, configuration, study brief or study answer;
 5. reopen an old run and read the exact cited source version and passage, even after the source was replaced, re-extracted or re-annotated, and even while the modeling service is down;
 6. archive a source, remove it from a collection, delete a collection, or permanently delete an unreferenced version, each with a distinct, clearly stated effect;
 7. export a selected set of sources and their citations as a portable package and import it elsewhere without running anything.
@@ -318,7 +318,7 @@ Collections panel (190 px) beside a fluid document list, stacking at the narrow 
 
 Selecting a passage (pointer or keyboard, with labeled start/end fields as an accessible fallback) offers "Cite passage", "Cite page" or "Cite original". The user must choose a relationship (Supports, Challenges, Context); "Preview citation" shows the server-verified quotation; any field change invalidates the preview. Saving creates a new evidence version; attaching it to an assumption, configuration or approach item is a separate explicit step on that owner, and a created evidence record survives if the owner's draft is discarded.
 
-The cited source is reachable from: (1) a model or component assumption → View evidence → Read cited source; (2) a configuration's context, input, criterion or assumption → View evidence; (3) the modeling approach's question, step, assumption or case; (4) a run's models, configuration or evidence; (5) the Evidence page. The historical view shows the frozen quotation and annotation snapshot ("Recorded note — later edits and reprocessing do not change this citation"); "View latest source" is a separate, explicit navigation. If the native store is down, retained descriptors and quotations still display and the bytes are marked unavailable.
+The cited source is reachable from: (1) a model or component assumption → View evidence → Read cited source; (2) a configuration's context, input, criterion or assumption → View evidence; (3) the study brief's question, limits or assumptions, or a study answer's justification; (4) a run's models, configuration or evidence; (5) the Evidence page. The historical view shows the frozen quotation and annotation snapshot ("Recorded note — later edits and reprocessing do not change this citation"); "View latest source" is a separate, explicit navigation. If the native store is down, retained descriptors and quotations still display and the bytes are marked unavailable.
 
 ### 15.5 States, recovery and accessibility
 

@@ -1,0 +1,3 @@
+# Settings
+
+SettingsSection groups Account and browser-local Appearance. Account name is read-only; Display alias is an optional, non-unique human-readable name saved through the public profile API. Blank restores the account name. Save alias updates shared account metadata; historical record and message names remain as authored. Failed saves retain edits, stale profiles offer Load latest profile, and navigation uses the shared unsaved-work guard. Neither field changes sign-in credentials. Appearance stays browser-local: System follows the operating system; Day and Control room set data-theme. Storage denial keeps appearance usable for the session.

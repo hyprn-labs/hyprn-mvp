@@ -2,7 +2,7 @@
 
 Status: record of licensing facts, recorded obligations and open items. This is not legal advice and not a legal opinion; it states what is known and what still needs counsel. **Legal review is pending before any commercial cloud distribution of HYPRN MVP.**
 
-Per-component detail lives in the provenance records: `modeling/provenance.md`, `application/provenance.md`, `integration/provenance.md`, `integration/document-parser-provenance.md`, `ui/provenance.md` and the browser notices in `ui/public/THIRD_PARTY_NOTICES.txt`.
+Per-component detail lives in the provenance records: `modeling/provenance.md`, `application/provenance.md`, `integration/provenance.md`, `integration/document-parser-provenance.md`, `ui/provenance.md` and the browser licence copies in `ui/licenses/browser.txt`.
 
 ## 1. HYPRN MVP's own code
 
@@ -29,6 +29,10 @@ These are the obligations the project treats as applying to the modeling service
 3. **Separation is not immunity.** Network and container separation are technical isolation. They are not treated as settling licensing obligations.
 4. **Generated model code: unresolved.** The native OpenMDAO code templates carry no generated-code exception, and the bodies they emit are substantive. Until counsel decides, generated files are treated as inside the AGPL scope, template licences are recorded per prepared artifact, and every prepared artifact carries a generated-code notice.
 5. **Separate licence sets per artifact.** Model-author declarations, generated-code and template licences, and runtime dependency licences are tracked as separate sets in every prepared artifact and execution bundle.
+
+### Local-edition corresponding source
+
+The local edition builds WhatsOpt under AGPL-3.0 from the commit, archive SHA-256 and length in `deployment/locks/upstream.json`. Setup fetches that archive by pin and refuses changed bytes. The modeling image ships the original archive, `upstream/whatsopt-patches/`, the modeling policy, both source and modeling Dockerfiles, the upstream and gem locks, and their build identity in `/usr/share/hyprn-mvp-modeling-source/`. These files, together with the repository's matching build code and pins, identify the corresponding source for recipients. `THIRD_PARTY_NOTICES.md` lists the shipped components. This inventory does not resolve the pending legal review under L1 and L4.
 
 ## 4. Other components
 
@@ -65,3 +69,22 @@ Replacing WhatsOpt changes only the modeling-service implementation, its deploym
 | L4 | Distribution of the local edition, which includes the modeling image | Treat it like any other distribution: ship the corresponding-source directory and notices with it, pending L1 |
 | L5 | Third-party notice bundle for cloud releases | Every release carries the licence and source notices of the modeling service, the browser bundle and, once adopted, the parser image |
 | L6 | Berkeley DB 6.0.19 (Sleepycat licence) is linked into the `_dbm` extension module of the Linux CPython builds that uv provisions (python-build-standalone `20261003`). Sleepycat requires redistributions to offer the complete source of the DB software and of any software that uses it | HYPRN MVP does not redistribute the interpreter: each installation downloads it from the python-build-standalone GitHub release with a pinned SHA-256, so Linux is not blocked. Before any distribution that ships an interpreter (local-edition bundle, images), either remove `lib-dynload/_dbm*.so`, which upstream builds as a separate shared module for this purpose (no HYPRN MVP source imports `dbm` or `shelve`), or obtain counsel's view together with L4. Upstream: astral-sh/python-build-standalone#836. Record: `docs/operations/dependency-audit.md` §3 and §8 |
+
+## 8. Demo interface notice review — 2026-10-15
+
+The interface has no software-notices page or footer link. The exact installed MIT
+licence texts for React, React DOM and scheduler are retained in
+`ui/licenses/browser.txt` and embedded by the UI build in each delivered JavaScript
+bundle. This satisfies the copy-accompanying requirement without introducing a
+product navigation item. Build verification must check that the notice survives
+minification. Licence/source records belonging to redistributed native and modeling
+artifacts remain intact; removing the interface feature does not remove those obligations.
+
+Other obligations follow the delivered artifact, not a general advertising requirement:
+
+- **AiiDA (MIT):** retain its copyright and licence with distributed host software. Its installed native notice inventory contains `aiida_core-2.9.3.dist-info/licenses/LICENSE.txt`. This does not require an AiiDA badge in the browser.
+- **OpenMDAO (Apache-2.0):** retain the licence and applicable attribution/NOTICE material with redistributed worker software. [Apache-2.0 §4](https://www.apache.org/licenses/LICENSE-2.0) permits the required NOTICE attribution in accompanying documentation; it does not require a home-page supplier badge. Worker packaging remains the owner of those notices.
+- **Modified WhatsOpt (AGPL-3.0):** a short credit is insufficient. The running demo's modeling image was inspected read-only: `/native/LICENSE`, the pinned upstream archive, ordered patches, policy, build recipes, dependency pins and source identity are retained. Distribution must provide the matching corresponding source; [AGPL §13](https://www.gnu.org/licenses/agpl-3.0.html#section13) also requires a prominent source offer to remote users interacting with a modified program when that provision applies. Private networking is not an exemption. The existing source inventory is not proof of a complete recipient-facing source offer.
+- **Generated artifacts:** preserve their recorded author, template/generated-code and runtime licence sets. The unresolved generated-code scope in L2 remains unchanged.
+
+This review records artifact-level licence retention; it is not release legal clearance. Before external network operation or software distribution, L1/L4/L5 still require confirmation of source-offer scope, completeness and delivery for the exact release. No backend source bundle or newly exposed network endpoint was added by this UI change. Existing dependency and source notices were not removed.

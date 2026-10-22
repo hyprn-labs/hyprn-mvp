@@ -3,6 +3,8 @@
 The program is the captured native producer artifact, executed unchanged by the
 attested restricted worker. No result, parser or native process is synthesized.
 """
+
+from legacy_study_support import seed_legacy_context
 import base64
 from copy import deepcopy
 import hashlib
@@ -22,6 +24,7 @@ from hyprn_mvp_app.modeling import validate
 from hyprn_mvp_integration.calculation import NativeExecution
 from hyprn_mvp_integration.results import retained_bundle
 from test_assumptions_execution import case4, repin
+from criteria_free import CRITERIA_FREE_CAPABILITY
 
 
 def payload(env,rid=None):
@@ -135,7 +138,14 @@ def test_retained_history_seed_restart_outage_and_changed_study(actual,monkeypat
         assert seed['configuration'][key]==config[key]
     assert seed['configuration']['inputs'][0]['provenance']==config['inputs'][0]['provenance']
     study=store.study(env['actor'],env['sid'])
-    store.update_study(env['actor'],env['sid'],uid(),study['revision'],dict(description='New study context'))
+    seed_legacy_context(
+        store,
+        env['actor'],
+        env['sid'],
+        uid(),
+        study['revision'],
+        dict(description='New study context'),
+    )
     later=ModifiedRuns(store).seed(env['actor'],env['sid'],env['rid'])
     assert later['context_changed'] and later['requires_context_choice']
     assert later['source_context']==config['context_snapshot'] and later['current_context']['description']=='New study context'
@@ -241,57 +251,133 @@ def test_revoked_or_foreign_access_reveals_no_retained_bytes(actual):
     assert canonical(payload(env))==env['original']
 
 
-def test_new_evidence_head_and_model_edit_require_explicit_modified_replacement(actual):
-    """Real application preview/commit; private compatibility transport is explicit.
+def configuration_count(store):
+    with store.connection() as db:
+        return db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]
 
-    Native computation is proved separately above; this transport never executes.
+
+def save_command(request, preview_digest):
+    return dict(
+        command_id=uid(),
+        configuration_id=None,
+        expected_revision=None,
+        configuration=request,
+        expected_preview_digest=preview_digest,
+    )
+
+
+def test_retained_bundle4_seed_reads_exactly_and_its_earlier_request_is_refused(actual):
+    """New configurations are version 6 only. The seed of the actual retained bundle4 run still
+    reads the exact retained model and evidence, but its configuration 3 request is refused at
+    preview and save: nothing is written and the private modeling service is never contacted."""
+    from hyprn_mvp_app.configuration import Configurations
+    from hyprn_mvp_app.modeling import Coordinator
+    from runs_criteria_free_support import ModelingDouble
+
+    env = actual
+    store, actor, sid, case = env['store'], env['actor'], env['sid'], env['case']
+    old = case['frozen']['configuration']['evidence_snapshots'][0]
+    offline = ModelingDouble(case)
+    offline.offline = True
+    configs = Configurations(store, Coordinator(store, offline))
+    seed = ModifiedRuns(store).seed(actor, sid, env['rid'])
+    assert seed['model_snapshot'] == case['frozen']['model_snapshot']
+    assert History(store).read(actor, sid, env['rid'])['evidence'] == [old]
+    request = deepcopy(seed['configuration'])
+    request['context_source']['choice_confirmed'] = True
+    request['assumptions'][0]['statement'] = 'Explicit modified statement'
+    before = configuration_count(store)
+    with pytest.raises(DomainError, match='unsupported_record_version'):
+        configs.preview(actor, sid, request)
+    with pytest.raises(DomainError, match='unsupported_record_version'):
+        configs.commit(actor, sid, save_command(request, '0' * 64))
+    assert configuration_count(store) == before and not offline.calls
+    assert ModifiedRuns(store).seed(actor, sid, env['rid']) == seed
+    assert canonical(payload(env)) == env['original']
+
+
+def test_new_evidence_head_and_assumption_edit_require_explicit_modified_replacement(actual):
+    """A configuration 6 modified from a criteria-free run records an edited assumption and a
+    new evidence head as explicit derivation changes, keeps the exact source model without a
+    model fetch, and leaves both retained source runs unchanged.
+
+    The criteria-free source run is a recorded protocol-3 record, not a native process, and the
+    private compatibility transport is an explicit typed double: nothing here executes.
     """
     from hyprn_mvp_app.configuration import Configurations
     from hyprn_mvp_app.modeling import Coordinator
-    from test_assumptions_evidence_contracts import sample,D
-    env=actual;store=env['store'];actor=env['actor'];sid=env['sid'];case=env['case']
-    old=case['frozen']['configuration']['evidence_snapshots'][0]
-    note={k:deepcopy(old[k]) for k in ('evidence_schema_version','title','kind','content','source_refs','resource_scope')}
-    note.update(title='New calibration title',content='New observation')
-    new=store.revise_evidence(actor,sid,old['evidence_id'],uid(),old['evidence_version_id'],note)
-    caps=sample(D['Capabilities'])
-    caps['generator_identity'].update(source_commit='a'*40,provenance_path='provenance/fixture.json')
-    cap=sample(D['Capabilities']['properties']['capabilities']['items']);cap.update(id='resolved_configuration',version='3',supported=True)
-    caps.update(contract_versions=['1.2'],schema_versions=['1','2'],capabilities=[cap])
-    class PrivateCompatibility:
-        def call(self,actor,sid,method,path,body=None,**kwargs):
-            if path=='/capabilities':return 200,dict(data=caps)
-            assert method=='POST' and path.endswith('/configuration-compatibility'),'Modified origin must not fetch current model'
-            candidate=body['configuration_candidate'];model=case['frozen']['model_snapshot']
-            return 200,dict(data=dict(schema_version='2',model_revision_id=model['model_revision_id'],model_digest=model['digest'],
-                candidate_digest=digest(candidate),compatible=True,diagnostics=[],required_capabilities=candidate['required_capabilities'],
-                validator_identity='explicit-private-compatibility-fixture',input_interpretations=[dict(target=i['target'],conversion=dict(
-                    policy='openmdao-linear-catalog-1',catalog_digest='a'*64,source_units=i['units'],destination_units=i['units'],
-                    factor=1,destination_value=i['value'])) for i in candidate['inputs']]))
-    coordinator=Coordinator(store,PrivateCompatibility());configs=Configurations(store,coordinator)
+    from criteria_free import bind_case, request6
+    from runs_criteria_free_support import ModelingDouble, retain as retain6
+
+    env = actual
+    store, actor, sid = env['store'], env['actor'], env['sid']
+    old = env['case']['frozen']['configuration']['evidence_snapshots'][0]
+    oid = old['evidence_version_id']
+    study = store.study(actor, sid)
+    case = bind_case('chain', sid, study_revision=study['revision'])
+    model = ModelingDouble(case)
+    configs = Configurations(store, Coordinator(store, model))
     with store.connection(write=True) as db:
-        db.execute('INSERT INTO model_associations VALUES(?,?,?)',(sid,case['frozen']['model_snapshot']['model_id'],uid()))
-    # The backend's hypothetical newer revision is deliberately different. The
-    # retained seed and source model must still be exact without any GET.
-    newer_model=deepcopy(case['frozen']['model_snapshot']);newer_model['model_revision_id']=uid()
-    newer_model['assumptions'][0]['statement']='A newer model statement'
-    seed=ModifiedRuns(store).seed(actor,sid,env['rid'])
-    assert seed['model_snapshot']!=newer_model and seed['model_snapshot']==case['frozen']['model_snapshot']
-    assert History(store).read(actor,sid,env['rid'])['evidence']==[old]
-    request=seed['configuration'];request['context_source']['choice_confirmed']=True
-    request['assumptions'][0]['statement']='Explicit modified statement'
-    request['assumptions'][0]['evidence_links']=[dict(evidence_version_id=new['evidence_version_id'],relation='context')]
-    request['general_context_evidence_version_ids']=[new['evidence_version_id']]
-    preview=configs.preview(actor,sid,request)[0]
-    saved=configs.commit(actor,sid,dict(command_id=uid(),configuration_id=None,expected_revision=None,
-        configuration=request,expected_preview_digest=preview['candidate_digest']))
-    config=saved['configuration'];source=case['frozen']['configuration']
-    assert config['configuration_id']!=source['configuration_id'] and config['parent_revision_id'] is None
-    assert saved['model_snapshot']==case['frozen']['model_snapshot']
-    assert config['model_revision_id']==source['model_revision_id']
-    assert config['evidence_snapshots']==sorted([old,new],key=lambda r:r['evidence_version_id'])
-    assert any(r['path'].startswith('/assumptions/'+source['assumptions'][0]['assumption_id']) for r in config['derivation']['changes'])
-    assert canonical(payload(env))==env['original']
+        db.execute(
+            'INSERT INTO model_associations VALUES(?,?,?)',
+            (sid, case['frozen']['model_snapshot']['model_id'], uid()),
+        )
+    aid = uid()
+    assumption = dict(
+        assumption_id=aid,
+        statement='Calibrated against the original observation',
+        evidence_links=[dict(evidence_version_id=oid, relation='supports')],
+    )
+    source = request6(
+        case,
+        sid,
+        study['revision'],
+        name='Criteria-free calibrated source',
+        assumptions=[assumption],
+        general_context_evidence_version_ids=[oid],
+    )
+    source['inputs'][0]['provenance']['evidence_version_ids'] = [oid]
+    preview = configs.preview(actor, sid, source)[0]
+    frozen = configs.commit(actor, sid, save_command(source, preview['candidate_digest']))
+    rid, _ = retain6(store, actor, sid, case, frozen)
+    original = canonical(payload(env, rid))
+    fields = ('evidence_schema_version', 'title', 'kind', 'content', 'source_refs')
+    note = {k: deepcopy(old[k]) for k in (*fields, 'resource_scope')}
+    note.update(title='New calibration title', content='New observation')
+    new = store.revise_evidence(actor, sid, old['evidence_id'], uid(), oid, note)
+    nid = new['evidence_version_id']
+    model.calls.clear()
+    seed = ModifiedRuns(store).seed(actor, sid, rid)
+    validate('ModifiedRunSeed8', seed)
+    assert seed['model_snapshot'] == frozen['model_snapshot']
+    assert seed['source_configuration'] == frozen['configuration']
+    request = seed['configuration']
+    request['context_source']['choice_confirmed'] = True
+    request['assumptions'][0]['statement'] = 'Explicit modified statement'
+    link = dict(evidence_version_id=nid, relation='context')
+    request['assumptions'][0]['evidence_links'] = [link]
+    request['general_context_evidence_version_ids'] = [nid]
+    preview = configs.preview(actor, sid, request)[0]
+    saved = configs.commit(actor, sid, save_command(request, preview['candidate_digest']))
+    fetched = [c for c in model.calls if c[2] == 'GET' and '/revisions/' in c[3]]
+    assert not fetched, 'Modified origin fetched the current model'
+    config, src = saved['configuration'], frozen['configuration']
+    assert config['schema_version'] == '6'
+    assert not set(config) & {'criteria', 'approach_binding'}
+    assert config['configuration_id'] != src['configuration_id']
+    assert config['parent_revision_id'] is None
+    assert saved['model_snapshot'] == frozen['model_snapshot']
+    assert config['model_revision_id'] == src['model_revision_id']
+    snapshots = config['evidence_snapshots']
+    assert [r['evidence_version_id'] for r in snapshots] == sorted([oid, nid])
+    assert [r for r in snapshots if r['evidence_version_id'] == oid] == src['evidence_snapshots']
+    paths = {r['path'] for r in config['derivation']['changes']}
+    assert '/assumptions/' + aid + '/statement' in paths
+    assert '/assumptions/' + aid + '/evidence_links/' + oid + ':supports' in paths
+    assert '/assumptions/' + aid + '/evidence_links/' + nid + ':context' in paths
+    assert '/general_context_evidence_version_ids/' + nid in paths
+    assert canonical(payload(env, rid)) == original
+    assert canonical(payload(env)) == env['original']
 
 
 def test_existing_member_revocation_blocks_history_seed_and_inventory(actual):
@@ -310,7 +396,7 @@ def test_existing_member_revocation_blocks_history_seed_and_inventory(actual):
 
 
 @pytest.mark.parametrize('supported',[True,False])
-def test_public_history_seed_and_checked_bundle4_capability(actual,supported):
+def test_public_history_view_seed_and_checked_configuration6_capability(actual, supported):
     import subprocess
     from pathlib import Path
     from test_assumptions_evidence_contracts import sample,D
@@ -319,12 +405,15 @@ def test_public_history_seed_and_checked_bundle4_capability(actual,supported):
     cap=sample(D['Capabilities']['properties']['capabilities']['items'])
     cap.update(id='resolved_configuration',version='3',supported=supported)
     caps.update(contract_versions=['1.2'],schema_versions=['1','2'],capabilities=[cap])
+    if supported:
+        caps['capabilities'].append(deepcopy(CRITERIA_FREE_CAPABILITY))
     # The reviewed native interpreter intentionally has no web stack. The
     # approved application interpreter reads the same isolated retained store,
     # with the full existing scope/env guard and no AiiDA imports or allocation.
     repo=Path(__file__).resolve().parents[2]
     target=guard.scoped_path(SCOPE,'artifacts/api-'+str(supported)+'.json')
-    target.write_text(json.dumps(dict(caps=caps,sid=env['sid'],rid=env['rid'],supported=supported)))
+    data = dict(caps=caps, actor=env['actor'], sid=env['sid'], rid=env['rid'], supported=supported)
+    target.write_text(json.dumps(data))
     script='''import json,sys
 from pathlib import Path
 repo=Path(sys.argv[1])
@@ -348,10 +437,26 @@ client=TestClient(create_app(store,Auth(store,origin),Private()),base_url=origin
 session=client.post('/api/1/session',json=dict(username='owner',password='correct horse battery staple'),headers={'Origin':origin})
 assert session.status_code==200
 response=client.get('/api/1/capabilities');assert response.status_code==200
-assert ('execution_bundle/4' in response.json()['data']['contract_versions']) is data['supported']
+versions = response.json()['data']['contract_versions']
+# New configurations are version 6 only: earlier configuration and bundle versions are never
+# advertised, and version 6 only when the private service supports it.
+assert ('configuration/6' in versions) is data['supported']
+assert ('execution_bundle/11' in versions) is data['supported']
+assert not {'configuration/3', 'execution_bundle/4'} & set(versions)
 route='/api/1/studies/'+data['sid']+'/runs/'+data['rid']
 detail=client.get(route);assert detail.status_code==200,detail.text
-validate('RunHistory2',detail.json()['data']['history'])
+# The public read is the record view of the exact retained history: obsolete result facets are
+# projected out and both source and view hashes are carried; the stored record is unchanged.
+from jsonschema import Draft202012Validator, FormatChecker
+from hyprn_mvp_app.contracts import public_record_view
+from hyprn_mvp_app.history import History
+public = json.loads((repo / 'contracts/hyprn-mvp.openapi.yaml').read_text())
+schema = {**public, '$ref': '#/components/schemas/RunHistory2'}
+viewed = detail.json()['data']['history']
+Draft202012Validator(schema, format_checker=FormatChecker()).validate(viewed)
+retained = History(store).read(data['actor'], data['sid'], data['rid'])
+validate('RunHistory2', retained)
+assert viewed == public_record_view(retained)
 seed=client.get(route+'/modified-run-seed');assert seed.status_code==200,seed.text
 validate('ModifiedRunSeed2',seed.json()['data'])
 assert not any(n.split('.')[0] in ('aiida','openmdao','openturns') for n in sys.modules)

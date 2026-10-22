@@ -58,11 +58,19 @@ def test_truncated_missing_or_invalid_envelope_is_rejected(raw):
 
 
 def retained_record(version):
-    """Inert historical manifest fixture; never passed to an execution API."""
+    """Inert retained manifest fixture; never passed to an execution API."""
     from execution_fixtures import fixture,legacy_fixture,uid,raw_hash,runtime_fixture
     from hyprn_mvp_app.store import canonical,digest
     from test_execution import assemble
     if version=='2':return assemble()
+    if version == '10':
+        case = fixture()
+        prepared = case['prepared']
+        prepared.update(schema_version='3', result_protocol_version='2')
+        prepared['prepared_digest'] = digest(
+            {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+        )
+        return assemble(case)
     case=legacy_fixture();prepared=case['prepared'];config=case['frozen']['configuration'];selected=runtime_fixture()
     files={**case['files'],'preparation.json':canonical(prepared),'configuration.json':canonical(config),
            'context.json':canonical(config['context_snapshot']),'evidence/index.json':canonical(config['evidence_snapshots']),
@@ -135,7 +143,7 @@ def test_artifact_decoder_preserves_data_bounds(raw):
     with pytest.raises(ValueError):artifact_json(raw)
 
 
-@pytest.mark.parametrize('version',['1','2'])
+@pytest.mark.parametrize('version',['1','2','10'])
 def test_retained_versions_read_without_worker_modeling_or_reassessment(monkeypatch,version):
     import builtins,io
     from hyprn_mvp_app.store import canonical
@@ -159,8 +167,8 @@ def test_retained_versions_read_without_worker_modeling_or_reassessment(monkeypa
     assert raw==before
 
 
-@pytest.mark.parametrize('version',['1','2'])
-@pytest.mark.parametrize('mode',['raw','request','snapshot','prepared_version','bundle_version','oversize','duplicate'])
+@pytest.mark.parametrize('version',['1','2','10'])
+@pytest.mark.parametrize('mode',['raw','request','snapshot','prepared_version','bundle_version','unissued_bundle_version','oversize','duplicate'])
 def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode):
     import io,json
     from hyprn_mvp_app.store import canonical,digest
@@ -176,6 +184,7 @@ def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode)
         d=next(d for d in manifest['files'] if d['path']=='preparation.json')
         d.update(size=len(files['preparation.json']),sha256=raw_hash(files['preparation.json']))
     if mode=='bundle_version':manifest['schema_version']='99'
+    if mode=='unissued_bundle_version':manifest['schema_version']='9'
     if mode=='oversize':manifest['files'][0]['size']=33*1024*1024
     if mode=='duplicate':manifest['files'].append(manifest['files'][0])
     manifest['bundle_digest']=digest({k:v for k,v in manifest.items() if k!='bundle_digest'})
@@ -184,7 +193,7 @@ def test_retained_reader_rejects_corruption_or_reports_unsupported(version,mode)
     class Repository:
         def open(self,path,mode):return io.BytesIO(canonical(manifest) if path=='manifest.json' else files[path])
     with pytest.raises(ValueError) as error:retained_bundle(Repository(),request)
-    if mode in ('prepared_version','bundle_version'):
+    if mode in ('prepared_version','bundle_version','unissued_bundle_version'):
         assert isinstance(error.value,UnsupportedRecordVersion) and error.value.code=='unsupported_record_version'
 
 
@@ -204,7 +213,7 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
     import hashlib
     import json
     from pathlib import Path
-    from execution_fixtures import fixture,uid
+    from execution_fixtures import current_fixture as fixture,uid
     from hyprn_mvp_app.store import digest
     from hyprn_mvp_app.execution import assemble_bundle
     from execution_fixtures import scoped_native_runtime
@@ -246,10 +255,12 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
     assert {k:native['results'][k] for k in ('run_id','bundle_digest')}=={
         k:bundle['manifest'][k] for k in ('run_id','bundle_digest')}
     assert native['process_state']=='finished'
-    assert native['results']['convergence']==dict(state='not_applicable',diagnostics_ref=None)
-    assert native['results']['optimization']==dict(termination='not_applicable',feasibility='not_applicable')
-    assert native['results']['applicability']==dict(state='unassessed',evidence_refs=[])
-    assert b'HYPRN_MVP_RESULT_V1 ' in raw
+    assert native['results']['schema_version'] == '2'
+    assert (
+        not {'convergence', 'optimization', 'applicability', 'completeness'}
+        & native['results'].keys()
+    )
+    assert b'HYPRN_MVP_RESULT_V2 ' in raw
     assert runtime.retained_bundle(node.uuid)==bundle
     envelope=json.loads(raw)
     origins=[json.loads(line.removeprefix('HYPRN_MVP_NATIVE_ORIGINS_V1 '))
@@ -261,7 +272,6 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
         c['sha256']==hashlib.sha256(bundle['files'][c['path']]).hexdigest() for c in classes)
     if kind=='throw':
         assert native['exit_status']==301
-        assert native['results']['completeness']==dict(expected=2,available=1,failed=1,unavailable=1)
         by_target={(o['target']['instance_id'],o['target']['port_id']):o for o in native['results']['outputs']}
         upstream=by_target[tuple(case['targets']['linear']['u'][k] for k in ('instance_id','port_id'))]
         downstream=by_target[tuple(case['targets']['square']['y'][k] for k in ('instance_id','port_id'))]
@@ -276,3 +286,39 @@ def test_real_native_criteria_and_failed_raw_artifacts_are_retained(kind):
         assert [(o['value'],o['units'],o['availability']) for o in native['results']['outputs']]==[(2,'km','available')]
         assert native['results']['criteria'][0]['reason']=='threshold_comparison'
     assert (evidence/'result.json').read_bytes()==node.outputs.retrieved.base.repository.get_object_content('result.json',mode='rb')
+
+
+@pytest.mark.parametrize(
+    'fault',
+    [None, 'legacy_field', 'missing', 'duplicate', 'nonfinite', 'unassigned', 'wrong_protocol'],
+)
+def test_current_result_protocol_retains_scalar_guards_without_aggregate_status(fault):
+    import json
+    from hyprn_mvp_integration.results import validate_result, read_stored_result
+    case, request, legacy = record()
+    result = {k: copy.deepcopy(v) for k, v in legacy.items()
+              if k not in {'convergence', 'optimization', 'completeness', 'applicability'}}
+    result['schema_version'] = '2'
+    if fault == 'legacy_field':result['applicability'] = legacy['applicability']
+    if fault == 'missing':result['outputs'] = []
+    if fault == 'duplicate':result['outputs'] *= 2
+    if fault == 'nonfinite':result['outputs'][0]['value'] = float('inf')
+    if fault == 'unassigned':result['outputs'][0]['assigned'] = False
+    prefix = 'HYPRN_MVP_RESULT_V1 ' if fault == 'wrong_protocol' else 'HYPRN_MVP_RESULT_V2 '
+    raw = json.dumps(dict(reason='exited', exit_code=0, output=prefix + json.dumps(result)))
+    if fault:
+        with pytest.raises(ValueError):
+            validate_result(
+                raw, request, case['frozen']['model_snapshot'], result_schema_version='2'
+            )
+    else:
+        assert (
+            validate_result(
+                raw, request, case['frozen']['model_snapshot'], result_schema_version='2'
+            )
+            == result
+        )
+        assert read_stored_result(result, request, case['frozen']['model_snapshot']) == result
+        assert read_stored_result(legacy, request, case['frozen']['model_snapshot']) == legacy
+        with pytest.raises(ValueError):
+            validate_result(raw, request, case['frozen']['model_snapshot'])

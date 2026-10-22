@@ -2,6 +2,8 @@
 
 These tests never import native code or resolve live scientific records.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema, case_removal_digests
 import copy
 import json
 from pathlib import Path
@@ -9,12 +11,12 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 D = SCHEMA['$defs']
 UUID = '11111111-1111-4111-8111-111111111111'
 SHA = 'a' * 64
 NEW_OBJECTS = '''ApproachContent1 ApproachModelBinding1 ApproachStep1 ApproachIntent1
-ApproachEvidenceLink1 ApproachAssumption1 ApproachAssumptionOrigin1 ApproachCase1
+ApproachEvidenceLink1 ApproachAssumption1 ApproachAssumptionOrigin1
 ApproachDraft1 ApproachVersion1 ApproachSaved1 ApproachState1 ApproachVersionSummary1
 ApproachPreviewRequest1 ApproachPreview1 ApproachDraftWrite1 ApproachVersionSave1
 ApproachVersionSaved1 ApproachRestore1 ApproachResolution1 ApproachCoverage1
@@ -71,8 +73,8 @@ def test_new_records_closed_required_valid(name):
         with pytest.raises(ValidationError): validate(name, bad)
 
 def test_mirrors_and_private_protocols_unchanged():
-    other = json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())['$defs']
-    for name in NEW_OBJECTS: assert D[name] == other[name]
+    other = authored_schema()['$defs']
+    assert_execution_schema()
     assert D['ModelingConfiguration3']['properties']['schema_version'] == {'enum':['3']}
     assert D['PreparedModelArtifact2']['properties']['schema_version'] == {'enum':['2']}
     assert 'approach_binding' not in D['ModelingConfiguration3']['properties']
@@ -105,7 +107,7 @@ def test_implementation_states_do_not_overclaim():
 
 def test_bounds_ids_hashes_nullable_fields_and_pairing():
     value=valid('ApproachContent1')
-    for key,limit in [('model_bindings',32),('steps',64),('assumptions',256),('cases',64),('basis_refs',64)]:
+    for key,limit in [('model_bindings',32),('steps',64),('assumptions',256),('basis_refs',64)]:
         item=sample(D['ApproachContent1']['properties'][key]['items'])
         with pytest.raises(ValidationError): validate('ApproachContent1',value | {key:[item]*(limit+1)})
     with pytest.raises(ValidationError): validate('ApproachContent1',value | {'question':'x'*4097})
@@ -146,7 +148,7 @@ def test_old_closed_read_branches_remain_explicit():
     for union,names in {'ConfigurationRevision':['ConfigurationRevision1','ConfigurationRevision2','ConfigurationRevision3','ConfigurationRevision4'], 'RunHistory':['RunHistory1','RunHistory2','RunHistory3','RunHistory4'], 'ModifiedRunSeed':['ModifiedRunSeed1','ModifiedRunSeed2','ModifiedRunSeed3','ModifiedRunSeed4']}.items():
         assert [r['$ref'].split('/')[-1] for r in D[union]['oneOf']]==names
     for schema in ('model','execution'):
-        Draft202012Validator.check_schema(json.loads((ROOT / ('contracts/schemas/'+schema+'.schema.json')).read_text()))
+        Draft202012Validator.check_schema(authored_schema())
 
 
 def test_receipt_results_categories_and_stable_error_shape():
@@ -203,7 +205,7 @@ def test_exact_closure_bounds_and_failed_basis_remain_explicit():
     with pytest.raises(ValidationError): validate('ApproachRunContext1',context | {'request':context['request'] | {'guess':True}})
 
 
-@pytest.mark.parametrize('name,field',[('ApproachStep1','title'),('ApproachCase1','title'),('ApproachAssumption1','statement')])
+@pytest.mark.parametrize('name,field',[('ApproachStep1','title'),('ApproachAssumption1','statement')])
 @pytest.mark.parametrize('blank',[' ', '\t\n', '\u00a0'])
 def test_approach_nonblank_fields_rejected_at_public_boundary(name,field,blank):
     value=valid(name);value[field]=blank
@@ -278,6 +280,10 @@ def test_public_integrity_generation_preserves_units_and_mixed_branches(name):
             return [public_refs(item) for item in value]
         return value
     expected = public_refs(D[name])
+    if name in {'FrozenConfiguration5Model3', 'FrozenConfiguration5Model2',
+                'RunHistory4Model3', 'RunHistory4Model2',
+                'ModifiedRunSeed4Model3', 'ModifiedRunSeed4Model2'}:
+        expected['properties']['record_view'] = {'$ref': '#/components/schemas/RecordView1'}
     assert document['components']['schemas'][name] == expected
     assert 'RetainedReadIntegrity1' not in D
     assert 'retained_integrity' not in json.dumps(D)
@@ -316,7 +322,7 @@ def test_polish_limits_bounds_and_semantic_counterexample():
     validate('ApproachContent2',value|{'limit_items':[limit,limit|{'statement':'Different'}]})
 
 def test_polish_reference_closure_no_documents():
-    other=json.loads((ROOT/'contracts/schemas/execution.schema.json').read_text())['$defs'];seen=set()
+    assert_execution_schema();seen=set()
     def walk(v):
         if isinstance(v,dict):
             if '$ref' in v:
@@ -326,9 +332,9 @@ def test_polish_reference_closure_no_documents():
         elif isinstance(v,list):
             for child in v:walk(child)
     for name in POLISH_OBJECTS+['FrozenConfiguration7','ExecutionBundle8','RunHistory6','ModifiedRunSeed6','ApproachReceipt2']:
-        assert D[name]==other[name];walk(D[name])
+        walk(D[name])
     assert not any(n.startswith('Document') or n=='EvidenceSnapshot4' for n in seen)
-    for schema in (SCHEMA,json.loads((ROOT/'contracts/schemas/execution.schema.json').read_text())):
+    for schema in (SCHEMA,authored_schema()):
         Draft202012Validator.check_schema(schema)
         for definition in schema['$defs'].values():walk(definition)
 
@@ -371,13 +377,8 @@ def test_polish_null_partial_bundle_discriminators():
 
 def test_polish_projection_writers_numerical_protocols():
     api=json.loads((ROOT/'contracts/hyprn-mvp.openapi.yaml').read_text());schemas=api['components']['schemas']
-    assert 'case_context' in schemas['RunHistoryItem']['properties']
-    assert 'case_context' not in schemas['RunHistoryItem']['required']
-    validator=Draft202012Validator({**api,'$ref':'#/components/schemas/RunCaseContext1'},format_checker=FormatChecker())
-    for state in ('unlinked','unavailable'):validator.validate({'state':state})
-    linked=dict(state='linked',approach_id=UUID,approach_version_id=UUID,version_number=1,case_id=None,case_name=None);validator.validate(linked)
-    for bad in ({'state':'linked'},linked|{'version_number':0},linked|{'case_id':'latest'},{'state':'unlinked','case_name':'x'}):
-        with pytest.raises(ValidationError):validator.validate(bad)
+    assert 'case_context' not in schemas['RunHistoryItem']['properties']
+    assert 'RunCaseContext1' not in schemas
     assert api['paths']['/studies/{study_id}/approach/draft']['post']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/ApproachDraftWriteRead2')
     assert D['PreparedModelArtifact2']['properties']['model_package_manifest']['$ref'].endswith('/ModelPackage')
     assert {'$ref':'#/$defs/ModelPackage4'} in D['ModelPackage']['oneOf']
@@ -388,13 +389,30 @@ POLISH_HISTORICAL_HASHES = {'Source': 'ced46ca6ae852ed5a1d751eac61c8b2eb5598219a
 def test_polish_historical_hashes():
     import hashlib
     for path in ('model.schema.json','execution.schema.json'):
-        definitions=json.loads((ROOT/'contracts/schemas'/path).read_text())['$defs']
+        definitions=authored_schema()['$defs']
         for name,digest in POLISH_HISTORICAL_HASHES.items():
+            if name in case_removal_digests():
+                digest = case_removal_digests()[name]
+                if digest is None:
+                    assert name not in definitions
+                    continue
             # Reviewed exception: observed operational capabilities admit Bundle8.
             # Keep the historical baseline above; no stored artifact schema changes.
             if name=='ExecutionVersions':
                 digest='d5cbee9218c8bcab63e4ec0e58412ac095f16d423cc0f0bce45d6358e43341e7'
-            assert hashlib.sha256(json.dumps(definitions[name],sort_keys=True,separators=(',',':')).encode()).hexdigest()==digest,name
+            definition = copy.deepcopy(definitions[name])
+            if name == 'UnitDeclaration1':
+                # Approved additive exception: normalize only the exact reviewed suffix.
+                units = definition['oneOf'][2]['properties']['expression']['enum']
+                assert units[28:] == ['m**3', 'cm**3', 'mm**3', 'kg/m**2', 'g/m**2', '1/m**2', 'J/(kg*K)', 'kJ/(kg*K)', 'J', 'kJ', 'MJ', 'W', 'kW', 'MW', 'm**3/s', 'kg/s', 'm/s**2', 'N*m', 'W/(m*K)', 'W/(m**2*K)']
+                del units[28:]
+            if name == 'UnitCatalog1':
+                units = definition['properties']['supported_units']
+                assert units['items']['enum'] == definitions['UnitDeclaration1']['oneOf'][2]['properties']['expression']['enum']
+                assert units['minItems'] == units['maxItems'] == 48
+                del units['items']['enum'][28:]
+                units['minItems'] = units['maxItems'] = 28
+            assert hashlib.sha256(json.dumps(definition,sort_keys=True,separators=(',',':')).encode()).hexdigest()==digest,name
 
 
 def test_polish_known_model_partial_history_and_implemented_package_writer():

@@ -21,7 +21,8 @@ from checks import PROJECTION_SCOPE as SCOPE, NATIVE_BACKEND as BACKEND
 import scoped_fixture as guard
 guard.validate_scope(SCOPE)
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'modeling/tests'))
-from units_native_fixture import UnitsJourney,source,literal,criterion
+from units_native_fixture import UnitsJourney,source,literal
+from combined_fixture import brief_constraint
 from hyprn_mvp_app.store import canonical,digest,uid,DomainError
 from hyprn_mvp_app.computational_export import ComputationalRecords,inspect_record
 from hyprn_mvp_integration.computational_export import Export
@@ -49,10 +50,10 @@ def targets(model,name):
     return {p['code_symbol']:dict(instance_id=inst['instance_id'],port_id=p['port_id']) for p in definition['ports']}
 
 
-def band(target,units,eid):
-    # Criterion comparison itself is exact; author an explicit analytical tolerance.
-    return [criterion(target,1-EXPECT['relative_tolerance'],units,eid)|{'operator':'ge'},
-            criterion(target,1+EXPECT['relative_tolerance'],units,eid)|{'operator':'le'}]
+def expectation(name,threshold,units):
+    """A brief constraint in the exact output units with the analytical tolerances."""
+    return brief_constraint(name,'eq',threshold,units,relative_tolerance=EXPECT['relative_tolerance'],
+        absolute_tolerance=EXPECT['absolute_tolerance'])
 
 
 def output(detail,target):
@@ -67,6 +68,15 @@ def test_native_compounds_histories_and_archive():
     j=UnitsJourney(SCOPE,BACKEND);proof={'passed':False};records=[];selected=[]
     try:
         j.start();e=j.evidence('Independent SI scale expectations');eid=e['evidence_version_id']
+        # Criteria are study brief constraints in the exact output units. They are evaluated
+        # only through calculations over the recorded runs; no configuration or run holds one.
+        expected={family['name']:{role:expectation(family['name']+' '+role,family['factor'],
+            family['destination']) for role in ('connected','explicit','downstream')}
+            for family in EXPECT['families']}
+        first_family=EXPECT['families'][0]
+        violated=brief_constraint(first_family['name']+' source above its input','eq',2,
+            first_family['source'])
+        brief=j.brief_version([c for f in expected.values() for c in f.values()]+[violated])
         for family in EXPECT['families']:
             src,dst,factor=family['source'],family['destination'],family['factor']
             edits=[component('source',src),instance('source'),component('connected',dst),instance('connected'),
@@ -81,6 +91,7 @@ def test_native_compounds_histories_and_archive():
             if first:
                 for port in edits[0]['ports']:port['units']={'kind':'unspecified'}
             draft,model=j.model(family['name'],edits)
+            assert model['schema_version']=='4'
             if first:
                 old=next(d for d in model['definitions'] if d['name']=='source')
                 with pytest.raises(DomainError):j.prepared(model)
@@ -96,7 +107,9 @@ def test_native_compounds_histories_and_archive():
                 model=j.commit(draft)
                 assert next(d for d in model['definitions'] if d['definition_version_id']==old['definition_version_id'])==old
                 assert [p['port_id'] for p in newer['ports']]==[p['port_id'] for p in old['ports']]
-                assert j.prepared(model)['schema_version']=='2'
+                # The private configuration 5 prepares artifact 4, which pins result protocol 3.
+                prepared=j.prepared(model)
+                assert prepared['schema_version']=='4' and prepared['result_protocol_version']=='3'
                 def later_draft():
                     changed=j.edit(draft,[dict(kind='revise_definition',temp_key='later',
                         definition_id=newer['definition_id'],expected_definition_version_id=newer['definition_version_id'],
@@ -107,9 +120,7 @@ def test_native_compounds_histories_and_archive():
                     return changed
                 j.after_prepare=later_draft
             s,c,x=[targets(model,k) for k in ('source','connected','explicit')]
-            cfg=j.configuration(model,family['name'],[literal(s['x'],1,src,eid),literal(x['x'],1,src,eid)],
-                band(c['y'],src,eid)+band(x['y'],src,eid),None,e)
-            if first:cfg['criteria'].append(criterion(s['y'],2,src,eid))
+            cfg=j.configuration(model,family['name'],[literal(s['x'],1,src,eid),literal(x['x'],1,src,eid)],e)
             # Unsupported/incompatible/affine/overflow fail before any process exists.
             before=j.process_count()
             for unit,value in [('USD',1),('kg',1),(src,1e308)]:
@@ -124,8 +135,12 @@ def test_native_compounds_histories_and_archive():
             for target in (c['y'],x['y']):
                 near(output(detail,target)['value'],factor)
                 assert output(detail,target)['units']==dst
-            outcomes={k['criterion_id']:k['outcome'] for k in detail['history']['results']['criteria']}
-            assert all(outcomes[k['criterion_id']]==('violated' if first and k is cfg['criteria'][-1] else 'met') for k in cfg['criteria'])
+            # The analytical expectations are judged in a calculation, never inside the run.
+            own=expected[family['name']]
+            bindings=[(own['connected']['criterion_id'],c['y']),(own['explicit']['criterion_id'],x['y'])]
+            if first:bindings.append((violated['criterion_id'],s['y']))
+            outcomes={k:v['outcome'] for k,v in j.evaluate([saved],brief,bindings)[rid].items()}
+            assert [outcomes[k] for k,_ in bindings]==['met','met']+(['not_met'] if first else [])
             records.append((rid,detail,saved,canonical(j.payload(rid))))
             # Separate native program uses retained source units; destination conversion
             # is performed by pinned problem.set_val with the exact source result link.
@@ -134,22 +149,17 @@ def test_native_compounds_histories_and_archive():
             binding=dict(kind='run_result',target=t['x'],source_run_id=rid,source_output=s['y'],
                 expected_results_digest=digest(detail['history']['results']),
                 provenance=dict(kind='manual',statement='Exact prior native scalar',evidence_version_ids=[eid]))
-            ds=j.save_configuration(j.configuration(down,'Retained '+family['name'],[binding],band(t['y'],src,eid),None,e))
+            ds=j.save_configuration(j.configuration(down,'Retained '+family['name'],[binding],e))
             dr,dh,dn=j.execute(ds)
             near(output(dh,t['y'])['value'],factor);assert output(dh,t['y'])['units']==dst
-            assert all(k['outcome']=='met' for k in dh['history']['results']['criteria'])
+            evaluated=j.evaluate([ds],brief,[(own['downstream']['criterion_id'],t['y'])])[dr]
+            assert evaluated[own['downstream']['criterion_id']]['outcome']=='met'
             assert any(link.node.uuid==node.outputs.results.uuid for link in dn.base.links.get_incoming().all())
             records.append((dr,dh,ds,canonical(j.payload(dr))));selected.append(dr)
-        # A real old string-unit history remains distinct from new Model3 history.
+        # A legacy string-unit model can no longer be configured; its upgrade to format 4 by a
+        # typed edit keeps the old version, ports and source byte-exact.
         draft,legacy=j.model('Legacy dimensionless',[component('legacy','',version='2'),instance('legacy')],version='2')
-        t=targets(legacy,'legacy')
-        legacy_saved=j.save_configuration(j.configuration(legacy,'Legacy zero',[literal(t['x'],0,'',eid)],[criterion(t['y'],0,'',eid)],None,e))
-        # This method requires History4, so use the original concrete historical helper.
-        from approach_native_fixture import ApproachJourney
-        lr,lh,ln=ApproachJourney.execute(j,legacy_saved)
-        near(output(lh,t['y'])['value'],0);assert output(lh,t['y'])['units']==''
-        records.append((lr,lh,legacy_saved,canonical(j.payload(lr))));selected.append(lr)
-        # Real legacy -> typed edit keeps old version/ports/source byte-exact.
+        assert legacy['schema_version']=='2'
         updated=j.edit(draft,[dict(kind='rename_model',name='Mixed current')])
         d=next(d for d in updated['definitions'] if d['name']=='legacy')
         updated=j.edit(updated,[dict(kind='revise_definition',temp_key='v2',definition_id=d['definition_id'],
@@ -159,12 +169,117 @@ def test_native_compounds_histories_and_archive():
         updated=j.edit(updated,[dict(kind='replace_local_instance_version',instance_id=inst['instance_id'],
             expected_definition_version_id=d['definition_version_id'],version_ref=dict(definition_version_id=v2['definition_version_id']))])
         mixed=j.commit(updated)
+        assert mixed['schema_version']=='4'
         assert next(v for v in mixed['definitions'] if v['definition_version_id']==d['definition_version_id'])==d
         assert mixed['source_files']==legacy['source_files']
-        assert j.prepared(mixed)['schema_version']=='2'
+        assert j.prepared(mixed)['schema_version']=='4'
         assert not j.canary()['candidate_side_effect']
-        assert j.process_count()==7
+        assert j.process_count()==6
+        # Assess the already retained native records through ordinary study HTTP commands.
+        # Answer authoring must neither launch science nor change any retained run/configuration.
+        from approach_native_fixture import step
+
+        bindings = [
+            dict(
+                binding_id=uid(),
+                model_id=saved['configuration']['model_id'],
+                model_revision_id=saved['configuration']['model_revision_id'],
+            )
+            for _, _, saved, _ in records
+        ]
+        method = step('Compare explicit conversions with retained-result reuse')
+        method.update(
+            purpose='Test the independently specified SI scale relationships.',
+            rationale='Compare independently executed identity models and exact retained reuse.',
+            intent=dict(
+                transformation='Scalar identity with explicit compatible SI unit conversion.',
+                inputs='Specified unit-bearing scalars and exact prior recorded outputs.',
+                outputs='Converted scalar outputs with retained units.',
+                depends_on_step_ids=[],
+            ),
+            implementation_state='linked',
+            implementation_refs=[
+                dict(kind='model', binding_id=binding['binding_id']) for binding in bindings
+            ],
+        )
+        approach = j.save_approach(dict(
+            schema_version='1',
+            question='Do the native fixture calculations preserve the specified SI relationships?',
+            scope='Synthetic scalar identity models with explicit units and exact retained inputs.',
+            limitations='Unit-conversion evidence only; no engineering-validity claim.',
+            open_questions='Independent engineering validation is outside this fixture.',
+            model_bindings=bindings,
+            steps=[method],
+            assumptions=[],
+            basis_refs=[],
+        ))
+        answer_path = 'approach/versions/' + approach['version']['approach_version_id'] + '/answers'
+        assert j.request('GET', answer_path)['items'] == []
+        assert all(
+            result['availability'] == 'available'
+            for _, detail, _, _ in records[:2]
+            for result in detail['history']['results']['outputs']
+        )
+        answer_command = dict(
+            schema_version='1', command_id=uid(), expected_revision=None,
+            approach_version_id=approach['version']['approach_version_id'],
+            observations='The two cited native runs retain available outputs and explicit units.',
+            interpretation=(
+                'Direct and result-linked calculations agree with the specified SI scale '
+                'expectations for this synthetic identity-model comparison.'
+            ),
+            qualifications=['This fixture does not validate an engineering model.'],
+            open_deliverables=['Independent engineering validation remains outside this fixture.'],
+            basis=dict(
+                configuration_revision_ids=[
+                    saved['configuration']['configuration_revision_id']
+                    for _, _, saved, _ in records[:2]
+                ],
+                run_ids=[rid for rid, _, _, _ in records[:2]],
+                evidence_version_ids=[eid],
+            ),
+        )
+        first_answer = j.request('POST', 'answers', answer_command, 201)
+        synthesis_command = dict(
+            answer_command, command_id=uid(), expected_revision=first_answer['answer_version_id'],
+            observations='Six retained native runs cover the stated SI conversion fixture.',
+            interpretation=(
+                'The examined computations support unit conversion and exact retained reuse; '
+                'they establish no physical feasibility conclusion.'
+            ),
+            basis=dict(
+                configuration_revision_ids=[
+                    saved['configuration']['configuration_revision_id']
+                    for _, _, saved, _ in records
+                ],
+                run_ids=[rid for rid, _, _, _ in records],
+                evidence_version_ids=[eid],
+            ),
+        )
+        study_answer = j.request('POST', 'answers', synthesis_command, 201)
+        revised_answer = j.request('POST', 'answers', dict(
+            synthesis_command, command_id=uid(),
+            expected_revision=study_answer['answer_version_id'],
+            qualifications=[
+                'This fixture does not validate an engineering model.',
+                'The comparison covers only the explicitly referenced unit relationships.',
+            ],
+        ), 201)
+        assert revised_answer['previous_version_id'] == study_answer['answer_version_id']
+        assert j.request('GET', 'answers/' + first_answer['answer_version_id']) == first_answer
+        assert j.request('GET', 'answers/' + study_answer['answer_version_id']) == study_answer
+        assert j.process_count() == 6
         j.offline();j.restart_web()
+        for answer in (first_answer, revised_answer, study_answer):
+            assert j.request('GET', 'answers/' + answer['answer_version_id']) == answer
+        assert {
+            answer['answer_version_id'] for answer in j.request('GET', answer_path)['items']
+        } == {revised_answer['answer_version_id']}
+        receipt = j.request(
+            'GET', 'commands/' + answer_command['command_id'] + '?category=answer_save'
+        )
+        assert receipt['recovery'] == 'adopt' and receipt['result'] == first_answer
+        assert j.process_count() == 6
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
             assert j.request('GET','configurations/'+saved['configuration']['configuration_revision_id'])==saved
@@ -185,8 +300,7 @@ def test_native_compounds_histories_and_archive():
             with zipfile.ZipFile(io.BytesIO(raw)) as archive:
                 manifest=json.loads(archive.read('manifest.json'))
                 path=SCOPE.root/('evidence/units-native-'+str(number)+'.aiida');path.write_bytes(archive.read('computations.aiida'))
-            expected=[records[number*2][0],selection] if number<3 else [lr]
-            assert manifest['computational_run_ids']==sorted(expected)
+            assert manifest['computational_run_ids']==sorted([records[number*2][0],selection])
             service=ComputationalRecords(j.store,SCOPE.root/'artifacts/offline-inspect')
             _,_,preflight,_=service._collect(j.actor,j.sid,[selection])
             with ArchiveFormatSqlZip().open(path,'r') as archive:
@@ -207,8 +321,18 @@ def test_native_compounds_histories_and_archive():
         assert j.private('GET','/models/'+mixed['model_id']+'/revisions/'+mixed['model_revision_id'])==mixed
         for rid,history,saved,raw in records:
             assert j.request('GET','runs/'+rid)['history']==history['history']
+        j.scientific_answers = dict(
+            approach_version_id=approach['version']['approach_version_id'],
+            first_answer=first_answer, revised_answer=revised_answer,
+            study_answer=study_answer,
+        )
         browser=j.browser(records)
         proof=dict(passed=True,browser=browser,analytical=EXPECT,records=[dict(run_id=r,history=h,configuration=s,payload_sha256=hashlib.sha256(b).hexdigest()) for r,h,s,b in records],
+            scientific_answers=dict(
+                approach_version_id=approach['version']['approach_version_id'],
+                first_answer=first_answer, revised_answer=revised_answer,
+                study_answer=study_answer, application_restart=True,
+            ),
             legacy=legacy,mixed=mixed,archives=archives,aggregate_archive_refusal=rejected,selected_run_ids=selected,
             modeling_outage=True,application_restart=True,modeling_restart=True,actual_http_jwt=True,
             attestation=j.native.require_attestation(),human_acceptance='pending')
@@ -262,110 +386,3 @@ def test_http_fixture_response_disconnect_boundary(failure):
         with pytest.raises(RuntimeError,match='fixture write'):write_http_response(handler,response)
     else:assert write_http_response(handler,response)==(failure is None)
     assert calls==[200,('content-type','application/json'),('Content-Length','20'),b'exact retained bytes']
-
-
-def test_native_mixed_legacy_selected_repair():
-    """One authentic mixed process; explanatory variants never change Model2."""
-    from approach_native_fixture import step
-    from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
-    j=UnitsJourney(SCOPE,BACKEND);proof={'passed':False,'scientific_process_budget':1};records=[]
-    try:
-        j.start();assert j.process_count()==0
-        e=j.evidence('Mixed exact legacy reuse');eid=e['evidence_version_id']
-        _,legacy=j.model('Retained legacy force',[component('legacy','N','2'),instance('legacy'),
-            component('unused_dimensionless','','2')],version='2')
-        original=canonical(legacy);target=targets(legacy,'legacy')
-        package=j.private('GET','/models/'+legacy['model_id']+'/export?revision='+legacy['model_revision_id'])
-        assert package['schema_version']=='2'
-        assert any(p['units']=='' for d in legacy['definitions'] for p in d['ports'])
-        variants=[]
-        for kind in ('physical','unspecified'):
-            edit=component('explanation','N')
-            for port in edit['ports']:port['units']={'kind':kind,**({'expression':'N'} if kind=='physical' else {})}
-            _,explanation=j.model('Explanatory '+kind,[edit,instance('explanation')])
-            bindings=[dict(binding_id=uid(),model_id=m['model_id'],model_revision_id=m['model_revision_id']) for m in (legacy,explanation)]
-            primary=step('Use retained legacy force');primary.update(implementation_state='linked',implementation_refs=[dict(kind='model',binding_id=bindings[0]['binding_id'])])
-            explanatory=step('Read explanatory '+kind);et=targets(explanation,'explanation')['y']
-            explanatory.update(implementation_state='linked',implementation_refs=[dict(kind='port',binding_id=bindings[1]['binding_id'],**et)])
-            content=dict(schema_version='1',question='Can exact legacy science retain new explanations?',scope='One authored scalar identity',
-                limitations='Fixture evidence only',open_questions='Human acceptance pending',model_bindings=bindings,
-                steps=[primary,explanatory],assumptions=[],cases=[],basis_refs=[])
-            approach=j.save_approach(content)
-            config=j.configuration(legacy,'Mixed '+kind,[literal(target['x'],3,'N',eid)],[criterion(target['y'],3,'N',eid)],
-                dict(approach_version_id=approach['version']['approach_version_id'],case_id=None),e)
-            preview=j.request('POST','configurations/preview',config)
-            assert preview['compatibility']['compatible'],preview
-            saved=j.save_configuration(config)
-            assert saved['schema_version']=='5' and canonical(saved['model_snapshot'])==original
-            assert saved['approach_closure']==approach['closure']
-            assert j.request('GET','configurations/'+saved['configuration']['configuration_revision_id'])==saved
-            private=project_scientific_configuration(saved['configuration'])
-            assert private['schema_version']=='3' and 'unit_declarations/1' not in private['required_capabilities']
-            prepared=j.private('POST','/models/'+legacy['model_id']+'/prepare-execution',dict(command_id=uid(),
-                model_revision_id=legacy['model_revision_id'],configuration_snapshot=private,configuration_digest=private['digest']))
-            assert prepared['schema_version']=='2' and prepared['required_capabilities']==legacy['required_capabilities']
-            assert j.private('GET','/models/'+legacy['model_id']+'/revisions/'+legacy['model_revision_id'])==legacy
-            assert j.private('GET','/models/'+legacy['model_id']+'/export?revision='+legacy['model_revision_id'])==package
-            assert j.process_count()==0 and not j.canary()['candidate_side_effect']
-            variants.append(dict(kind=kind,model=explanation,approach=approach,configuration=saved,preview=preview,private=private,prepared=prepared))
-        # Scientific expectation is authored before execution: y=x, x=3 N => y=3 N.
-        proof.update(variants=variants,selected_model=legacy,selected_model_sha256=hashlib.sha256(original).hexdigest(),package=package,
-            expected=dict(relation='y = x',input=3,output=3,units='N'),processes_before=0,preparation_processes=0)
-        (SCOPE.root/'evidence/mixed-pre-execution.json').write_text(json.dumps(proof,indent=2))
-        saved=variants[1]['configuration'];rid,detail,node=j.execute(saved)
-        proof.update(science_succeeded=True,run_id=rid,process_uuid=node.uuid,processes_after=j.process_count())
-        (SCOPE.root/'evidence/mixed-science-retained.json').write_text(json.dumps(proof,indent=2))
-        near(output(detail,target['y'])['value'],3);assert output(detail,target['y'])['units']=='N'
-        payload=j.payload(rid);raw=canonical(payload);bundle=payload['bundle']
-        files={p:base64.b64decode(b) for p,b in bundle['files'].items()}
-        assert bundle['manifest']['schema_version']=='6'
-        assert bundle['manifest']['required_capabilities']==legacy['required_capabilities']
-        assert json.loads(files['model.json'])==legacy
-        assert json.loads(files['configuration.json'])==saved['configuration']
-        assert json.loads(files['approach/closure.json'])==saved['approach_closure']
-        assert detail['history']['model_snapshot']==legacy and detail['history']['approach_closure']==saved['approach_closure']
-        seed=j.request('GET','runs/'+rid+'/modified-run-seed')
-        assert seed['schema_version']=='4' and seed['model_snapshot']==legacy and seed['source_configuration']==saved['configuration']
-        assert seed['approach_closure']==saved['approach_closure']
-        modified=deepcopy(seed['configuration']);modified['name']='Mixed modified without dispatch'
-        modified['context_source']['choice_confirmed']=True
-        changed=j.save_configuration(modified)
-        assert changed['model_snapshot']==legacy and changed['approach_closure']==saved['approach_closure']
-        assert j.process_count()==1
-        records=[(rid,detail,saved,raw)]
-        preview=j.request('POST','computational-record-previews',dict(command_id=uid(),selected_run_ids=[rid]),202)
-        guard.run_export_dispatcher(SCOPE,j.native,j.store.path,preview['request_id'])
-        preview=j.request('GET','computational-records/'+preview['request_id']);assert preview['state']=='reviewable',preview
-        create=j.request('POST','computational-records',dict(command_id=uid(),preview_id=preview['request_id'],expected_preview_digest=preview['preview']['preview_digest']),202)
-        guard.run_export_dispatcher(SCOPE,j.native,j.store.path,create['request_id'])
-        ready=j.request('GET','computational-records/'+create['request_id']);assert ready['state']=='ready',ready
-        response=j.http.get('/api/1/studies/'+j.sid+'/computational-records/'+create['request_id']+'/download')
-        assert response.status_code==200
-        archive_bytes=response.content;(SCOPE.root/'evidence/mixed-native.zip').write_bytes(archive_bytes)
-        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-            manifest=json.loads(archive.read('manifest.json'))
-            path=SCOPE.root/'evidence/mixed-native.aiida';path.write_bytes(archive.read('computations.aiida'))
-        assert manifest['computational_run_ids']==[rid]
-        service=ComputationalRecords(j.store,SCOPE.root/'artifacts/mixed-offline-inspect')
-        _,_,preflight,_=service._collect(j.actor,j.sid,[rid])
-        with ArchiveFormatSqlZip().open(path,'r') as archive:
-            inventory,_,_=Export(j.native,preflight).inspect(archive.get_backend())
-        assert inspect_record(archive_bytes,native_inventory=inventory)==manifest
-        assert j.process_count()==1 and canonical(j.payload(rid))==raw
-        # Archive is already authenticated before presentation-only checks.
-        browser=j.browser(records,mixed=dict(variants=variants,seed=seed,modified=changed,
-            archive_id=create['request_id'],archive_manifest=manifest,archive_sha256=hashlib.sha256(archive_bytes).hexdigest()))
-        j.restart_web()
-        assert j.request('GET','runs/'+rid)['history']==detail['history']
-        assert j.request('GET','runs/'+rid+'/modified-run-seed')==seed
-        for variant in variants:
-            s=variant['configuration'];assert j.request('GET','configurations/'+s['configuration']['configuration_revision_id'])==s
-        assert canonical(j.payload(rid))==raw
-        proof.update(passed=True,browser=browser,seed=seed,modified=changed,history=detail,
-            archive=dict(manifest=manifest,native_inventory=inventory,sha256=hashlib.sha256(archive_bytes).hexdigest()),
-            retained_payload_sha256=hashlib.sha256(raw).hexdigest(),retained_file_hashes={p:hashlib.sha256(b).hexdigest() for p,b in files.items()},
-            application_restart=True,modeling_outage=True,actual_http_jwt=True,attestation=j.native.require_attestation(),human_acceptance='pending')
-    finally:
-        (SCOPE.root/'evidence/mixed-native-events.json').write_text(json.dumps(j.events,indent=2))
-        (SCOPE.root/'evidence/mixed-native-proof.json').write_text(json.dumps(proof,indent=2))
-        j.close()

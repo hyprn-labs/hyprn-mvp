@@ -31,6 +31,7 @@ def run(*, group):
     from hyprn_mvp_app.store import Store, uid, digest, canonical
     from hyprn_mvp_app.modeling import ModelingClient, validate
     from test_unit_guidance_api import UnitTransport
+    from criteria_free import CRITERIA_FREE_CAPABILITY
     from test_assumption_authoring import revision, sample, D
     from hyprn_mvp_app.units import resolved_model_units
     from hyprn_mvp_app.modeling import UNIT_CATALOG_DIGEST
@@ -70,6 +71,14 @@ def run(*, group):
             if key.endswith(('/capabilities','/unit-catalog')):
                 catalog_transport = UnitTransport(store,sid)
                 catalog_transport.caps['capabilities'].append(dict(catalog_transport.caps['capabilities'][0],id='resolved_configuration',version='3'))
+                catalog_transport.caps['capabilities'].append(dict(
+                    catalog_transport.caps['capabilities'][0],
+                    id='quantity_definitions',version='1',
+                ))
+                # New configurations (version 6) need the criteria-free capability.
+                catalog_transport.caps['capabilities'].append(deepcopy(CRITERIA_FREE_CAPABILITY))
+                catalog_transport.caps['schema_versions'].append('4')
+                catalog_transport.caps['contract_versions'].append('1.4')
                 return catalog_transport(method,path,raw,headers)
             if '/commands/' in key:
                 command = key.rsplit('/',1)[1]
@@ -156,18 +165,42 @@ def run(*, group):
                             elif change['kind']=='remove_port':definition['ports']=[p for p in definition['ports'] if p['port_id']!=change['port_id']]
                             elif change['kind']=='set_source':
                                 draft['source_files'].append(change['source']);definition['source_refs']=[change['source']['sha256']]
+                            elif change['kind'] in (
+                                'set_quantity_definition','clear_quantity_definition',
+                            ):
+                                assert any(
+                                    p['port_id']==change['port_id'] for p in definition['ports']
+                                )
+                                definition['quantity_definitions']=[
+                                    q for q in definition.get('quantity_definitions',[])
+                                    if q['port_id']!=change['port_id']
+                                ]
+                                if change['kind']=='set_quantity_definition':
+                                    definition['quantity_definitions'].append(
+                                        dict(port_id=change['port_id'],statement=change['statement'])
+                                    )
                             else:raise AssertionError(change['kind'])
                         draft['definitions'].append(definition);created[edit['temp_key']]=dict(definition_id=definition['definition_id'],definition_version_id=vid,ports={})
                     elif kind=='replace_local_instance_version':
                         next(i for i in draft['instances'] if i['instance_id']==edit['instance_id'])['definition_version_id']=created[edit['version_ref']['temp_key']]['definition_version_id']
                     elif kind=='rename_instance':next(i for i in draft['instances'] if i['instance_id']==edit['instance_id'])['name']=edit['name']
                     elif kind=='rename_model':draft['name']=edit['name']
+                    elif kind=='set_annotation':
+                        assert any(
+                            i['instance_id']==edit['element_ref'] for i in draft['instances']
+                        )
+                        draft['annotations']=[
+                            a for a in draft['annotations'] if a['element_ref']!=edit['element_ref']
+                        ]+[dict(element_ref=edit['element_ref'],text=edit['text'])]
                     elif kind=='connect':
                         draft['connections'].append(dict(connection_id=uid(),source_ref=edit['source_ref'],target_ref=edit['target_ref']))
                     else:raise AssertionError('Unsupported declared test operation: '+kind)
                 draft['ports']=[deepcopy(p) for d in draft['definitions'] for p in d['ports']]
+                if (draft['schema_version']=='4'
+                    and 'quantity_definitions/1' not in draft['required_capabilities']):
+                    draft['required_capabilities'].append('quantity_definitions/1')
                 if operation=='edits':draft['draft_revision']=uid();transport.draft=draft
-                validate('ModelDraft',draft)
+                validate('ModelDraft4' if draft['schema_version']=='4' else 'ModelDraft',draft)
                 result=response(draft,created_ids=created,diagnostics=[])[1]
             elif operation=='commits':
                 saved=revision(draft);transport.revisions[saved['model_revision_id']]=saved;result=response(saved)[1]
@@ -248,6 +281,10 @@ def run(*, group):
                 legacy=definition('Legacy component',[('legacy','input','')])
                 draft['definitions']=[draft['definitions'][0],old,active,receiver,legacy]
                 producer_id,receiver_id=uid(),uid()
+                draft['annotations']=[
+                    dict(element_ref=producer_id,text='Recorded energy transformation.'),
+                    dict(element_ref=receiver_id,text='Receives the recorded flow.'),
+                ]
                 draft['instances']=[draft['instances'][0],dict(instance_id=producer_id,definition_version_id=active['definition_version_id'],name='Energy law'),dict(instance_id=receiver_id,definition_version_id=receiver['definition_version_id'],name='Receiver'),dict(instance_id=uid(),definition_version_id=legacy['definition_version_id'],name='Legacy component')]
                 draft['connections']=[dict(connection_id=uid(),source_ref=dict(instance_id=producer_id,port_id=active['ports'][-1]['port_id']),target_ref=dict(instance_id=receiver_id,port_id=receiver['ports'][0]['port_id']))]
                 draft['ports']=[deepcopy(port) for d in draft['definitions'] for port in d['ports']]
@@ -291,9 +328,16 @@ def run(*, group):
                 run=Submissions(store,None,None).submit(actor,sid,dict(command_id=uid(),configuration_revision_id=config['configuration_revision_id']))
                 rid=run['run_id'];bundle_digest=digest(dict(fixture='synthetic-history',run_id=rid));units=resolved_model_units(model)
                 outputs=[dict(target=dict(instance_id=i['instance_id'],port_id=p['port_id']),value=7,units=units[(i['instance_id'],i['definition_version_id'],p['port_id'])],availability='available',reason=None,producer_completed=True,assigned=True) for i in model['instances'] for d in model['definitions'] if d['definition_version_id']==i['definition_version_id'] for p in d['ports'] if p['direction']=='output']
-                results=dict(schema_version='1',run_id=rid,bundle_digest=bundle_digest,execution=dict(state='finished',exit_code=0,message='Synthetic history double'),convergence=dict(state='not_applicable',diagnostics_ref=None),optimization=dict(termination='not_applicable',feasibility='not_applicable'),completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),outputs=outputs,criteria=[dict(criterion_id=c['criterion_id'],outcome='unresolved',reason='Synthetic fixture') for c in config['criteria']],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
-                manifest=dict(schema_version='6',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],approach_digest=None,approach_closure_digest=None)
-                history=dict(history_schema_version='4',configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],bundle={k:v for k,v in manifest.items() if k!='runtime'},results=results,assessment=None,artifacts=[],errors=[],approach_closure=frozen['approach_closure'])
+                execution=dict(state='finished',exit_code=0,message='Synthetic history double')
+                if config['schema_version']=='6':
+                    # History 8: configuration 6 on Model4, bundle 11 and results 3 (no criteria).
+                    results=dict(schema_version='3',run_id=rid,bundle_digest=bundle_digest,execution=execution,outputs=outputs,artifacts=[])
+                    manifest=dict(schema_version='11',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],model_schema_version='4',input_schema_version='11')
+                    history=dict(history_schema_version='8',configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],bundle={k:v for k,v in manifest.items() if k!='runtime'},results=results,artifacts=[],errors=[])
+                else:
+                    results=dict(schema_version='1',run_id=rid,bundle_digest=bundle_digest,execution=execution,convergence=dict(state='not_applicable',diagnostics_ref=None),optimization=dict(termination='not_applicable',feasibility='not_applicable'),completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),outputs=outputs,criteria=[dict(criterion_id=c['criterion_id'],outcome='unresolved',reason='Synthetic fixture') for c in config['criteria']],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
+                    manifest=dict(schema_version='6',bundle_digest=bundle_digest,model_digest=model['digest'],configuration_digest=config['digest'],dependencies=[],runtime=runtime_fixture()['runtime'],approach_digest=None,approach_closure_digest=None)
+                    history=dict(history_schema_version='4',configuration=config,model_snapshot=model,context=config['context_snapshot'],evidence=config['evidence_snapshots'],bundle={k:v for k,v in manifest.items() if k!='runtime'},results=results,assessment=None,artifacts=[],errors=[],approach_closure=frozen['approach_closure'])
                 retained[rid]=(history,dict(bundle=dict(manifest=manifest),frozen=frozen))
                 with store.connection(write=True) as db:
                     db.execute('UPDATE run_associations SET store_uuid=?,process_uuid=? WHERE run_id=?',(uid(),uid(),rid))
@@ -349,7 +393,7 @@ def run(*, group):
             imports+='import * as exports from '+json.dumps(str(REPO/'ui/src/exports'))+';\n'
         reader='window.showAssumptionChanges=(before,after)=>root.render(<ModelAssumptionChanges before={before} after={after}/>);' if group=='units-ui-reading' else ''
         if group=='units-ui-history':
-            reader='window.exportHelpers=exports;window.showComparison=(study,snapshot)=>root.render(<ComparisonView api={window.unitsApi} study={study} scope={{snapshot,values:{kind:"model"},selection:{kind:"none"},unsaved:false}} root={{current:document.body}} navigate={f=>f()} onImported={async()=>{}} showComparison/>);'
+            reader='window.exportHelpers=exports;window.showPortability=(study,snapshot)=>root.render(<ComparisonView api={window.unitsApi} study={study} scope={{snapshot,values:{kind:"model"},selection:{kind:"none"},unsaved:false}} root={{current:document.body}} navigate={f=>f()} onImported={async()=>{}} standalone/>);'
         (stage/'entry.tsx').write_text(imports+'window.unitLabels=unitLabels;window.unitsApi=new HyprnMvpApi();const root=createRoot(document.getElementById("root"));'+reader+'root.render(<Workspace/>);')
         config=dict(root=str(stage),base='/ui/',build=dict(outDir=str(dist),target='esnext'),resolve=dict(alias={'react':str(REPO/'ui/node_modules/react'),'react-dom':str(REPO/'ui/node_modules/react-dom')}))
         (stage/'vite.config.mjs').write_text('export default '+json.dumps(config))

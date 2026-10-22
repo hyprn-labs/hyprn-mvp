@@ -1,33 +1,14 @@
-import { useEffect, useId, useRef, useState, type ReactElement, type ReactNode, type ComponentPropsWithRef } from 'react';
+import { cloneElement, createContext, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode, type ComponentPropsWithRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Tabs, StatusTag, type Tone, type ButtonProps } from './components';
 import { formatNumber } from './numbers';
+import sectionHelp from './section-help.json';
+import { displayUnit } from '../unitLabels';
 
-export type ActionIconName = 'close' | 'back' | 'add' | 'import' | 'export'
-  | 'chevron-left' | 'chevron-right' | 'chevron-up' | 'chevron-down' | 'search';
-
-// Independently drawn on a 24-unit grid; no icon library or font assets.
-const paths: Record<Exclude<ActionIconName, 'search'>, string> = {
-  close: 'M6 6l12 12M18 6L6 18',
-  back: 'M20 12H4m7-7-7 7 7 7',
-  add: 'M12 4v16M4 12h16',
-  import: 'M12 3v12m-5-5 5 5 5-5M4 15v6h16v-6',
-  export: 'M12 16V4m-5 5 5-5 5 5M4 15v6h16v-6',
-  'chevron-left': 'm15 5-7 7 7 7',
-  'chevron-right': 'm9 5 7 7-7 7',
-  'chevron-up': 'm5 15 7-7 7 7',
-  'chevron-down': 'm5 9 7 7 7-7',
-};
-
-/** Decorative only. Give the containing Button visible text or an aria-label. */
-export function ActionIcon({ name }: { name: ActionIconName }): ReactElement {
-  return (
-    <svg className="hf-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter">
-      {name === 'search' ? <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></> : <path d={paths[name]} />}
-    </svg>
-  );
-}
+import { ActionIcon } from './icons';
+import { OpenLink } from './navigation';
+export { ActionIcon } from './icons';
+export type { ActionIconName } from './icons';
 
 /** Native semantics and controlled values pass through; no domain state lives here. */
 export function TextInput({ className = '', ...props }: ComponentPropsWithRef<'input'>) {
@@ -38,24 +19,95 @@ export function FilePicker({ label, ...props }: Omit<ComponentPropsWithRef<'inpu
   const input = useRef<HTMLInputElement>(null), [name, setName] = useState('No file selected');
   return <div className="hf-file-picker"><input {...props} ref={input} type="file" hidden tabIndex={-1} aria-label={label} onChange={event => { setName(event.target.files?.[0]?.name ?? 'No file selected'); props.onChange?.(event); }} /><Button disabled={props.disabled} onClick={() => input.current?.click()}>Choose file</Button><span aria-live="polite">{name}</span></div>;
 }
-/** Indeterminate progress only. No percentage is inferred from execution stages. */
-export function Progress({ label, message }: { label: string; message?: string }) {
-  return <section className="hf-progress"><p role="status">{label}</p><progress aria-label={label} />{message && <p className="hf-progress__message">{message}</p>}</section>;
+/** Only explicit work counts determine progress; stages never imply elapsed-time percentages. */
+export function Progress({ label, message, count }: {
+  label: string;
+  message?: string;
+  count?: { completed: number; total: number };
+}) {
+  const known = count && Number.isSafeInteger(count.completed) &&
+    Number.isSafeInteger(count.total) && count.total > 0 &&
+    count.completed >= 0 && count.completed <= count.total;
+  return <section className="hf-progress">
+    <p role="status">{label}</p>
+    <progress aria-label={label} value={known ? count.completed : undefined}
+      max={known ? count.total : undefined} />
+    {message && <p className="hf-progress__message">{message}</p>}
+  </section>;
+}
+/** Ordinary form fields share visible labels, optionality and spacing across editors. */
+export function FormField({ label, optional = false, children }: {
+  label: string;
+  optional?: boolean;
+  children: ReactNode;
+}) {
+  return <label className="hf-form-field">
+    <span>{label}{optional && <span className="hf-form-field__optional"> (optional)</span>}</span>
+    {children}
+  </label>;
+}
+/** Optional field guidance has its own hierarchy; warnings remain full-size alerts. */
+export function FieldHint({ children, id }: { children: ReactNode; id?: string }) {
+  return <p id={id} className="hf-field-hint">{children}</p>;
 }
 export function TextArea({ className = '', ...props }: ComponentPropsWithRef<'textarea'>) {
   return <textarea {...props} className={'hf-input hf-textarea ' + className} />;
 }
-export function Select({ className = '', ...props }: ComponentPropsWithRef<'select'>) {
-  return <select {...props} className={'hf-input ' + className} />;
-}
+export { Select } from './select';
 export function Checkbox(props: ComponentPropsWithRef<'input'>) {
   return <TextInput {...props} type="checkbox" />;
 }
-export function Disclosure(props: ComponentPropsWithRef<'details'>) {
-  return <details {...props} />;
+export function Disclosure({ className = '', ...props }: ComponentPropsWithRef<'details'>) {
+  return <details {...props} className={'hf-disclosure ' + className} />;
 }
-export function DialogFrame({ className = '', onKeyDown, ...props }: ComponentPropsWithRef<'dialog'>) {
-  return <dialog {...props} className={'hf-dialog ' + className} onKeyDown={event => {
+type DialogFooter = { root: HTMLDivElement; secondary: HTMLDivElement; primary: HTMLDivElement };
+const DialogFooterContext = createContext<DialogFooter | null | undefined>(undefined);
+
+type CompletionActionsProps = {
+  children?: ReactNode;
+  primary?: ReactElement<ButtonProps> | false | null;
+};
+function primaryAction(primary: CompletionActionsProps['primary']) {
+  return primary ? cloneElement(primary, {
+    variant: primary.props.variant === 'danger' ? 'danger' : 'primary',
+  }) : null;
+}
+
+/** Inline editors use the same action order and emphasis as modal editors. */
+export function FormActions({ children, primary }: CompletionActionsProps) {
+  return <div className="hf-form-actions">{children}{primaryAction(primary)}</div>;
+}
+
+/** Secondary actions always precede the highlighted primary action, including in
+ * keyboard order. Submit form ownership and disabled/hidden state stay explicit.
+ */
+export function DialogActions({ children, primary, active = true }: {
+  active?: boolean;
+} & CompletionActionsProps) {
+  const host = useContext(DialogFooterContext);
+  if (!active) return null;
+  const commit = primaryAction(primary);
+  if (host === undefined) return <div className="hf-dialog-actions">{children}{commit}</div>;
+  return host ? <>
+    {children && createPortal(children, host.secondary)}
+    {commit && createPortal(commit, host.primary)}
+  </> : null;
+}
+
+/** A modal frame; `width="wide"` gives a comparison its reading width from the layout tokens. */
+export function DialogFrame({ className = '', width = 'default', onKeyDown, children, ...props }: ComponentPropsWithRef<'dialog'> & { width?: 'default' | 'wide' }) {
+  // Create the portal target before children mount. Mounting it in the same commit
+  // keeps native form refs and the owner's initial modal focus available to effects.
+  const [footer] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const root = document.createElement('div');
+    const secondary = document.createElement('div');
+    const primary = document.createElement('div');
+    root.className = secondary.className = primary.className = 'hf-dialog-actions';
+    root.append(secondary, primary);
+    return { root, secondary, primary };
+  });
+  return <dialog {...props} className={'hf-dialog ' + (width === 'wide' ? 'hf-dialog--wide ' : '') + className} onKeyDown={event => {
     onKeyDown?.(event);
     const dialog = event.currentTarget;
     // Native modal inertness blocks the page, but Tab can still leave for browser
@@ -76,11 +128,79 @@ export function DialogFrame({ className = '', onKeyDown, ...props }: ComponentPr
       event.preventDefault();
       (event.shiftKey ? last : first)?.focus();
     }
-  }} />;
+  }}>
+    <DialogFooterContext.Provider value={footer}>{children}</DialogFooterContext.Provider>
+    <div className="dialog-footer" ref={element => {
+      if (element && footer && footer.root.parentNode !== element) element.appendChild(footer.root);
+    }} />
+  </dialog>;
 }
-export function SectionHeader({ title, actions, level = 3, id }: { title: ReactNode; actions?: ReactNode; level?: 2 | 3 | 4; id?: string }) {
+export type SectionHelpTopic = keyof typeof sectionHelp;
+
+/** Shared section meanings; agent guidance carries the same domain distinctions. */
+export function SectionHelp({ topic }: { topic: SectionHelpTopic }) {
+  const content = sectionHelp[topic];
+  return (
+    <HelpButton title={content.title}>
+      {content.paragraphs.map((paragraph) => (
+        <p key={paragraph}>{paragraph}</p>
+      ))}
+    </HelpButton>
+  );
+}
+
+export function SectionHeader({
+  title,
+  actions,
+  help,
+  level = 3,
+  id,
+}: {
+  title: ReactNode;
+  actions?: ReactNode;
+  help?: SectionHelpTopic;
+  level?: 2 | 3 | 4;
+  id?: string;
+}) {
   const Heading = ('h' + level) as 'h2' | 'h3' | 'h4';
-  return <div className="section-header"><Heading id={id}>{title}</Heading>{actions && <div className="section-actions">{actions}</div>}</div>;
+  return (
+    <div className="section-header">
+      <div className="hf-heading-group">
+        <Heading id={id}>{title}</Heading>
+        {help && <SectionHelp topic={help} />}
+      </div>
+      {actions && (
+        <div className="section-actions">
+          {actions}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Labels and scientific states are inert; only the distinct arrow navigates. */
+export function RecordNavigation({
+  children,
+  label,
+  onOpen,
+}: {
+  children: ReactNode;
+  label: string;
+  onOpen: () => void;
+}) {
+  return (
+    <span className="hf-record-navigation">
+      <span>{children}</span>
+      <OpenLink
+        size="sm"
+        iconOnly
+        className="hf-record-navigation__open"
+        aria-label={label}
+        title={label}
+        onClick={onOpen}
+      />
+    </span>
+  );
 }
 
 export type CriterionRecordProps = {
@@ -96,34 +216,166 @@ export type CriterionRecordProps = {
 
 /** Presentation only: callers resolve quantities and supply saved criterion evaluations. */
 export function CriterionRecord({ number, target, comparison, threshold, units, tolerances, evidence, evaluation }: CriterionRecordProps) {
-  const id = useId(), unit = units || 'dimensionless';
+  const id = useId(), unit = units ? displayUnit(units) : 'dimensionless';
   const value = (n: number | null, missing = 'unassigned') => n === null ? missing : formatNumber(n);
-  const exact = (n: number | null, missing = 'unassigned') => n === null ? missing : Number.isFinite(n) ? String(n) : 'not computed';
-  return <article className="hf-criterion-record hf-criterion" aria-labelledby={id}>
-    <div className="hf-criterion__heading"><h4 id={id}>Criterion {number}</h4>{evaluation && <StatusTag tone={evaluation.tone}>{evaluation.label}</StatusTag>}</div>
-    <p className="hf-criterion__target">{target || 'Choose output'}</p>
-    <div className="hf-criterion__requirement"><span>{comparison}</span><span className="hf-criterion__number">{value(threshold)}</span><span className="hf-criterion__unit">{unit}</span></div>
-    {tolerances && <dl className="hf-criterion__facts"><div><dt>Absolute tolerance</dt><dd>{value(tolerances.absolute)} <span className="hf-criterion__unit">{unit}</span></dd></div><div><dt>Relative tolerance</dt><dd>{value(tolerances.relative)}</dd></div></dl>}
-    {evaluation?.actual !== undefined && <dl className="hf-criterion__facts"><div><dt>Actual value</dt><dd>{value(evaluation.actual, 'not computed')} <span className="hf-criterion__unit">{evaluation.units ?? unit}</span></dd></div></dl>}
-    {evaluation?.reason && <p className="hf-criterion__reason">{evaluation.reason}</p>}
-    {evidence && <div className="hf-criterion__evidence">{evidence}</div>}
-    <div className="hf-criterion__actions"><ActionDialog title={`Full-precision values for criterion ${number}`} label="Full-precision values" size="sm"><dl className="hf-record-details"><dt>Threshold</dt><dd>{exact(threshold)} {unit}</dd>{tolerances && <><dt>Absolute tolerance</dt><dd>{exact(tolerances.absolute)} {unit}</dd><dt>Relative tolerance</dt><dd>{exact(tolerances.relative)}</dd></>}{evaluation?.actual !== undefined && <><dt>Actual value</dt><dd>{exact(evaluation.actual, 'not computed')} {evaluation.units ?? unit}</dd></>}</dl></ActionDialog></div>
-  </article>;
+  return (
+    <article className="hf-criterion-record hf-criterion" aria-labelledby={id}>
+      <div className="hf-criterion__heading">
+        <h4 id={id}>Criterion {number}</h4>
+        {evaluation && <StatusTag tone={evaluation.tone}>{evaluation.label}</StatusTag>}
+      </div>
+      <p className="hf-criterion__target">{target || 'Choose output'}</p>
+      <div className="hf-criterion__requirement">
+        <span>{comparison}</span>
+        <span
+          className="hf-criterion__number"
+          title={threshold === null ? undefined : String(threshold)}
+        >
+          {value(threshold)}
+        </span>
+        <span className="hf-criterion__unit">{unit}</span>
+      </div>
+      {tolerances && (
+        <dl className="hf-criterion__facts">
+          <div>
+            <dt>Absolute tolerance</dt>
+            <dd>
+              {value(tolerances.absolute)} <span className="hf-criterion__unit">{unit}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Relative tolerance</dt>
+            <dd>{value(tolerances.relative)}</dd>
+          </div>
+        </dl>
+      )}
+      {evaluation?.actual !== undefined && (
+        <dl className="hf-criterion__facts">
+          <div>
+            <dt>Actual value</dt>
+            <dd>
+              {value(evaluation.actual, 'not computed')}{' '}
+              <span className="hf-criterion__unit">{evaluation.units === undefined ? unit : evaluation.units ? displayUnit(evaluation.units) : 'dimensionless'}</span>
+            </dd>
+          </div>
+        </dl>
+      )}
+      {evaluation?.reason && <p className="hf-criterion__reason">{evaluation.reason}</p>}
+      {evidence && <div className="hf-criterion__evidence">{evidence}</div>}
+    </article>
+  );
 }
 
 /** Closing hides rather than unmounts children, preserving the owning controller's draft. */
-export function ActionDialog({ title, label = title, children, disabled = false, actionHost, completionKey, size, triggerLabel, variant, width = 'default' }: { variant?: ButtonProps['variant']; width?: 'default' | 'workspace'; size?: 'sm' | 'desk'; triggerLabel?: string; title: string; label?: string; children: ReactNode; disabled?: boolean; actionHost?: HTMLElement | null; completionKey?: number }) {
-  const dialog = useRef<HTMLDialogElement>(null), invoker = useRef<HTMLElement | null>(null), id = useId();
-  useEffect(() => { if (completionKey) dialog.current?.close(); }, [completionKey]);
-  const trigger = <Button variant={variant} size={size} aria-label={triggerLabel} disabled={disabled} aria-haspopup="dialog" onClick={() => { invoker.current = document.activeElement as HTMLElement; dialog.current?.showModal(); }}>{label}</Button>;
+export function ActionDialog({
+  title,
+  label = title,
+  purpose = 'action',
+  children,
+  disabled = false,
+  actionHost,
+  completionKey,
+  size,
+  triggerLabel,
+  triggerClassName,
+  icon,
+  variant,
+  width = 'default',
+  closeLabel = 'Done',
+  help,
+  onOpen,
+  onDismiss,
+}: {
+  purpose?: 'action' | 'reader';
+  closeLabel?: string;
+  help?: SectionHelpTopic;
+  /** Called each time the dialog opens, so its content can load on demand. */
+  onOpen?: () => void;
+  /** Discard only local editor state on Cancel, Escape or the close control. */
+  onDismiss?: () => void | boolean;
+  variant?: ButtonProps['variant'];
+  width?: 'default' | 'workspace';
+  size?: 'sm' | 'desk';
+  triggerLabel?: string;
+  triggerClassName?: string;
+  icon?: ReactNode;
+  title: string;
+  label?: string;
+  children: ReactNode;
+  disabled?: boolean;
+  actionHost?: HTMLElement | null;
+  completionKey?: number;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null),
+    invoker = useRef<HTMLElement | null>(null),
+    id = useId();
+  useEffect(() => {
+    if (completionKey) dialog.current?.close();
+  }, [completionKey]);
+  function dismiss() {
+    if (onDismiss?.() === false) return;
+    dialog.current?.close();
+  }
+  const open = () => {
+    invoker.current = document.activeElement as HTMLElement;
+    dialog.current?.showModal();
+    onOpen?.();
+  };
+  const trigger = purpose === 'reader' ? (
+    <OpenLink size={size} aria-label={triggerLabel} className={triggerClassName}
+      disabled={disabled} aria-haspopup="dialog" onClick={open}>{label}</OpenLink>
+  ) : (
+    <Button variant={variant} size={size} iconOnly={label === '…'}
+      aria-label={triggerLabel} className={triggerClassName} icon={icon}
+      disabled={disabled} aria-haspopup="dialog" onClick={open}>{label}</Button>
+  );
   // Native close normally restores focus; its delayed event must not steal a later selection.
-  return <>{actionHost ? createPortal(trigger, actionHost) : trigger}
-    <DialogFrame ref={dialog} aria-labelledby={id} className={'action-dialog' + (width === 'workspace' ? ' hf-dialog--workspace' : '')} onClose={() => { const active = document.activeElement; if (invoker.current?.isConnected && (active === document.body || !active || dialog.current?.contains(active))) invoker.current.focus(); }}>
-      <div className="dialog-heading"><h2 id={id}>{title}</h2><Button variant="quiet" icon={<ActionIcon name="close" />} aria-label={'Close ' + title} onClick={() => dialog.current?.close()} /></div>
-      <div className="dialog-body">{children}</div>
-      <div className="dialog-footer"><Button onClick={() => dialog.current?.close()}>Done</Button></div>
-    </DialogFrame></>;
+  return (
+    <>
+      {actionHost ? createPortal(trigger, actionHost) : trigger}
+      {typeof document !== 'undefined' && createPortal(
+        <DialogFrame
+          ref={dialog}
+          aria-labelledby={id}
+          className={'action-dialog' + (width === 'workspace' ? ' hf-dialog--workspace' : '')}
+          onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); dismiss(); }}
+          onClose={() => {
+            const active = document.activeElement;
+            if (
+              invoker.current?.isConnected &&
+              (active === document.body || !active || dialog.current?.contains(active))
+            )
+              invoker.current.focus();
+          }}
+        >
+          <div className="dialog-heading">
+            <div className="hf-heading-group">
+              <h2 id={id}>{title}</h2>
+              {help && <SectionHelp topic={help} />}
+            </div>
+            <Button
+              variant="quiet"
+              icon={<ActionIcon name="close" />}
+              aria-label={'Close ' + title}
+              onClick={dismiss}
+            />
+          </div>
+          <div className="dialog-body">{children}</div>
+          <DialogActions>
+            <Button onClick={dismiss}>{closeLabel}</Button>
+          </DialogActions>
+        </DialogFrame>,
+        document.body,
+      )}
+    </>
+  );
 }
+/** Context help: one circular trigger, a named dialog, keyboard dismissal and focus return. */
+export function HelpButton({ title, children }: { title: string; children: ReactNode }) {
+  return <ActionDialog title={title} label="?" triggerLabel={'Help: ' + title}
+    triggerClassName="hf-help" variant="quiet" size="sm">{children}</ActionDialog>;
+}
+
 export function DetailTabs({ ports, source, assumptions }: { ports: ReactNode; source: ReactNode; assumptions: ReactNode }) {
   const [tab, setTab] = useState('0'), id = useId();
   return <><Tabs className="detail-tabs" label="Component details" value={tab} onChange={setTab}

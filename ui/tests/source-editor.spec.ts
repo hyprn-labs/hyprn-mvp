@@ -30,11 +30,11 @@ test('source tools preserve raw bytes until a deliberate edit and save only thro
   const f=await setup(page);const source=page.getByRole('textbox',{name:'Python source',exact:true});
   const raw=Buffer.from('\ufeff# café <script>window.sourceExecuted=true</script>\r\noutputs["y"] = inputs["x"]\r\n\r\n');
   await page.getByLabel('Load Python source file').setInputFiles({name:'unicode.py',mimeType:'text/x-python',buffer:raw});
-  await expect(page.getByRole('toolbar',{name:'Source actions'})).toBeVisible();
+  await expect(page.getByRole('toolbar',{name:'Source actions'})).toHaveCount(0);
   await expect(page.getByText('Declared symbols: x → y',{exact:true})).toBeVisible();
   await expect(page.locator('.source-highlight')).toContainText('<script>window.sourceExecuted=true</script>');
   expect(await page.evaluate(()=>Reflect.get(window,'sourceExecuted'))).toBeUndefined();
-  await source.focus();await source.press('Escape');await expect(page.getByRole('button',{name:'Expand source',exact:true})).toBeFocused();
+  await source.focus();await source.press('Escape');await expect(source).toBeFocused();
   await page.getByLabel('Find in source',{exact:true}).fill('outputs');await page.getByRole('button',{name:'Find next',exact:true}).click();
   expect(await source.evaluate((e:HTMLTextAreaElement)=>e.value.slice(e.selectionStart,e.selectionEnd))).toBe('outputs');
   await source.press('Tab');await expect(source).not.toBeFocused();
@@ -64,19 +64,13 @@ test('source tools preserve raw bytes until a deliberate edit and save only thro
   writeFileSync(evidencePath('source-byte-proof.json'),JSON.stringify({original:raw.toString('base64'),sha256:expected,editedHash,first,notes,changed,candidate_executions:0},null,2));
 });
 
-test('expanded editor keeps selection, local scroll, caret and accessible keyboard exit at wide and narrow widths',async({page})=>{
+test('source preserves caret and scrolling across widths',async({page})=>{
   await setup(page);const source=page.getByRole('textbox',{name:'Python source',exact:true});
   const text='# '+ 'long_identifier '.repeat(100)+'\n'+Array.from({length:40},(_,i)=>`# line ${i+2}`).join('\n');
   await source.fill(text);await source.evaluate((e:HTMLTextAreaElement)=>e.setSelectionRange(2,17));
-  await page.getByRole('button',{name:'Expand source',exact:true}).click();
-  await expect(source).toHaveValue(text);await expect(page.getByRole('button',{name:'Collapse source',exact:true})).toBeVisible();
-  expect(await source.evaluate((e:HTMLTextAreaElement)=>[e.selectionStart,e.selectionEnd])).toEqual([2,17]);
-  await page.getByRole('button',{name:'Hide component inspector',exact:true}).click();
-  await expect(page.locator('.connected-inspector')).toBeHidden();
-  await expect(page.locator('.connected-main')).toBeVisible();
-  await expect(page.getByRole('button',{name:'Show component inspector',exact:true})).toBeFocused();
-  await page.getByRole('button',{name:'Show component inspector',exact:true}).click();
-  await expect(source).toBeVisible();await expect(source).toHaveValue(text);
+  await page.getByRole('tab',{name:'Component',exact:true}).click();
+  await page.getByRole('tab',{name:'Python',exact:true}).click();
+  await expect(source).toHaveValue(text);
   expect(await source.evaluate((e:HTMLTextAreaElement)=>[e.selectionStart,e.selectionEnd])).toEqual([2,17]);
   await expect(page.locator('.source-line-numbers')).toContainText('41');
   expect(await source.evaluate((e:HTMLTextAreaElement)=>e.scrollWidth>e.clientWidth)).toBeTruthy();
@@ -88,9 +82,7 @@ test('expanded editor keeps selection, local scroll, caret and accessible keyboa
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
     await page.screenshot({path:evidencePath(`source-editor-${width}.png`),fullPage:true});
   }
-  await source.press('Escape');await expect(page.getByRole('button',{name:'Collapse source',exact:true})).toBeFocused();
-  await page.getByRole('button',{name:'Collapse source',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Inspector',exact:true})).toBeFocused();
-  await page.getByRole('tab',{name:'Inspector',exact:true}).press('Enter');await expect(source).toHaveValue(text);
+  await source.focus();await source.press('Tab');await expect(source).not.toBeFocused();
+  await expect(source).toHaveValue(text);
   await expect(page.getByText('Unsaved changes',{exact:true}).first()).toBeVisible();
 });

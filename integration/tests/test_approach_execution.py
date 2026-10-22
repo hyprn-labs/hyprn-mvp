@@ -46,7 +46,7 @@ def test_raw_numeric_fragments_preserved(tmp_path,number,version):
         assert worker.frozen_json(worker.object_fields(bundle['files']['modeling-configuration.json'])['schema_version'])=='3'
     assert worker.verify_object_digest(bundle['files']['configuration.json'])==c['digest']
 
-@pytest.mark.parametrize('change',['bytes','source','model','config','private','case','root','closure_digest','unused_evidence','unknown_field','missing_ref','step_cycle','case_only_binding','ancestor_digest'])
+@pytest.mark.parametrize('change',['bytes','source','model','config','private','case','root','closure_digest','unused_evidence','unknown_field','missing_ref','step_cycle','unused_binding','ancestor_digest'])
 def test_worker_rejects_resealed_tamper_before_import(tmp_path,monkeypatch,change):
     from copy import deepcopy
     from hyprn_mvp_app.store import digest,uid
@@ -71,7 +71,7 @@ def test_worker_rejects_resealed_tamper_before_import(tmp_path,monkeypatch,chang
     elif change=='unknown_field':v['content']['steps'][0]['native_graph']={}
     elif change=='missing_ref':v['content']['steps'][0]['implementation_refs'][0]['binding_id']=uid()
     elif change=='step_cycle':v['content']['steps'][0]['intent']['depends_on_step_ids']=[v['content']['steps'][0]['step_id']]
-    elif change=='case_only_binding':v['content']['steps']=[]
+    elif change=='unused_binding':v['content']['steps']=[]
     else:
         # Insert a reachable prior Config4 pin with a deliberately wrong ancestor
         # digest. Every enclosing object is re-signed; ancestry must be verified.
@@ -79,7 +79,7 @@ def test_worker_rejects_resealed_tamper_before_import(tmp_path,monkeypatch,chang
         prior=deepcopy(c);prior['configuration_revision_id']=uid();prior['approach_binding'].update(approach_version_id=old['approach_version_id'],approach_digest=old['digest'],closure_digest='f'*64);signed(prior)
         closure['approach_versions'].append(old);closure['configurations']=[prior]
         v['content']['basis_refs']=[dict(kind='configuration',configuration_revision_id=prior['configuration_revision_id'],reason='Prior exact basis',relation='context')]
-    if change in ('unused_evidence','unknown_field','missing_ref','step_cycle','case_only_binding','ancestor_digest'):
+    if change in ('unused_evidence','unknown_field','missing_ref','step_cycle','unused_binding','ancestor_digest'):
         signed(v);closure['root_approach_digest']=v['digest'];c['approach_binding']['approach_digest']=v['digest']
         closure['approach_versions'].sort(key=lambda a:a['approach_version_id'])
     if change not in ('bytes','source','model','private','closure_digest'):
@@ -191,7 +191,7 @@ def test_explanatory_method_cycle_admitted_across_authoring_and_worker(tmp_path)
     bundle,request=assembled(case,deps);root=tmp_path/'method-cycle';launcher.write_bundle(bundle,root)
     assert worker.read_inputs(root,request['bundle_digest'])[2]==c
 
-@pytest.mark.parametrize('kind',['step','case','assumption'])
+@pytest.mark.parametrize('kind',['step','assumption'])
 def test_blank_approach_text_rejected_before_closure_persistence(kind):
     from copy import deepcopy
     from hyprn_mvp_app.approach_closure import build_closure
@@ -199,7 +199,7 @@ def test_blank_approach_text_rejected_before_closure_persistence(kind):
     case,_=case5();f=case['frozen'];c=f['configuration'];v=deepcopy(f['approach_closure']['approach_versions'][0])
     if kind=='assumption':
         item=sample(D['ApproachAssumption1']);item['statement']=' \t\n';v['content']['assumptions']=[item]
-    else:v['content']['steps' if kind=='step' else 'cases'][0]['title']=' \t\n'
+    else:v['content']['steps'][0]['title']=' \t\n'
     signed(v)
     with pytest.raises(ValueError):
         build_closure(v,resolution(models=[f['model_snapshot']],evidence=c['evidence_snapshots']),study_id=c['study_id'])

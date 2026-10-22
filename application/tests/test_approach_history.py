@@ -1,4 +1,6 @@
 """Exact Bundle5 history from a guarded native run; no live workspace access."""
+
+from legacy_study_support import seed_legacy_context
 import base64
 from copy import deepcopy
 import json
@@ -48,9 +50,16 @@ def test_restart_and_library_outage_never_replace_retained_context(recorded,monk
     seed=ModifiedRuns(store).seed(e['actor'],e['sid'],e['rid']);validate('ModifiedRunSeed3',seed)
     assert seed['source_configuration']==h['configuration'] and seed['approach_closure']==h['approach_closure']
     pin=h['configuration']['approach_binding']
-    assert seed['configuration']['approach_selection']=={k:pin[k] for k in ('approach_version_id','case_id')}
+    assert seed['configuration']['approach_selection']=={k:pin[k] for k in ('approach_version_id',)}
     before=canonical(h);study=store.study(e['actor'],e['sid'])
-    store.update_study(e['actor'],e['sid'],uid(),study['revision'],dict(description='Later study description'))
+    seed_legacy_context(
+        store,
+        e['actor'],
+        e['sid'],
+        uid(),
+        study['revision'],
+        dict(description='Later study description'),
+    )
     assert canonical(History(Store(store.path)).read(e['actor'],e['sid'],e['rid']))==before
     assert canonical(payload(e))==e['original']
 
@@ -152,14 +161,14 @@ def test_native_bundle8_history6_seed6_exact_outage_and_scalar_source(polished,m
     assert sorted(o['value'] for o in ResultBindings(e['store']).inventory(e['actor'],e['sid'])['items'] if o['source_run_id']==e['rid'])==[7,49]
 
 
-@pytest.mark.parametrize('fault',['missing','foreign_case','foreign_study','closure','config_digest'])
-def test_list_case_context_fails_closed_and_does_not_read_history(polished,monkeypatch,fault):
+@pytest.mark.parametrize('fault',['missing','foreign_approach','foreign_study','closure','config_digest'])
+def test_list_configuration_name_fails_closed_and_does_not_read_history(polished,monkeypatch,fault):
     e=polished;c=e['case']['frozen']['configuration'];f=deepcopy(e['case']['frozen'])
     monkeypatch.setattr(History,'read',lambda *a,**k:pytest.fail('Full history read in list'))
-    actual=next(r for r in History(e['store']).list(e['actor'],e['sid']) if r['run_id']==e['rid'])['case_context']
-    assert actual['state']=='linked' and actual['approach_version_id']==c['approach_binding']['approach_version_id']
+    actual=next(r for r in History(e['store']).list(e['actor'],e['sid']) if r['run_id']==e['rid'])['configuration_name']
+    assert actual == c['name']
     if fault=='missing':f={}
-    elif fault=='foreign_case':f['configuration']['approach_binding']['case_id']=uid()
+    elif fault=='foreign_approach':f['configuration']['approach_binding']['approach_version_id']=uid()
     elif fault=='foreign_study':f['configuration']['study_id']=uid()
     elif fault=='closure':f['approach_closure']['approach_versions'][0]['content']['question']='Changed'
     else:f['configuration']['digest']='f'*64
@@ -167,7 +176,7 @@ def test_list_case_context_fails_closed_and_does_not_read_history(polished,monke
         original=db.execute('SELECT payload FROM configurations WHERE configuration_revision_id=?',(c['configuration_revision_id'],)).fetchone()[0]
     replace_configuration(e['store'],c['configuration_revision_id'],json.dumps(f))
     try:
-        assert next(r for r in History(e['store']).list(e['actor'],e['sid']) if r['run_id']==e['rid'])['case_context']==dict(state='unavailable')
+        assert next(r for r in History(e['store']).list(e['actor'],e['sid']) if r['run_id']==e['rid'])['configuration_name']==None
     finally:
         replace_configuration(e['store'],c['configuration_revision_id'],original)
 

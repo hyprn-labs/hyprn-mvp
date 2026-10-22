@@ -17,7 +17,9 @@ async function openSource(page: Page) {
 
 test('@modified retained seed opens offline without current model or writes',async({page})=>{
   const writes:string[]=[],mutable:string[]=[];
-  page.on('request',r=>{if(r.method()==='POST'&&/\/configurations$|\/runs$/.test(r.url()))writes.push(r.url());if(/\/models\//.test(r.url()))mutable.push(r.url());});
+  // The modified run works from its source's saved model version: it never reads the current
+  // model or a model version. Only the calculation navigation lists retained version summaries.
+  page.on('request',r=>{if(r.method()==='POST'&&/\/configurations$|\/runs$/.test(r.url()))writes.push(r.url());const path=new URL(r.url()).pathname;if(/\/models\//.test(path)&&!/\/models\/[^/]+\/revisions$/.test(path))mutable.push(r.url());});
   await openSource(page);
   await page.getByRole('button',{name:'Create modified run',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Create modified run',exact:true})).toBeVisible();
@@ -25,10 +27,10 @@ test('@modified retained seed opens offline without current model or writes',asy
   await page.getByLabel('Configuration name',{exact:true}).fill('Modified offline work');
   // The modeling outage is surfaced before a save attempt: unit guidance
   // (served by the private modeling service) is unavailable, so saving is not offered.
+  const editor=page.getByRole('region',{name:'Configuration',exact:true});
   await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeDisabled();
-  await expect(page.getByRole('alert')).toContainText('unavailable');
+  await expect(editor.getByRole('alert')).toContainText('unavailable');
   await expect(page.getByRole('radio',{name:/context/})).toHaveCount(0);
-  await expect(page.getByRole('alert')).toContainText('unavailable');
   await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Modified offline work');
   expect(writes).toEqual([]);expect(mutable).toEqual([]);
   await page.screenshot({path:`${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/modified-outage.png`,fullPage:true});
@@ -54,11 +56,15 @@ test('@modified inherited context notes, stale review and exact origin save',asy
   await page.request.post('/fixture/control',{data:{offline:false}});
   await page.getByRole('button',{name:'Create modified run',exact:true}).click();
   await expect(page.getByRole('radio',{name:/context/})).toHaveCount(0);
-  await page.getByRole('button',{name:'Edit context',exact:true}).click();
-  await expect(page.getByLabel('Description',{exact:true})).toBeDisabled();
+  // A configuration 6 owns its context: the source run's description starts the draft and
+  // stays editable for the new configuration only; the source run is never changed.
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
+  const tools=page.getByRole('dialog',{name:'Input tools and model binding',exact:true});
+  await expect(tools.getByLabel('Description',{exact:true})).toBeEnabled();
+  await expect(tools.getByLabel('Description',{exact:true})).toHaveValue(props.saved.configuration.context_snapshot.description);
   // Configuration notes are not authored in the UI; inherited notes pass through unchanged.
   await expect(page.getByLabel('Configuration notes',{exact:true})).toHaveCount(0);
-  await page.getByRole('dialog',{name:'Edit context',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+  await tools.getByRole('button',{name:'Done',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('My independent attempt');
   await page.screenshot({path:`${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/modified-context-light.png`,fullPage:true});
   await page.request.post('/fixture/control',{data:{description:'Context changed again'}});
@@ -85,7 +91,7 @@ test('@modified inherited context notes, stale review and exact origin save',asy
   expect(saved.configuration.evidence_snapshots).toHaveLength(1);
   expect(saved.configuration.context_snapshot.notes).toEqual(props.saved.configuration.context_snapshot.notes);
   expect(saved.configuration.inputs[1].value).toBe(9.123456);
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
   const after=await(await page.request.get(`/api/1/studies/${sid}/runs/${props.linked_run}`)).json();expect(after.data).toEqual(before.data);
 });
 
@@ -106,7 +112,7 @@ test('@modified inherited context and lost submission preserve saved revision an
   await page.route('**/runs',async route=>{if(route.request().method()!=='POST')return route.continue();commands.push(route.request().postDataJSON());const result=await route.fetch();accepted=(await result.json()).data;await route.abort('failed');});
   await page.getByRole('button',{name:'Run this configuration',exact:true}).click();
   await expect(page.getByRole('button',{name:'Run this configuration',exact:true})).toBeDisabled();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
   expect(commands).toHaveLength(1);expect(commands[0].configuration_revision_id).toBe(saved.configuration.configuration_revision_id);
   await page.getByRole('button',{name:'Check original command',exact:true}).click();
   await expect(page).toHaveURL(new RegExp('run='+accepted.run_id));expect(commands).toHaveLength(1);
@@ -130,7 +136,7 @@ test('@modified lost save receipt recovers one independent revision',async({page
   await page.getByRole('button',{name:'Save modified configuration',exact:true}).click();
   await expect(page.getByRole('button',{name:'Check original configuration command',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Check original configuration command',exact:true}).click();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();expect(commands).toHaveLength(1);
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();expect(commands).toHaveLength(1);
   const configurations=(await(await page.request.get(`/api/1/studies/${props.study.study_id}/configurations`)).json()).data;
   const receipt=(await(await page.request.get(`/api/1/studies/${props.study.study_id}/commands/${commands[0].command_id}?category=configuration`)).json()).data;
   expect(configurations.filter((c:any)=>c.configuration.configuration_revision_id===receipt.result.configuration.configuration_revision_id)).toHaveLength(1);
@@ -156,7 +162,7 @@ test('@modified genuine 200 percent context, binding and review keyboard flow',a
     expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tabId)).toBe(2);
     expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);
     async function capture(name:string){await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});await writeFile(join(root,`evidence/${name}.png`),Buffer.from(shot.data,'base64'));expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
-    const edit=page.getByRole('button',{name:'Edit context',exact:true});await edit.focus();await page.keyboard.press('Enter');await expect(page.getByLabel('Description',{exact:true})).toBeVisible();await expect(page.getByLabel('Configuration notes',{exact:true})).toHaveCount(0);await page.keyboard.press('Escape');await expect(edit).toBeFocused();
+    const edit=page.getByRole('button',{name:'Input tools',exact:true});await edit.focus();await page.keyboard.press('Enter');await expect(page.getByLabel('Description',{exact:true})).toBeVisible();await expect(page.getByLabel('Configuration notes',{exact:true})).toHaveCount(0);await page.keyboard.press('Escape');await expect(edit).toBeFocused();
     await capture('modified-context-200-light');
     await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.emulateMedia({reducedMotion:'reduce'});await page.waitForTimeout(250);
     const replace=page.getByRole('button',{name:'Enter a value instead',exact:true});await replace.focus();await replace.scrollIntoViewIfNeeded();

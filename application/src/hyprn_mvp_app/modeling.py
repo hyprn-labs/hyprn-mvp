@@ -14,7 +14,6 @@ from .units import UNIT_CATALOG_BYTES, UNIT_CATALOG_DIGEST, UNIT_ENGINE_SOURCE_S
 from .store import ForeignEvidence
 # Temporary forwarding aliases for test imports only;
 # production code imports these from their owner (application/tests/test_module_boundaries.py).
-from .contracts import SCHEMA, VALIDATORS  # noqa: F401
 
 class ModelingClient:
     def __init__(self,base_url,key,*,transport=None):
@@ -106,8 +105,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponse",resources=[sid])
-            caps=validate("Capabilities",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead3",resources=[sid])
+            caps=validate("CapabilitiesRead3",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             supported=("1.2" in caps["contract_versions"] and "2" in caps["schema_versions"]
                 and any(c["id"]=="model_assumptions" and c["version"]=="1" and c["supported"] for c in caps["capabilities"]))
@@ -131,8 +130,8 @@ class Coordinator:
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
             status,result=self.model.call(actor,sid,"GET","/capabilities",
-                response_schema="CapabilitiesResponse",resources=[sid])
-            caps=validate("Capabilities",result["data"],remote=True)
+                response_schema="CapabilitiesResponseRead3",resources=[sid])
+            caps=validate("CapabilitiesRead3",result["data"],remote=True)
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             if not self.supports_units(caps):raise DomainError("unsupported_capability",422)
         finally:
@@ -146,7 +145,7 @@ class Coordinator:
     def _require_quantities(self,actor,sid):
         with self.store.connection() as db:self.store.authorize(db,actor,sid)
         try:
-            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponse",resources=[sid])
+            status,result=self.model.call(actor,sid,"GET","/capabilities",response_schema="CapabilitiesResponseRead3",resources=[sid])
             if status!=200:raise DomainError("backend_unavailable",503,outcome="unknown")
             if not self.supports_quantities(result["data"]):raise DomainError("unsupported_capability",422)
         finally:
@@ -262,10 +261,27 @@ class Coordinator:
     def authorize_model(self,actor,sid,mid,write=False):
         with self.store.connection() as db:self.store.model_association(db,actor,sid,mid,write=write)
 
-    def models(self,actor,sid):
+    def models(self,actor,sid,*,cursor=None,limit=100):
         with self.store.connection() as db:
             self.store.authorize(db,actor,sid)
-            return [dict(r) for r in db.execute("SELECT model_id,command_id FROM model_associations WHERE study_id=? ORDER BY model_id",(sid,))]
+            records = [dict(r) for r in db.execute("SELECT model_id,command_id FROM model_associations WHERE study_id=? ORDER BY model_id",(sid,))]
+        if not 1 <= limit <= 100:
+            raise DomainError('invalid_request', 400)
+        if cursor:
+            position = next((i for i, item in enumerate(records) if item['model_id'] == cursor), None)
+            if position is None:
+                raise DomainError('resource_not_found', 404)
+            records = records[position + 1:]
+        more = len(records) > limit
+        records = records[:limit]
+        for record in records:
+            try:
+                record['name'] = self.read(actor, sid, record['model_id'])['data']['name']
+            except DomainError as error:
+                if error.code != 'backend_unavailable':
+                    raise
+                record['name'] = None
+        return records, records[-1]["model_id"] if more else None
 
     def execute(self,actor,sid,operation,target,body,remote_body,path,request_schema,response_schema,*,association=False):
         validate(request_schema,remote_body)
@@ -342,10 +358,18 @@ class Coordinator:
             current=self.store.command_receipt(db,sid,"model",command)
             if current["state"]=="committed":return current["result"]["status"],current["result"]["response"]
             if request["association"]:
-                db.execute("INSERT OR IGNORE INTO model_associations VALUES(?,?,?)",(sid,response["data"]["model_id"],command))
+                db.execute("INSERT INTO model_associations VALUES(?,?,?) ON CONFLICT DO NOTHING",(sid,response["data"]["model_id"],command))
             # Only the typed immutable command result is retained, never an editable model master.
             db.execute("UPDATE receipts SET state='committed',result=? WHERE scope=? AND category='model' AND command_id=?",
                        (json.dumps(dict(status=status,response=response)),sid,command))
+            # The receipt's actor wrote the model, whoever reconciles it: a commit records a
+            # model version, every other model command the draft revision it produced.
+            data=response["data"]
+            if request["operation"]=="commits":
+                written=("model_version",data["model_id"],data["model_revision_id"])
+            else:
+                written=("model_draft",data["model_id"],data["draft_revision"])
+            self.store.attribute(db,current["actor_id"],sid,"model",command,[written])
         return status,response
 
     @staticmethod

@@ -21,7 +21,7 @@ test('@retained source inspection keeps unsaved form and exact binding',async({p
   // the two retained-view cases run with the model service fully unavailable.
   await page.route(`**/models/${props.model.model_id}`,route=>route.fulfill({json:{schema_version:'1',data:props.model}}));
   await page.route('**/configurations/preview',route=>route.fulfill({status:503,json:{error:{code:'backend_unavailable',message:'Modeling unavailable; edits are kept.',fields:[],outcome:'unchanged'}}}));
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Unsaved engineer notes');
   const literal=page.locator('input[data-input-key]:not([readonly])').first();await literal.fill('9.123456');
   await page.getByRole('button',{name:'View source result',exact:true}).click();
@@ -102,7 +102,7 @@ async function openEditor(page: Page) {
   for (const input of await page.locator('input[data-input-key]').all()) await input.fill('3');
   for (const input of await page.locator('input[aria-label$=" provenance"]').all()) await input.fill('Reviewed laboratory input');
   // Units are explicit (authoritative catalog; no implicit physical default).
-  // The retained chain model ports declare no units, so Dimensionless is the explicit choice.
+  // The Model4 chain ports declare Dimensionless; the entered units are still chosen explicitly.
   for (const units of await page.locator('select[aria-label$=" units"]').all()) await units.selectOption('dimensionless');
 }
 async function choose(page: Page) {
@@ -143,13 +143,15 @@ test('@editor exact source, nullable labels, conversion and explicit replacement
   await expect(page.getByTestId('dirty')).toHaveText('dirty');
 });
 
-// New (non-seed) configurations are Request3 since 02-13; Request2 remains only for legacy Seed1.
-test('@editor request3 preview digest and saved copy preserve binding', async ({ page }) => {
+// New configurations are version 6 (no criteria, no approach); a result-linked input sends only its source.
+test('@editor configuration 6 preview digest and saved copy preserve binding', async ({ page }) => {
   await openEditor(page); await choose(page);
   const commandPromise = page.waitForRequest(r => r.method() === 'POST' && /\/configurations$/.test(r.url()));
   await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
   const command = (await commandPromise).postDataJSON();
-  expect(command.configuration.schema_version).toBe('3');
+  expect(command.configuration.schema_version).toBe('6');
+  expect(command.configuration).not.toHaveProperty('criteria');
+  expect(command.configuration).not.toHaveProperty('approach_binding');
   expect(command.configuration.inputs[0].kind).toBe('run_result');
   expect(command.configuration.inputs[0]).not.toHaveProperty('value');
   expect(command.expected_preview_digest).toMatch(/^[a-f0-9]{64}$/);
@@ -210,12 +212,13 @@ test('@editor dark selected state and keyboard operation', async ({ page }) => {
   await page.screenshot({ path: `${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/selected-dark.png`, fullPage: true });
 });
 
-test('@editor literal inputs use Request3 and a reviewed finite value', async ({ page }) => {
+test('@editor literal inputs save as configuration 6 with a reviewed finite value', async ({ page }) => {
   await openEditor(page);
   const sent = page.waitForRequest(r => r.method() === 'POST' && /\/configurations$/.test(r.url()));
   await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
   const body = (await sent).postDataJSON();
-  expect(body.configuration.schema_version).toBe('3');
+  expect(body.configuration.schema_version).toBe('6');
+  expect(body.configuration).not.toHaveProperty('criteria');
   expect(body.configuration.inputs.every((i: { kind: string; value: number; units: string }) => i.kind === 'literal' && i.value === 3 && i.units === '')).toBe(true);
   await expect(page.getByRole('button', { name: /Copy.*configuration/i }).first()).toBeVisible();
 });
@@ -325,47 +328,19 @@ test('@editor genuine 200 percent browser zoom preserves picker and selected act
   }
 });
 
-// Overview: recent runs read "name · id8" with Execution and Criteria only; full identities live in Record details;
-// the study header names the study once; the footer is one notices link.
-test('@retained Overview recent records show name and id8 with Execution and Criteria, no identity disclosures, the study name once and one notices link',async({page})=>{
-  test.setTimeout(120000);
-  const props=await (await page.request.get('/fixture')).json(),sid=props.study.study_id;
-  await page.goto('/ui/?retained=overview#'+new URLSearchParams({v:'1',study:sid,view:'overview'}));
-  await page.getByLabel('Username',{exact:true}).fill('owner');await page.getByLabel('Password',{exact:true}).fill('correct horse battery staple');
-  await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  const runs=page.getByRole('region',{name:'Recent runs',exact:true}),configs=page.getByRole('region',{name:'Recent configurations',exact:true});
-  const linked=runs.getByRole('button',{name:'Open run '+props.linked_run,exact:true});
-  await expect(linked).toHaveText(new RegExp(' · '+props.linked_run.slice(0,8)+'$'));
-  const outcomes=runs.getByLabel('Run outcomes',{exact:true});await expect(outcomes.first()).toBeVisible();await expect(runs).not.toContainText('Loading status');
-  for(const summary of await outcomes.all()){await expect(summary.locator('.hf-tag')).toHaveCount(2);await expect(summary).toContainText('Execution');await expect(summary).toContainText('Criteria');}
-  const revision=props.saved.configuration.configuration_revision_id;
-  const config=configs.getByRole('button',{name:props.saved.configuration.name+' · Open configuration '+revision,exact:true});
-  await expect(config).toHaveText(props.saved.configuration.name);await expect(configs).toContainText('Version '+revision.slice(0,8)+' · read-only');
-  // Full identities are not shown on Overview (Record details owns them).
-  for(const region of [runs,configs])await expect(region.locator('details')).toHaveCount(0);
-  await expect(page.getByText(/^Exact (run|configuration) identities$/)).toHaveCount(0);
-  await expect(runs).not.toContainText(props.linked_run);await expect(configs).not.toContainText(revision);
-  await expect(configs).not.toContainText(props.saved.configuration.model_revision_id);
-  // Section named once: no subtitle under the study name; the active tab names the section.
-  await expect(page.locator('.study-heading')).toHaveText(props.study.name);
-  await expect(page.getByRole('navigation',{name:'Workspace sections',exact:true}).getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');
-  const footer=page.locator('main>footer');await expect(footer).toHaveText('Third-party software notices');
-  await expect(footer.getByRole('link')).toHaveCount(1);await expect(footer.getByRole('link',{name:'Third-party software notices',exact:true})).toHaveAttribute('href','/ui/THIRD_PARTY_NOTICES.txt');
-  const cdp=await page.context().newCDPSession(page),root=process.env.HYPRN_MVP_TEST_SCOPE_ROOT!;
-  try{
-    for(const [size,metrics] of [['1440',{width:1440,height:1000,deviceScaleFactor:1,mobile:false}],['375',{width:375,height:812,deviceScaleFactor:1,mobile:false}],['200',{width:720,height:500,deviceScaleFactor:2,mobile:false}]] as const){
-      await cdp.send('Emulation.setDeviceMetricsOverride',metrics);
-      for(const theme of ['light','dark']){
-        await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
-        await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
-        await expect.poll(()=>page.evaluate(()=>document.getAnimations().every(a=>a.playState!=='running'))).toBe(true);
-        expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),size).toBe(true);
-        for(const [part,target] of [['top',null],['records',runs]] as const){
-          if(target)await target.evaluate(element=>element.scrollIntoView({block:'start'}));else await page.evaluate(()=>scrollTo(0,0));
-          const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
-          await writeFile(join(root,'evidence',`s6b-overview-${part}-${size}-${theme}.png`),Buffer.from(shot.data,'base64'));
-        }
-      }
-    }
-  }finally{await cdp.send('Emulation.clearDeviceMetricsOverride');await cdp.detach();}
-});
+// Execution is separate from study criteria in every run headline. Older criterion
+// artifacts remain available in their configuration and exported records.
+for (const record of ['retained source', 'configuration 6'] as const) {
+  test(`@retained ${record} execution reads offline without study criteria`, async ({ page }) => {
+    const props = await (await page.request.get('/fixture')).json();
+    const run = record === 'retained source' ? props.source.source_run_id : props.linked_run;
+    await page.goto('/ui/#' + new URLSearchParams({ v: '1', study: props.study.study_id, view: 'runs', run }));
+    await page.getByLabel('Username', { exact: true }).fill('owner');
+    await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    const status = page.getByLabel('Execution summary', { exact: true });
+    await expect(status).toContainText('Completed');
+    await expect(status).not.toContainText('Criteria');
+    await expect(status).not.toContainText('Applicability');
+  });
+}

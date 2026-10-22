@@ -32,3 +32,8 @@ export function unresolvedModelUnits(model: ModelDraftRead4 | ModelRevisionRead4
     }));
   });
 }
+
+/** Presentation only; never used for serialization or conversion. */
+export function displayUnit(value: UnitValue): string {
+  return unitLabel(value).replace(/\*\*2\b/g, '²').replace(/\*\*3\b/g, '³');
+}

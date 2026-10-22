@@ -1,6 +1,6 @@
 # Dependency audit
 
-Status: **approved by the product owner** (2026-10-13, decisions D-05, D-05a and D-05b of the local-edition plan). The decisions taken on §7 and what the repository applies are recorded in §10. Any package or version that is not in this record is a separate blocking review and is never approved automatically. Recorded 2026-10-13 from official upstream sources only (see "Sources"). It is a provenance, licence and advisory inventory, not legal advice.
+Status: **approved by the product owner** (2026-10-13, decisions D-05, D-05a and D-05b of the local-edition plan). The decisions taken on §7 and what the repository applies are recorded in §10. The formatter and linter (ruff and prettier, decision D-13) are recorded in §11 to §13, approved by the product owner on 2026-10-13 before installation. The build backend of the checkout's packages (flit_core, decision D6) is recorded in §14 and §15, approved by the product owner on 2026-10-14 before installation. Any package or version that is not in this record is a separate blocking review and is never approved automatically. Recorded 2026-10-13 from official upstream sources only (see "Sources"). It is a provenance, licence and advisory inventory, not legal advice.
 
 Every archive SHA-256 below was read from upstream release metadata and cross-checked against at least two independent published records, and all of them matched:
 
@@ -359,6 +359,7 @@ Sets: A application, T integration test, W worker lock (and worker image), N nat
 | requests | 2.34.2 | W, N | none |
 | rfc8785 | 0.1.4 | A, N | none |
 | rpds-py | 2026.9.1 | A, N | none |
+| ruff | 0.16.10 | N | none (formatter and linter added to the native development set, §11) |
 | scipy | 1.18.1 | W | none |
 | shortuuid | 1.0.13 | N | none |
 | sniffio | 1.3.1 | N | none |
@@ -390,6 +391,7 @@ Sets: A application, T integration test, W worker lock (and worker image), N nat
 - **Method:** OSV batch API, ecosystem `npm`, queried 2026-10-13 for every package entry in `ui/package-lock.json` (lockfile version 3). That is 52 distinct name and version pairs:
   - 8 direct packages;
   - 44 transitive packages, 28 of which are optional platform-specific binaries for rolldown, lightningcss and fsevents.
+  - Since §12, a ninth direct package: `prettier@3.9.10` (development only, no dependencies; OSV none), so the lock holds 53 pairs.
 - **Result: no known advisory affects any pinned npm package.**
 - **Direct packages:**
   - `react@19.3.0`
@@ -538,8 +540,8 @@ Package review:
 
 - One resolution cannot satisfy both reviewed sets (click 8.2.1 and 8.5.0, pydantic 2.13.5 and 2.14.0, pydantic-core 2.46.5 and 2.50.0), so `uv.lock` holds two conflicting dependency groups, each pinned exactly:
   - `contract` = set A (28 distributions), which contains set T after the pytest change;
-  - `native` = set N (89 distributions, the reviewed native development set).
-- The lock holds 97 distributions: the union of A and N (20 name and version pairs are shared). Its versions equal the reviewed sets; the only difference from the inputs is the approved pytest change in T. No other package and no other version entered.
+  - `native` = set N (89 distributions, the reviewed native development set; 90 since ruff 0.16.10 joined it, §13).
+- The lock holds 97 distributions: the union of A and N (20 name and version pairs are shared). Its versions equal the reviewed sets; the only difference from the inputs is the approved pytest change in T. No other package and no other version entered. Since §13 it holds 98: ruff 0.16.10 is the only addition.
 - Every hash of `application/requirements.lock` and `integration/test-requirements.lock` is in `uv.lock`. The lock adds the published wheel hashes of the same versions for the supported hosts that the older locks did not cover (§5, "Platform hash coverage"); it also lists musllinux wheels and sdists that uv records but never installs (`./hyprn-mvp` refuses musl hosts and every install uses `--no-build`).
 - Neither environment contains pip or setuptools (no `--seed`). The worker set W and its sdist-only packages (`openmdao_extensions`, `wop`, `xdsmjs`) are not locked here.
 - Installs: `uv sync --frozen --no-build --no-install-project --no-default-groups --group <group>` into `<tool cache>/envs/<group>-<first 16 hex of the uv.lock SHA-256>`, with `UV_NO_CONFIG=1`, `UV_PYTHON_PREFERENCE=only-managed`, `UV_PYTHON_INSTALL_MIRROR` set to the python-build-standalone releases, and the interpreter, cache and binary folders inside the tool cache. After each install the CLI compares the environment's distributions with its group and refuses any difference.
@@ -550,3 +552,246 @@ Package review:
 - CPython: installed by uv from the mirror above (uv enforces the embedded SHA-256 of §3). The installation's BUILD file reads `20261003`; it reports CPython 3.12.15, OpenSSL 3.5.9, SQLite 3.53.1, expat 2.8.5 and the system zlib, as §3 records.
 - Licence texts: the `install_only_stripped` tree holds only CPython's `lib/python3.12/LICENSE.txt`, confirming §3 "Licence texts in the archive". HYPRN MVP does not redistribute the interpreter.
 - Berkeley DB (L6): no source file of HYPRN MVP (`application`, `contracts`, `deployment`, `editions`, `integration`, `modeling`) imports `dbm` or `shelve`. The Linux builds were not extracted on this host.
+
+## 11. ruff 0.16.10 (Python formatter and linter)
+
+Recorded 2026-10-13 from the PyPI JSON API and the GitHub release. ruff and prettier are build and check tools only: neither is shipped in a served bundle, an image or a distribution, and neither is redistributed.
+
+### Identity
+
+| Field | Value |
+|---|---|
+| Project | ruff, Astral (`astral-sh/ruff`) |
+| Version | **ruff 0.16.10**, the latest patch of the 0.16 series. 0.17.0 (2026-10-09) is a breaking minor series and is not adopted |
+| Official source | PyPI `ruff`, https://pypi.org/project/ruff/0.16.10/ (download base `https://files.pythonhosted.org/packages/`) |
+| Published | 2026-10-01 (wheels uploaded 18:02:36 to 18:03:21 UTC); not yanked |
+| Release page | https://github.com/astral-sh/ruff/releases/tag/0.16.10 (not a prerelease or draft; GitHub immutable release, published 2026-10-01 18:04:27 UTC) |
+| Tag commit | `3265ed1f944c98bb4c04d632fbefb1257cdb583d` |
+| Requires Python | `>=3.7`; the wheel is `py3-none-<platform>` and carries the native binary |
+| Dependencies (`requires_dist`) | **none** |
+| Known advisories | **none** (OSV batch API, ecosystem `PyPI`, `ruff==0.16.10`, queried 2026-10-13; the control query `jinja2==2.10` returned advisories) |
+| Attestations | None: PyPI reports no provenance for the 0.16.10 files (`https://pypi.org/integrity/ruff/0.16.10/<file>/provenance` answers 404). Integrity rests on the SHA-256 that `uv.lock` records and uv verifies on every install |
+
+### Wheels the lock resolves (supported hosts)
+
+The SHA-256 values are those of the PyPI JSON API (`https://pypi.org/pypi/ruff/0.16.10/json`); `uv lock` wrote the same values into `uv.lock`.
+
+| Host | Wheel | Size (bytes) | SHA-256 |
+|---|---|---|---|
+| macOS arm64 | `ruff-0.16.10-py3-none-macosx_11_0_arm64.whl` | 9,774,282 | `3031a4a2e8e7b8a46f70be45f198c35a11ece509a94b80334d8d397a33c67550` |
+| Linux x86_64 (glibc) | `ruff-0.16.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl` | 10,387,968 | `f33f43a864a8483eebd160e713336c8bab02c934feaff0a33cf5ccb41546d09a` |
+| Linux aarch64 (glibc) | `ruff-0.16.10-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl` | 9,920,895 | `494401c86df4c4c25f69b9419605d944467ee98c42fb6ad405ef4fa40b8fb67d` |
+| Linux x86_64 (musl; recorded, never installed) | `ruff-0.16.10-py3-none-musllinux_1_2_x86_64.whl` | 10,741,702 | `7ae7375f803b5520dc9f546bed7e3a0acb70b91812e9bb4b19927de22f25b77d` |
+| Linux aarch64 (musl; recorded, never installed) | `ruff-0.16.10-py3-none-musllinux_1_2_aarch64.whl` | 10,012,938 | `6553498afc35f580f036030795810b9e6bcea31604b0fd9e8d352795473042e3` |
+| Source (recorded, never built: `--no-build`) | `ruff-0.16.10.tar.gz` | 4,958,724 | `eff4728c4eaae93f0955cd264d24b2ab348e74bf59986ccf282ba6dc16b3b017` |
+
+### Licence
+
+| Field | Value |
+|---|---|
+| Licence | **MIT** (PyPI `license_expression` is `MIT`; `license = "MIT"` in `pyproject.toml` at the tag) |
+| Text | https://github.com/astral-sh/ruff/blob/0.16.10/LICENSE. The file adds the permission notices of the projects the linter and formatter derive from (pycodestyle, Pyflakes, Flake8 plugins, isort, pyupgrade, rome/tools, RustPython and others); all are permissive MIT-style notices, none is copyleft |
+| Statically linked crates | The binary embeds third-party Rust crates without a published per-crate inventory (as for uv, §2). Not redistributed, so the `LICENSE` text is enough for this record |
+
+### What ruff does not do
+
+- It parses source text; it never imports or executes project code and loads no plugins (rules are compiled in).
+- The ratchet calls only `ruff check` (read-only) and `ruff format --check`, both with `--no-cache`, so ruff writes nothing into the checkout. A developer running ruff by hand should pass `--no-cache` or set `RUFF_CACHE_DIR` outside the checkout.
+- Its formatter makes a best-effort attempt at the line limit only; `E501` still reports lines it cannot wrap.
+
+### Behaviour that the configuration pins
+
+- Since 0.16.0 the default rule set is large and no longer contains `E701` to `E703`, so `select = ["E501", "E702", "E703"]` replaces it explicitly.
+- Since 0.16.0 `ruff format` also formats Python code blocks in Markdown files; `extend-exclude = ["*.md"]` keeps the documentation out, and the ratchet never formats.
+- The default target version of 0.16 is Python 3.10; `target-version = "py312"` is set explicitly. `preview = false` is explicit; no import sorting (`I001` is not selected).
+
+## 12. prettier 3.9.10 (TypeScript formatter)
+
+### Identity
+
+| Field | Value |
+|---|---|
+| Project | Prettier (`prettier/prettier`) |
+| Version | **prettier 3.9.10** (npm dist-tag `latest` on 2026-10-13) |
+| Official source | npm `prettier`, https://registry.npmjs.org/prettier/-/prettier-3.9.10.tgz (56 files, 9,959,033 bytes unpacked) |
+| Published | 2026-10-10 08:35:28 UTC by GitHub Actions through npm trusted publishing |
+| `dist.integrity` | `sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==` (the value `ui/package-lock.json` records) |
+| `dist.shasum` (SHA-1, legacy) | `ac378e432f1a7381518f2e080816bbaefa38d585` |
+| Tag | `3.9.10` in `prettier/prettier` |
+| `dependencies` | **none**; no `scripts`, so no install-time script |
+| Runtime | Node `>=14` (`engines`) |
+| Known advisories | **none** (OSV batch API, ecosystem `npm`, `prettier@3.9.10`, queried 2026-10-13) |
+| Signatures | `npm audit signatures` after installation: every installed package, prettier included, has verified registry signatures |
+
+### Licence
+
+| Field | Value |
+|---|---|
+| Licence | **MIT** (`license` in `package.json`; `LICENSE` is the MIT text, 1,065 bytes, "Copyright © James Long and contributors") |
+| Bundled code | The artifact bundles about 250 third-party parsers and utilities (TypeScript-ESLint, Babel, acorn, postcss and others) that are not npm dependencies. Its `THIRD-PARTY-NOTICES.md` (362,597 bytes, inside the tarball) states their licences as MIT, ISC, BSD-3-Clause, Apache-2.0, BSD-2-Clause and BlueOak-1.0.0, all permissive |
+
+### What prettier does not do
+
+- It parses and prints source text; it never executes project code and runs no plugin (the configuration lists none). The configuration is JSON (`ui/.prettierrc.json`), never an executable `prettier.config.js`.
+- The ratchet runs it with `--list-different` only (no `--write`, no `--cache`) and `--no-editorconfig`, so it writes nothing and only `ui/.prettierrc.json` sets its options.
+- `printWidth` is a target, not a limit; the ratchet measures long lines itself (§13).
+
+## 13. Formatter decisions and what the repository applies
+
+### Decisions (product owner, 2026-10-13, before any installation)
+
+| Item | Decision |
+|---|---|
+| Versions | ruff 0.16.10 and prettier 3.9.10, both MIT, both hash-pinned |
+| Line limit | 100 characters for both tools |
+| Quotes | single quotes (`quote-style = "single"`, `singleQuote: true`), matching the existing code |
+| Rules | ruff `select = ["E501", "E702", "E703"]`, explicit `target-version = "py312"`, no preview mode, no import sorting |
+| Ratchet | line-level: a new file must be fully formatted and free of violations; in an existing file no violation may sit on a line added or changed since the baseline's base commit and no per-file count may rise; existing files are never reformatted as a whole |
+
+### Applied
+
+- `pyproject.toml`: `ruff==0.16.10` in the `native` dependency group, and the `[tool.ruff]` configuration. The native group is the environment `./hyprn-mvp dev check` runs the test-group runner in, so the ratchet finds ruff next to its interpreter. The `contract` group is not used because it must equal `application/requirements.lock`, the application image's lock, which must not carry a development tool; a third group would need a third locked environment in the local edition. `uv lock` (uv 0.12.24) added exactly one package, ruff 0.16.10 with the six hashes of §11, and nothing else.
+- `ui/package.json` and `ui/package-lock.json`: `"prettier": "3.9.10"` in `devDependencies`, and exactly one lock entry, `node_modules/prettier`, with the integrity of §12. `npm --prefix ui ls --all` differs from the earlier tree only by `prettier@3.9.10`.
+- `ui/.prettierrc.json`: `printWidth` 100, `singleQuote`, `semi`, `trailingComma` `all`, `endOfLine` `lf` (the last three restate defaults so a later default change cannot move the format silently).
+- `deployment/style_ratchet.py`, `deployment/style_baseline.json` and the must-pass group `style-ratchet`. For TypeScript and JavaScript the ratchet counts the lines over the limit itself (`long-line`, with the exemptions of `E501`: a single word, or a trailing URL), because prettier has no line-length rule.
+
+### First verified acquisition (macOS arm64)
+
+- ruff: installed by `./hyprn-mvp` with `uv sync --frozen --no-build` into the native environment of the new lock (uv verifies the wheel SHA-256 of §11); `ruff --version` reports `ruff 0.16.10`.
+- prettier: installed by `npm --prefix ui ci --ignore-scripts`, which verifies the lock's SHA-512; `prettier --version` reports `3.9.10`; `npm audit signatures` verified the registry signatures of all 29 installed packages.
+
+### Sources
+
+- ruff: https://pypi.org/pypi/ruff/0.16.10/json, https://pypi.org/simple/ruff/, https://github.com/astral-sh/ruff/releases/tag/0.16.10 (API: https://api.github.com/repos/astral-sh/ruff/releases/tags/0.16.10), https://github.com/astral-sh/ruff/blob/0.16.10/LICENSE, release notes https://github.com/astral-sh/ruff/releases/tag/0.16.0, documentation https://docs.astral.sh/ruff/settings/ and https://docs.astral.sh/ruff/rules/line-too-long/
+- prettier: https://registry.npmjs.org/prettier/3.9.10, https://github.com/prettier/prettier/blob/3.9.10/LICENSE, https://github.com/prettier/prettier/blob/3.9.10/docs/options.md, https://github.com/prettier/prettier/blob/3.9.10/docs/cli.md
+- Advisories: OSV batch API https://api.osv.dev/v1/querybatch (PyPI `ruff` 0.16.10 and npm `prettier` 3.9.10: no results)
+
+## 14. flit_core 4.1.0 (build backend of the checkout's packages)
+
+Recorded 2026-10-14 from the PyPI JSON API, the PyPI integrity API and the GitHub tag. flit_core builds the `hyprn-mvp-app` and `hyprn-mvp-integration` wheels that the native host environment installs (task 2.5). It runs only inside the isolated build environment, offline. It is never installed into an environment that runs HYPRN MVP, never shipped in an image and never redistributed.
+
+### Identity
+
+| Field | Value |
+|---|---|
+| Project | flit_core, PyPA (`pypa/flit`); the backend part of Flit |
+| Version | **flit_core 4.1.0**, the latest release when recorded |
+| Official source | PyPI `flit-core`, https://pypi.org/project/flit-core/4.1.0/ (download base `https://files.pythonhosted.org/packages/`) |
+| Published | 2026-09-16 (wheel uploaded 10:46:56 UTC, sdist 10:46:58 UTC); not yanked |
+| Tag commit | `75b1c909d587c1ff5e0fd5f3df1046f74ee249d4` (tag `4.1.0` in `pypa/flit`; the project publishes no GitHub release page for it) |
+| Requires Python | `>=3.8`; the wheel is pure Python (`py3-none-any`, 22 files, 142,338 bytes unpacked) |
+| Dependencies (`requires_dist`) | **none**. A vendored tomli 1.2.3 (MIT) is used only on Python older than 3.11, so never on CPython 3.12.15 |
+| Contents | `flit_core` and its vendored tomli only. There is no startup path file (`.pth`), no executable and no other bundled code |
+| Known advisories | **none** (OSV batch API, ecosystem `PyPI`, `flit-core==4.1.0`, queried 2026-10-14; the control queries `setuptools==78.1.0` and `jinja2==2.10` returned advisories) |
+| Attestations | PEP 740 publish attestation on PyPI for the wheel (`https://pypi.org/integrity/flit-core/4.1.0/flit_core-4.1.0-py3-none-any.whl/provenance`). Publisher kind GitHub, repository `pypa/flit`, workflow `test.yml`. The attested subject digest equals the wheel SHA-256 below |
+
+### Artifacts
+
+| Artifact | Size (bytes) | SHA-256 |
+|---|---|---|
+| `flit_core-4.1.0-py3-none-any.whl` (pinned in `deployment/locks/build-backend.json`) | 45,622 | `17398cdd2c38b24047a5a9c93089ec5c0bf12ec3d1469bbf69c27ed7965299db` |
+| `flit_core-4.1.0.tar.gz` (recorded, never fetched or built) | 54,678 | `62e12b63ead8335b37f59fabb977c7167fe476dafb5e41785dfa8c9aff843bc6` |
+
+A copy of the wheel was downloaded into a scratch folder outside the repository and re-hashed. Its size and SHA-256 equal the PyPI values.
+
+### Licence
+
+| Field | Value |
+|---|---|
+| Licence | **BSD-3-Clause** (PyPI `license_expression`; `License-Expression: BSD-3-Clause` in the wheel metadata) |
+| Texts in the wheel | `flit_core-4.1.0.dist-info/licenses/LICENSE`: the BSD 3-clause text, "Copyright (c) 2015, Thomas Kluyver and contributors", 1,525 bytes, SHA-256 `35b4f1dec512e617077fd6980dbb43ef8c2887adc5d0185edb4c04da175dd816`. The vendored tomli's MIT text: 1,072 bytes, SHA-256 `b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe` |
+
+### Release history relevant to HYPRN MVP
+
+- **4.0 is a breaking series:** `[tool.flit.metadata]` is no longer read. Both packages already use the `[project]` table, so nothing else changes.
+- **4.0.3 fixes wheels written with mode 0600.** This matters because `./hyprn-mvp` runs with umask 077.
+- **4.1 accepts licence expressions with `WITH`.** No other change affects these packages.
+- **flit requires `description`** in `[project]`, or listed as dynamic, so `integration/pyproject.toml` gained one line.
+
+### Alternatives considered (not adopted)
+
+| Candidate | Why not |
+|---|---|
+| setuptools 84.0.0 (MIT; wheel `51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670`, 818,216 bytes) | Vendors autocommand 2.2.2 under **LGPL-3.0**, which conflicts with the permissive-licence rule even for a build-time tool. Also ships a startup path file (`distutils-precedence.pth`) and eight Windows launcher executables. No PyPI attestation |
+| uv_build 0.12.24 (`MIT OR Apache-2.0`, the same release as the audited uv) | Needs one native binary per platform. Its embedded CycloneDX inventory of 259 Rust crates contains one MPL-2.0 crate (`astral-version-ranges` 0.2.2). No PyPI attestation for the wheels |
+
+## 15. Build-backend decision and what the repository applies
+
+### Decision (product owner, 2026-10-14, before installation)
+
+D6 (b) of §10 is applied with **flit_core 4.1.0** instead of setuptools. The build backend is pinned exactly, verified by hash and audited here. Installing exactly this version needs no further checkpoint. Any other version or backend is a new blocking review.
+
+### Applied
+
+- **`deployment/locks/build-backend.json`** records the name, version and licence, the requirement `flit_core==4.1.0`, the backend `flit_core.buildapi`, and the wheel's URL, size and SHA-256 of §14.
+- **`application/pyproject.toml` and `integration/pyproject.toml`** both declare `requires = ["flit_core==4.1.0"]` and `build-backend = "flit_core.buildapi"`. Before this, the application package had no `[build-system]` and the integration package named an unpinned `setuptools>=61`.
+- **`deployment/native_environment.py` `prepare`** acquires and builds as follows:
+  1. It fetches the wheel from its pinned URL and refuses it unless its size and SHA-256 equal the pin.
+  2. It builds each package from a staged copy of the release snapshot with `uv build --wheel --offline --no-index --find-links <verified wheel folder> --build-constraints <hashed constraint> --require-hashes`.
+  3. `SOURCE_DATE_EPOCH` is fixed, so the wheels of one snapshot are byte-identical.
+
+  A package whose build system is not exactly this pin is refused before any effect.
+- **`deployment/locks/native-host.txt`** holds the reviewed native set N of §5: 89 distributions, the `native` group of `uv.lock` without ruff, exported from `uv.lock` with all its hashes. It contains no package or version outside this record. It is installed with `uv pip sync --require-hashes --no-build --strict`, and the project wheels are then installed with `--no-deps`.
+
+### First verified acquisition (macOS arm64)
+
+- **flit_core:** `prepare` fetched and verified it in a scratch installation. Two scratch builds of the same snapshot produced byte-identical wheels.
+- **Native host environment:** it held exactly the 89 distributions of N plus the two project wheels. The five `licenses/native/` METADATA files that `AUDITED_LICENSES` pins were byte-equal.
+
+### Sources
+
+- https://pypi.org/pypi/flit-core/json, https://pypi.org/project/flit-core/4.1.0/, https://pypi.org/integrity/flit-core/4.1.0/flit_core-4.1.0-py3-none-any.whl/provenance
+- https://github.com/pypa/flit (tag `4.1.0`, API https://api.github.com/repos/pypa/flit/git/ref/tags/4.1.0), release history https://github.com/pypa/flit/blob/main/doc/history.rst
+- Alternatives: https://pypi.org/pypi/setuptools/json, https://pypi.org/pypi/uv-build/0.12.24/json, and the integrity API for both
+- Advisories: OSV batch API https://api.osv.dev/v1/querybatch (PyPI `flit-core` 4.1.0, `setuptools` 84.0.0 and 83.0.0, `uv-build` 0.12.24: no results)
+
+## 16. Numerical source-wheel packaging decision
+
+On 2026-10-14 the product owner explicitly approved the Flit proposal for
+`openmdao_extensions==1.6.3`, `wop==2.6.1` and `xdsmjs==2.1.0`. This authorizes the
+three packaging-only transformations in `upstream/engine-packaging/`; it does not
+authorize setuptools or a licence exception. The approved proposal SHA-256 is
+`e60ff64202d200fa085bef63270ec3457bd4362bc43e04991a576696f2afdcf7`; its manifest is
+`2faa1a433783ea23e8851d901f9e57d7b0f12ad69c147333969586167895bf91`.
+
+`deployment/locks/engine-sources.json` records official archive URLs, sizes, hashes,
+the exact original and replacement packaging metadata, patch hashes and every runtime
+source/resource hash. Only `pyproject.toml` changes. Every other upstream file remains
+unchanged. The XDSMjs generated sdist excludes its upstream test before wheel creation;
+its four runtime files remain exact. No dependency, extra, Python requirement or entry
+point changes. All three packages retain Apache-2.0; XDSMjs has no standalone licence
+file in its published sdist, so its existing declarations and embedded notices remain.
+
+The already audited BSD-3-Clause Flit 4.1.0 is used only in the build stage, with its
+MIT-licensed vendored TOML parser. Source builds run offline from verified artifacts.
+Each wheel is built twice and must be byte-identical. Flit, setuptools, pip and their
+build-time vendored dependencies are absent from the engine runtime environment.
+The managed CPython distribution excludes its separate `_dbm` extension as required
+by the existing distribution decision in `docs/legal/licensing.md` L6.
+
+Approved metadata differences are the Flit generator, reproducible ZIP/RECORD layout,
+metadata 2.5 serialization, Import-Name, redundant Dynamic/top-level/zip-safe bookkeeping,
+and the documented equivalent Apache-2.0, homepage and author serialization. Runtime
+payloads, dependencies, extras, Python requirements, non-licence classifiers and entry
+point mappings remain equivalent. Flit's initial XDSMjs wheel additionally advertises
+Python 2; the recipe strictly recognizes that exact intermediate WHEEL and removes only
+its Python 2 tag, rewrites RECORD and restores the reference `py3-none-any` filename.
+No Python requirement is added, and any unexpected intermediate WHEEL field is refused.
+
+The rebuilt engine and retained reference have 20 matching runtime distribution
+versions and 4,430 identical recorded file hashes, with zero unexpected differences or
+runtime RECORD integrity errors. The reference's additional pip is a build tool and is
+excluded. Explicit installation differences are bytecode, generated console launchers,
+INSTALLER/REQUESTED/direct-url/RECORD bookkeeping and three inspected uv cache records;
+these do not exempt arbitrary package or metadata files. The exact metadata comparison
+report SHA-256 is `82aa685393b0a97e0dc51a30f932c3aee84299beed27cf8b366a074729cb45af`;
+the complete RECORD comparison report is
+`0c8c0243322d02071af3eb46e189bcdeafc56ade3fc98ffe2a909fc6c42b9d31`.
+
+Whole-image inspection covers all interpreter and site-packages locations, not only the
+active venv. The engine has 4,481 package files and the application has 1,228, with zero
+unrecorded files. The managed interpreter site-packages is empty, the base interpreter
+is removed, and no pip, Flit, setuptools, `_dbm` or `.pth` files remain. Only the managed
+CPython 3.12.15 binary and its aliases remain executable. Engine whole-image evidence
+SHA-256: `ad4f365cd6fa38de7c909f4318d6dd71fc6690e1f4d409ea77e482267d954b1f`;
+application: `1d2a6e012d9c3ad1aaa1c8622cb2626756e4934469b5c3e56c92fb2405519b3f`.

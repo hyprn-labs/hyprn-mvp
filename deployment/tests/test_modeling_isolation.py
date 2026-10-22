@@ -37,6 +37,8 @@ pytestmark = [pytest.mark.isolation, pytest.mark.usefixtures('owned_modeling')]
 
 def test_native_build_closure_is_identity_bound():
     inventory = runtime.source_hashes()
+    assert 'contracts/schemas/documents.schema.json' not in inventory
+    assert len(inventory) == 24
     for path in ('modeling/rehearsal.py', 'contracts/schemas/model.schema.json',
                  'contracts/schemas/execution.schema.json', 'integration/worker-requirements.lock',
                  'upstream/whatsopt-patches/050-native-generation.patch'):
@@ -55,7 +57,10 @@ def test_actual_identity_matches_reviewed_pins(owned_modeling):
     result = runtime.check(root, deployment=deployment)  # refuses unless the recorded identity names the current sources
     identity = json.loads((root / 'identity.json').read_text())
     assert result['image'] == identity['image'] == pins['modeling_producer']['image']
-    assert identity['source_image'] == pins['modeling_source_image']
+    built = runtime.image_identity(identity['image'])
+    assert identity['source_image'] == built['source_image']
+    assert built['source_build_inputs'] == runtime.source_build_inputs()
+    assert built['source_hashes'] == runtime.source_hashes()
     assert identity['source_hashes'] == runtime.source_hashes()
     assert result['candidate_execution'] == 'blocked_pending_plan_01_12_consumer_attestation'
 
@@ -231,7 +236,10 @@ def test_actual_cross_network_endpoint_denial(owned_modeling):
         runtime.run('docker', 'network', 'create', '--internal', '--label', label, network)
         made_network = True
         server = "require 'socket'; s=TCPServer.new('0.0.0.0',3443); loop { c=s.accept; c.write('synthetic-app-canary'); c.close }"
-        runtime.run('docker', 'run', '-d', '--name', name, '--label', label, '--network', network, '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '32', '--memory', '64m', '--entrypoint', 'ruby', runtime.RUBY_IMAGE, '-e', server)
+        runtime.run('docker', 'run', '-d', '--name', name, '--label', label, '--network', network,
+                    '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt',
+                    'no-new-privileges', '--pids-limit', '32', '--memory', '64m', '--entrypoint',
+                    'ruby', runtime.source_build_inputs()['ruby_image'], '-e', server)
         made_container = True
         probe = "require 'socket'; puts TCPSocket.new('127.0.0.1',3443).read"
         for attempt in range(20):

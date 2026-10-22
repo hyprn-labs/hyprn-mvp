@@ -7,6 +7,7 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
 import live_fence  # noqa: E402
 setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
 from dataclasses import replace
+import ast
 import hashlib
 import importlib
 import json
@@ -33,17 +34,30 @@ class GuardTests(unittest.TestCase):
 
     def test_approach_groups_fail_closed_before_allocation(self):
         groups = runner.APPROACH_PYTEST_GROUPS | set(runner.APPROACH_BROWSER_GROUPS)
-        self.assertEqual(groups, {
-            'approach-contracts', 'approach-closure', 'approach-service',
-            'approach-api', 'approach-configuration', 'approach-bundle',
-            'approach-worker', 'approach-history', 'approach-export',
-            'approach-native', 'approach-ui-controller',
-            'approach-ui-reading', 'approach-ui-method', 'approach-ui-assumptions',
-            'approach-ui-configuration', 'approach-ui-history',
-            'fuel-platform', 'fuel-native-provenance',
-            'investigation-native', 'investigation-worker', 'investigation-evidence',
-            'investigation-diagnostics', 'findings-history',
-        })
+        self.assertEqual(
+            groups,
+            {
+                'approach-contracts',
+                'approach-closure',
+                'brief-api',
+                'calculations-api',
+                'explanations-api',
+                'study-answer-api',
+                'approach-bundle',
+                'approach-worker',
+                'approach-export',
+                'brief-ui',
+                'study-answer-ui',
+                'calculations-ui',
+                'fuel-native-provenance',
+                'investigation-native',
+                'investigation-worker',
+                'investigation-evidence',
+                'investigation-diagnostics',
+                'findings-history',
+                'exploration-numerics',
+            },
+        )
         for group in groups:
             with self.subTest(group=group), patch.object(runner, 'targets_for', side_effect=ValueError('missing')), patch.object(fixture, 'allocate_scope') as allocate:
                 with self.assertRaises(ValueError): runner.run_group(group)
@@ -70,8 +84,23 @@ class GuardTests(unittest.TestCase):
         for group in runner.APPROACH_NATIVE_GROUPS:
             self.assertEqual(runner.GROUP_INTERPRETERS.get(group, fixture.APPROVED_PYTHON), fixture.APPROVED_PYTHON)
         for group, selector in runner.APPROACH_BROWSER_GROUPS.items():
-            self.assertTrue(selector.startswith('@approach-'))
-            self.assertEqual(runner.GROUPS[group], ('deployment/tests/approach_ui_fixture.py', 'ui/tests/approach.spec.ts'))
+            if group == 'exploration-answer-ui':
+                self.assertEqual(selector, '@exploration-answer-basis')
+            elif group == 'study-answer-ui':
+                self.assertEqual(selector, '@study-answer')
+            elif group == 'brief-ui':
+                self.assertEqual(selector, '@brief')
+            elif group == 'calculations-ui':
+                self.assertEqual(selector, '@calculations')
+            else:
+                self.assertTrue(selector.startswith('@approach-'))
+            self.assertEqual(
+                runner.GROUPS[group],
+                (
+                    'deployment/tests/approach_ui_fixture.py',
+                    'ui/tests/' + runner.APPROACH_BROWSER_SPECS.get(group, 'approach.spec.ts'),
+                ) + (('ui/tests/DesignSpecimen.tsx',) if group=='approach-ui-demo' else ()),
+            )
 
     def test_approach_child_guards_before_collection_or_native_setup(self):
         for group in runner.APPROACH_PYTEST_GROUPS:
@@ -574,6 +603,17 @@ class DocumentsGuardTests(unittest.TestCase):
 
 
 
+class LocalApiClientGroupGuardTests(unittest.TestCase):
+    def test_local_api_client_has_one_scoped_target_and_no_native_backend(self):
+        self.assertEqual(runner.GROUPS['local-api-client'],
+                         ('deployment/tests/test_local_api_client.py',))
+        self.assertEqual(runner.UNITTEST_GUARD_MODULES['local-api-client'],
+                         'test_local_api_client')
+        self.assertNotIn('local-api-client', runner.NATIVE_BACKEND_GROUPS)
+        self.assertNotIn('local-api-client', runner.BROWSER_GROUPS)
+        self.assertEqual(runner.group_needs('local-api-client'), ())
+
+
 class LocalityContractsGuardTests(unittest.TestCase):
     """Closed data-only locality group under the reviewed application interpreter."""
 
@@ -662,10 +702,97 @@ class AgentGroupsGuardTests(unittest.TestCase):
             allocate.assert_not_called()
 
 
+class AgentBrowserGuardTests(unittest.TestCase):
+    """The agent browser group: closed specs on the in-browser agent double, the reviewed
+    application interpreter, a browser need and a report that fails closed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scope = fixture.scope_from_environment()
+
+    def test_agent_ui_group_is_closed_with_fixed_targets_and_application_interpreter(self):
+        import agent_ui_fixture as agent
+
+        self.assertEqual(runner.AGENT_BROWSER_GROUPS, {'agent-ui'})
+        self.assertEqual(
+            runner.GROUPS['agent-ui'],
+            (
+                'deployment/tests/agent_ui_fixture.py',
+                'deployment/tests/foundry_ui_fixture.py',
+                'ui/tests/foundry-fixtures.ts',
+                'ui/tests/agent-fixtures.ts',
+                'application/tests/agent/fixtures/recorded_api.json',
+                'ui/tests/agent-attribution.spec.ts',
+            ),
+        )
+        self.assertEqual(agent.GROUP_SPECS, {'agent-ui': ('agent-attribution.spec.ts',)})
+        specs = tuple(t for t in runner.GROUPS['agent-ui'] if t.endswith('.spec.ts'))
+        self.assertEqual(specs, tuple('ui/tests/' + spec for spec in agent.GROUP_SPECS['agent-ui']))
+        self.assertEqual(runner.GROUP_INTERPRETERS['agent-ui'], fixture.APPROVED_CONTRACT_PYTHON)
+        self.assertEqual(runner.group_class('agent-ui'), 'must-pass')
+        self.assertEqual(runner.group_needs('agent-ui'), ('browser',))
+        self.assertIn('agent-ui', runner.CHILD_GROUPS)
+        self.assertFalse(
+            runner.AGENT_BROWSER_GROUPS
+            & (
+                runner.FOUNDRY_BROWSER_GROUPS
+                | runner.PROJECT_PYTEST_GROUPS
+                | runner.SERVED_BROWSER_GROUPS
+                | runner.DOCKER_GROUPS
+                | runner.FIXTURE_GROUPS
+                | set(runner.DOCUMENTS_ROUTES)
+            )
+        )
+        config = agent.browser_config(self.scope)
+        self.assertEqual(config['testMatch'], ['agent-attribution.spec.ts'])
+        self.assertEqual((config['workers'], config['retries'], config['forbidOnly']), (1, 0, True))
+        for key in ('outputDir', 'snapshotPathTemplate'):
+            self.assertTrue(config[key].startswith(str(self.scope.root) + '/evidence/'), key)
+
+    def test_agent_ui_report_fails_closed(self):
+        import agent_ui_fixture as agent
+
+        good = dict(expected=7, unexpected=0, skipped=0, flaky=0)
+        specs = set(agent.GROUP_SPECS['agent-ui'])
+        self.assertTrue(agent.report_passed(0, good, specs, []))
+        for returncode, stats, files, forbidden in (
+            (1, good, specs, []),
+            (0, {}, specs, []),
+            (0, dict(good, expected=0), specs, []),
+            (0, dict(good, skipped=1), specs, []),
+            (0, dict(good, flaky=1), specs, []),
+            (0, dict(good, unexpected=1), specs, []),
+            (0, good, set(), []),
+            (0, good, specs | {'foundry-zoom.spec.ts'}, []),
+            (0, good, specs, ['openmdao']),
+        ):
+            with self.subTest(returncode=returncode, stats=stats, files=files, forbidden=forbidden):
+                self.assertFalse(agent.report_passed(returncode, stats, files, forbidden))
+
+    def test_agent_ui_child_refuses_wrong_interpreter_unknown_group_or_missing_target(self):
+        import agent_ui_fixture as agent
+
+        # This guard child runs the native interpreter: the application-only child must refuse.
+        with patch.object(agent.subprocess, 'run') as spawned:
+            with self.assertRaisesRegex(ValueError, 'reviewed interpreter'):
+                runner.agent_browser_child('agent-ui')
+            with self.assertRaisesRegex(ValueError, 'reviewed application interpreter'):
+                agent.run(group='agent-ui')
+            with self.assertRaisesRegex(ValueError, 'Unknown agent'):
+                runner.agent_browser_child('agent-ui-x')
+            spawned.assert_not_called()
+        missing = ValueError('Required target missing')
+        with patch.object(runner, 'targets_for', side_effect=missing), \
+                patch.object(fixture, 'allocate_scope') as allocate:
+            with self.assertRaisesRegex(ValueError, 'Required target missing'):
+                runner.run_group('agent-ui')
+            allocate.assert_not_called()
+
+
 class RegistryGuardTests(unittest.TestCase):
     """Every group has a class and environment needs; absent needs fail before allocation."""
 
-    RETIRED = ('ae-activation', 'approach-activation', 'units-activation', 'handoff', 'polish-release',
+    RETIRED = ('approach-configuration', 'approach-history', 'approach-native', 'exploration-fuel-surrogate', 'exploration-native', 'exploration-surrogates-native', 'exploration-ui', 'fuel-platform', 'approach-service', 'approach-api', 'answers-api', 'exploration-contracts', 'exploration-api', 'approach-ui-controller', 'approach-ui-reading', 'approach-ui-method', 'approach-ui-demo', 'approach-ui-assumptions', 'approach-ui-history', 'exploration-answer-ui', 'ae-activation', 'approach-activation', 'units-activation', 'handoff', 'polish-release',
                'checkpoint-a', 'checkpoint-b', 'checkpoint-c', 'combined', 'ae-ui', 'approach-ui')
 
     @classmethod
@@ -686,7 +813,7 @@ class RegistryGuardTests(unittest.TestCase):
             self.assertIn('browser', runner.group_needs(group))
         self.assertEqual(runner.group_needs('naming'), ())
         self.assertEqual(runner.group_needs('hygiene'), ())
-        self.assertEqual(runner.group_needs('approach-ui-history'), ('browser', 'fixtures'))
+        self.assertEqual(runner.group_needs('study-answer-ui'), ('browser',))
         with self.assertRaises(ValueError):
             runner.group_class('all')
 
@@ -705,7 +832,7 @@ class RegistryGuardTests(unittest.TestCase):
 
     def test_absent_need_fails_before_allocation(self):
         for group, need in (('units-native', 'docker'), ('ui-navigation', 'browser'),
-                            ('approach-ui-history', 'fixtures'), ('documents-native-atomicity', 'docker')):
+                            ('findings-native-read', 'fixtures'), ('documents-native-atomicity', 'docker')):
             with self.subTest(group=group), patch.object(runner, 'need_present', side_effect=lambda n, absent=need: n != absent), \
                     patch.object(sys, 'executable', fixture.APPROVED_PYTHON), \
                     patch.object(fixture, 'allocate_scope') as allocate, patch.object(runner.subprocess, 'run') as launch:
@@ -876,7 +1003,7 @@ class QualificationPoolTests(unittest.TestCase):
         self.assertEqual(runner.QUALIFICATION_JOBS, 3)
         lane = runner.SERIAL_LANES['fixed-scratch-root']
         self.assertTrue({'findings-native-preflight', 'findings-native', 'findings-native-read',
-                         'approach-ui-history', 'units-native'} <= lane)
+                         'units-native'} <= lane)
         self.assertTrue(runner.FIXTURE_GROUPS <= lane)
         members = [g for members in runner.SERIAL_LANES.values() for g in members]
         self.assertEqual(len(members), len(set(members)))
@@ -994,7 +1121,8 @@ class FoundryNavGuardTests(unittest.TestCase):
     def test_foundry_nav_group_is_closed_with_fixed_targets_and_application_interpreter(self):
         self.assertEqual(runner.GROUPS['foundry-nav'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
-            'ui/tests/model-configuration-run.spec.ts', 'ui/tests/foundry-zoom.spec.ts'))
+            'ui/tests/model-configuration-run.spec.ts', 'ui/tests/foundry-zoom.spec.ts',
+            'ui/tests/DesignSpecimen.tsx'))
         self.assertEqual(runner.GROUPS['ported-isolated'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/command-recovery.spec.ts', 'ui/tests/history-races-isolated.spec.ts'))
@@ -1004,7 +1132,7 @@ class FoundryNavGuardTests(unittest.TestCase):
         self.assertEqual(runner.GROUPS['ui-reading'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/screen-readability.spec.ts', 'ui/tests/evidence-workspace.spec.ts',
-            'ui/tests/record-labels.spec.ts'))
+            'ui/tests/record-labels.spec.ts', 'ui/tests/DesignSpecimen.tsx'))
         self.assertEqual(runner.GROUPS['ui-fidelity'], (
             'deployment/tests/foundry_ui_fixture.py', 'ui/tests/foundry-fixtures.ts',
             'ui/tests/prototype-fidelity.spec.ts'))
@@ -1024,7 +1152,10 @@ class FoundryNavGuardTests(unittest.TestCase):
             'ui-reading': ('screen-readability.spec.ts', 'evidence-workspace.spec.ts', 'record-labels.spec.ts'),
             'ui-fidelity': ('prototype-fidelity.spec.ts',)})
         for group, specs in foundry.GROUP_SPECS.items():
-            self.assertEqual(tuple('ui/tests/' + spec for spec in specs), runner.GROUPS[group][2:])
+            specimen = (('ui/tests/DesignSpecimen.tsx',)
+                        if group in {'ui-reading', 'foundry-nav'} else ())
+            self.assertEqual(tuple('ui/tests/' + spec for spec in specs) + specimen,
+                             runner.GROUPS[group][2:])
         # Isolated specs never name another installation's ports or names, the development
         # application port, an installation's credentials or a default base URL. Ports and names
         # come from the environment the test-safety fence reads; none is written in source.
@@ -1127,6 +1258,8 @@ class BrowserSpecRegistryTests(unittest.TestCase):
         present = {str(p.relative_to(runner.REPO)) for p in (runner.REPO / 'ui/tests').rglob('*.spec.ts')}
         registered = runner.browser_specs()
         self.assertTrue(present)
+        self.assertIn('study-answer-ui', registered['ui/tests/study-answer.spec.ts'])
+        self.assertIn('browser', runner.group_needs('study-answer-ui'))
         self.assertEqual(sorted(present - set(registered)), [], 'browser specs selected by no group')
         self.assertEqual(sorted(set(registered) - present), [], 'registered browser specs that do not exist')
 
@@ -1174,6 +1307,18 @@ class BrowserSpecRegistryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     runner.run_group('ui-served')
                 allocate.assert_not_called(); spawned.assert_not_called()
+
+    def test_served_selection_cannot_narrow_qualification_or_other_groups(self):
+        for group, selection in [('qualification', 'one'), ('guard', 'one'), ('ui-served', '')]:
+            with self.subTest(group=group), patch.object(fixture, 'allocate_scope') as allocate:
+                with self.assertRaisesRegex(ValueError, 'served-grep'):
+                    runner.run_group(group, served_grep=selection)
+                allocate.assert_not_called()
+        with patch.object(runner, 'targets_for', return_value=['example.spec.ts']), \
+                patch.object(runner, 'run_served', return_value=0) as served:
+            self.assertEqual(runner.run_group('ui-served', served_grep='exact title'), 0)
+            served.assert_called_once_with(
+                'ui-served', ['example.spec.ts'], served_grep='exact title')
 
     def test_served_environment_adds_only_the_installation_variables(self):
         clean = fixture.clean_environment(self.scope)
@@ -1279,14 +1424,12 @@ class LocationResolutionTests(unittest.TestCase):
             for resolver, relative in self.STORES.items():
                 with self.subTest(resolver=resolver):
                     self.assertEqual(getattr(self.paths, resolver)(), Path(data) / relative)
-            self.assertEqual(self.paths.activation_root(), Path(data) / 'application/activation')
             self.assertEqual(self.paths.store_roots(), tuple(Path(data) / r for r in self.STORES.values()))
             self.assertEqual(self.paths.live_roots(), ())
             import tempfile
             self.assertEqual(self.paths.scratch_root(), Path(os.path.realpath(tempfile.gettempdir())))
-            self.assertIsNone(self.paths.old_runtime_root(required=False))
-            with self.assertRaises(self.paths.LocationUnset):
-                self.paths.old_runtime_root()
+            # No location names a retired runtime: the native environment is built from pins.
+            self.assertFalse(hasattr(self.paths, 'old_runtime_root'))
 
     def test_unset_or_invalid_locations_refuse_with_a_message_naming_the_variable(self):
         with self.clean():
@@ -1485,6 +1628,57 @@ class LiveFenceTests(unittest.TestCase):
         self.assertIsNotNone(fence.decide('socket.connect', (None, socket_path), 'unit'))
         self.assertIsNotNone(fence.decide('os.system', ('true',), 'baseline'))
 
+    def test_user_installations_are_never_read_written_mounted_or_named(self):
+        fence = live_fence
+        popen = lambda *argv: (None, list(argv), None, None)  # noqa: E731
+        policy = fence._path_policy()
+        environ = {**os.environ, 'HOME': str(fixture.local_paths.account_home())}
+        config = str(policy.default('config', environ=environ))
+        data = str(policy.default('data_root', environ=environ))
+        self.assertIn(config, fence.INSTALLATION_CONFIGS)
+        mount = 'type=bind,src=' + data + '/modeling,dst=/x'
+        refused = [
+            ('open', (config, 'rb', os.O_RDONLY)),
+            ('open', (config, 'w', os.O_WRONLY | os.O_CREAT)),
+            ('os.listdir', (data,)),
+            ('sqlite3.connect', (data + '/application/application/application.sqlite',)),
+            ('subprocess.Popen', popen('docker', 'run', '--mount', mount, 'i')),
+        ]
+        prefix = 'hyprn-mvp-local-0123abcd'
+        owner = 'org.hyprn-mvp.owner=hyprn-mvp-local-' + str(uuid4())
+        for argv in (
+            ('docker', 'stop', prefix + '-modeling'),
+            ('docker', 'network', 'rm', prefix + '-public'),
+            ('docker', 'ps', '--filter', 'label=' + owner),
+            ('docker', 'run', '--label', owner, 'image'),
+        ):
+            refused.append(('subprocess.Popen', popen(*argv)))
+        for event, args in refused:
+            for policy_name in ('baseline', 'unit'):
+                with self.subTest(event=event, args=args, policy=policy_name):
+                    self.assertIsNotNone(fence.decide(event, args, policy_name))
+        # A test scope's own names stay usable.
+        scoped = popen('docker', 'stop', fixture.SCOPE_PREFIX + '0123abcd-modeling')
+        self.assertIsNone(fence.decide('subprocess.Popen', scoped, 'baseline'))
+
+    def test_a_configured_installation_adds_its_data_root_cache_and_port(self):
+        folder = fixture.scope_from_environment().root / 'tmp' / ('installation-' + uuid4().hex)
+        folder.mkdir(parents=True)
+        data = str(folder / 'data')
+        config = folder / 'installation.json'
+        named = {'data_root': data, 'upstream': {'cache': data + '/cache'}, 'ports': {'app': 19999}}
+        config.write_text(json.dumps(named))
+        named_only = {'HYPRN_MVP_CONFIG': str(config)}
+        configs, roots, ports = live_fence.installations(named_only, defaults=False)
+        self.assertIn(str(config), configs)
+        self.assertTrue({data, data + '/cache'} <= set(roots))
+        self.assertIn(19999, ports)
+        # A configuration that cannot be read as JSON still protects its own file.
+        config.write_text('{')
+        configs, roots, ports = live_fence.installations(named_only, defaults=False)
+        self.assertIn(str(config), configs)
+        self.assertNotIn(data, roots)
+
     def test_entry_points_named_by_the_fence_exist_in_the_repository(self):
         present = {p.name for p in (runner.REPO / 'deployment').rglob('*') if p.is_file()}
         self.assertEqual(sorted(live_fence.LIVE_ENTRYPOINTS - present), [])
@@ -1530,16 +1724,31 @@ class LiveFenceTests(unittest.TestCase):
                              *((name, "pytest_fixture('baseline')") for name in (
                                  'test_native_journey.py', 'test_units_native.py', 'test_approach_native.py',
                                  'test_assumptions_evidence_journey.py', 'test_investigation_native.py',
-                                 'test_findings_native.py', 'test_attestation.py', 'test_modeling_isolation.py'))):
+                                 'test_findings_native.py', 'test_attestation.py',
+                                 'test_modeling_isolation.py',
+                                 'test_exploration_native.py', 'test_exploration_ui.py'))):
             with self.subTest(module=name):
                 text = (runner.REPO / 'deployment/tests' / name).read_text()
-                self.assertIn('\nimport live_fence  # noqa: E402\n', text)
                 self.assertIn('live_fence.' + policy, text)
         # Every deployment test module declares a fence policy.
         modules = {p.name for p in (runner.REPO / 'deployment/tests').glob('test_*.py')}
         for name in modules:
             with self.subTest(unfenced=name):
-                self.assertIn('\nimport live_fence  # noqa: E402\n', (runner.REPO / 'deployment/tests' / name).read_text())
+                tree = ast.parse((runner.REPO / 'deployment/tests' / name).read_text())
+                self.assertTrue(any(
+                    isinstance(node, ast.Import) and any(
+                        alias.name == 'live_fence' and alias.asname in (None, 'live_fence')
+                        for alias in node.names) for node in tree.body), 'fence import absent')
+                declarations = [
+                    node for statement in tree.body
+                    if isinstance(statement, (ast.Assign, ast.AnnAssign, ast.Expr))
+                    for node in ast.walk(statement) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == 'live_fence'
+                    and node.func.attr in ('pytest_fixture', 'unittest_module_hooks')
+                ]
+                self.assertTrue(declarations, 'fence policy declaration absent')
 
 
 class DurableFixtureGuardTests(unittest.TestCase):
@@ -1841,8 +2050,16 @@ class UpstreamArchiveGuardTests(unittest.TestCase):
         self.assertEqual(live_fence.STATE.policy, 'unit')
         stage = self.scope.root / 'tmp' / ('upstream-stage-' + uuid4().hex)
         stage.mkdir(parents=True)
-        self.runtime.stage_native_inputs(stage)
+        previous = os.umask(0o077)  # as under the ./hyprn-mvp entry point
+        try:
+            self.runtime.stage_native_inputs(stage)
+        finally:
+            os.umask(previous)
         self.assertEqual(live_fence.STATE.trips, [])
+        # Staged build inputs are readable by the image's non-root service user.
+        for path in (stage, *stage.rglob('*')):
+            mode = path.stat().st_mode & 0o777
+            self.assertEqual(mode, 0o755 if path.is_dir() else 0o644, str(path))
         staged = (stage / 'provenance-inputs/upstream.tar.gz').read_bytes()
         self.assertEqual(hashlib.sha256(staged).hexdigest(), self.runtime.ARCHIVE_SHA256)
         self.assertTrue((stage / 'provenance-inputs/upstream/LICENSE').is_file())

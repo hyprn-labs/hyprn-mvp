@@ -1,0 +1,10 @@
+[project]
+name = "hyprn-mvp-cloud"
+version = "0.1.0"
+description = "HYPRN MVP hosted identity adapters"
+requires-python = "==3.12.15"
+dependencies = [
+  "PyJWT==2.15.1",
+  "cryptography==50.0.2",
+  "httpx==0.28.1",
+]

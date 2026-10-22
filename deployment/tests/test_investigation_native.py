@@ -50,7 +50,7 @@ def test_investigation_native_journey():
         content = dict(schema_version='1', question='Can a revised component remain traceable?', scope='Isolated regression', limitations='Intentional computational failure', open_questions='', model_bindings=[binding], steps=[method], assumptions=[], cases=[], basis_refs=[])
         approach = j.save_approach(content)
         target = dict(instance_id=instance['instance_id'], port_id=next(p['port_id'] for p in definition['ports'] if p['code_symbol'] == 'x'))
-        candidate = j.configuration(revised, 'Intentional failure', [literal(target, 2, 'N', eid)], [], dict(approach_version_id=approach['version']['approach_version_id'], case_id=None), note)
+        candidate = j.configuration(revised, 'Intentional failure', [literal(target, 2, 'N', eid)], [], dict(approach_version_id=approach['version']['approach_version_id']), note)
         good_preview = req('POST', 'configurations/preview', candidate)
         bad_candidate = deepcopy(good_preview['resolved_candidate'])
         bad_candidate['inputs'][0]['provenance']['evidence_version_ids'].append(eid)

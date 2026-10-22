@@ -1,4 +1,6 @@
 """Evidence family storage contracts on the runner's isolated, off-cloud store."""
+
+from legacy_study_support import seed_legacy_context
 import base64
 import copy
 import json
@@ -230,7 +232,7 @@ def test_exact_labels_all_scopes_and_rename_immutability(env, scoped, kind):
     if kind=='connection': assert labels[-1]['name']=='Exact component.Heat → Second component.Heat'
     before = rows(store,'evidence')
     study = store.study(actor,sid)
-    store.update_study(actor,sid,uid(),study['revision'],dict(name='Renamed study'))
+    seed_legacy_context(store, actor,sid,uid(),study['revision'],dict(name='Renamed study'))
     model['instances'][0]['name']='Later live model'
     assert Store(store.path).evidence_version(actor,sid,saved['evidence_version_id'])==saved
     assert store.add_evidence(actor,sid,command,payload,coordinator=None)==saved

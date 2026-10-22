@@ -11,7 +11,7 @@ async function setup(page: Page) {
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await page.getByLabel('New model name').fill('Chain'); await page.getByLabel('Starting model').selectOption('two_component_example');
   await page.getByRole('button', { name: 'Create model', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh model', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Configurations', exact: true }).click();
   await page.getByRole('button', { name: 'Commit model snapshot', exact: true }).click();
   await expect(page.getByText('Model snapshot committed. Enter or review every input.', { exact: true })).toBeVisible();
@@ -114,9 +114,9 @@ test('deep-linked retained run copies to its matching model configuration withou
   await page.route(`**/api/1/studies/${sid}/runs`, route => route.fulfill({ json: { schema_version: '1', data: [{ run_id: rid, state: 'recorded', configuration_revision_id: frozen.configuration.configuration_revision_id }] } }));
   const { workspaceHash } = await import('../src/workspaceModel');
   await page.evaluate(hash => { location.hash = hash; }, workspaceHash({ study: sid, view: 'runs', run: rid }));
-  await expect(page.getByRole('button', { name: 'Copy configuration to draft', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create new version', exact: true })).toBeVisible();
   let writes = 0; page.on('request', r => { if (['POST', 'PATCH'].includes(r.method())) writes++; });
-  await page.getByRole('button', { name: 'Copy configuration to draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Create new version', exact: true }).click();
   await expect(page.getByText('Configuration copied to an unsaved draft. No run submitted.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('First · x value', { exact: true })).toHaveValue('2');
   await expect(page.getByRole('button', { name: 'Run model', exact: true })).toBeDisabled();

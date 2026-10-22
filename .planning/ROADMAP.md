@@ -4,9 +4,37 @@
 
 The product already delivers the manual modeling workflow. This milestone turns it into a local edition any engineer can install on macOS or Linux (Windows through WSL2), gives desktop coding agents a governed tool surface onto one study, adds source documents, and ends with independent reviews and a first qualified local release. Phase 1 makes the repository consistent under the `hyprn-mvp` namespace with every must-pass group green. Phase 2 packages the local edition. Phases 3 and 4 add agent tools and documents and may run in parallel with Phase 2 where their files do not overlap. Phase 5 qualifies and releases.
 
+## Current delivery
+
+The latest [delivery instruction](DELIVERY-PLAN.md) makes the real owner-operated
+fuel workflow the only demo queue: current app/services, thin authenticated public
+API client, Codex author–run–inspect–revise loop, actual retained outputs and UI
+rehearsal. Open numbered tasks below remain deferred product obligations. In-flight
+CLI/MCP work is preserved separately; its completion is not required for this demo.
+No phase or release completion is implied.
+
 ## Phases
 
-- [ ] **Phase 1: Repository baseline** - One `hyprn-mvp` namespace, clean tree, every must-pass test group green through the renamed runner
+The earlier full-product priority was governed by [the A–D delivery amendment](DELIVERY-PLAN.md),
+approved on 2026-10-14. It preserves the phase scope and original task IDs while
+ordering pending work by delivered value:
+
+| Priority | Outcome | Stop/checkpoint |
+|---|---|---|
+| A | Clear application ownership and attested installed source | Schema/study-path/release window verified and closed at 2.8 |
+| B | Consistent public API, authority and recoverable outcomes | Shared API and agent recovery/activity contracts verified |
+| C | Both local clients save an evidence note visible in the UI | 3.30-evidence: persisted record, attribution, activity and revocation |
+| D | Full engineering workflow from model to saved conclusion | 3.35-host and 3.36-delivery-status, then feature freeze/rehearsal |
+| E | Complete installation portability and documentation | Remaining adapter/probe/clean-room/docs slices and Phase 2/3 closure |
+| F | Documents and qualified first release | Original Phases 4 and 5 |
+
+A's ownership and attested-source foundations are verified through 2.8. B's remaining
+agent recovery/activity contracts feed C. Local lifecycle, safe cleanup and current-host
+smoke remain C prerequisites. The next two batches are 2.9 + 2.10-host and 3.11 + 3.12.
+The amendment's waves supersede the original whole-phase ordering for pending work.
+Partial delivery never closes an original task or requirement without its full evidence.
+
+- [x] **Phase 1: Repository baseline** - One `hyprn-mvp` namespace, clean tree, every must-pass test group green through the renamed runner
 - [ ] **Phase 2: Local edition** - Clone, `./hyprn-mvp setup`, `./hyprn-mvp start` on macOS and Linux from pinned sources, with attestation at setup and no hard-coded location
 - [ ] **Phase 3: Agent tools for coding agents** - Attributed agent principal, agent-practices research, local MCP server, study folders, attributed authoring with the Agent activity page, configurations and runs, evaluation
 - [ ] **Phase 4: Documents** - Collections and annotations on AiiDA, document API routes, library, reader, search and citations from evidence in the UI
@@ -39,7 +67,7 @@ Plans:
   3. Images, the native environment and the WhatsOpt source are built only from pinned, verified inputs; non-acquisition builds run without network.
   4. Setup snapshots the committed checkout and attests the worker; start refuses a changed checkout or a stale attestation and never rebuilds.
   5. `status`, `doctor`, `open`, `logs`, `stop` and `uninstall` behave as documented in `docs/operations/`, with no secret in output, arguments or logs.
-**Plans**: 1 plan, 17 tasks (2.1–2.14 plus 2.8a–2.8c), one task per fresh executor
+**Plans**: 1 plan, 18 original tasks (2.1–2.14 plus 2.1a and 2.8a–2.8c), sliced and batched in fresh executors under DELIVERY-PLAN.md
 
 Plans:
 - [ ] 02-PLAN.md — Entry point and pinned toolchain (tracer), installation configuration and path policy, installation-driven managers, native environment, reproducible images, checkout-mode release, CLI, OS adapters, lifecycle, uninstall, smoke and clean-room installs, operations docs
@@ -54,7 +82,7 @@ Plans:
   3. Agent writes execute directly within the Owner's authority, attributed and journaled, including new studies owned by the Owner and removal of draft content under revision checks; no tool deletes a saved record, archives, restores or manages access, and agent sessions are refused on those routes; the Owner sees every agent action on the Agent activity page and can revoke the agent's access there.
   4. An agent saves configurations, submits runs within the run limits (a configuration that is not ready to run is refused with its reasons and no run created), reads results with outcome facets separate, and records an interim conclusion.
   5. Evaluation scenarios G2–G8 pass on both local clients (scripted where possible); G1 is recorded per client.
-**Plans**: 1 plan, 41 tasks (3.1–3.36 plus 3.2a and 3.3a–3.3d), one task per fresh executor
+**Plans**: 1 plan, 41 tasks (3.1–3.36 plus 3.2a and 3.3a–3.3d), sliced and batched in fresh executors under DELIVERY-PLAN.md
 
 Plans:
 - [ ] 03-PLAN.md — Agent principal and attribution (tracer), agent-practices research, read-only tools and local MCP server, study folders and relay, client-facts probe, authoring with the Agent activity page, configurations and runs, evaluation
@@ -105,8 +133,8 @@ Release gate action: remove `documents` from the advertised unavailable capabili
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Repository baseline | 0/1 | In progress (9/10 tasks) | - |
-| 2. Local edition | 0/1 | Planned | - |
-| 3. Agent tools for coding agents | 0/1 | Planned | - |
+| 1. Repository baseline | 1/1 | Complete (tasks 1.1–1.11) | 2026-10-14 |
+| 2. Local edition | 0/1 | In progress | - |
+| 3. Agent tools for coding agents | 0/1 | In progress | - |
 | 4. Documents | 0/1 | Planned | - |
 | 5. Qualification and first local release | 0/? | Context ready | - |

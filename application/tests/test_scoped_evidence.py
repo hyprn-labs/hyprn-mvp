@@ -1,4 +1,5 @@
 """Typed immutable evidence through authenticated API and isolated real model HTTP."""
+from hyprn_mvp_app.contracts import authored_schema
 import copy
 import json
 import os
@@ -10,27 +11,44 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.store import Store, digest
-from test_api import ORIGIN, post, uid, model_revision, candidate, study
+from test_api import ORIGIN, post, uid, model4_revision, configuration_request, configuration_commit, study
 from test_ui_discovery import api, private_http, scoped_evidence_root
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def retained_criterion(store, sid):
+    """A retained configuration 1 with one criterion, stored exactly as an earlier release saved
+    it: criteria exist only on retained records, never on a configuration 6."""
+    from execution_fixtures import fixture
+    frozen = fixture('chain')['frozen']; config = frozen['configuration']; model = frozen['model_snapshot']
+    output = next(dict(instance_id=i['instance_id'], port_id=p['port_id']) for i in model['instances']
+                  for d in model['definitions'] if d['definition_version_id'] == i['definition_version_id']
+                  for p in d['ports'] if p['direction'] == 'output')
+    config.update(study_id=sid, configuration_id=uid(), configuration_revision_id=uid(),
+                  criteria=[dict(criterion_id=uid(), target=output, operator='ge', threshold=0, units='', evidence_version_ids=[])])
+    config['digest'] = digest({k: v for k, v in config.items() if k != 'digest'})
+    with store.connection(write=True) as db:
+        db.execute('INSERT INTO configurations VALUES(?,?,?,?)', (config['configuration_revision_id'], config['configuration_id'], sid, json.dumps(frozen)))
+        db.execute('INSERT INTO configuration_families VALUES(?,?,?)', (config['configuration_id'], sid, config['configuration_revision_id']))
+        db.execute('INSERT INTO model_associations VALUES(?,?,?)', (sid, config['model_id'], uid()))
+    return config
+
+
 @pytest.fixture
 def scoped(api):
-    c = api[0]; s, model = model_revision(api); sid = s['study_id']
+    c, store = api[0], api[1]; s, model = model4_revision(api); sid = s['study_id']
     base = dict(scope_version='1', study_id=sid)
     binding = dict(base, model_id=model['model_id'], model_revision_id=model['model_revision_id'])
     definition = next(d for d in model['definitions'] if d['kind'] == 'explicit_component')
     instances = [i for i in model['instances'] if i['definition_version_id'] == definition['definition_version_id']]
     port = next(p for p in definition['ports'] if p['direction'] == 'output')
-    cfg = candidate(model, sid); cfg['context_snapshot'] = dict(description='', boundary='', notes=[])
-    criterion = dict(criterion_id=uid(), target=dict(instance_id=instances[-1]['instance_id'], port_id=port['port_id']),
-                     operator='ge', threshold=0, units='', evidence_version_ids=[])
-    cfg['criteria'] = [criterion]
-    frozen = post(c, f'/studies/{sid}/configurations', dict(command_id=uid(), expected_revision=None, configuration=cfg), 201)['data']
+    cfg = configuration_request(api, s, model)
+    frozen = post(c, f'/studies/{sid}/configurations', configuration_commit(api, cfg), 201)['data']
+    assert frozen['configuration']['schema_version'] == '6' and 'criteria' not in frozen['configuration']
     revision = frozen['configuration']['configuration_revision_id']
     run = post(c, f'/studies/{sid}/runs', dict(command_id=uid(), configuration_revision_id=revision), 202)['data']
+    retained = retained_criterion(store, sid)
     scopes = dict(
         study=dict(base, kind='study'), model_revision=dict(binding, kind='model_revision'),
         definition_version=dict(binding, kind='definition_version', definition_id=definition['definition_id'], definition_version_id=definition['definition_version_id']),
@@ -39,7 +57,8 @@ def scoped(api):
         connection=dict(binding, kind='connection', connection_id=model['connections'][0]['connection_id']),
         configuration=dict(base, kind='configuration', configuration_revision_id=revision),
         run=dict(base, kind='run', run_id=run['run_id']),
-        criterion=dict(base, kind='criterion', configuration_revision_id=revision, criterion_id=criterion['criterion_id']))
+        criterion=dict(base, kind='criterion', configuration_revision_id=retained['configuration_revision_id'],
+                       criterion_id=retained['criteria'][0]['criterion_id']))
     return s, model, cfg, frozen, scopes, instances
 
 
@@ -96,7 +115,7 @@ def test_repeated_instance_ports_are_distinct_and_resolve_the_pinned_version(api
     post(c,path,note(root_scope),404)
     model_path = f"/studies/{sid}/models/{model['model_id']}"
     current = c.get('/api/1'+model_path).json()['data']
-    renamed = post(c,model_path+'/edits',dict(command_id=uid(),expected_revision=current['draft_revision'],edits=[dict(kind='rename_model',name='Later name')]))['data']
+    renamed = post(c,model_path+'/edits',dict(schema_version='4',command_id=uid(),expected_revision=current['draft_revision'],edits=[dict(kind='rename_model',name='Later name')]))['data']
     newer = post(c,model_path+'/commits',dict(command_id=uid(),expected_revision=renamed['draft_revision']))['data']
     assert newer['model_revision_id'] != scopes['port']['model_revision_id']
     assert c.get('/api/1'+path+'/'+first['evidence_version_id']).json()['data'] == first
@@ -111,6 +130,18 @@ def test_invalid_or_foreign_reference_creates_no_evidence_or_receipt(api, scoped
     bad = dict(scopes[kind]); bad[field] = uid()
     before = rows(store,'evidence'), rows(store,'receipts')
     post(c,f"/studies/{s['study_id']}/evidence",note(bad),404)
+    assert (rows(store,'evidence'),rows(store,'receipts')) == before
+
+
+def test_criterion_scope_on_a_configuration_without_criteria_creates_no_evidence_or_receipt(api, scoped):
+    """A configuration 6 carries no criteria to scope evidence to: any criterion reference on it
+    is refused as not found, and nothing is written."""
+    c, store, *_ = api; s, _, _, frozen, scopes, _ = scoped
+    revision = frozen['configuration']['configuration_revision_id']
+    before = rows(store,'evidence'), rows(store,'receipts')
+    for criterion in (uid(), scopes['criterion']['criterion_id']):
+        bad = dict(scopes['criterion'], configuration_revision_id=revision, criterion_id=criterion)
+        post(c,f"/studies/{s['study_id']}/evidence",note(bad),404)
     assert (rows(store,'evidence'),rows(store,'receipts')) == before
 
 
@@ -165,26 +196,34 @@ def test_legacy_mixed_paging_filters_and_serialized_rows_are_unchanged(api, scop
 
 
 def test_full_scope_freezes_and_tampering_cannot_strip_or_replace_it(api, scoped):
-    c,store,auth,model,transport,_=api;s,_,cfg,old_frozen,scopes,_=scoped;sid=s['study_id'];path=f'/studies/{sid}'
+    """The server freezes the exact cited evidence (a typed record with its full scope pair, an
+    older record without one); a request that supplies its own snapshots, forged, rescoped or
+    stripped, is refused before any private call and never replaces the frozen ones."""
+    c,store,auth,model,transport,_=api;s,_,cfg,_,scopes,_=scoped;sid=s['study_id'];path=f'/studies/{sid}'
     legacy=post(c,path+'/evidence',dict(command_id=uid(),scope=None,kind='note',content='Old shape',source_refs=[]),201)['data']
-    legacy_trial=copy.deepcopy(cfg);legacy_trial['evidence_snapshots']=[snapshot(legacy)]
-    old_frozen=post(c,path+'/configurations',dict(command_id=uid(),expected_revision=None,configuration=legacy_trial),201)['data']
+    legacy_trial=copy.deepcopy(cfg);legacy_trial['general_context_evidence_version_ids']=[legacy['evidence_version_id']]
+    old_frozen=post(c,path+'/configurations',configuration_commit(api,legacy_trial),201)['data']
+    assert old_frozen['configuration']['evidence_snapshots']==[snapshot(legacy)]
     old_rows=rows(store,'configurations');old_digest=old_frozen['configuration']['digest']
     typed=post(c,path+'/evidence',note(scopes['port']),201)['data']
-    trial=copy.deepcopy(cfg);trial['evidence_snapshots']=[snapshot(legacy),snapshot(typed)]
-    trial['inputs'][0]['provenance']['evidence_version_ids']=[typed['evidence_version_id']]
-    frozen=post(c,path+'/configurations',dict(command_id=uid(),expected_revision=None,configuration=trial),201)['data']
-    assert frozen['configuration']['evidence_snapshots']==trial['evidence_snapshots']
+    trial=copy.deepcopy(legacy_trial);trial['inputs'][0]['provenance']['evidence_version_ids']=[typed['evidence_version_id']]
+    frozen=post(c,path+'/configurations',configuration_commit(api,trial),201)['data']
+    expected=sorted([snapshot(legacy),snapshot(typed)],key=lambda x:x['evidence_version_id'])
+    assert frozen['configuration']['evidence_snapshots']==expected
+    assert snapshot(typed)['resource_scope']==scopes['port'] and snapshot(typed)['evidence_schema_version']=='2'
     assert frozen['configuration']['digest']==digest({k:v for k,v in frozen['configuration'].items() if k!='digest'})
-    before=rows(store,'configurations');transport.offline=True
-    for field,value in [('content','forged'),('source_refs',['forged']),('resource_scope',scopes['study'])]:
-        altered=copy.deepcopy(trial);altered['evidence_snapshots'][1][field]=value
-        post(c,path+'/configurations',dict(command_id=uid(),expected_revision=None,configuration=altered),409)
-    stripped=copy.deepcopy(trial)
-    for key in ['evidence_schema_version','resource_scope']:stripped['evidence_snapshots'][1].pop(key)
-    post(c,path+'/configurations',dict(command_id=uid(),expected_revision=None,configuration=stripped),409)
-    partial=copy.deepcopy(trial);partial['evidence_snapshots'][1].pop('resource_scope')
-    post(c,path+'/configurations',dict(command_id=uid(),expected_revision=None,configuration=partial),400)
+    before=rows(store,'configurations');transport.offline=True;calls=len(transport.calls)
+    forged=[dict(snapshot(typed),content='forged'),dict(snapshot(typed),source_refs=['forged']),
+            dict(snapshot(typed),resource_scope=scopes['study']),
+            {k:v for k,v in snapshot(typed).items() if k not in ('evidence_schema_version','resource_scope')},
+            {k:v for k,v in snapshot(typed).items() if k!='resource_scope'}]
+    for item in forged:
+        altered=dict(copy.deepcopy(trial),evidence_snapshots=[snapshot(legacy),item])
+        assert post(c,path+'/configurations/preview',altered,400)['error']['code']=='invalid_request'
+        body=dict(configuration_id=None,expected_revision=None,command_id=uid(),configuration=altered,
+                  expected_preview_digest=digest(frozen['configuration']))
+        assert post(c,path+'/configurations',body,400)['error']['code']=='invalid_request'
+    assert len(transport.calls)==calls
     restarted=TestClient(create_app(Store(store.path),auth,model),base_url=ORIGIN);restarted.cookies.update(c.cookies)
     assert restarted.get('/api/1'+path+'/configurations/'+frozen['configuration']['configuration_revision_id']).json()['data']==frozen
     assert rows(store,'configurations')==before and rows(store,'configurations')[:len(old_rows)]==old_rows
@@ -193,7 +232,7 @@ def test_full_scope_freezes_and_tampering_cannot_strip_or_replace_it(api, scoped
 
 
 def test_scope_schema_pair_is_closed_and_snapshot_pair_is_all_or_neither():
-    schemas=[json.loads((ROOT/'contracts/schemas'/name).read_text()) for name in ['model.schema.json','execution.schema.json']]
+    schemas=[authored_schema() for name in ['model.schema.json','execution.schema.json']]
     for schema in schemas:
         Draft202012Validator.check_schema(schema)
         assert 'EvidenceResourceRef1' in schema['$defs']
@@ -248,9 +287,11 @@ def test_model_scoped_evidence_replay_is_local_after_restart_with_current_author
 @pytest.mark.parametrize('action', ['configuration-compatibility','prepare-execution'])
 def test_private_evidence_snapshot_pair_is_enforced_on_real_http(api, scoped, shape, action):
     from hyprn_mvp_app.store import DomainError
+    from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
     _,_,_,model,_,actor=api
     s,pin,_,frozen,scopes,_=scoped
-    cfg=copy.deepcopy(frozen['configuration'])
+    # The private configuration 5 the application projects from the saved configuration 6.
+    cfg=project_scientific_configuration(copy.deepcopy(frozen['configuration']))
     item=dict(evidence_version_id=uid(),kind='note',content='Private contract test',source_refs=[])
     if shape in ('paired','version_only'):item['evidence_schema_version']='2'
     if shape in ('paired','scope_only'):item['resource_scope']=scopes['port']
@@ -270,4 +311,4 @@ def test_private_evidence_snapshot_pair_is_enforced_on_real_http(api, scoped, sh
         status,result=invoke()
         assert status==200
         if action=='configuration-compatibility':assert result['data']['compatible'] is True
-        else:assert result['data']['schema_version']=='2'
+        else:assert (result['data']['schema_version'],result['data']['result_protocol_version'])==('4','3')

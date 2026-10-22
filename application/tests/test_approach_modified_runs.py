@@ -18,12 +18,11 @@ from execution_fixtures import runtime_fixture
 ORIGIN='http://127.0.0.1:19999'
 def path(e,suffix):return '/api/1/studies/'+e['sid']+'/'+suffix
 
-@pytest.mark.parametrize('choice',['preserve','change','remove','case'])
+@pytest.mark.parametrize('choice',['preserve','change','remove'])
 def test_approach_selection_changes_are_explicit_scientific_delta(choice):
     source=case5()[0]['frozen']['configuration'];candidate=deepcopy(source)
     if choice=='change':candidate['approach_binding']['approach_version_id']=uid()
     elif choice=='remove':candidate['approach_binding']=None
-    elif choice=='case':candidate['approach_binding']['case_id']=None
     records,summaries=changes(source,candidate)
     if choice=='preserve':assert records==summaries==[]
     else:
@@ -105,34 +104,46 @@ def seed(e):
     value['configuration']['context_source']['choice_confirmed']=True
     return value
 
-def check_real_api_preview_commit_replay_and_next_seed(app,choice):
-    e=app;original=History(e['store']).read(e['actor'],e['sid'],e['rid']);request=seed(e)['configuration']
-    if choice=='remove':request['approach_selection']=None
-    elif choice=='change':
-        base=path(e,'approach');state=e['client'].get(base).json()['data']['draft'];content=state['content'];content['question']='New interpretation'
-        q=dict(schema_version='1',expected_revision=state['revision'],content=content)
-        p=e['client'].post(base+'/preview',json=q);assert p.status_code==200,p.text
-        d=e['client'].post(base+'/draft',json=dict(q,command_id=uid(),expected_preview_digest=p.json()['data']['preview_digest']));assert d.status_code in (200,201),d.text
-        revision=d.json()['data']['revision'];q['expected_revision']=revision
-        p=e['client'].post(base+'/preview',json=q)
-        v=e['client'].post(base+'/versions',json=dict(schema_version='1',command_id=uid(),expected_revision=revision,expected_preview_digest=p.json()['data']['preview_digest']));assert v.status_code in (200,201),v.text
-        request['approach_selection']['approach_version_id']=v.json()['data']['saved']['version']['approach_version_id']
-    request['context_override']['description']='Edited inherited rationale'
-    p=e['client'].post(path(e,'configurations/preview'),json=request);assert p.status_code==200,p.text
-    p=p.json()['data'];validate('ConfigurationPreview4',p)
-    pin_changes=[d for d in p['changes'] if d['path'].startswith('/approach_binding')]
-    assert bool(pin_changes)==(choice!='preserve')
-    command=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=request,expected_preview_digest=p['candidate_digest'])
-    r=e['client'].post(path(e,'configurations'),json=command);assert r.status_code==201,r.text
-    frozen=r.json()['data'];validate('FrozenConfiguration4',frozen)
-    e['model'].offline=True
-    assert e['client'].post(path(e,'configurations'),json=command).json()['data']==frozen
-    e['rid']=retain_api(e,frozen);next_seed=seed(e)
-    assert next_seed['source_configuration']==frozen['configuration']
-    assert next_seed['approach_closure']==frozen['approach_closure']
-    assert next_seed['configuration']['approach_selection']==request['approach_selection']
-    assert next_seed['source_context']['description']=='Edited inherited rationale'
-    assert History(e['store']).read(e['actor'],e['sid'],original['results']['run_id'])==original
+def configuration_count(e):
+    with e['store'].connection() as db:
+        return db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]
+
+
+def check_earlier_request_refused_without_write(e, request):
+    """New configurations are version 6 only: an approach-bound request is refused at preview
+    and save, nothing is written and no private modeling call is made."""
+    before = configuration_count(e)
+    calls = len(e['model'].calls)
+    preview = e['client'].post(path(e, 'configurations/preview'), json=request)
+    assert preview.status_code == 422, preview.text
+    assert preview.json()['error']['code'] == 'unsupported_record_version'
+    command = dict(
+        command_id=uid(),
+        configuration_id=None,
+        expected_revision=None,
+        configuration=request,
+        expected_preview_digest='0' * 64,
+    )
+    saved = e['client'].post(path(e, 'configurations'), json=command)
+    assert saved.status_code == 422, saved.text
+    assert saved.json()['error']['code'] == 'unsupported_record_version'
+    assert configuration_count(e) == before
+    assert len(e['model'].calls) == calls
+
+
+def check_approach_seed_reads_exactly_and_its_earlier_request_is_refused(app, choice):
+    """A seed from a retained approach-bound run still reads exactly. Writing its
+    approach-bound request is retired, whether the selection is kept or removed."""
+    e = app
+    original = History(e['store']).read(e['actor'], e['sid'], e['rid'])
+    first = seed(e)
+    request = deepcopy(first['configuration'])
+    if choice == 'remove':
+        request['approach_selection'] = None
+    request['context_override']['description'] = 'Edited inherited rationale'
+    check_earlier_request_refused_without_write(e, request)
+    assert seed(e) == first
+    assert History(e['store']).read(e['actor'], e['sid'], e['rid']) == original
 
 def check_incompatible_or_implicit_pin_changes_fail_without_new_configuration(app,change):
     e=app;r=seed(e)['configuration']
@@ -192,27 +203,24 @@ def test_public_modified_run_operations_in_reviewed_application_interpreter():
     assert result.returncode==0,result.stderr
 
 
-def check_polish_seed_copy_replay_and_current_authorization(e):
-    before=History(e['store']).read(e['actor'],e['sid'],e['rid'])
-    url=path(e,'runs/'+e['rid']+'/modified-run-seed')
-    response=e['client'].get(url);assert response.status_code==200,response.text
-    value=response.json()['data'];validate('ModifiedRunSeed6',value)
-    assert value['source_configuration']==before['configuration']
-    assert value['approach_closure']==before['approach_closure']
-    request=value['configuration'];request['context_source']['choice_confirmed']=True
-    request['context_override']['description']='Explicitly edited source context'
-    preview=e['client'].post(path(e,'configurations/preview'),json=request)
-    assert preview.status_code==200,preview.text
-    validate('ConfigurationPreview6',preview.json()['data'])
-    command=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=request,expected_preview_digest=preview.json()['data']['candidate_digest'])
-    response=e['client'].post(path(e,'configurations'),json=command);assert response.status_code==201,response.text
-    frozen=response.json()['data'];validate('FrozenConfiguration7',frozen)
-    e['model'].offline=True
-    assert e['client'].post(path(e,'configurations'),json=command).json()['data']==frozen
-    assert History(e['store']).read(e['actor'],e['sid'],e['rid'])==before
-    with e['store'].connection(write=True) as db:db.execute('DELETE FROM memberships WHERE actor_id=?',(e['actor'],))
-    assert e['client'].get(url).status_code in (403,404)
-    assert e['client'].post(path(e,'configurations'),json=command).status_code in (403,404)
+def check_polish_seed_reads_exactly_refuses_its_request_and_current_authorization(e):
+    before = History(e['store']).read(e['actor'], e['sid'], e['rid'])
+    url = path(e, 'runs/' + e['rid'] + '/modified-run-seed')
+    response = e['client'].get(url)
+    assert response.status_code == 200, response.text
+    value = response.json()['data']
+    validate('ModifiedRunSeed6', value)
+    assert value['source_configuration'] == before['configuration']
+    assert value['approach_closure'] == before['approach_closure']
+    request = deepcopy(value['configuration'])
+    request['context_source']['choice_confirmed'] = True
+    request['context_override']['description'] = 'Explicitly edited source context'
+    check_earlier_request_refused_without_write(e, request)
+    assert e['client'].get(url).json()['data'] == value
+    assert History(e['store']).read(e['actor'], e['sid'], e['rid']) == before
+    with e['store'].connection(write=True) as db:
+        db.execute('DELETE FROM memberships WHERE actor_id=?', (e['actor'],))
+    assert e['client'].get(url).status_code in (403, 404)
 
 if __name__=='__main__':
     import sys
@@ -221,9 +229,11 @@ if __name__=='__main__':
     wire=json.loads(guard.scoped_path(scope,'artifacts/modified-case.json').read_text())
     wire['files']={p:base64.b64decode(raw) for p,raw in wire['files'].items()}
     checks=[]
-    for choice in ('preserve','change','remove'):
+    for choice in ('preserve','remove'):
         tmp=guard.scoped_path(scope,'artifacts/api-'+choice);tmp.mkdir()
-        check_real_api_preview_commit_replay_and_next_seed(new_app(tmp,wire),choice);checks.append(choice)
+        app = new_app(tmp, wire)
+        check_approach_seed_reads_exactly_and_its_earlier_request_is_refused(app, choice)
+        checks.append(choice)
     for choice in ('model','version','case','downgrade','omit'):
         tmp=guard.scoped_path(scope,'artifacts/api-'+choice);tmp.mkdir()
         check_incompatible_or_implicit_pin_changes_fail_without_new_configuration(new_app(tmp,wire),choice);checks.append(choice)
@@ -237,6 +247,8 @@ if __name__=='__main__':
     newer=json.loads(guard.scoped_path(scope,'artifacts/modified-polish-case.json').read_text())
     newer['files']={p:base64.b64decode(raw) for p,raw in newer['files'].items()}
     tmp=guard.scoped_path(scope,'artifacts/api-polish');tmp.mkdir()
-    check_polish_seed_copy_replay_and_current_authorization(new_app(tmp,newer));checks.append('polish_seed_copy_replay_authorization')
+    app = new_app(tmp, newer)
+    check_polish_seed_reads_exactly_refuses_its_request_and_current_authorization(app)
+    checks.append('polish_seed_refusal_authorization')
     assert not any(n.split('.')[0] in ('aiida','openmdao','openturns') for n in sys.modules)
     print(json.dumps(dict(checks=checks,native_imports=[])))

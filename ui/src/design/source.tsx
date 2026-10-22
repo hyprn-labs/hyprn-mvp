@@ -31,3 +31,8 @@ export function SourceSurface({ display, codeRef, children }: { display: string;
     <div className="source-area"><div ref={highlightView} aria-hidden="true" className="source-highlight-scroll"><pre className="source-highlight">{colored}</pre></div>{children}</div>
   </div>;
 }
+
+/** Verified source reads as a full-width document; never as an action group. */
+export function SourceReader({ identity, text }: { identity: ReactNode; text: string }) {
+  return <div className="hf-source-reader">{identity}<pre tabIndex={0} aria-label="Read-only authored source">{text}</pre></div>;
+}

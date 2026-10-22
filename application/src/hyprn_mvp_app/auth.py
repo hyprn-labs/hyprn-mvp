@@ -1,8 +1,8 @@
 """Local owner provisioning, scrypt passwords and revocable opaque sessions.
 
 Agent credentials: a delegated agent API session (15 minutes, cookie and cross-site request
-values returned once, hashes stored) and a tool token (audience ``/mcp`` only, 256 random bits
-after the ``hyprn_mvp_mcp_`` prefix, returned once, hash stored). Neither value is logged.
+values returned once, hashes stored) for the embedded Assistant. Session credentials
+never leave the application or enter logs.
 """
 import argparse
 import getpass
@@ -13,10 +13,7 @@ import time
 from .contracts import DomainError, uid
 from .store import AGENT_WRITE_EFFECTS, Store
 
-TOOL_TOKEN_PREFIX="hyprn_mvp_mcp_"
-TOOL_TOKEN_AUDIENCE="/mcp"
 AGENT_SESSION_SECONDS=15*60
-TOOL_TOKEN_MAX_HOURS=24
 
 def token_hash(token):return hashlib.sha256(token.encode()).hexdigest()
 
@@ -46,7 +43,7 @@ class Auth:
             if not db.execute("SELECT 1 FROM users").fetchone():raise DomainError("resource_not_found",404)
             db.execute("UPDATE users SET password_hash=?,failures=0,locked_until=0",(hashed,))
             db.execute("DELETE FROM sessions")
-            # Recovery also ends every agent delegation, tool token and agent API session.
+            # Recovery also ends every agent delegation and agent API session.
             self.store.revoke_all_agent_credentials(db,"owner_recovery")
 
     def login(self,username,password):
@@ -77,10 +74,10 @@ class Auth:
         """The session of cookie value ``token``: ``kind`` (``user`` or ``agent``),
         ``actor_id``, ``csrf_hash``, ``expires_at``, ``delegation_id``, ``study_id``,
         ``effects`` and ``read_only``. An agent session is valid only while its delegation is
-        live; a tool token is never a session."""
+        live."""
         if not isinstance(token,str) or not token or len(token)>256:raise DomainError("unauthenticated",401)
         now=time.time()
-        with self.store.connection() as db:
+        with self.store.authentication_connection() as db:
             row=db.execute("SELECT actor_id,csrf_hash,expires_at FROM sessions WHERE token_hash=? AND expires_at>?",
                            (token_hash(token),now)).fetchone()
             if row is not None:
@@ -110,45 +107,8 @@ class Auth:
         return dict(token=token,csrf_token=csrf,actor_id=delegation["agent_actor_id"],delegation_id=delegation_id,
                     study_id=delegation["study_id"],read_only=read_only,expires_at=expires)
 
-    def mint_tool_token(self,delegation_id,*,ttl_hours,client_label):
-        """A tool token for live delegation ``delegation_id``, valid ``ttl_hours`` (1 to 24).
-
-        Returns the token and its ``token_id`` once; only the hash is stored. Its audience is
-        ``/mcp``: it is never accepted on the API."""
-        if (isinstance(ttl_hours,bool) or not isinstance(ttl_hours,int) or not 1<=ttl_hours<=TOOL_TOKEN_MAX_HOURS
-                or not isinstance(client_label,str) or not 1<=len(client_label)<=128):
-            raise DomainError("invalid_request",400)
-        token=TOOL_TOKEN_PREFIX+secrets.token_urlsafe(32)
-        token_id=uid()
-        with self.store.connection(write=True) as db:
-            delegation=self.store.live_delegation(db,delegation_id) if isinstance(delegation_id,str) else None
-            if delegation is None:raise DomainError("resource_not_found",404)
-            now=time.time()
-            expires=min(now+ttl_hours*60*60,delegation["expires_at"])
-            db.execute("INSERT INTO agent_tool_tokens VALUES(?,?,?,?,?,?,?,?)",
-                       (token_hash(token),token_id,delegation_id,TOOL_TOKEN_AUDIENCE,client_label,now,expires,None))
-        return dict(token=token,token_id=token_id,delegation_id=delegation_id,expires_at=expires)
-
-    def verify_tool_token(self,token):
-        """The delegation behind tool token ``token``: ``delegation_id``, ``agent_actor_id``,
-        ``delegator_actor_id``, ``study_id``, ``effects``, ``read_only`` and ``token_id``.
-        Expired or revoked tokens and dead delegations are ``unauthenticated`` 401."""
-        if (not isinstance(token,str) or not token.startswith(TOOL_TOKEN_PREFIX)
-                or len(token)>len(TOOL_TOKEN_PREFIX)+64):
-            raise DomainError("unauthenticated",401)
-        with self.store.connection() as db:
-            row=db.execute("SELECT token_id,delegation_id FROM agent_tool_tokens WHERE token_hash=? AND audience=? "
-                           "AND revoked_at IS NULL AND expires_at>?",(token_hash(token),TOOL_TOKEN_AUDIENCE,time.time())).fetchone()
-            delegation=self.store.live_delegation(db,row["delegation_id"]) if row else None
-            if delegation is None:raise DomainError("unauthenticated",401)
-        return dict(delegation_id=delegation["delegation_id"],agent_actor_id=delegation["agent_actor_id"],
-                    delegator_actor_id=delegation["delegator_actor_id"],study_id=delegation["study_id"],
-                    effects=delegation["effects"],
-                    read_only=not (delegation["effects"]&AGENT_WRITE_EFFECTS and delegation["role_ceiling"]=="writer"),
-                    token_id=row["token_id"])
-
     def revoke_delegation(self,delegation_id,reason="revoked"):
-        """End delegation ``delegation_id`` with its tool tokens and agent API sessions; the
+        """End delegation ``delegation_id`` with its agent API sessions; the
         agent's next call is refused. Returns whether it was live."""
         with self.store.connection(write=True) as db:
             return self.store.revoke_delegation(db,delegation_id,reason)

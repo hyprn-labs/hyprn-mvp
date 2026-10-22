@@ -48,7 +48,7 @@ test('exact committed revision remains read-only after draft changes and missing
   await page.getByLabel('New model name').fill('Revision fixture');
   await page.getByLabel('Starting model').selectOption('two_component_example');
   await page.getByRole('button', { name: 'Create model', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reload model' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh model' })).toBeVisible();
   const sid = await page.getByRole('combobox', { name: 'Study', exact: true }).inputValue();
   const mid = await page.getByRole('combobox', { name: 'Model', exact: true }).inputValue();
   const base = `/api/1/studies/${sid}/models/${mid}`;
@@ -58,7 +58,7 @@ test('exact committed revision remains read-only after draft changes and missing
   expect(revision.model_revision_id).toMatch(/^[0-9a-f-]{36}$/);
   const rename = await page.request.post(base + '/edits', { headers: { 'X-CSRF-Token': csrf, Origin: servedOrigin() }, data: { command_id: crypto.randomUUID(), expected_revision: draft.draft_revision, edits: [{ kind: 'rename_model', name: 'Changed draft name' }] } });
   expect(rename.ok()).toBeTruthy();
-  await page.getByRole('button', { name: 'Reload model' }).click();
+  await page.getByRole('button', { name: 'Refresh model' }).click();
   await page.getByRole('combobox', { name: 'Model revision', exact: true }).selectOption(revision.model_revision_id);
   await expect(page.getByText('Read-only model revision', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Exact revision source').first()).toHaveText(Buffer.from(revision.source_files[0].bytes, 'base64').toString('utf8'));

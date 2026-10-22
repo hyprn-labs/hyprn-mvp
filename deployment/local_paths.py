@@ -5,16 +5,20 @@ Resolution order for every location (first match wins):
 
 1. an explicit command-line flag or function argument, passed in by the caller;
 2. the location's own ``HYPRN_MVP_*`` environment variable (below);
-3. the installation configuration (added by the packaging work; not present yet);
-4. a neutral default below ``HYPRN_MVP_DATA_ROOT`` (or, for scratch folders, the operating
-   system's temporary folder). No operating-system specific folder layout is written into
-   code: where no default can be derived the caller refuses with a message naming the
-   variable instead of guessing.
+3. the installation configuration named by ``HYPRN_MVP_CONFIG`` (``data_root``,
+   ``upstream.cache``, ``ports.app``), read and validated by the stdlib loader
+   ``integration/src/hyprn_mvp_integration/installation.py``; a refused configuration is a
+   refusal, never skipped;
+4. a neutral default below the data root (or, for scratch folders, the operating system's
+   temporary folder). No operating-system specific folder layout is written here: the per-OS
+   defaults live only in the local edition's path policy
+   (``editions/local/src/hyprn_mvp_local/paths.py``); where no default can be derived the
+   caller refuses with a message naming the variable instead of guessing.
 
 Neutral layout below the data root (every entry relative to ``HYPRN_MVP_DATA_ROOT``)::
 
     application/            development application store (installation data, credentials,
-                            deployed UI, activation records)
+                            deployed UI)
     modeling/               development modeling store
     execution/              development execution store (attested worker, native profile)
     releases/               retained releases
@@ -31,7 +35,12 @@ Environment variables:
 ``HYPRN_MVP_DATA_ROOT``
     Absolute path of the development data root (outside the repository and outside any
     synced folder). Every default below needs it; a location that has neither its own
-    variable nor the data root refuses with ``LocationUnset``.
+    variable nor the data root refuses with ``LocationUnset``. When it is unset, the
+    installation configuration's ``data_root`` is used.
+``HYPRN_MVP_CONFIG``
+    Absolute path of an installation configuration (``deployment/config.schema.json``). Unset
+    by default: deployment code never derives the per-OS default location of this file. Scoped
+    test children never receive it.
 ``HYPRN_MVP_TOOLS_DIR``
     Tool cache: the pinned uv, the uv-managed CPython and the locked development environments
     ``envs/<group>-<first 16 hex of the uv.lock SHA-256>/`` (groups ``contract`` and
@@ -54,9 +63,14 @@ Environment variables:
 ``HYPRN_MVP_TEST_FIXTURES_ROOT``
     Durable test fixtures. Default ``<data root>/fixtures``.
 ``HYPRN_MVP_UPSTREAM_CACHE``
-    Verified WhatsOpt upstream archive cache. Default ``<data root>/cache/upstream/whatsopt``.
+    Verified WhatsOpt upstream archive cache. Then the installation configuration's
+    ``upstream.cache``; default ``<data root>/cache/upstream/whatsopt``.
 ``HYPRN_MVP_EVIDENCE_ROOT``
     Evidence of development runs. Default ``<data root>/evidence``.
+``HYPRN_MVP_EXPERIMENT_STORAGE_CONFIG``
+    Explicit developer experiment retention policy. Default: experiment-storage.json
+    below the data root. Absence disables experiment collection. Not passed to scoped
+    children; installation stores are never automatically enrolled.
 ``HYPRN_MVP_SCRATCH_ROOT``
     Folder that holds scoped test folders (``hyprn-mvp-test-<uuid>``). Default: the
     operating system's temporary folder, resolved to its real path. Scoped test children
@@ -66,7 +80,8 @@ Environment variables:
     container operation). Default: none. The test-safety fence also covers the data root's
     stores without it.
 ``HYPRN_MVP_PORT``
-    Development application port. Refused when unset; there is no default port.
+    Development application port. Then the installation configuration's ``ports.app``;
+    refused when neither is set (there is no default port).
 ``HYPRN_MVP_DOCKER_SOCKET``
     Docker daemon socket path. Default: ``DOCKER_HOST`` when it names a unix socket,
     otherwise the endpoint of the active Docker context.
@@ -90,10 +105,14 @@ Environment variables:
     variable is unset, and refuses an id that differs from the reviewed pin in
     ``deployment/pins.json``.
 
-Two stdlib-only units that may not import this module read ``HYPRN_MVP_DATA_ROOT`` the
-same way: the attested execution launcher (``launcher.py`` in the integration package)
-and the standalone backup tool (``deployment/tools/backup_immutable.py``). The launcher
-also reads ``HYPRN_MVP_SCRATCH_ROOT`` to recognise scoped test folders.
+The attested execution launcher (``launcher.py`` in the integration package) may not import
+this module; it reads ``HYPRN_MVP_DATA_ROOT`` the same way, and ``HYPRN_MVP_SCRATCH_ROOT`` to
+recognise scoped test folders.
+
+Identities: while ``HYPRN_MVP_DATA_ROOT`` names the development data root, the managers keep
+the development store's fixed container, network and owner names and the ambient container
+engine; otherwise the installation configuration decides them (``configured_installation``,
+read by the same loader as the attested launcher).
 """
 import hashlib
 import json
@@ -102,9 +121,11 @@ from pathlib import Path
 import pwd
 import re
 import subprocess
+import sys
 import tempfile
 
 DATA_ROOT = 'HYPRN_MVP_DATA_ROOT'
+CONFIG = 'HYPRN_MVP_CONFIG'
 TOOLS_DIR = 'HYPRN_MVP_TOOLS_DIR'
 NATIVE_PYTHON = 'HYPRN_MVP_NATIVE_PYTHON'
 NATIVE_INVENTORY = 'HYPRN_MVP_NATIVE_INVENTORY'
@@ -113,6 +134,7 @@ TEST_FIXTURES_ROOT = 'HYPRN_MVP_TEST_FIXTURES_ROOT'
 UPSTREAM_CACHE = 'HYPRN_MVP_UPSTREAM_CACHE'
 EVIDENCE_ROOT = 'HYPRN_MVP_EVIDENCE_ROOT'
 SCRATCH_ROOT = 'HYPRN_MVP_SCRATCH_ROOT'
+CHECK_SESSION = 'HYPRN_MVP_CHECK_SESSION'
 LIVE_ROOTS = 'HYPRN_MVP_LIVE_ROOTS'
 PORT = 'HYPRN_MVP_PORT'
 DOCKER_SOCKET = 'HYPRN_MVP_DOCKER_SOCKET'
@@ -124,7 +146,7 @@ MODELING_SOURCE_IMAGE = 'HYPRN_MVP_MODELING_SOURCE_IMAGE'
 # Location variables a scoped test child receives unchanged when they are set
 # (scoped_fixture.clean_environment); the scratch root is always passed, resolved.
 SCOPED_PASS_THROUGH = (DATA_ROOT, TOOLS_DIR, NATIVE_PYTHON, NATIVE_INVENTORY, CONTRACT_PYTHON, TEST_FIXTURES_ROOT,
-                       UPSTREAM_CACHE, EVIDENCE_ROOT, CHROMIUM)
+                       UPSTREAM_CACHE, EVIDENCE_ROOT, CHROMIUM, CHECK_SESSION)
 # Value variables (not locations) a scoped test child receives, validated, when they are set.
 SCOPED_VALUES = (LIVE_PORTS, LIVE_NAMES, ENGINE_IMAGE, MODELING_SOURCE_IMAGE)
 
@@ -173,13 +195,87 @@ def absolute(value, name):
     return path
 
 
+def installation():
+    """The installation configuration named by HYPRN_MVP_CONFIG, validated by the stdlib
+    loader of this checkout; None when the variable is unset. A refused configuration raises
+    LocationUnset with the loader's reason."""
+    value = os.environ.get(CONFIG, '')
+    if not value:
+        return None
+    path = absolute(value, CONFIG)
+    loader = _installation_loader()
+    try:
+        return loader.load(path, edition='local')
+    except loader.InstallationError as error:
+        raise LocationUnset(CONFIG + ' names a refused installation configuration (' + error.reason_code + '): '
+                            + str(error)) from None
+
+
+def _installation_loader():
+    """integration/src/hyprn_mvp_integration/installation.py of this checkout (imported on
+    first use only, with the core application package it reads the location rule from)."""
+    repo = Path(__file__).resolve().parents[1]
+    for source in ('integration/src', 'application/src'):
+        if str(repo / source) not in sys.path:
+            sys.path.append(str(repo / source))
+    from hyprn_mvp_integration import installation as loader
+    if Path(loader.__file__).resolve() != repo / 'integration/src/hyprn_mvp_integration/installation.py':
+        raise LocationUnset('the installation loader was imported from outside this checkout: ' + loader.__file__)
+    return loader
+
+
 def data_root(*, required=True):
     value = os.environ.get(DATA_ROOT, '')
     if not value:
+        configured = installation()
+        if configured is not None:
+            return Path(configured['data_root'])
         if required:
             raise LocationUnset(unset_message())
         return None
     return absolute(value, DATA_ROOT)
+
+
+def configured_installation():
+    """The installation configuration that decides the managers' identities: None while
+    HYPRN_MVP_DATA_ROOT names the development data root (it comes first, as in the attested
+    launcher) or while HYPRN_MVP_CONFIG is unset."""
+    cloud = cloud_execution()
+    if cloud is not None:
+        return cloud
+    if os.environ.get(DATA_ROOT, ''):
+        return None
+    return installation()
+
+
+def cloud_execution():
+    """Cloud execution paths are explicit and never fall back to local stores."""
+    if not os.environ.get('HYPRN_MVP_CLOUD_EXECUTION_CONFIG'):
+        return None
+    return _installation_loader().cloud_from_environment()
+
+
+def component_names():
+    """Compose project, container, network and owner names of the modeling and application
+    components (``installation.component_names``): the installation's, or the development
+    data root's fixed names."""
+    return _installation_loader().component_names(configured_installation())
+
+
+def owner_username():
+    """The owner's sign-in name provisioned with a new application store."""
+    return _installation_loader().owner_username(configured_installation())
+
+
+def docker_environment():
+    """Environment of the managers' docker commands: DOCKER_HOST set to the installation's
+    engine endpoint, or None (the ambient engine) for the development data root."""
+    return _installation_loader().docker_environment(configured_installation())
+
+
+def installation_name_prefixes():
+    """The prefixes every Docker name of an installation starts with (one per edition)."""
+    return _installation_loader().NAME_PREFIXES
 
 
 def under(relative, *, required=True):
@@ -221,17 +317,14 @@ def application_root(*, required=True):
     return under(APPLICATION, required=required)
 
 
-def activation_root(*, required=True):
-    """Activation records of the development installation, kept with its application store."""
-    root = application_root(required=required)
-    return None if root is None else root / 'activation'
-
-
 def modeling_root(*, required=True):
     return under(MODELING, required=required)
 
 
 def execution_root(*, required=True):
+    cloud = cloud_execution()
+    if cloud is not None:
+        return Path(cloud['execution_root'])
     return under(EXECUTION, required=required)
 
 
@@ -245,16 +338,11 @@ def store_roots(*, required=True):
     return () if root is None else tuple(root / name for name in (APPLICATION, MODELING, EXECUTION, RELEASES))
 
 
-def old_runtime_root(*, required=True):
-    """The neutral layout holds no retired runtime: always None, or a refusal when required,
-    so every check that compares against one fails closed."""
-    if required:
-        raise LocationUnset('No retired runtime exists in the development data root layout')
-    return None
-
-
 def native_python(*, required=True):
     """The native development interpreter (an interpreter only; no profile is ever used)."""
+    cloud = cloud_execution()
+    if cloud is not None:
+        return Path(cloud['python'])
     return located(NATIVE_PYTHON, NATIVE_ENVIRONMENT + '/' + INTERPRETER, required=required)
 
 
@@ -310,6 +398,10 @@ def fixtures_root(*, required=True):
 
 
 def upstream_archive_root(*, required=True):
+    if not os.environ.get(UPSTREAM_CACHE, ''):
+        configured = installation()
+        if configured is not None:
+            return Path(configured['upstream']['cache'])
     return located(UPSTREAM_CACHE, UPSTREAM, required=required)
 
 
@@ -375,6 +467,9 @@ def port(*, required=True):
     """The development application port; refused when unset (there is no default)."""
     value = os.environ.get(PORT, '')
     if not value:
+        configured = installation()
+        if configured is not None:
+            return configured['ports']['app']
         if required:
             raise LocationUnset(PORT + ' is not set: export the development application port and rerun')
         return None
@@ -404,3 +499,8 @@ def docker_socket():
     if not host.startswith('unix://'):
         raise LocationUnset('Docker endpoint is not a local unix socket; set ' + DOCKER_SOCKET)
     return absolute(host.removeprefix('unix://'), 'Docker socket')
+
+
+def check_storage_root():
+    """Supervisor records and bounded diagnostics, separate from disposable scopes."""
+    return scratch_root() / ".hyprn-checks"

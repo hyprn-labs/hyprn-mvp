@@ -28,5 +28,7 @@ def test_public_contract_contains_no_native_routes_or_escape_hatch():
     root=Path(__file__).resolve().parents[2]
     for p in [root/'contracts/hyprn-mvp.openapi.yaml',root/'contracts/modeling.openapi.yaml']:
         text=p.read_text().lower()
-        assert all(x not in text for x in ('/api/v1/','_probe','whatsopt_options','native_id','analysis_id','discipline_id'))
+        # Native identifiers as whole field names; "alternative_id" is a study brief field.
+        import re
+        assert not re.search(r'/api/v1/|_probe|whatsopt_options|(?<![a-z])(native_id|analysis_id|discipline_id)',text)
         assert json.loads(text)['openapi']=='3.1.0'

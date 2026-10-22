@@ -66,28 +66,44 @@ class ApproachJourney(NativeJourney):
         return saved['saved']
 
     def model(self,name,edits):
+        """Commit a Model4 revision: a format-4 edit envelope upgrades the new draft, and every
+        created port declares typed units (a string spelling becomes its declaration)."""
         study=self.http.get('/api/1/studies/'+self.sid).json()['data']
-        draft=self.request('POST','models',dict(command_id=uid(),expected_revision=study['revision'],name=name,template='empty'),201)
+        body=dict(command_id=uid(),expected_revision=study['revision'],name=name,template='empty')
+        draft=self.request('POST','models',body,201)
         mp='models/'+draft['model_id']
-        body=dict(schema_version='2',command_id=uid(),expected_revision=draft['draft_revision'],edits=edits)
+        body=dict(schema_version='4',command_id=uid(),expected_revision=draft['draft_revision'],
+            edits=declared(edits))
         draft=self.request('POST',mp+'/edits',body)
         assert self.request('POST',mp+'/edits',body)==draft
-        model=self.request('POST',mp+'/commits',dict(command_id=uid(),expected_revision=draft['draft_revision']))
+        body=dict(command_id=uid(),expected_revision=draft['draft_revision'])
+        model=self.request('POST',mp+'/commits',body)
+        assert model['schema_version']=='4'
+        assert 'quantity_definitions/1' in model['required_capabilities']
         assert not self.canary()['candidate_side_effect']
         return draft,model
 
-    def configuration(self,model,name,inputs,criteria,selection,evidence):
+    def configuration(self,model,name,inputs,evidence):
+        """A configuration request 6: explicit inputs only, no criteria and no approach."""
         study=self.http.get('/api/1/studies/'+self.sid).json()['data']
-        return dict(schema_version='4',study_id=self.sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],name=name,
-            inputs=inputs,criteria=criteria,numerical=dict(mode='deterministic',initialization=[],solvers=[],design_variables=[],objectives=[],constraints=[],optimizer=None,uncertainty=None,derivatives=dict(method='none',form=None,check=None)),
-            context_source=dict(kind='current_study',expected_study_revision=study['revision']),notes=['Explicit analytical test'],assumptions=[],
-            general_context_evidence_version_ids=[evidence['evidence_version_id']],derivation=None,approach_selection=selection)
+        numerical=dict(mode='deterministic',initialization=[],solvers=[],design_variables=[],
+            objectives=[],constraints=[],optimizer=None,uncertainty=None,
+            derivatives=dict(method='none',form=None,check=None))
+        return dict(schema_version='6',study_id=self.sid,model_id=model['model_id'],
+            model_revision_id=model['model_revision_id'],name=name,inputs=inputs,
+            numerical=numerical,
+            context_source=dict(kind='current_study',expected_study_revision=study['revision']),
+            notes=['Explicit analytical test'],assumptions=[],
+            general_context_evidence_version_ids=[evidence['evidence_version_id']],derivation=None)
 
     def save_configuration(self,value):
         n=self.process_count();preview=self.request('POST','configurations/preview',value)
+        assert preview['schema_version']=='8' and 'criteria' not in preview['resolved_candidate']
         body=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=value,expected_preview_digest=preview['candidate_digest'])
         saved=self.request('POST','configurations',body,201)
         assert self.request('POST','configurations',body,201)==saved
+        assert saved['schema_version']=='9' and saved['configuration']['schema_version']=='6'
+        assert 'approach_closure' not in saved and 'criteria' not in saved['configuration']
         self.request('POST','configurations',body|{'expected_preview_digest':'0'*64},409)
         assert self.process_count()==n and not self.canary()['candidate_side_effect']
         return saved
@@ -101,9 +117,8 @@ class ApproachJourney(NativeJourney):
         self.dispatch(rid,prepare_only=True)
         assert self.process_count()==n and not self.canary()['candidate_side_effect']
         self.dispatch(rid);detail=self.request('GET','runs/'+rid)
-        assert detail['state']=='recorded' and not detail['history']['errors'],detail
-        assert detail['history']['history_schema_version']=='3'
-        assert detail['history']['results']['execution']['state']=='finished'
+        assert detail['state']=='recorded' and not detail['history']['errors'],json.dumps(detail)
+        self.recorded_without_criteria(detail)
         assert self.process_count()==n+1
         self.dispatch(rid);assert self.process_count()==n+1
         assert self.request('POST','runs',body,202)['run_id']==rid
@@ -127,5 +142,18 @@ def literal(target,value,units,eid):
     return dict(kind='literal',target=target,value=value,units=units,provenance=dict(kind='manual',statement='Explicit analytical input',evidence_version_ids=[eid]))
 
 
-def criterion(target,value,units,eid):
-    return dict(criterion_id=uid(),target=target,operator='eq',threshold=value,units=units,evidence_version_ids=[eid])
+def declaration(units):
+    """The typed declaration of one unit spelling: empty is dimensionless, never unspecified."""
+    return {'kind':'dimensionless'} if units=='' else {'kind':'physical','expression':units}
+
+
+def declared(edits):
+    """Edits whose created ports carry typed unit declarations, as Model4 requires."""
+    edits=deepcopy(edits)
+    for edit in edits:
+        if edit['kind']!='create_definition':
+            continue
+        for port in edit['ports']:
+            if isinstance(port['units'],str):
+                port['units']=declaration(port['units'])
+    return edits

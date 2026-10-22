@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Structured authored evidence content, version 1",
+  "description": "JSON following the exact HYPRN evidence/1 newline prefix in an evidence note's content. The entire stored content remains bounded to 4096 characters. Author-supplied transcription, not authenticated document extraction. All four fields are explicit; legacy content without the prefix remains uninterpreted prose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["excerpt", "source_reference", "location", "explanation"],
+  "properties": {
+    "excerpt": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S", "description": "Verbatim source text. Do not paraphrase or invent."},
+    "source_reference": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S", "description": "Source title, citation or URL identifying the quoted document."},
+    "location": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S", "description": "Printed page reference, or an explicit section/table/figure locator for an unpaginated source. Never infer a page."},
+    "explanation": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S", "description": "Author reasoning about the specific claim, applicable conditions and limits; never a quotation."}
+  }
+}

@@ -1,0 +1,63 @@
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+
+type BoxProps = ComponentPropsWithoutRef<'div'>;
+type SectionProps = ComponentPropsWithoutRef<'section'>;
+
+/** Layout only: callers own statements, source resolution and immutable identities. */
+export function Assertion({
+  statement,
+  children,
+  className = '',
+  ...props
+}: ComponentPropsWithoutRef<'article'> & { statement?: ReactNode }) {
+  return (
+    <article {...props} className={'hf-assertion ' + className}>
+      {statement != null && <p className="hf-assertion__statement">{statement}</p>}
+      {children}
+    </article>
+  );
+}
+
+export function AssertionList({ className = '', ...props }: BoxProps) {
+  return <div {...props} className={'hf-assertions ' + className} />;
+}
+
+/** Empty source collections add neither a visible wrapper nor phantom spacing. */
+export function EvidenceStack({ className = '', ...props }: BoxProps) {
+  return <div role={props['aria-label'] ? 'region' : undefined} {...props} className={'hf-evidence-stack ' + className} />;
+}
+
+export function ReadingSection({ className = '', tone, ...props }: SectionProps & { tone?: 'sunken' }) {
+  return <section {...props} className={'hf-reading-section ' + (tone ? 'hf-reading-section--sunken ' : '') + className} />;
+}
+
+export function ReadingStack({ className = '', ...props }: BoxProps) {
+  return <div {...props} className={'hf-reading-stack ' + className} />;
+}
+
+/** A file transfer has one purpose, a short scope statement and explicit actions. */
+export function TransferSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="hf-transfer-section" aria-label={title}>
+      <h3>{title}</h3>
+      {description && <p>{description}</p>}
+      <div className="hf-transfer-section__content">{children}</div>
+    </section>
+  );
+}
+
+export function ActionGroup({
+  align = 'start',
+  className = '',
+  ...props
+}: BoxProps & { align?: 'start' | 'end' }) {
+  return <div {...props} className={`hf-actions hf-actions--${align} ${className}`} />;
+}

@@ -71,7 +71,15 @@ export async function harness(page: Page) {
     const request = route.request(), path = new URL(request.url()).pathname.slice('/api/1'.length), method = request.method();
     const body = method === 'GET' ? undefined : request.postDataJSON();
     const ok = (data: unknown) => route.fulfill({ json: { schema_version: '1', data, next_cursor: null } });
+    if (path === '/session/mode') return ok({ mode: 'local' });
     if (path === '/session') { if (method === 'POST') state.actor = body.username; return ok({ actor_id: state.actor, csrf_token: 'isolated-fixture-token' }); }
+    // The model editor negotiates its edit format: this service accepts model format 4 edits.
+    if (path === '/capabilities' && method === 'GET') return ok({ model_formats: { create_request: ['3'], edit_request: ['4'], saved_record: ['4'] } });
+    // The study shell's attribution reads: no record in these studies was written by an agent.
+    // Answered before the expiry switch, which belongs to the request each test exercises.
+    const attribution =
+      path === '/agent/attribution/studies' || /^\/studies\/[^/]+\/agent\/attribution$/.test(path);
+    if (attribution && method === 'GET') return ok({ items: [], next_cursor: null });
     if (state.expire) { state.expire = false; return route.fulfill({ status: 401, json: { error: { code: 'unauthenticated', message: 'Session expired', fields: [], outcome: 'unchanged' } } }); }
     if (method !== 'GET') state.writes.push({ path, method, body });
     if (path === '/capabilities') return ok({engineering: []});
@@ -82,7 +90,9 @@ export async function harness(page: Page) {
       const study = { study_id: sid2, revision: 'new-study-r1', name: body.name, description: '', boundary: '' };
       state.studies.push(study); return ok(study);
     }
-    if (path.includes('/commands/')) return ok({ state: 'rejected', result: null });
+    if (path.includes('/commands/')) {
+      return ok({ state: 'rejected', result: null, recovery: 'refused' });
+    }
     const id = path.split('/')[2], study = state.studies.find(s => s.study_id === id);
     if (path === `/studies/${id}` && study) {
       if (method === 'PATCH') Object.assign(study, { name: body.name, description: body.description, boundary: body.boundary, revision: 'study-r2' });
@@ -93,8 +103,18 @@ export async function harness(page: Page) {
     // The model view reads the latest saved approach to explain components. These legacy
     // presentation studies have no approach; the declared double says so explicitly.
     if (path === `/studies/${id}/approach` && study && method === 'GET') return ok({ draft: null, latest_version: null });
+    // These studies have no study brief and no saved brief versions; Overview reads both.
+    if (path === `/studies/${id}/brief` && study && method === 'GET') return ok({ draft: null, latest_version: null });
+    if (path === `/studies/${id}/brief/versions` && study && method === 'GET') return ok({ items: [], next_cursor: null });
+    if (path === `/studies/${id}/models/${mid}/explanation` && study && method === 'GET') return ok({ draft: null, latest_version: null });
+    if (path === `/studies/${id}/models/${mid}/revisions/${version}/explanation` && study && method === 'GET') return ok({ explanation: null });
+    if (path === `/studies/${id}/answer` && study && method === 'GET') return ok({ draft: null, latest_version: null });
+    if (path === `/studies/${id}/answer/versions` && study && method === 'GET') return ok({ items: [], next_cursor: null });
+    // These studies have no calculations and no reference marks; the Calculations area reads both.
+    if (path === `/studies/${id}/analyses` && study && method === 'GET') return ok({ items: [], next_cursor: null });
+    if (path === `/studies/${id}/reference-marks` && study && method === 'GET') return ok({ items: [] });
     if (path === `/studies/${id}/models`) {
-      if (method === 'GET') return ok(state.model ? [{ model_id: mid }] : []);
+      if (method === 'GET') return ok(state.model ? [{ model_id: mid, name: state.model.name }] : []);
       state.model = { schema_version: '1', model_id: mid, study_id: id, name: body.name, root_instance_id: 'root', draft_revision: 'draft-r1', definitions: [], instances: [], ports: [], connections: [], boundary_mappings: [], annotations: [], source_files: [], required_capabilities: [] };
       return ok(state.model);
     }
@@ -118,22 +138,26 @@ export async function harness(page: Page) {
     // Legacy Foundry fixtures have no assumption closure or modified-run seed.
     // Explicit unavailable reads exercise honest recovery, never fabricated evidence.
     if (method === 'GET' && (path.endsWith('/assumption-evidence') || path.endsWith('/modified-run-seed'))) return route.fulfill({status:409,json:{error:{code:'source_result_unavailable',message:'Unavailable in this legacy presentation fixture',fields:[],outcome:'unchanged'}}});
-    // Request3 (new configurations since 02-13) previews and saves server-resolved shapes:
-    // context_override becomes context_snapshot and literal inputs gain result_binding null.
+    // Configuration requests 3 and 6 preview and save server-resolved shapes: context_override
+    // becomes context_snapshot and literal inputs gain result_binding null. A version 6 request
+    // carries no criteria and resolves to preview 8 and frozen configuration 9.
     // Declared presentation double only; no compatibility or digest is computed here.
-    const resolved3 = (candidate: any) => { const { context_override, notes, ...rest } = candidate;
+    const resolved = (candidate: any) => { const { context_override, notes, ...rest } = candidate;
       return { ...rest, inputs: candidate.inputs.map(({ kind: _kind, ...input }: any) => ({ ...input, result_binding: null })),
         context_snapshot: { description: context_override.description, boundary: context_override.boundary, notes },
         evidence_snapshots: [], required_capabilities: [] }; };
+    const previews: Record<string, string> = { '3': '3', '6': '8' };
     if (path.endsWith('/configurations/preview')) {
-      if (body.schema_version !== '3') return ok({ compatible: true, diagnostics: [] });
-      return ok({ schema_version: '3', request_digest: 'request-fixture', resolved_candidate: resolved3(body), candidate_digest: 'candidate-fixture', model_digest: 'fixture-digest',
+      if (!(body.schema_version in previews)) return ok({ compatible: true, diagnostics: [] });
+      return ok({ schema_version: previews[body.schema_version], request_digest: 'request-fixture', resolved_candidate: resolved(body), candidate_digest: 'candidate-fixture', model_digest: 'fixture-digest',
         compatibility: { schema_version: '1', model_revision_id: version, model_digest: 'fixture-digest', candidate_digest: 'candidate-fixture', compatible: true, diagnostics: [], required_capabilities: [], validator_identity: 'foundry-fixture' },
         changes: [], runtime_comparison: null });
     }
+    if (path.endsWith('/configuration-summaries')) return ok(state.configurations.map(c => ({...c.configuration, input_count:c.configuration.inputs.length})));
     if (path.endsWith('/configurations')) {
-      if (method === 'POST') { const configuration = body.configuration.schema_version === '3' ? { ...resolved3(body.configuration), configuration_id: '50000000-0000-4000-8000-000000000001', parent_revision_id: null } : body.configuration;
-        const value = { configuration: { ...configuration, configuration_revision_id: '40000000-0000-4000-8000-000000000001', digest: 'config-fixture' }, model_snapshot: { ...state.model, model_revision_id: version, originating_draft_revision: state.model.draft_revision, digest: 'fixture-digest' } }; state.configurations.push(value); return ok(value); }
+      if (method === 'POST') { const configuration = body.configuration.schema_version in previews ? { ...resolved(body.configuration), configuration_id: '50000000-0000-4000-8000-000000000001', parent_revision_id: null } : body.configuration;
+        const frozen = body.configuration.schema_version === '6' ? { schema_version: '9', study_revision: state.studies.find(s => s.study_id === id)!.revision } : {};
+        const value = { ...frozen, configuration: { ...configuration, configuration_revision_id: '40000000-0000-4000-8000-000000000001', digest: 'config-fixture' }, model_snapshot: { ...state.model, model_revision_id: version, originating_draft_revision: state.model.draft_revision, digest: 'fixture-digest' } }; state.configurations.push(value); return ok(value); }
       return ok(state.configurations);
     }
     if (path.endsWith('/configurations/40000000-0000-4000-8000-000000000001')) return ok(state.configurations[0]);
@@ -151,7 +175,7 @@ export async function login(page: Page, hash = '', name = 'owner') {
   await page.getByLabel('Username', { exact: true }).fill(name);
   await page.getByLabel('Password', { exact: true }).fill('isolated-test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
 }
 export async function openStudy(page: Page) { await page.getByRole('button', { name: 'Open study Thermal study' }).click(); await expect(page.getByRole('heading', { name: 'About this study' })).toBeVisible(); }
 

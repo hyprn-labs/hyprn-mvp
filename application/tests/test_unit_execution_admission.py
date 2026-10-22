@@ -19,10 +19,21 @@ import pytest
 from execution_fixtures import fixture, runtime_fixture
 from test_approach_closure import sample, D, link, signed, resolution
 from hyprn_mvp_app.approach_closure import build_closure
-from hyprn_mvp_app.execution import (assemble_bundle, validate_frozen_configuration,
-    validate_preparation, validate_retained_bundle, executable_digest, raw_hash,
-    StaticPreparation, Submissions)
-from hyprn_mvp_app.modeling import UNIT_CATALOG_DIGEST, validate
+from hyprn_mvp_app.execution import (
+    assemble_bundle,
+    validate_frozen_configuration,
+    validate_preparation,
+    validate_retained_bundle,
+    executable_digest,
+    raw_hash,
+    StaticPreparation,
+    Submissions,
+)
+from hyprn_mvp_app.modeling import validate
+from hyprn_mvp_app.units import UNIT_CATALOG_DIGEST as CURRENT_CATALOG_DIGEST
+
+# This admission corpus retains its original producer bytes and conversion proofs.
+UNIT_CATALOG_DIGEST = 'f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3'
 from hyprn_mvp_app.scientific_configuration import project_scientific_configuration as project
 from hyprn_mvp_app.store import canonical, digest, uid, Store, DomainError
 
@@ -35,19 +46,39 @@ def catalog(tmp_path_factory):
     # The producer's patched catalog is the 040 catalog with the 080 catalog hunk applied once,
     # exactly; the fixture carries those bytes.
     root = tmp_path_factory.mktemp('catalog')
-    (root/'config').mkdir()
-    created = (REPO/'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
+    (root / 'config').mkdir()
+    created = (REPO / 'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
     section = created.split('+++ b/config/modeling.units.json\n', 1)[1].split('\n--- ', 1)[0]
-    (root/'config/modeling.units.json').write_text('\n'.join(line[1:] for line in section.splitlines()[1:] if line.startswith('+')) + '\n')
-    patch = (REPO/'upstream/whatsopt-patches/080-unit-declarations.patch').read_text()
-    patch = patch[patch.index('--- a/config/modeling.units.json'):]
-    result = subprocess.run(['patch','--batch','--forward','--fuzz=0','-p1'], input=patch,
-                            text=True, cwd=root, capture_output=True)
+    (root / 'config/modeling.units.json').write_text(
+        '\n'.join(line[1:] for line in section.splitlines()[1:] if line.startswith('+')) + '\n'
+    )
+    patch = (REPO / 'upstream/whatsopt-patches/080-unit-declarations.patch').read_text()
+    patch = patch[patch.index('--- a/config/modeling.units.json') :]
+    result = subprocess.run(
+        ['patch', '--batch', '--forward', '--fuzz=0', '-p1'],
+        input=patch,
+        text=True,
+        cwd=root,
+        capture_output=True,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'offset' not in result.stdout and 'fuzz' not in result.stdout
-    assert (root/'config/modeling.units.json').read_bytes() == fixture()['files'][CATALOG_PATH]
-    value = json.loads((root/'config/modeling.units.json').read_bytes())
-    assert raw_hash(json.dumps({k:v for k,v in value.items() if k!='catalog_digest'}, sort_keys=True, separators=(',',':'), allow_nan=False).encode()) == UNIT_CATALOG_DIGEST
+    current = json.loads((root / 'config/modeling.units.json').read_bytes())
+    assert current['catalog_digest'] == CURRENT_CATALOG_DIGEST
+    value = json.loads(fixture()['files'][CATALOG_PATH])
+    assert current['supported_units'][: len(value['supported_units'])] == value['supported_units']
+    assert all(pair in current['linear_pairs'] for pair in value['linear_pairs'])
+    assert (
+        raw_hash(
+            json.dumps(
+                {k: v for k, v in value.items() if k != 'catalog_digest'},
+                sort_keys=True,
+                separators=(',', ':'),
+                allow_nan=False,
+            ).encode()
+        )
+        == UNIT_CATALOG_DIGEST
+    )
     return value
 
 
@@ -100,7 +131,7 @@ def case6(catalog, linked=False, legacy=False):
         closure=build_closure(v,resolution(models=[m]),study_id=c['study_id'])
         f['approach_closure']=closure
         c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],
-            approach_digest=v['digest'],closure_digest=closure['digest'],case_id=None)
+            approach_digest=v['digest'],closure_digest=closure['digest'])
         repin(case)
     return case
 
@@ -109,7 +140,8 @@ def deps():return dict(schema_version='1',sources=[],mappings=[])
 
 
 def assemble(case, dependencies=None):
-    b=assemble_bundle(uid(),case['prepared'],case['files'],case['frozen'],runtime_fixture(),dependencies or deps())
+    b=assemble_bundle(uid(),case['prepared'],case['files'],case['frozen'],runtime_fixture(),
+        None if case['frozen']['configuration']['schema_version']=='1' else dependencies or deps())
     r=dict(run_id=b['manifest']['run_id'],scope=case['frozen']['configuration']['study_id'],command_id=uid(),payload_digest='a'*64,bundle_digest=b['manifest']['bundle_digest'])
     return b,r
 
@@ -474,7 +506,7 @@ def mixed_case(catalog,declaration='unspecified'):
     closure=build_closure(v,resolution(models=[m,extra]),study_id=c['study_id'])
     f.update(schema_version='5',approach_closure=closure)
     c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],
-        approach_digest=v['digest'],closure_digest=closure['digest'],case_id=None)
+        approach_digest=v['digest'],closure_digest=closure['digest'])
     repin(case);assert canonical(m)==selected
     return case
 
@@ -594,7 +626,7 @@ def case8(catalog, model_version='4', approach_version='2', legacy=False, mixed=
         closure=build_closure(v,resolution(models=[m]),study_id=c['study_id'])
         f['approach_closure']=closure
         c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],
-            approach_digest=v['digest'],closure_digest=closure['digest'],case_id=None)
+            approach_digest=v['digest'],closure_digest=closure['digest'])
         repin(case)
     return case
 
@@ -677,3 +709,223 @@ def test_polish_model2_root_with_unresolved_model4_ancestor(catalog):
     assert b['manifest']['model_schema_version']=='2' and b['manifest']['schema_version']=='8'
     validate_retained_bundle(b,r,case['frozen'])
     assert json.loads(b['files']['modeling-configuration.json'])['required_capabilities']==['flat_explicit_scalar']
+
+
+@pytest.mark.parametrize('layout', ['2', '3', '4', '5', '6', '8'])
+def test_current_result_protocol_uses_explicit_input_layout_and_strict_pairing(
+    catalog, layout, tmp_path
+):
+    from hyprn_mvp_app.execution_bundle import bundle_layout, result_history_version
+    if layout in ('5', '6'):
+        case = case6(catalog, linked=True, legacy=layout == '5')
+    elif layout == '8':
+        case = case8(catalog)
+    else:
+        case = fixture()
+        config = case['frozen']['configuration']
+        if layout != '2':
+            config.update(
+                schema_version='2' if layout == '3' else '3',
+                context_source=dict(kind='current_study', expected_study_revision='fixture:1'),
+                derivation=None,
+            )
+            for item in config['inputs']:
+                item['result_binding'] = None
+            if layout == '4':
+                config.update(assumptions=[], general_context_evidence_version_ids=[])
+                config['required_capabilities'].append('configuration_assumptions/1')
+    case['prepared'].update(schema_version='3', result_protocol_version='2')
+    repin(case)
+    bundle, request = assemble(case)
+    manifest = bundle['manifest']
+    assert manifest['schema_version'] == '10'
+    assert manifest['input_schema_version'] == bundle_layout(manifest) == layout
+    assert manifest['result_protocol_version'] == '2'
+    assert result_history_version('10', '2') == '7'
+    validate_retained_bundle(bundle, request, case['frozen'])
+    directory = tmp_path / 'current-inputs'
+    directory.mkdir()
+    for name, raw in {**bundle['files'], 'manifest.json': canonical(manifest)}.items():
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+    # Worker admission stays in its own process; application imports remain inert.
+    code = '''
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from hyprn_mvp_integration.worker import read_inputs
+root = Path(sys.argv[2])
+observed = read_inputs(root, sys.argv[3], sys.argv[4])
+expected = tuple(json.loads((root / name).read_bytes()) for name in
+                 ('manifest.json', 'model.json', 'configuration.json'))
+assert observed == expected
+print('current worker inputs accepted')
+'''
+    checked = subprocess.run(
+        [sys.executable, '-B', '-c', code, str(REPO / 'integration/src'), str(directory),
+         manifest['bundle_digest'], raw_hash(canonical(manifest))],
+        capture_output=True, text=True,
+    )
+    assert checked.returncode == 0, checked.stderr
+    assert checked.stdout.strip() == 'current worker inputs accepted'
+    for field, value in [('result_protocol_version', '1'), ('input_schema_version', '1')]:
+        altered, altered_request = deepcopy((bundle, request))
+        altered['manifest'][field] = value
+        reseal(altered, altered_request)
+        with pytest.raises((ValueError, DomainError)):
+            validate_retained_bundle(altered, altered_request, case['frozen'])
+    with pytest.raises(ValueError):
+        result_history_version('10', '1')
+    with pytest.raises(ValueError):
+        result_history_version(layout, '2')
+
+
+def test_current_prior_run_closure_freezes_and_reexecutes_with_exact_protocol(catalog):
+    case = case6(catalog)
+    frozen = case['frozen']
+    model, config = frozen['model_snapshot'], frozen['configuration']
+    prior = deepcopy(config)
+    prior.update(configuration_id=uid(), configuration_revision_id=uid())
+    signed(prior)
+    context = sample(D['ApproachRunContext2'])
+    context.update(
+        study_id=prior['study_id'],
+        configuration_revision_id=prior['configuration_revision_id'],
+        configuration_digest=prior['digest'],
+        model_revision_id=model['model_revision_id'],
+        model_digest=model['digest'],
+        context=prior['context_snapshot'],
+        assessment=None,
+        errors=[],
+    )
+    context['request'].update(run_id=context['run_id'], scope=prior['study_id'])
+    result = sample(D['RetainedResults2'])
+    result.update(
+        run_id=context['run_id'],
+        bundle_digest=context['request']['bundle_digest'],
+        execution=dict(state='failed', exit_code=1, message='Prior recorded failure'),
+        outputs=[],
+        criteria=[],
+    )
+    context['results'] = result
+    signed(context)
+    version = sample(D['ApproachVersion1'])
+    version['study_id'] = prior['study_id']
+    link(version, model)
+    version['content']['basis_refs'] = [dict(kind='run', run_id=context['run_id'],
+        reason='Prior recorded calculation', relation='context')]
+    signed(version)
+    closure = build_closure(version, resolution(models=[model], configurations=[prior],
+        run_contexts=[context]), study_id=prior['study_id'])
+    assert closure['schema_version'] == '4'
+    assert closure['run_contexts'] == [context]
+    frozen.update(schema_version='8', approach_closure=closure)
+    config['approach_binding'] = dict(approach_id=version['approach_id'],
+        approach_version_id=version['approach_version_id'], approach_digest=version['digest'],
+        closure_digest=closure['digest'])
+    case['prepared'].update(schema_version='3', result_protocol_version='2')
+    repin(case)
+    bundle, request = assemble(case)
+    assert bundle['manifest']['input_schema_version'] == '9'
+    validate_retained_bundle(bundle, request, frozen)
+    assert json.loads(bundle['files']['approach/closure.json']) == closure
+
+
+class PreparationFiles:
+    """Exact retained bytes behind a counted, independently authorized preparation."""
+    def __init__(self, case):
+        self.case = case
+        self.downloads = 0
+        self.preparations = 0
+        self.refuse = False
+
+    def call(self, actor, sid, method, path, *args, **kwargs):
+        if self.refuse:
+            raise DomainError('resource_not_found', 404)
+        if method == 'POST':
+            self.preparations += 1
+            return 200, dict(data=deepcopy(self.case['prepared']))
+        self.downloads += 1
+        item = next(f for f in self.case['prepared']['files'] if path.endswith(f['file_id']))
+        return 200, dict(data=dict(
+            bytes=base64.b64encode(self.case['files'][item['path']]).decode(),
+            sha256=item['sha256'], media_type=item['media_type'],
+        ))
+
+
+def test_repeated_preparation_reuses_only_verified_bytes():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    first = prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    # New preparations retain fresh authority and bindings, even for identical content.
+    second = prepare(actor, sid, uid(), case['frozen'])
+    assert first == second
+    assert remote.preparations == 2
+    assert remote.downloads == count
+    remote.refuse = True
+    with pytest.raises(DomainError):
+        prepare(actor, sid, uid(), case['frozen'])
+
+
+def test_preparation_cache_is_scoped_and_revalidates_manifest():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    prepare(uid(), sid, uid(), case['frozen'])
+    assert remote.downloads == count * 2
+    remote.case['prepared']['configuration_digest'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+
+
+def test_failed_preparation_does_not_populate_byte_cache():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    good = deepcopy(case['prepared'])
+    case['prepared']['configuration_digest'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    case['prepared'] = good
+    prepare(actor, sid, uid(), case['frozen'])
+    assert remote.downloads == count * 2
+
+
+def test_preparation_cache_eviction_only_causes_redownload(monkeypatch):
+    import hyprn_mvp_app.execution as execution
+
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    monkeypatch.setattr(execution, 'MAX_FILES', 3)
+    first = prepare(actor, sid, uid(), case['frozen'])
+    assert len(prepare._files) <= 3
+    count = remote.downloads
+    assert prepare(actor, sid, uid(), case['frozen']) == first
+    assert remote.downloads > count
+    assert len(prepare._files) <= 3
+    assert prepare._file_bytes == sum(map(len, prepare._files.values()))
+
+
+def test_changed_prepared_file_cannot_hit_old_hash_cache():
+    case = fixture()
+    remote = PreparationFiles(case)
+    prepare = StaticPreparation(remote)
+    actor, sid = uid(), case['frozen']['configuration']['study_id']
+    prepare(actor, sid, uid(), case['frozen'])
+    count = remote.downloads
+    item = case['prepared']['files'][0]
+    item['sha256'] = '0' * 64
+    with pytest.raises(ValueError):
+        prepare(actor, sid, uid(), case['frozen'])
+    assert remote.downloads > count

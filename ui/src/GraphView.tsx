@@ -1,4 +1,5 @@
-import { GraphCanvas } from './design';
+import { GraphCanvas } from './design/graph';
+import type { ReactNode } from 'react';
 import type { Connection, Instance, ModelDraftRead4, ModelRevisionRead4, PortRead3, PortRef } from './contract';
 import type { Selection } from './workspaceModel';
 
@@ -53,7 +54,16 @@ export function groupSelected(group: Exchange, selection: Selection) {
 }
 export function selectGroup(group: Exchange): Selection { return { kind: 'connection_group', source_instance_id: group.source, target_instance_id: group.target, connection_ids: group.links.map(l => l.connection_id) }; }
 export type RevealTarget = { instance_id: string; port_id?: string; request: number };
-export type ViewProps = { highlightedPorts?: Set<string>; reveal?: RevealTarget; projection: Projection; selection: Selection; onSelect: (selection: Selection) => void; trace: ReturnType<typeof traceRelationships> };
+export type ViewProps = {
+  toolbarEnd?: ReactNode;
+  portContent?: (instanceId: string, port: PortRead3) => ReactNode;
+  highlightedPorts?: Set<string>;
+  reveal?: RevealTarget;
+  projection: Projection;
+  selection: Selection;
+  onSelect: (selection: Selection) => void;
+  trace: ReturnType<typeof traceRelationships>;
+};
 export const portSelected = (selection: Selection, id: string, port: string) => selection.kind === 'variable' && selection.instance_id === id && selection.port_id === port;
 export const isFree = (projection: Projection, id: string, port: string) => !projection.groups.some(g => g.links.some(l => l.target_ref.instance_id === id && l.target_ref.port_id === port));
 export const isResponse = (projection: Projection, id: string, port: string) => !projection.groups.some(g => g.links.some(l => l.source_ref.instance_id === id && l.source_ref.port_id === port));

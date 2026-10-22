@@ -119,7 +119,34 @@ def test_receipt_payload_digests_and_rows_unchanged(tmp_path):
             assert row == case['expected']
 
 
-@pytest.mark.parametrize('name', [b['name'] for b in CORPUS['bundles']])
+# Bundles whose frozen approach versions carry the retired ``cases`` field (ADR-0006). No
+# reader for retired formats is kept (ADR-0007; development records may be discarded, owner
+# authorization of 2026-10-18), so assembly refuses them; the corpus bytes stay pinned.
+RETIRED_BUNDLES = frozenset({
+    'bundle6_configuration4_model3_frozen5_approach',
+    'bundle8_configuration4_model2_frozen7_approach2',
+    'bundle8_configuration4_model4_frozen7_approach2_mixed',
+})
+
+
+def carries_retired_cases(bundle):
+    closure = bundle['inputs']['frozen'].get('approach_closure') or {}
+    return any('cases' in v['content'] for v in closure.get('approach_versions', []))
+
+
+def test_only_bundles_with_retired_cases_are_retired_and_assembly_refuses_them(monkeypatch):
+    assert {b['name'] for b in CORPUS['bundles'] if carries_retired_cases(b)} == RETIRED_BUNDLES
+    for name in sorted(RETIRED_BUNDLES):
+        inputs = by_name('bundles')[name]['inputs']
+        files = {path: BLOBS[key] for path, key in inputs['prepared_files'].items()}
+        selected = dict(inputs['selected'], files={path: BLOBS[key] for path, key in inputs['selected']['files'].items()})
+        monkeypatch.setitem(assemble_bundle.__globals__, 'uid', lambda: inputs['bundle_id'])
+        with pytest.raises(ValueError):
+            assemble_bundle(inputs['run_id'], deepcopy(inputs['prepared']), files, deepcopy(inputs['frozen']), selected,
+                            deepcopy(inputs['dependencies']))
+
+
+@pytest.mark.parametrize('name', [b['name'] for b in CORPUS['bundles'] if b['name'] not in RETIRED_BUNDLES])
 def test_bundle_manifest_files_and_record_digests_unchanged(name, monkeypatch):
     inputs = by_name('bundles')[name]['inputs']
     expected = by_name('bundles')[name]['expected']

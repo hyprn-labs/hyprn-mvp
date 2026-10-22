@@ -16,7 +16,7 @@ function sourceModule(name) {
   mod.filename = file;
   mod.paths = Module._nodeModulePaths(dirname(file));
   const nativeRequire = mod.require.bind(mod);
-  mod.require = id => id === './components' ? sourceModule('components.tsx') : id === './numbers' ? sourceModule('numbers.ts') : nativeRequire(id);
+  mod.require = id => id === './navigation' ? sourceModule('navigation.tsx') : id === './icons' ? sourceModule('icons.tsx') : id === './select' ? sourceModule('select.tsx') : id === './components' ? sourceModule('components.tsx') : id === './numbers' ? sourceModule('numbers.ts') : id === '../unitLabels' ? sourceModule('../unitLabels.ts') : nativeRequire(id);
   modules.set(file, mod);
   mod._compile(ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, file);
   return mod.exports;
@@ -31,7 +31,7 @@ test('numbered saved criterion is structured, exact values available, no invente
   assert.match(html, /at most/);
   assert.match(html, /12\.346/);
   assert.match(html, /12\.345678/);
-  assert.match(html, /Full-precision values/);
+  assert.doesNotMatch(html, /Full-precision values/);
   assert.doesNotMatch(html, /Not evaluated|Met|Not met|Actual value/);
 });
 test('zero is explicit, unset threshold unassigned, tiny nonzero remains nonzero', () => {
@@ -51,9 +51,41 @@ test('equality tolerances, evidence and real outcome retain separate meanings', 
   assert.match(html, /not computed/);
   assert.match(html, /hf-tag--advisory/);
 });
-test('record content is escaped; exact-value action has unique scope', () => {
+test('record content is escaped without an extra precision action', () => {
   const html = render({ target: '<script>alert(1)</script>', number: 2 });
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
-  assert.match(html, /Full-precision values for criterion 2/);
+  assert.doesNotMatch(html, /Full-precision values/);
+});
+
+test('read-only criterion units share typography while preserving declared expressions', () => {
+  const props = { units: 'kg/m**3', evaluation: { label: 'Met', tone: 'ok', actual: 12, units: 'kg/m**3' } };
+  const html = render(props);
+  assert.match(html, /kg\/m³/);
+  assert.doesNotMatch(html, /kg\/m\*\*3/);
+  assert.equal(props.units, 'kg/m**3');
+});
+
+const { suggestCriterionOutput } = sourceModule('../criterionLabels.ts');
+test('criterion suggestions require a unique name and exact units, not units alone', () => {
+  const criterion = { name: 'Outlet temperature', units: 'K' };
+  const output = { key: 'component/out', name: '  outlet   temperature ', units: 'K' };
+  assert.equal(suggestCriterionOutput(criterion, [output]), output.key);
+  assert.equal(suggestCriterionOutput(criterion, [output, { ...output, key: 'other/out' }]), '');
+  assert.equal(suggestCriterionOutput(criterion, [{ ...output, name: 'Inlet temperature' }]), '');
+  assert.equal(suggestCriterionOutput(criterion, [{ ...output, units: 'degC' }]), '');
+  assert.equal(suggestCriterionOutput(criterion, [{ ...output, units: undefined }]), '');
+  assert.equal(suggestCriterionOutput({ ...criterion, units: '' }, [{ ...output, units: '' }]), output.key);
+});
+
+const { criterionOutputLabels } = sourceModule('../criterionLabels.ts');
+test('output choices show components only to distinguish repeated quantity names', () => {
+  const outputs = [
+    { key: 'a', name: 'Temperature', label: 'Cold side · Temperature' },
+    { key: 'b', name: 'Flow', label: 'Pump · Flow' },
+  ];
+  assert.deepEqual(criterionOutputLabels(outputs), { a: 'Temperature', b: 'Flow' });
+  assert.deepEqual(criterionOutputLabels([...outputs,
+    { key: 'c', name: 'temperature', label: 'Hot side · temperature' },
+  ]), { a: 'Cold side · Temperature', b: 'Flow', c: 'Hot side · temperature' });
 });

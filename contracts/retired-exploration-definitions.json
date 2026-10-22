@@ -1,0 +1,3434 @@
+{
+  "ScientificAnswerSave1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "approach_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "observations": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16384,
+        "pattern": "\\S"
+      },
+      "interpretation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16384,
+        "pattern": "\\S"
+      },
+      "qualifications": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "\\S"
+        },
+        "maxItems": 64,
+        "uniqueItems": true
+      },
+      "open_deliverables": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "\\S"
+        },
+        "maxItems": 64,
+        "uniqueItems": true
+      },
+      "basis": {
+        "type": "object",
+        "properties": {
+          "configuration_revision_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "evidence_version_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "configuration_revision_ids",
+          "run_ids",
+          "evidence_version_ids"
+        ],
+        "additionalProperties": false
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "expected_revision": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema_version",
+      "approach_version_id",
+      "observations",
+      "interpretation",
+      "qualifications",
+      "open_deliverables",
+      "basis",
+      "command_id",
+      "expected_revision"
+    ],
+    "additionalProperties": false
+  },
+  "ScientificAnswer1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "approach_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "observations": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16384,
+        "pattern": "\\S"
+      },
+      "interpretation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16384,
+        "pattern": "\\S"
+      },
+      "qualifications": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "\\S"
+        },
+        "maxItems": 64,
+        "uniqueItems": true
+      },
+      "open_deliverables": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "\\S"
+        },
+        "maxItems": 64,
+        "uniqueItems": true
+      },
+      "basis": {
+        "type": "object",
+        "properties": {
+          "configuration_revision_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "run_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "evidence_version_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "configuration_revision_ids",
+          "run_ids",
+          "evidence_version_ids"
+        ],
+        "additionalProperties": false
+      },
+      "study_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "answer_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "previous_version_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "version_number": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      },
+      "created_by": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "required": [
+      "schema_version",
+      "approach_version_id",
+      "observations",
+      "interpretation",
+      "qualifications",
+      "open_deliverables",
+      "basis",
+      "study_id",
+      "answer_id",
+      "answer_version_id",
+      "previous_version_id",
+      "version_number",
+      "created_by",
+      "created_at",
+      "digest"
+    ],
+    "additionalProperties": false
+  },
+  "ScientificAnswerHeads1": {
+    "type": "object",
+    "properties": {
+      "approach_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "items": {
+        "type": "array",
+        "maxItems": 1,
+        "items": {
+          "$ref": "#/$defs/ScientificAnswer1"
+        }
+      }
+    },
+    "required": [
+      "approach_version_id",
+      "items"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationRuntime1": {
+    "type": "object",
+    "properties": {
+      "image_digest": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "architecture": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "python_version": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "worker_entrypoint": {
+        "enum": [
+          "hyprn_mvp_integration.worker"
+        ]
+      },
+      "policy_digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "required": [
+      "image_digest",
+      "architecture",
+      "python_version",
+      "worker_entrypoint",
+      "policy_digest"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationRequest1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "operation": {
+        "enum": [
+          "design",
+          "fit_predict"
+        ]
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "configuration_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "axis": {
+        "$ref": "#/$defs/PortRef"
+      },
+      "lower": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "upper": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "training_count": {
+        "type": "integer",
+        "minimum": 3,
+        "maximum": 16
+      },
+      "check_count": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 16
+      },
+      "method": {
+        "enum": [
+          "response_surface",
+          "kriging"
+        ]
+      },
+      "training_run_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 16
+      },
+      "check_run_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 16
+      },
+      "query_values": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "minItems": 1,
+        "maxItems": 33
+      },
+      "tolerances": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "absolute": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "relative": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "target",
+            "absolute",
+            "relative"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "selection_token",
+      "operation",
+      "answer_version_id",
+      "configuration_revision_id",
+      "axis",
+      "lower",
+      "upper",
+      "seed",
+      "training_count",
+      "check_count",
+      "method",
+      "training_run_ids",
+      "check_run_ids",
+      "query_values",
+      "tolerances",
+      "rationale"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationOperation1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "request_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "running",
+          "complete",
+          "uncertain"
+        ]
+      },
+      "result": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ExplorationPrediction1"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema_version",
+      "request_id",
+      "selection_token",
+      "state",
+      "result"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationPrediction1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "basis": {
+        "$ref": "#/$defs/ExplorationBasis1"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationRequest1"
+      },
+      "identity": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "query_inputs": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 33,
+        "items": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/PortRef"
+              },
+              "value": {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "units": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "target",
+              "value",
+              "units"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "samples": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "configuration_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bundle_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "results_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "runtime": {
+              "$ref": "#/$defs/ExplorationRuntime1"
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Input"
+                  },
+                  {
+                    "$ref": "#/$defs/ResolvedInput2"
+                  }
+                ]
+              },
+              "maxItems": 1000
+            }
+          },
+          "required": [
+            "run_id",
+            "configuration_digest",
+            "bundle_digest",
+            "results_digest",
+            "runtime",
+            "inputs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "numerical": {
+        "$ref": "#/$defs/ExplorationNumerical1"
+      }
+    },
+    "required": [
+      "schema_version",
+      "basis",
+      "request",
+      "identity",
+      "query_inputs",
+      "samples",
+      "numerical"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationNumerical1": {
+    "type": "object",
+    "properties": {
+      "runtime": {
+        "$ref": "#/$defs/ExplorationRuntime1"
+      },
+      "request_sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "result_sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "elapsed_seconds": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "process_uuid": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "store_uuid": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "artifact_uuid": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1"
+          },
+          "identity": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "method": {
+            "enum": [
+              "response_surface",
+              "kriging"
+            ]
+          },
+          "versions": {
+            "type": "object",
+            "properties": {
+              "openmdao": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "scipy": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "numpy": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "openmdao",
+              "scipy",
+              "numpy"
+            ],
+            "additionalProperties": false
+          },
+          "training_vectors": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minItems": 1,
+              "maxItems": 1
+            }
+          },
+          "check_vectors": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minItems": 1,
+              "maxItems": 1
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "estimated",
+                    "unavailable"
+                  ]
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "values": {
+                  "type": "array",
+                  "maxItems": 33,
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "assessed_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16
+                },
+                "evaluable_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16
+                },
+                "failed_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16
+                },
+                "max_absolute_error": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rmse": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "target_met": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "state",
+                "reason",
+                "values",
+                "assessed_count",
+                "evaluable_count",
+                "failed_count",
+                "max_absolute_error",
+                "rmse",
+                "target_met"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "compute_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "schema_version",
+          "identity",
+          "method",
+          "versions",
+          "training_vectors",
+          "check_vectors",
+          "outputs",
+          "compute_seconds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "runtime",
+      "request_sha256",
+      "result_sha256",
+      "elapsed_seconds",
+      "process_uuid",
+      "store_uuid",
+      "artifact_uuid",
+      "result"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationInput1": {
+    "type": "object",
+    "properties": {
+      "target": {
+        "$ref": "#/$defs/PortRef"
+      },
+      "definition_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "name": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "instance_name": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "units": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "binding": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "free"
+              },
+              "assignment": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Input"
+                  },
+                  {
+                    "$ref": "#/$defs/ResolvedInput2"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "assignment"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "connected"
+              },
+              "source": {
+                "$ref": "#/$defs/PortRef"
+              }
+            },
+            "required": [
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "required": [
+      "target",
+      "definition_version_id",
+      "name",
+      "instance_name",
+      "units",
+      "binding"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationOutput1": {
+    "type": "object",
+    "properties": {
+      "target": {
+        "$ref": "#/$defs/PortRef"
+      },
+      "definition_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "name": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "instance_name": {
+        "type": "string",
+        "maxLength": 4096
+      },
+      "units": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "required": [
+      "target",
+      "definition_version_id",
+      "name",
+      "instance_name",
+      "units"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationBasis1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "study_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "answer_digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "configuration_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "configuration_digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "model_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "model_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "model_digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "source_sha256s": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 1000
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplorationInput1"
+        },
+        "maxItems": 1000
+      },
+      "outputs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplorationOutput1"
+        },
+        "maxItems": 1000
+      },
+      "run_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 1000
+      },
+      "digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "required": [
+      "schema_version",
+      "study_id",
+      "answer_version_id",
+      "answer_digest",
+      "configuration_revision_id",
+      "configuration_digest",
+      "model_id",
+      "model_revision_id",
+      "model_digest",
+      "source_sha256s",
+      "inputs",
+      "outputs",
+      "run_ids",
+      "digest"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationRequest2": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "2"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "operation": {
+        "enum": [
+          "design",
+          "fit_predict"
+        ]
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "configuration_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "axis": {
+        "$ref": "#/$defs/PortRef"
+      },
+      "lower": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "upper": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "training_count": {
+        "type": "integer",
+        "minimum": 3,
+        "maximum": 16
+      },
+      "check_count": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 16
+      },
+      "method": {
+        "enum": [
+          "response_surface",
+          "kriging"
+        ]
+      },
+      "training_run_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 16
+      },
+      "check_run_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "uniqueItems": true,
+        "maxItems": 16
+      },
+      "query_values": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "minItems": 1,
+        "maxItems": 33
+      },
+      "tolerances": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "absolute": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "relative": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "target",
+            "absolute",
+            "relative"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "varying_targets": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/PortRef"
+        },
+        "minItems": 1,
+        "maxItems": 32,
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "selection_token",
+      "operation",
+      "answer_version_id",
+      "configuration_revision_id",
+      "axis",
+      "lower",
+      "upper",
+      "seed",
+      "training_count",
+      "check_count",
+      "method",
+      "training_run_ids",
+      "check_run_ids",
+      "query_values",
+      "tolerances",
+      "rationale",
+      "varying_targets"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationPrediction2": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "2"
+      },
+      "basis": {
+        "$ref": "#/$defs/ExplorationBasis1"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationRequest2"
+      },
+      "identity": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "query_inputs": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 33,
+        "items": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/PortRef"
+              },
+              "value": {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "units": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "target",
+              "value",
+              "units"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "samples": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "configuration_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bundle_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "results_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "runtime": {
+              "$ref": "#/$defs/ExplorationRuntime1"
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Input"
+                  },
+                  {
+                    "$ref": "#/$defs/ResolvedInput2"
+                  }
+                ]
+              },
+              "maxItems": 1000
+            }
+          },
+          "required": [
+            "run_id",
+            "configuration_digest",
+            "bundle_digest",
+            "results_digest",
+            "runtime",
+            "inputs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "numerical": {
+        "$ref": "#/$defs/ExplorationNumerical1"
+      },
+      "sample_outputs": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "required": [
+      "schema_version",
+      "basis",
+      "request",
+      "identity",
+      "query_inputs",
+      "samples",
+      "numerical",
+      "sample_outputs"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationOperation2": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "2"
+      },
+      "request_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "running",
+          "complete",
+          "uncertain"
+        ]
+      },
+      "result": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ExplorationPrediction2"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema_version",
+      "request_id",
+      "selection_token",
+      "state",
+      "result"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationDesignRequest1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "category_dimensions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 1,
+              "maxItems": 32
+            }
+          },
+          "required": [
+            "name",
+            "values"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 8
+      },
+      "combinations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 0,
+              "maxItems": 8
+            },
+            "configuration_revision_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "model_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "model_revision_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "initial_axis": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "lower": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "upper": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "step": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "covary_group": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "common_key": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "target",
+                  "lower",
+                  "upper",
+                  "units",
+                  "step",
+                  "covary_group",
+                  "common_key"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 32
+            }
+          },
+          "required": [
+            "categories",
+            "configuration_revision_id",
+            "model_id",
+            "model_revision_id",
+            "initial_axis",
+            "dimensions"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 8
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "answer_version_id",
+      "category_dimensions",
+      "combinations",
+      "rationale"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationDesign1": {
+    "type": "object",
+    "properties": {
+      "design_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationDesignRequest1"
+      }
+    },
+    "required": [
+      "design_id",
+      "digest",
+      "request"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationViewRequest1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "expected_revision": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "input_targets": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/PortRef"
+        },
+        "minItems": 0,
+        "maxItems": 32
+      },
+      "output_targets": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/PortRef"
+        },
+        "minItems": 1,
+        "maxItems": 1000
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "expected_revision",
+      "input_targets",
+      "output_targets"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationView1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "view_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "configuration_revision_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "basis_digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationViewRequest1"
+      },
+      "digest": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "required": [
+      "schema_version",
+      "view_revision_id",
+      "answer_version_id",
+      "configuration_revision_id",
+      "basis_digest",
+      "request",
+      "digest"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSelectedPoint1": {
+    "type": "object",
+    "properties": {
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "run_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "combination": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 7
+      }
+    },
+    "required": [
+      "command_id",
+      "run_id",
+      "combination"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSampleRequest1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "previous_operation_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "category_dimensions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 1,
+              "maxItems": 32
+            }
+          },
+          "required": [
+            "name",
+            "values"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 8
+      },
+      "combinations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 0,
+              "maxItems": 8
+            },
+            "answer_version_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "configuration_revision_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "lower": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "upper": {
+                    "type": "number",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "target",
+                  "lower",
+                  "upper",
+                  "units"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "training_count": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 64
+            },
+            "check_count": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 64
+            },
+            "tolerances": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "absolute": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "relative": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "target",
+                  "absolute",
+                  "relative"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "categories",
+            "answer_version_id",
+            "configuration_revision_id",
+            "dimensions",
+            "training_count",
+            "check_count",
+            "tolerances"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 8
+      },
+      "budget": {
+        "type": "object",
+        "properties": {
+          "additional_evaluations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "wall_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "point_wall_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          },
+          "concurrency": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "additional_evaluations",
+          "wall_seconds",
+          "point_wall_seconds",
+          "concurrency"
+        ],
+        "additionalProperties": false
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "previous_operation_id",
+      "seed",
+      "category_dimensions",
+      "combinations",
+      "budget",
+      "rationale"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSampleControl1": {
+    "type": "object",
+    "properties": {
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "action": {
+        "enum": [
+          "cancel",
+          "reconcile",
+          "resume"
+        ]
+      }
+    },
+    "required": [
+      "command_id",
+      "action"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSamplePoint1": {
+    "type": "object",
+    "properties": {
+      "identity": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "combination": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 7
+      },
+      "partition": {
+        "enum": [
+          "training",
+          "check"
+        ]
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "value": {
+              "type": "number",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "units": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "required": [
+            "target",
+            "value",
+            "units"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 1000
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "submitted",
+          "uncertain",
+          "recorded",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "configuration_revision_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "reused": {
+        "type": "boolean"
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 4096
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "results_digest": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "identity",
+      "combination",
+      "partition",
+      "inputs",
+      "state",
+      "run_id",
+      "configuration_revision_id",
+      "reused",
+      "reason",
+      "results_digest"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSamplePreview1": {
+    "type": "object",
+    "properties": {
+      "retained_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "new_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "total_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "maximum_execution_seconds": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 460800
+      },
+      "allocation": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "combination": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            },
+            "retained_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            },
+            "new_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            },
+            "training_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            },
+            "check_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            }
+          },
+          "required": [
+            "combination",
+            "retained_count",
+            "new_count",
+            "training_count",
+            "check_count"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 8
+      }
+    },
+    "required": [
+      "retained_count",
+      "new_count",
+      "total_count",
+      "maximum_execution_seconds",
+      "allocation"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSampleOperation1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "operation_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationSampleRequest1"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "designing",
+          "sampling",
+          "uncertain",
+          "complete",
+          "cancelled",
+          "limited",
+          "failed"
+        ]
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 4096
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "runtime": {
+        "$ref": "#/$defs/ExplorationRuntime1"
+      },
+      "design_digest": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "design_artifact": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "process_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "store_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "artifact_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "request_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "result_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "process_uuid",
+              "store_uuid",
+              "artifact_uuid",
+              "request_sha256",
+              "result_sha256"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "points": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplorationSamplePoint1"
+        },
+        "minItems": 0,
+        "maxItems": 128
+      },
+      "allocation": {
+        "$ref": "#/$defs/ExplorationSamplePreview1"
+      },
+      "attempted_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "completed_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "failed_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "started_at": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "elapsed_seconds": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "cancel_requested": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schema_version",
+      "operation_id",
+      "request",
+      "state",
+      "reason",
+      "runtime",
+      "design_digest",
+      "design_artifact",
+      "points",
+      "allocation",
+      "attempted_count",
+      "completed_count",
+      "failed_count",
+      "started_at",
+      "elapsed_seconds",
+      "cancel_requested"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSampleRequest2": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "2"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "previous_operation_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f-]{36}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "category_dimensions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 1,
+              "maxItems": 32
+            }
+          },
+          "required": [
+            "name",
+            "values"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 8
+      },
+      "combinations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 0,
+              "maxItems": 8
+            },
+            "answer_version_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "configuration_revision_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "lower": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "upper": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "step": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "covary_group": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "common_key": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "target",
+                  "lower",
+                  "upper",
+                  "units",
+                  "step",
+                  "covary_group",
+                  "common_key"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "training_count": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 64
+            },
+            "check_count": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 64
+            },
+            "tolerances": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "absolute": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "relative": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "target",
+                  "absolute",
+                  "relative"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "model_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "model_revision_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "initial_axis": {
+              "$ref": "#/$defs/PortRef"
+            }
+          },
+          "required": [
+            "categories",
+            "answer_version_id",
+            "configuration_revision_id",
+            "dimensions",
+            "training_count",
+            "check_count",
+            "tolerances",
+            "model_id",
+            "model_revision_id",
+            "initial_axis"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 8
+      },
+      "budget": {
+        "type": "object",
+        "properties": {
+          "additional_evaluations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "wall_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "point_wall_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          },
+          "concurrency": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "additional_evaluations",
+          "wall_seconds",
+          "point_wall_seconds",
+          "concurrency"
+        ],
+        "additionalProperties": false
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "previous_operation_id",
+      "seed",
+      "category_dimensions",
+      "combinations",
+      "budget",
+      "rationale"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSampleOperation2": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "2"
+      },
+      "operation_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "request": {
+        "$ref": "#/$defs/ExplorationSampleRequest2"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "designing",
+          "sampling",
+          "uncertain",
+          "complete",
+          "cancelled",
+          "limited",
+          "failed"
+        ]
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 4096
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "runtime": {
+        "$ref": "#/$defs/ExplorationRuntime1"
+      },
+      "design_digest": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "design_artifact": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "process_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "store_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "artifact_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f-]{36}$"
+              },
+              "request_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "result_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "process_uuid",
+              "store_uuid",
+              "artifact_uuid",
+              "request_sha256",
+              "result_sha256"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "points": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExplorationSamplePoint1"
+        },
+        "minItems": 0,
+        "maxItems": 128
+      },
+      "allocation": {
+        "$ref": "#/$defs/ExplorationSamplePreview1"
+      },
+      "attempted_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "completed_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "failed_count": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 128
+      },
+      "started_at": {
+        "type": "number",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "elapsed_seconds": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "cancel_requested": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schema_version",
+      "operation_id",
+      "request",
+      "state",
+      "reason",
+      "runtime",
+      "design_digest",
+      "design_artifact",
+      "points",
+      "allocation",
+      "attempted_count",
+      "completed_count",
+      "failed_count",
+      "started_at",
+      "elapsed_seconds",
+      "cancel_requested"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSurrogateArtifact1": {
+    "type": "object",
+    "properties": {
+      "surrogate_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "combination": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 7
+      },
+      "sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "size": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1048576
+      },
+      "media_type": {
+        "const": "application/json"
+      },
+      "bytes_base64": {
+        "type": "string",
+        "maxLength": 1398104
+      }
+    },
+    "required": [
+      "surrogate_version_id",
+      "combination",
+      "sha256",
+      "size",
+      "media_type",
+      "bytes_base64"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationBuildRequest1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "design_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "sample_operation_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      }
+    },
+    "required": [
+      "schema_version",
+      "command_id",
+      "design_id",
+      "sample_operation_id"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationWarmRequest1": {
+    "type": "object",
+    "properties": {
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      }
+    },
+    "required": [
+      "command_id"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationWarmOperation1": {
+    "type": "object",
+    "properties": {
+      "command_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "surrogate_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "ready",
+          "failed"
+        ]
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 4096
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "command_id",
+      "surrogate_version_id",
+      "state",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationSurrogate1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "surrogate_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "design_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "sample_operation_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "answer_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "identity": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "state": {
+        "enum": [
+          "pending",
+          "building",
+          "ready",
+          "assessed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 4096
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "completed_groups": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 8
+      },
+      "total_groups": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 8
+      },
+      "groups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "combination": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            },
+            "identity": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "original_runtime": {
+              "$ref": "#/$defs/ExplorationRuntime1"
+            },
+            "computation_runtime": {
+              "$ref": "#/$defs/ExplorationRuntime1"
+            },
+            "process_uuid": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "store_uuid": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "artifact_uuid": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f-]{36}$"
+            },
+            "request_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "result_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "outputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "$ref": "#/$defs/PortRef"
+                  },
+                  "units": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "method": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "response_surface",
+                          "kriging"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "metrics": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "assessed_count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 64
+                          },
+                          "evaluable_count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 64
+                          },
+                          "failed_count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 64
+                          },
+                          "max_absolute_error": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "rmse": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "target_met": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "assessed_count",
+                          "evaluable_count",
+                          "failed_count",
+                          "max_absolute_error",
+                          "rmse",
+                          "target_met"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "comparisons": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "enum": [
+                            "response_surface",
+                            "kriging"
+                          ]
+                        },
+                        "reason": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 4096
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "error": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "method",
+                        "reason",
+                        "error"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 0,
+                    "maxItems": 2
+                  }
+                },
+                "required": [
+                  "target",
+                  "units",
+                  "method",
+                  "reason",
+                  "metrics",
+                  "comparisons"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 32
+            }
+          },
+          "required": [
+            "combination",
+            "identity",
+            "original_runtime",
+            "computation_runtime",
+            "process_uuid",
+            "store_uuid",
+            "artifact_uuid",
+            "request_sha256",
+            "result_sha256",
+            "artifact_sha256",
+            "outputs"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 8
+      }
+    },
+    "required": [
+      "schema_version",
+      "surrogate_version_id",
+      "design_id",
+      "sample_operation_id",
+      "answer_version_id",
+      "identity",
+      "state",
+      "reason",
+      "completed_groups",
+      "total_groups",
+      "groups"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationQuery1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "combination": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 7
+      },
+      "inputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "value": {
+              "type": "number",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "units": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "required": [
+            "target",
+            "value",
+            "units"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 32
+      },
+      "axis": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/PortRef"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "curve_points": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 32
+      }
+    },
+    "required": [
+      "schema_version",
+      "selection_token",
+      "combination",
+      "inputs",
+      "axis",
+      "curve_points"
+    ],
+    "additionalProperties": false
+  },
+  "ExplorationQueryResult1": {
+    "type": "object",
+    "properties": {
+      "schema_version": {
+        "const": "1"
+      },
+      "selection_token": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "surrogate_version_id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "identity": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "vectors": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/PortRef"
+              },
+              "value": {
+                "type": "number",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "units": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "target",
+              "value",
+              "units"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "minItems": 1,
+        "maxItems": 33
+      },
+      "outputs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/PortRef"
+            },
+            "units": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "estimated",
+                      "calculated",
+                      "unavailable"
+                    ]
+                  },
+                  "run_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^[0-9a-f-]{36}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "reason",
+                  "kind",
+                  "run_id"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 33
+            }
+          },
+          "required": [
+            "target",
+            "units",
+            "values"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 32
+      }
+    },
+    "required": [
+      "schema_version",
+      "selection_token",
+      "surrogate_version_id",
+      "identity",
+      "vectors",
+      "outputs"
+    ],
+    "additionalProperties": false
+  }
+}

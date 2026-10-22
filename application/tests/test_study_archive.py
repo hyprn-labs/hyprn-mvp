@@ -4,6 +4,8 @@ Archive is study-wide presentation state, not access control and not deletion: i
 the study record or its revision, never deletes or rewrites any row, and every read by id keeps
 working. Fresh synthetic off-cloud stores only; no modeling service, runtime or live store.
 """
+
+from legacy_study_support import seed_legacy_context
 import json
 from pathlib import Path
 import shutil
@@ -127,10 +129,13 @@ def test_archive_restore_round_trip_keeps_study_record_and_reads(env):
     assert sorted(s['study_id'] for s in listing(c)) == sorted([a['study_id'], b['study_id']])
     assert env['store'].study(env['actors']['owner'], a['study_id']) == a  # Revision never consumed.
 
-    # An archived study keeps every ordinary operation (here: a study edit) and stays archived.
+    # An archived study still accepts scientific evidence and stays archived.
     archive(c, a['study_id'])
-    edited = c.patch(f"/api/1/studies/{a['study_id']}", json=dict(command_id=uid(), expected_revision=a['revision'], name='Alpha 2'))
-    assert edited.status_code == 200, edited.text
+    edited = c.post(
+        f"/api/1/studies/{a['study_id']}/evidence",
+        json=dict(command_id=uid(), scope=None, kind="note", content="Archived evidence", source_refs=[]),
+    )
+    assert edited.status_code == 201, edited.text
     assert c.get(f"/api/1/studies/{a['study_id']}").json()['data']['archived'] is True
 
 
@@ -164,7 +169,9 @@ def test_command_id_idempotency_replay_and_payload_conflict(env):
 
     receipt = c.get(f'/api/1/studies/{sid}/commands/{command}', params=dict(category='study_archive'))
     assert receipt.status_code == 200
-    assert receipt.json()['data'] == dict(command_id=command, state='committed', result=first.json()['data'], error=None)
+    assert receipt.json()['data'] == dict(
+        command_id=command, state='committed', result=first.json()['data'], error=None,
+        recovery='adopt')
     raw = store.receipt(env['actors']['owner'], sid, 'study_archive', command)
     assert raw['actor_id'] == env['actors']['owner'] and raw['state'] == 'committed'
 
@@ -201,7 +208,7 @@ def test_authorization_conceals_non_members_and_forbids_readers(env):
     assert env['clients']['stranger'].get(f'/api/1/studies/{sid}').status_code == 404
     assert listing(env['clients']['stranger']) == [] and listing(env['clients']['stranger'], archived='true') == []
 
-    writer = env['clients']['writer']  # The patch_study permission: owner or writer.
+    writer = env['clients']['writer']  # Archive permission: owner or writer.
     assert archive(writer, sid).status_code == 200
     assert listing(env['clients']['stranger'], archived='true') == []
     assert archive(env['clients']['reader'], sid, action='restore').status_code == 403
@@ -255,13 +262,22 @@ def populate(env):
     """A populated store: memberships, edits, evidence, receipts, plus raw retained records."""
     store, owner = env['store'], env['actors']['owner']
     a, b = new_study(env, 'Populated A'), new_study(env, 'Populated B')
-    store.update_study(owner, a['study_id'], uid(), a['revision'], dict(description='Context', boundary='Boundary'))
+    seed_legacy_context(
+        store,
+        owner,
+        a['study_id'],
+        uid(),
+        a['revision'],
+        dict(description='Context', boundary='Boundary'),
+    )
     for s in (a, b):
         store.add_evidence(owner, s['study_id'], uid(), dict(scope=None, kind='note', content='Note ' + s['name'], source_refs=[]))
     with store.connection(write=True) as db:  # Retained configuration/run rows are bytes here.
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)', (uid(), uid(), a['study_id'], json.dumps(dict(x=1.5))))
         cfg = db.execute('SELECT configuration_revision_id FROM configurations').fetchone()[0]
-        db.execute('INSERT INTO run_associations VALUES(?,?,?,?,?,?)', (uid(), a['study_id'], cfg, uid(), None, None))
+        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                   'command_id,store_uuid,process_uuid) VALUES(?,?,?,?,?,?)',
+                   (uid(), a['study_id'], cfg, uid(), None, None))
     return a, b
 
 

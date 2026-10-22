@@ -1,0 +1,4 @@
+interface:
+  display_name: "hyprn"
+  short_description: "Run engineering studies with traceable answers"
+  default_prompt: "Use $hyprn to carry out the following study in HYPRN using my brief and supplied reference documents."

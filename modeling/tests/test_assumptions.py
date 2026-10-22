@@ -291,15 +291,26 @@ def test_existing_authorization_receipt_http_regressions(harness, monkeypatch, n
 def test_docker_applies_each_patch_once_in_order_and_patches_are_the_reviewed_bytes():
     import re
     docker = (ROOT / 'deployment/modeling.Dockerfile').read_text()
-    for name in ('native', 'discovery', 'assumptions', 'units'):
+    for name in ('native', 'assumptions', 'units'):
         assert docker.count('RUN patch --batch --fuzz=0 -p1 < /tmp/' + name + '.patch\n') == 1
-    assert (docker.index('COPY replay /native/') < docker.index('/tmp/native.patch\n') < docker.index('/tmp/discovery.patch\n')
-            < docker.index('/tmp/assumptions.patch\n') < docker.index('/tmp/units.patch\n') < docker.index('COPY modeling_contract.rb'))
+    applied = [docker.index('RUN patch --batch --fuzz=0 -p1 < /tmp/' + name + '.patch\n')
+               for name in ('native', 'assumptions', 'units')]
+    assert (docker.index('COPY replay /native/') < applied[0] < applied[1] < applied[2]
+            < docker.index('COPY modeling_contract.rb'))
+    # Adapter-only hunks are already in the cumulative adapter copied after native patches.
+    assert re.findall(r'^RUN patch --batch --fuzz=0 -p1 < /tmp/([a-z]+)\.patch$',
+                      docker, re.M) == ['native', 'assumptions', 'units']
+    assert docker.count('COPY modeling_contract.rb /native/app/services/modeling_contract.rb') == 1
     # The ordered patches are exactly the bytes the modeling provenance record lists.
     record = (ROOT / 'modeling/provenance.md').read_text()
     listed = dict(re.findall(r'^\| `(\d{3}-[a-z-]+\.patch)` \|.*\| `([0-9a-f]{64})` \|$', record, re.M))
     actual = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT / 'upstream/whatsopt-patches').glob('*.patch')}
-    assert listed == actual and len(actual) == 9
+    # The model-source baseline is documented separately from the ordered patch table.
+    baseline = '005-model-source-baseline.patch'
+    assert '`upstream/whatsopt-patches/' + baseline + '`' in record
+    listed[baseline] = 'abfc671cbc29912e6bf8c6a7eb75a946227e9f949278d3422a61ac01deb0d4fd'
+    # Exactly the reviewed set: the baseline, 010-090 and the adapter-only 100.
+    assert listed == actual and len(actual) == 11
     pins = json.loads((ROOT / 'deployment/pins.json').read_text())
     assert pins['native_patch_sha256'] == actual['050-native-generation.patch']
 
@@ -340,11 +351,30 @@ def test_replayed_sources_are_upstream_plus_the_ordered_patches(harness, monkeyp
     replay = modeling_runtime.stage_replayed_sources(stage, upstream)
     expected = sorted(path for _, path in modeling_runtime.REPLAYED_SOURCES)
     assert sorted(str(p.relative_to(replay)) for p in replay.rglob('*') if p.is_file()) == expected
-    # Rails loads a migration by the class its file name names; every replayed migration's
-    # version is one the build removes from the source image first.
+    # Rails loads a migration by the class its file name names. Baseline-created
+    # migrations and replacements together cover the replayed migration inventory.
     migration = replay / 'db/migrate/20261008160000_add_hyprn_mvp_study_boundary.rb'
     assert 'class AddHyprnMvpStudyBoundary <' in migration.read_text()
-    assert {p.split('/')[-1].split('_')[0] for p in expected if p.startswith('db/migrate/')} == set(modeling_runtime.REPLAYED_MIGRATION_VERSIONS)
+    created = {
+        'db/migrate/20261008140000_add_probe_source.rb':
+            '0312e376caf96f675553f341641dc86c46cf19d4156186b061763918f2f3df96',
+        'db/migrate/20261008140100_add_probe_receipts.rb':
+            '467eeb429337a6dc674c915e2528160d01d2f9e8ba911fc8ced273c761bcc240',
+    }
+    assert {p: pair[1] for p, pair in modeling_runtime.BASELINE_SOURCES.items()
+            if p.startswith('db/migrate/') and pair[0] is None} == created
+    for path, digest in created.items():
+        assert hashlib.sha256((replay / path).read_bytes()).hexdigest() == digest
+    new_versions = {p.split('/')[-1].split('_')[0] for p in created}
+    replaced = set(modeling_runtime.REPLAYED_MIGRATION_VERSIONS)
+    assert replaced == {'20261008160000', '20261008175500'}
+    docker = (ROOT / 'deployment/modeling.Dockerfile').read_text()
+    removal = next(line for line in docker.splitlines() if line.startswith('RUN rm -f /native/db/'))
+    assert {part.rsplit('/', 1)[-1].split('_')[0] for part in removal.split()[3:]} == replaced
+    assert docker.index(removal) < docker.index('COPY replay /native/')
+    assert not new_versions & replaced
+    assert {p.split('/')[-1].split('_')[0] for p in expected
+            if p.startswith('db/migrate/')} == new_versions | replaced
     # The native patch applies to the replayed generator and adapter with zero fuzz.
     work = stage / 'native'
     sections = modeling_runtime.patch_sections((ROOT / 'upstream/whatsopt-patches/050-native-generation.patch').read_text())

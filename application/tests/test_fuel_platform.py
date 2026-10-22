@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import pytest
 from hyprn_mvp_app.store import uid, DomainError
-from hyprn_mvp_app.modeling import validate, VALIDATORS
+from hyprn_mvp_app.contracts import validate, validator
 from hyprn_mvp_app.approach import Approaches
 from test_assumption_authoring import env
 from test_approach_service import run_env, content, req, signed

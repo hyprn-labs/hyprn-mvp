@@ -4,6 +4,8 @@ JSON Schema checks wire shapes. Canonical serialization rejects non-JSON numbers
 at the same boundary used by the app. Cross-record authority, keyed uniqueness,
 digest equality and archive safety remain producer/consumer checks in later tasks.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -18,7 +20,7 @@ import rfc8785
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 DEFS = SCHEMA['$defs']
 SHA = 'a' * 64
 
@@ -158,8 +160,8 @@ def test_private_projection_has_exact_literal_fields_and_separate_digest_shape()
 
 
 def test_common_definitions_and_legacy_authorities_are_preserved():
-    other = json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())
-    assert DEFS == other['$defs']
+    other = authored_schema()
+    assert_execution_schema()
     for schema in (SCHEMA, other):
         Draft202012Validator.check_schema(schema)
     # Pinned pre-task definitions; this gate detects accidental v1 tightening.
@@ -275,7 +277,9 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     spec = json.loads(public.read_text())
     source_route=spec['paths']['/studies/{study_id}/result-sources']
     assert set(source_route)=={'get'}
-    assert source_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={'$ref':'#/components/schemas/ResultSourcePage'}
+    assert source_route['get']['responses']['200']['content']['application/json']['schema'][
+        'properties'
+    ]['data'] == {'$ref': '#/components/schemas/ResultSourcePage3'}
     assert spec['paths']['/studies/{study_id}/configurations/preview']['post']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/PublicConfigurationRequest')
     seed_route=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']
     assert set(seed_route)=={'get'}
@@ -284,8 +288,13 @@ def test_generator_chain_supports_union_types_without_changing_public_outputs(tm
     # the unchanged historical ModifiedRunSeed1-4 union plus the new ModifiedRunSeed6.
     assert seed_route['get']['responses']['200']['content']['application/json']['schema']['properties']['data']=={
         '$ref':'#/components/schemas/ModifiedRunSeedRead6'}
-    assert spec['components']['schemas']['ModifiedRunSeedRead6']=={'oneOf':[
-        {'$ref':'#/components/schemas/ModifiedRunSeed'}, {'$ref':'#/components/schemas/ModifiedRunSeed6'}]}
+    assert spec['components']['schemas']['ModifiedRunSeedRead6'] == {
+        'oneOf': [
+            {'$ref': '#/components/schemas/PreviousModifiedRunSeedRead6'},
+            {'$ref': '#/components/schemas/ModifiedRunSeed7'},
+            {'$ref': '#/components/schemas/ModifiedRunSeed8'},
+        ]
+    }
     assert spec['components']['schemas']['ModifiedRunSeed']=={'oneOf':[
         {'$ref':'#/components/schemas/ModifiedRunSeed1'}, {'$ref':'#/components/schemas/ModifiedRunSeed2'},
         {'$ref':'#/components/schemas/ModifiedRunSeed3'}, {'$ref':'#/components/schemas/ModifiedRunSeed4'}]}
@@ -496,3 +505,16 @@ def test_every_new_object_is_closed_and_references_are_local():
                  'ModelingConfiguration2', 'ModelingConfigurationRevision2', 'ExecutionBundle3',
                  'NativeSource', 'ScalarMapping', 'RecordRequest', 'NativeInventory', 'ComputationalRecordManifest1'):
         visit(DEFS[name])
+
+
+def test_public_preview_and_receipt_accept_current_prior_run_context():
+    schemas = json.loads((ROOT / 'contracts/hyprn-mvp.openapi.yaml').read_text())['components'][
+        'schemas'
+    ]
+    # New configurations preview only version 6 (no criteria, no approach binding).
+    assert schemas['PublicConfigurationPreview'] == {
+        '$ref': '#/components/schemas/ConfigurationPreview8'
+    }
+    assert {'$ref': '#/components/schemas/ApproachCommandResult3'} in schemas[
+        'ApproachCommandResultRead2'
+    ]['anyOf']

@@ -22,6 +22,65 @@ test('@units-authoring negotiates explicit new-model protocol', async ({page})=>
   expect((await request).postDataJSON().schema_version).toBe('3');
 });
 
+for (const response of ['success', 'refusal'] as const) {
+  test('@units-authoring keeps component inputs through catalog ' + response, async ({page}) => {
+    await model(page);
+    await expect(page.getByRole('button', {name: 'Create model', exact: true})).toBeEnabled();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => release = resolve);
+    let arrived = false;
+    await page.route('**/unit-catalog', async route => {
+      arrived = true;
+      await pending;
+      if (response === 'refusal') {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({error: {
+            code: 'modeling_unavailable',
+            message: 'Unit guidance is unavailable',
+            fields: [],
+            outcome: 'unchanged',
+          }}),
+        });
+      } else {
+        await route.continue();
+      }
+    }, {times: 1});
+    try {
+      await page.getByRole('button', {name: 'Create model', exact: true}).click();
+      await expect.poll(() => arrived).toBe(true);
+      await page.getByRole('button', {name: '＋ Component', exact: true}).click();
+      const dialog = page.getByRole('dialog', {name: 'Add component', exact: true});
+      await dialog.getByLabel('New component name').fill('Energy law');
+      await dialog.getByLabel('Input symbols').fill('x');
+      await dialog.getByLabel('Output symbols').fill('y');
+      const add = dialog.getByRole('button', {name: 'Add component', exact: true});
+      await expect(dialog.getByRole('status')).toHaveText('Loading unit guidance…');
+      await expect(add).toBeDisabled();
+      release();
+      if (response === 'refusal') {
+        await expect(dialog.getByRole('alert')).toContainText('Unit guidance is unavailable');
+        await expect(add).toBeDisabled();
+        await dialog.getByRole('button', {name: 'Retry unit guidance', exact: true}).click();
+      }
+      await expect(add).toBeEnabled();
+      await expect(dialog.getByLabel('New component name')).toHaveValue('Energy law');
+      await expect(dialog.getByLabel('Input symbols')).toHaveValue('x');
+      await expect(dialog.getByLabel('Output symbols')).toHaveValue('y');
+      await add.click();
+      await page.getByRole('button', {name: 'Apply changes', exact: true}).click();
+      await expect(page.getByText('Component added', {exact: true})).toBeVisible();
+      const guidanceError = page.getByRole('alert').filter({
+        hasText: 'Unit guidance is unavailable',
+      });
+      await expect(guidanceError).toHaveCount(0);
+    } finally {
+      release();
+    }
+  });
+}
+
 async function create(page: Page) {
   await model(page);
   await page.getByRole('button',{name:'Create model',exact:true}).click();
@@ -38,12 +97,16 @@ async function component(page: Page) {
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByText('Component added',{exact:true})).toBeVisible();
 }
-async function ports(page: Page) { await page.getByRole('button',{name:'Edit ports',exact:true}).click();return page.getByRole('dialog',{name:'Edit ports',exact:true}); }
+async function ports(page: Page) {
+  await page.getByRole('button',{name:'Component actions',exact:true}).first().click();
+  await page.getByRole('button',{name:'Manage quantities',exact:true}).click();
+  return page.getByRole('dialog',{name:'Manage quantities',exact:true});
+}
 async function closePorts(page: Page) { await page.keyboard.press('Escape'); }
 async function save(page: Page) {
   await page.getByRole('button',{name:'Save component',exact:true}).click();
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Component saved',{exact:true})).toBeVisible();
 }
 const ids=(page:Page)=> {const hash=new URLSearchParams(new URL(page.url()).hash.slice(1));return {sid:hash.get('study')!,mid:hash.get('model')!};};
 async function snapshot(page:Page) {const {sid,mid}=ids(page);return (await (await page.request.get('/api/1/studies/'+sid+'/models/'+mid)).json()).data;}
@@ -52,14 +115,14 @@ const activePorts=(m:any)=>m.definitions.find((d:any)=>d.definition_version_id==
 test('@units-authoring new ports remain unspecified in saved drafts and read-only versions; configurations blocked',async({page})=>{
   await component(page);
   const draft=await snapshot(page);expect(activePorts(draft).map((p:any)=>p.units)).toEqual([{kind:'unspecified'},{kind:'unspecified'}]);
-  const edit=await ports(page);await expect(edit.getByLabel('Port 1 units',{exact:true})).toHaveValue('unspecified');await closePorts(page);
+  const edit=await ports(page);await expect(edit.getByLabel('Quantity 1 units',{exact:true})).toHaveValue('unspecified');await closePorts(page);
   await page.getByRole('button',{name:'Save model version',exact:true}).click();
   await expect(page.getByText('Model version saved · units incomplete. Resolve units in the listed active components before creating a configuration.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
   const version=await page.getByLabel('Model version',{exact:true}).locator('option').nth(1).getAttribute('value');
   await page.getByLabel('Model version',{exact:true}).selectOption(version!);
-  await expect(page.getByText('Read-only model version',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true}).first()).toBeVisible();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
   const {sid,mid}=ids(page);
@@ -71,19 +134,19 @@ test('@units-authoring new ports remain unspecified in saved drafts and read-onl
 
 test('@units-authoring catalog choices save explicit dimensionless and compound spelling; invalid text and dirty navigation survive',async({page})=>{
   await component(page);const edit=await ports(page);
-  await edit.getByLabel('Port 1 units',{exact:true}).selectOption('dimensionless');
-  await edit.getByLabel('Port 2 units',{exact:true}).selectOption('physical');
-  const spelling=edit.getByLabel('Port 2 units spelling',{exact:true});
+  await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');
+  await edit.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');
+  const spelling=edit.getByLabel('Quantity 2 units spelling',{exact:true});
   await spelling.fill('USD');
   await expect(edit.getByRole('alert')).toContainText('This unit spelling is not supported');
   await closePorts(page);await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'This unit spelling is not supported'})).toBeVisible();
-  await page.getByRole('button',{name:'All models',exact:true}).click();
+  await page.getByRole('button',{name:'Return to all models',exact:true}).click();
   await page.getByRole('dialog',{name:'Unsaved changes',exact:true}).getByRole('button',{name:'Keep editing',exact:true}).click();
-  const again=await ports(page);await expect(again.getByLabel('Port 2 units spelling',{exact:true})).toHaveValue('USD');
-  await again.getByLabel('Port 2 units spelling',{exact:true}).fill('MJ/kg');await closePorts(page);await save(page);
+  const again=await ports(page);await expect(again.getByLabel('Quantity 2 units spelling',{exact:true})).toHaveValue('USD');
+  await again.getByLabel('Quantity 2 units spelling',{exact:true}).fill('MJ/kg');await closePorts(page);await save(page);
   expect(activePorts(await snapshot(page)).map((p:any)=>p.units)).toEqual([{kind:'dimensionless'},{kind:'physical',expression:'MJ/kg'}]);
-  const reopened=await ports(page);await expect(reopened.getByLabel('Port 2 units spelling',{exact:true})).toHaveValue('MJ/kg');
+  const reopened=await ports(page);await expect(reopened.getByLabel('Quantity 2 units spelling',{exact:true})).toHaveValue('MJ/kg');
 });
 
 test('@units-authoring unavailable negotiation never downgrades and retry keeps model name',async({page})=>{
@@ -95,22 +158,22 @@ test('@units-authoring unavailable negotiation never downgrades and retry keeps 
 });
 
 test('@units-authoring preview refusal and stale revision preserve source and unit text',async({page})=>{
-  await component(page);const edit=await ports(page);await edit.getByLabel('Port 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Port 1 units spelling',{exact:true}).fill('m');await closePorts(page);
+  await component(page);const edit=await ports(page);await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Quantity 1 units spelling',{exact:true}).fill('m');await closePorts(page);
   await page.route('**/models/*/preview',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({error:{code:'incompatible_units',message:'Connected quantities have incompatible units. Your edits are kept.',fields:[],outcome:'unchanged'}})}),{times:1});
   await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'incompatible units'})).toBeVisible();
   await page.getByRole('button',{name:'Keep editing',exact:true}).click();
-  const again=await ports(page);await expect(again.getByLabel('Port 1 units spelling',{exact:true})).toHaveValue('m');await closePorts(page);
+  const again=await ports(page);await expect(again.getByLabel('Quantity 1 units spelling',{exact:true})).toHaveValue('m');await closePorts(page);
   await page.route('**/models/*/preview',route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'stale_revision',message:'Draft changed',fields:[],outcome:'unchanged'}})}),{times:1});
   await page.getByRole('button',{name:'Save component',exact:true}).click();await expect(page.getByRole('alert').filter({hasText:'Your edits are preserved'})).toBeVisible();
-  await page.getByRole('button',{name:'Keep editing',exact:true}).click();await ports(page);await expect(page.getByLabel('Port 1 units spelling',{exact:true})).toHaveValue('m');
+  await page.getByRole('button',{name:'Keep editing',exact:true}).click();await ports(page);await expect(page.getByLabel('Quantity 1 units spelling',{exact:true})).toHaveValue('m');
 });
 
 test('@units-authoring lost acknowledgement keeps exact typed receipt and reloads committed result',async({page})=>{
-  await component(page);const edit=await ports(page);await edit.getByLabel('Port 1 units',{exact:true}).selectOption('dimensionless');await closePorts(page);
+  await component(page);const edit=await ports(page);await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');await closePorts(page);
   let original:any;await page.route('**/models/*/edits',async route=>{original=route.request().postDataJSON();await route.fetch();await route.abort();},{times:1});
   await page.getByRole('button',{name:'Save component',exact:true}).click();await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByText(/Command outcome is uncertain/).first()).toBeVisible();expect(original.schema_version).toBe('3');
+  await expect(page.getByText(/Command outcome is uncertain/).first()).toBeVisible();expect(original.schema_version).toBe('4');
   await page.getByRole('button',{name:'Keep editing',exact:true}).click();
   await page.getByRole('button',{name:'Check original command',exact:true}).click();
   await expect.poll(async()=>activePorts(await snapshot(page))[0].units).toEqual({kind:'dimensionless'});
@@ -146,7 +209,7 @@ test('@units-authoring light dark narrow and genuine 200 percent zoom preserve k
     await resize(1440,1000);
     for(const theme of ['light','dark']) {
       await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await capture('units-workbench-'+theme);
-      const edit=await ports(page);await edit.getByLabel('Port 1 units',{exact:true}).selectOption('dimensionless');await edit.getByLabel('Port 2 units',{exact:true}).selectOption('physical');await edit.getByLabel('Port 2 units spelling',{exact:true}).fill('kg/m**3');await capture('units-editor-'+theme);await closePorts(page);
+      const edit=await ports(page);await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');await edit.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');await edit.getByLabel('Quantity 2 units spelling',{exact:true}).fill('kg/m**3');await capture('units-editor-'+theme);await closePorts(page);
     }
     await resize(600,900);await ports(page);await capture('units-editor-narrow');await closePorts(page);await resize(1440,1000);
     const tab=await worker.evaluate(async(url)=>{const tabs=await(globalThis as any).chrome.tabs.query({});return tabs.find((t:any)=>t.url.startsWith(url)).id;},baseURL!);
@@ -154,13 +217,14 @@ test('@units-authoring light dark narrow and genuine 200 percent zoom preserve k
     expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tab)).toBe(2);expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);
     for(const theme of ['light','dark']) {
       await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-      const button=page.getByRole('button',{name:'Edit ports',exact:true});await button.focus();await button.press('Enter');
-      const edit=page.getByRole('dialog',{name:'Edit ports',exact:true}),intent=edit.getByLabel('Port 1 units',{exact:true});
-      await intent.focus();await page.keyboard.press('Tab');await expect(edit.getByRole('button',{name:'Remove port 1',exact:true})).toBeFocused();
-      await edit.getByLabel('Port 2 units spelling',{exact:true}).fill('unsupported long unit spelling');
+      const button=page.getByRole('button',{name:'Component actions',exact:true}).first();await button.focus();await button.press('Enter');
+      const manage=page.getByRole('button',{name:'Manage quantities',exact:true});await manage.focus();await manage.press('Enter');
+      const edit=page.getByRole('dialog',{name:'Manage quantities',exact:true}),intent=edit.getByLabel('Quantity 1 units',{exact:true});
+      await intent.focus();await page.keyboard.press('Tab');await expect(edit.getByRole('button',{name:'Remove quantity 1',exact:true})).toBeFocused();
+      await edit.getByLabel('Quantity 2 units spelling',{exact:true}).fill('unsupported long unit spelling');
       await edit.getByRole('alert').scrollIntoViewIfNeeded();await capture('units-editor-error-200-'+theme);
-      await edit.getByLabel('Port 2 units spelling',{exact:true}).fill('kg/m**3');
-      await edit.getByRole('button',{name:'Remove port 2',exact:true}).scrollIntoViewIfNeeded();await capture('units-editor-200-'+theme);await page.keyboard.press('Escape');await expect(button).toBeFocused();
+      await edit.getByLabel('Quantity 2 units spelling',{exact:true}).fill('kg/m**3');
+      await edit.getByRole('button',{name:'Remove quantity 2',exact:true}).scrollIntoViewIfNeeded();await capture('units-editor-200-'+theme);await page.keyboard.press('Escape');await expect(button).toBeFocused();
     }
     await writeFile(join(root,'evidence/units-native-zoom.json'),JSON.stringify({zoom:2,viewport:null,geometry},null,2));
   } finally {await context.close();}
@@ -171,13 +235,13 @@ test('@units-authoring revoked catalog clears protected state; stale catalog fai
   await page.route('**/unit-catalog',async route=>{arrived=true;await wait;await route.continue();},{times:1});
   await model(page);await expect.poll(()=>arrived).toBe(true);
   const sid=ids(page).sid;expect((await page.request.post('/fixture/revoke',{data:{study_id:sid}})).ok()).toBe(true);release();
-  await expect(page.getByRole('heading',{name:'Sign in to HYPRN MVP',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
   await expect(page.getByText('Compound quantities',{exact:true})).toHaveCount(0);
   let releaseStale!:()=>void;const stale=new Promise<void>(resolve=>releaseStale=resolve);
   await page.route('**/unit-catalog',async route=>{await stale;await route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'resource_not_found',message:'Unavailable',fields:[],outcome:'unchanged'}})});},{times:1});
   await model(page);await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Home',exact:true}).click();releaseStale();
   await expect(page.getByRole('heading',{name:'Studies',exact:true})).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Sign in to HYPRN MVP',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toHaveCount(0);
 });
 
 test('@units-authoring shared labels preserve old strings and resolve only exact active versions',async({page})=>{
@@ -197,30 +261,26 @@ test('@units-authoring shared labels preserve old strings and resolve only exact
 
 test('@units-authoring editor guard refused editor save keeps unit text and focuses the source editor',async({page})=>{
   await component(page);const edit=await ports(page);
-  await edit.getByLabel('Port 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Port 1 units spelling',{exact:true}).fill('USD');await closePorts(page);
+  await edit.getByLabel('Quantity 1 units',{exact:true}).selectOption('physical');await edit.getByLabel('Quantity 1 units spelling',{exact:true}).fill('USD');await closePorts(page);
   // The source editor sits in the component's "Edit source" disclosure (no detail tabs);
   // a refused save opens it and focuses the editor.
   await expect(page.getByRole('tab',{name:'Source',exact:true})).toHaveCount(0);
   const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
-  await page.getByRole('button',{name:'All models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
+  await page.getByRole('button',{name:'Return to all models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
   await expect(dirty).toBeHidden();await expect(page.locator('#python-source')).toBeFocused();
   await expect(page.getByRole('heading',{name:'Compound quantities',exact:true})).toBeVisible();
-  const again=await ports(page);await expect(again.getByLabel('Port 1 units spelling',{exact:true})).toHaveValue('USD');
+  const again=await ports(page);await expect(again.getByLabel('Quantity 1 units spelling',{exact:true})).toHaveValue('USD');
 });
 
-test('@units-authoring editor guard Save applies an authored port paste once and skips the separate editor save',async({page})=>{
+test('@units-authoring editor guard Save applies a pending component edit once and skips the separate editor save',async({page})=>{
   await component(page);const {sid,mid}=ids(page),read=async()=>(await (await page.request.get('/api/1/studies/'+sid+'/models/'+mid)).json()).data;
-  // Inspector port edits conflict with a table paste by design, so the unsaved authoring edit is a rename.
-  await page.getByRole('region',{name:'Model authoring',exact:true}).getByRole('button',{name:'Edit',exact:true}).click();
-  const rename=page.getByRole('dialog',{name:'Edit component version',exact:true});await rename.getByLabel('Component name',{exact:true}).fill('Energy law renamed');await rename.getByRole('button',{name:'Done',exact:true}).click();
-  const port=activePorts(await read())[0];
-  const variables=page.getByLabel('Quantities view');await variables.getByText('Paste port metadata',{exact:true}).click();
-  await variables.getByRole('textbox',{name:'Port metadata paste',exact:true}).fill(`port_id\tname\n${port.port_id}\tPasted guard name`);
+  await page.getByRole('button',{name:'Edit component',exact:true}).click();
+  const rename=page.getByRole('dialog',{name:'Edit component',exact:true});await rename.getByLabel('Component name',{exact:true}).fill('Energy law renamed');await rename.getByRole('button',{name:'Done',exact:true}).click();
   const writes:unknown[]=[];page.on('request',r=>{if(r.method()==='POST'&&/\/models\/[^/]+\/edits$/.test(new URL(r.url()).pathname))writes.push(r.postDataJSON());});
   const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
-  await page.getByRole('button',{name:'All models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
+  await page.getByRole('button',{name:'Return to all models',exact:true}).click();await dirty.getByRole('button',{name:'Save changes',exact:true}).click();
   const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});await preview.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Models',exact:true})).toBeVisible();
   expect(writes).toHaveLength(1);
-  const saved=await read();expect(activePorts(saved)[0].name).toBe('Pasted guard name');expect(saved.instances[1].name).toBe('Energy law renamed');
+  expect((await read()).instances[1].name).toBe('Energy law renamed');
 });

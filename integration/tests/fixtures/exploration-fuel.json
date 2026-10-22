@@ -1,0 +1,1438 @@
+{
+  "origin": {
+    "study_id": "50e423fd-a709-4e21-9381-0b09022b4115",
+    "configuration_revision_id": "48840525-4dac-4f82-adcd-2b2238900e7c",
+    "configuration_digest": "0eacb2b2636969def15c4fcb422a392d1373d41249f4737b6c18bd808025d301",
+    "model_revision_id": "420b8ed0-dbc6-465b-968b-3e1ca7dc0df6",
+    "model_digest": "e1f5614279084846e83efa23d15f9e1af47d759532876ff0a5a0be28dfb21568"
+  },
+  "model": {
+    "schema_version": "3",
+    "model_id": "3f4d85eb-41bd-484f-a7a7-91729ddbf4e7",
+    "root_instance_id": "6817a0d2-04b3-4b96-a654-9efe19341957",
+    "definitions": [
+      {
+        "definition_id": "3bda26f3-467b-4ce5-850a-9b15e14059f7",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2",
+        "kind": "explicit_component",
+        "name": "Cruise aerodynamics and propulsion",
+        "ports": [
+          {
+            "code_symbol": "mach",
+            "direction": "input",
+            "name": "Cruise Mach number",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "1d9e46fe-eada-40c8-bff6-c3930127207f",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "tau",
+            "direction": "input",
+            "name": "Kuchemann volume parameter",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "47ec637c-4c43-4c70-b20d-19c4894f7163",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "propulsion_adjustment",
+            "direction": "input",
+            "name": "Fractional propulsion adjustment",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "4f9c1c03-e2a1-44d6-b505-c36a32b30ec8",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "lhv",
+            "direction": "input",
+            "name": "Fuel lower heating value",
+            "units": {
+              "expression": "MJ/kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "7db9ab55-3504-4227-920f-ff4ec55927f5",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "speed",
+            "direction": "output",
+            "name": "Cruise true airspeed",
+            "units": {
+              "expression": "m/s",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "13dcaae8-b2d5-42e7-8ac6-67e2f1b9b771",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "lift_drag",
+            "direction": "output",
+            "name": "Cruise lift-to-drag ratio",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "17f72b2c-8bd1-4073-82c2-4bacd121d14e",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          },
+          {
+            "code_symbol": "isp",
+            "direction": "output",
+            "name": "Fuel specific impulse",
+            "units": {
+              "expression": "s",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "c28596e9-2004-49c9-9462-f4ce38ee5040",
+            "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+          }
+        ],
+        "source_refs": [
+          "1f1c5d1816caace6bde33d981f0407dfb42af8824c990a78bfeefef1a357b5d0"
+        ],
+        "residual_port_ids": [],
+        "child_instances": [],
+        "boundary_mappings": [],
+        "annotations": []
+      },
+      {
+        "definition_id": "d66d1516-36a2-4dc2-878f-758e4203f322",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222",
+        "kind": "explicit_component",
+        "name": "Breguet cruise fuel",
+        "ports": [
+          {
+            "code_symbol": "speed",
+            "direction": "input",
+            "name": "Cruise true airspeed",
+            "units": {
+              "expression": "m/s",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "06d26bce-d509-4b16-8e80-3890d6ea018a",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "lift_drag",
+            "direction": "input",
+            "name": "Cruise lift-to-drag ratio",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "60bc988e-9b88-4b45-8135-95676097dc48",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "isp",
+            "direction": "input",
+            "name": "Fuel specific impulse",
+            "units": {
+              "expression": "s",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "812cd90a-8827-40ad-b71c-a404938ff9a5",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "range",
+            "direction": "input",
+            "name": "Cruise range",
+            "units": {
+              "expression": "m",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "895d4212-7788-4a64-821e-501366ddd8d5",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "takeoff_mass",
+            "direction": "input",
+            "name": "Candidate mass at start of cruise",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "5e873634-7b40-45b5-9aa5-6feb92b6f230",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "fuel_mass",
+            "direction": "output",
+            "name": "Cruise fuel consumed",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "402e99b0-11ee-4399-a087-464314f2f6b3",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          },
+          {
+            "code_symbol": "fuel_fraction",
+            "direction": "output",
+            "name": "Cruise fuel fraction of candidate mass",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "b17df972-bd3c-4630-94d2-62dda3e0679d",
+            "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+          }
+        ],
+        "source_refs": [
+          "1fb8304fcfc666ab134aa7579676f7b8768ef0065a14c5bd6efafc70c77afb5c"
+        ],
+        "residual_port_ids": [],
+        "child_instances": [],
+        "boundary_mappings": [],
+        "annotations": []
+      },
+      {
+        "definition_id": "a5dcee74-549f-4be1-806a-c6d709a48ae6",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d",
+        "kind": "explicit_component",
+        "name": "Aircraft mass budget and fuel expense",
+        "ports": [
+          {
+            "code_symbol": "fuel_mass",
+            "direction": "input",
+            "name": "Cruise fuel consumed",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "81027231-5b9e-4057-be9e-334725a0731f",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "lift_drag",
+            "direction": "input",
+            "name": "Cruise lift-to-drag ratio",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "6e09ada4-6b76-49fc-babe-557d1330d0ad",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "takeoff_mass",
+            "direction": "input",
+            "name": "Candidate take-off mass",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "1271c472-01ed-4f6e-913f-023c50bd56af",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "density",
+            "direction": "input",
+            "name": "Declared liquid fuel density",
+            "units": {
+              "expression": "kg/m**3",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "2d895122-05e5-4521-8c33-9080943fa921",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "tau",
+            "direction": "input",
+            "name": "Kuchemann volume parameter",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "81258968-7d43-42ad-839c-29b556c30625",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "passengers",
+            "direction": "input",
+            "name": "Design passenger capacity",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "5d4080d4-242d-477f-8ee9-e1ed9c7bd2bf",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "structural_scale",
+            "direction": "input",
+            "name": "Printed structural index multiplier to kg per square metre",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "c6356947-3f2f-4ac6-bbe4-6d202b7ad220",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "engine_ratio",
+            "direction": "input",
+            "name": "Published engine thrust-to-weight parameter",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "68d6bc5c-4505-4854-881f-a24a1eb28866",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "fuel_price",
+            "direction": "input",
+            "name": "Fuel price in 2021 USD per kg",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "7a0df844-acd3-414c-8c9a-d8390df7229f",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "load_factor",
+            "direction": "input",
+            "name": "Occupied-seat fraction",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "199fb588-2acf-407a-b2d4-60f0de2311ad",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "airframe_mass",
+            "direction": "output",
+            "name": "Airframe mass under labelled structural units",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "41bd3f81-488d-4536-9fd1-68dde880e4b7",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "required_mass",
+            "direction": "output",
+            "name": "Sum of cruise fuel and modelled dry masses",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "452c3cf9-ceb2-4f14-8819-ffca55bc4675",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "mass_margin",
+            "direction": "output",
+            "name": "Candidate mass minus required mass",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "3be5fc09-5782-46c7-9778-43e4d2cd0366",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          },
+          {
+            "code_symbol": "fuel_expense",
+            "direction": "output",
+            "name": "Cruise fuel expense per occupied seat in 2021 USD",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "994e6913-420d-475d-9b3b-d5f32d73a98a",
+            "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+          }
+        ],
+        "source_refs": [
+          "8101e353535ac95989edbbb91b5de810d9dc6ccf36f47b0f7b4e42580d89c3ff"
+        ],
+        "residual_port_ids": [],
+        "child_instances": [],
+        "boundary_mappings": [],
+        "annotations": []
+      },
+      {
+        "definition_id": "a5dcee74-549f-4be1-806a-c6d709a48ae6",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde",
+        "kind": "explicit_component",
+        "name": "Aircraft mass budget and fuel expense",
+        "ports": [
+          {
+            "code_symbol": "fuel_mass",
+            "direction": "input",
+            "name": "Cruise fuel consumed",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "81027231-5b9e-4057-be9e-334725a0731f",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "lift_drag",
+            "direction": "input",
+            "name": "Cruise lift-to-drag ratio",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "6e09ada4-6b76-49fc-babe-557d1330d0ad",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "takeoff_mass",
+            "direction": "input",
+            "name": "Candidate take-off mass",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "1271c472-01ed-4f6e-913f-023c50bd56af",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "density",
+            "direction": "input",
+            "name": "Declared liquid fuel density",
+            "units": {
+              "expression": "kg/m**3",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "2d895122-05e5-4521-8c33-9080943fa921",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "tau",
+            "direction": "input",
+            "name": "Kuchemann volume parameter",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "81258968-7d43-42ad-839c-29b556c30625",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "passengers",
+            "direction": "input",
+            "name": "Design passenger capacity",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "5d4080d4-242d-477f-8ee9-e1ed9c7bd2bf",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "structural_scale",
+            "direction": "input",
+            "name": "Printed structural index multiplier to kg per square metre",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "c6356947-3f2f-4ac6-bbe4-6d202b7ad220",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "engine_ratio",
+            "direction": "input",
+            "name": "Published engine thrust-to-weight parameter",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "68d6bc5c-4505-4854-881f-a24a1eb28866",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "fuel_price",
+            "direction": "input",
+            "name": "Fuel price in 2021 USD per kg",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "7a0df844-acd3-414c-8c9a-d8390df7229f",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "load_factor",
+            "direction": "input",
+            "name": "Occupied-seat fraction",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "199fb588-2acf-407a-b2d4-60f0de2311ad",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "airframe_mass",
+            "direction": "output",
+            "name": "Airframe mass under labelled structural units",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "41bd3f81-488d-4536-9fd1-68dde880e4b7",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "required_mass",
+            "direction": "output",
+            "name": "Sum of cruise fuel and modelled dry masses",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "452c3cf9-ceb2-4f14-8819-ffca55bc4675",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "mass_margin",
+            "direction": "output",
+            "name": "Candidate mass minus required mass",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "3be5fc09-5782-46c7-9778-43e4d2cd0366",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "fuel_expense",
+            "direction": "output",
+            "name": "Cruise fuel expense per occupied seat in 2021 USD",
+            "units": {
+              "kind": "dimensionless"
+            },
+            "value_type": "real_scalar",
+            "port_id": "994e6913-420d-475d-9b3b-d5f32d73a98a",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "wetted_area",
+            "direction": "output",
+            "name": "Wetted surface area driven by payload and fuel volume",
+            "units": {
+              "expression": "m**2",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "5a005fe0-41e4-43d7-aace-ccad0e72a21b",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          },
+          {
+            "code_symbol": "engine_mass",
+            "direction": "output",
+            "name": "Engine mass from the declared thrust-to-weight correlation",
+            "units": {
+              "expression": "kg",
+              "kind": "physical"
+            },
+            "value_type": "real_scalar",
+            "port_id": "f5464411-a5aa-42bb-9aaf-01f4ea5d614f",
+            "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+          }
+        ],
+        "source_refs": [
+          "a9331d42d73fba6d2dc2b9fe22e4ab198c8ac075d972d9b7e2888ab24755774a"
+        ],
+        "residual_port_ids": [],
+        "child_instances": [],
+        "boundary_mappings": [],
+        "annotations": []
+      }
+    ],
+    "instances": [
+      {
+        "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2",
+        "name": "Cruise aerodynamics and propulsion"
+      },
+      {
+        "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222",
+        "name": "Breguet cruise fuel"
+      },
+      {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde",
+        "name": "Aircraft mass budget and fuel expense"
+      }
+    ],
+    "ports": [
+      {
+        "code_symbol": "mach",
+        "direction": "input",
+        "name": "Cruise Mach number",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "1d9e46fe-eada-40c8-bff6-c3930127207f",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "tau",
+        "direction": "input",
+        "name": "Kuchemann volume parameter",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "47ec637c-4c43-4c70-b20d-19c4894f7163",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "propulsion_adjustment",
+        "direction": "input",
+        "name": "Fractional propulsion adjustment",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "4f9c1c03-e2a1-44d6-b505-c36a32b30ec8",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "lhv",
+        "direction": "input",
+        "name": "Fuel lower heating value",
+        "units": {
+          "expression": "MJ/kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "7db9ab55-3504-4227-920f-ff4ec55927f5",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "speed",
+        "direction": "output",
+        "name": "Cruise true airspeed",
+        "units": {
+          "expression": "m/s",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "13dcaae8-b2d5-42e7-8ac6-67e2f1b9b771",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "lift_drag",
+        "direction": "output",
+        "name": "Cruise lift-to-drag ratio",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "17f72b2c-8bd1-4073-82c2-4bacd121d14e",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "isp",
+        "direction": "output",
+        "name": "Fuel specific impulse",
+        "units": {
+          "expression": "s",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "c28596e9-2004-49c9-9462-f4ce38ee5040",
+        "definition_version_id": "2f6bb583-0083-47f2-92ec-89de74e3efe2"
+      },
+      {
+        "code_symbol": "speed",
+        "direction": "input",
+        "name": "Cruise true airspeed",
+        "units": {
+          "expression": "m/s",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "06d26bce-d509-4b16-8e80-3890d6ea018a",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "lift_drag",
+        "direction": "input",
+        "name": "Cruise lift-to-drag ratio",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "60bc988e-9b88-4b45-8135-95676097dc48",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "isp",
+        "direction": "input",
+        "name": "Fuel specific impulse",
+        "units": {
+          "expression": "s",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "812cd90a-8827-40ad-b71c-a404938ff9a5",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "range",
+        "direction": "input",
+        "name": "Cruise range",
+        "units": {
+          "expression": "m",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "895d4212-7788-4a64-821e-501366ddd8d5",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "takeoff_mass",
+        "direction": "input",
+        "name": "Candidate mass at start of cruise",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "5e873634-7b40-45b5-9aa5-6feb92b6f230",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "fuel_mass",
+        "direction": "output",
+        "name": "Cruise fuel consumed",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "402e99b0-11ee-4399-a087-464314f2f6b3",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "fuel_fraction",
+        "direction": "output",
+        "name": "Cruise fuel fraction of candidate mass",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "b17df972-bd3c-4630-94d2-62dda3e0679d",
+        "definition_version_id": "b35a0840-308a-413b-a18d-2c64d0a33222"
+      },
+      {
+        "code_symbol": "fuel_mass",
+        "direction": "input",
+        "name": "Cruise fuel consumed",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "81027231-5b9e-4057-be9e-334725a0731f",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "lift_drag",
+        "direction": "input",
+        "name": "Cruise lift-to-drag ratio",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "6e09ada4-6b76-49fc-babe-557d1330d0ad",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "takeoff_mass",
+        "direction": "input",
+        "name": "Candidate take-off mass",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "1271c472-01ed-4f6e-913f-023c50bd56af",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "density",
+        "direction": "input",
+        "name": "Declared liquid fuel density",
+        "units": {
+          "expression": "kg/m**3",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "2d895122-05e5-4521-8c33-9080943fa921",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "tau",
+        "direction": "input",
+        "name": "Kuchemann volume parameter",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "81258968-7d43-42ad-839c-29b556c30625",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "passengers",
+        "direction": "input",
+        "name": "Design passenger capacity",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "5d4080d4-242d-477f-8ee9-e1ed9c7bd2bf",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "structural_scale",
+        "direction": "input",
+        "name": "Printed structural index multiplier to kg per square metre",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "c6356947-3f2f-4ac6-bbe4-6d202b7ad220",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "engine_ratio",
+        "direction": "input",
+        "name": "Published engine thrust-to-weight parameter",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "68d6bc5c-4505-4854-881f-a24a1eb28866",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "fuel_price",
+        "direction": "input",
+        "name": "Fuel price in 2021 USD per kg",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "7a0df844-acd3-414c-8c9a-d8390df7229f",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "load_factor",
+        "direction": "input",
+        "name": "Occupied-seat fraction",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "199fb588-2acf-407a-b2d4-60f0de2311ad",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "airframe_mass",
+        "direction": "output",
+        "name": "Airframe mass under labelled structural units",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "41bd3f81-488d-4536-9fd1-68dde880e4b7",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "required_mass",
+        "direction": "output",
+        "name": "Sum of cruise fuel and modelled dry masses",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "452c3cf9-ceb2-4f14-8819-ffca55bc4675",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "mass_margin",
+        "direction": "output",
+        "name": "Candidate mass minus required mass",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "3be5fc09-5782-46c7-9778-43e4d2cd0366",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "fuel_expense",
+        "direction": "output",
+        "name": "Cruise fuel expense per occupied seat in 2021 USD",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "994e6913-420d-475d-9b3b-d5f32d73a98a",
+        "definition_version_id": "91ead06d-d37e-4055-9ab7-b0d60216e00d"
+      },
+      {
+        "code_symbol": "fuel_mass",
+        "direction": "input",
+        "name": "Cruise fuel consumed",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "81027231-5b9e-4057-be9e-334725a0731f",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "lift_drag",
+        "direction": "input",
+        "name": "Cruise lift-to-drag ratio",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "6e09ada4-6b76-49fc-babe-557d1330d0ad",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "takeoff_mass",
+        "direction": "input",
+        "name": "Candidate take-off mass",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "1271c472-01ed-4f6e-913f-023c50bd56af",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "density",
+        "direction": "input",
+        "name": "Declared liquid fuel density",
+        "units": {
+          "expression": "kg/m**3",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "2d895122-05e5-4521-8c33-9080943fa921",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "tau",
+        "direction": "input",
+        "name": "Kuchemann volume parameter",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "81258968-7d43-42ad-839c-29b556c30625",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "passengers",
+        "direction": "input",
+        "name": "Design passenger capacity",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "5d4080d4-242d-477f-8ee9-e1ed9c7bd2bf",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "structural_scale",
+        "direction": "input",
+        "name": "Printed structural index multiplier to kg per square metre",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "c6356947-3f2f-4ac6-bbe4-6d202b7ad220",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "engine_ratio",
+        "direction": "input",
+        "name": "Published engine thrust-to-weight parameter",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "68d6bc5c-4505-4854-881f-a24a1eb28866",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "fuel_price",
+        "direction": "input",
+        "name": "Fuel price in 2021 USD per kg",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "7a0df844-acd3-414c-8c9a-d8390df7229f",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "load_factor",
+        "direction": "input",
+        "name": "Occupied-seat fraction",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "199fb588-2acf-407a-b2d4-60f0de2311ad",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "airframe_mass",
+        "direction": "output",
+        "name": "Airframe mass under labelled structural units",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "41bd3f81-488d-4536-9fd1-68dde880e4b7",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "required_mass",
+        "direction": "output",
+        "name": "Sum of cruise fuel and modelled dry masses",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "452c3cf9-ceb2-4f14-8819-ffca55bc4675",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "mass_margin",
+        "direction": "output",
+        "name": "Candidate mass minus required mass",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "3be5fc09-5782-46c7-9778-43e4d2cd0366",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "fuel_expense",
+        "direction": "output",
+        "name": "Cruise fuel expense per occupied seat in 2021 USD",
+        "units": {
+          "kind": "dimensionless"
+        },
+        "value_type": "real_scalar",
+        "port_id": "994e6913-420d-475d-9b3b-d5f32d73a98a",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "wetted_area",
+        "direction": "output",
+        "name": "Wetted surface area driven by payload and fuel volume",
+        "units": {
+          "expression": "m**2",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "5a005fe0-41e4-43d7-aace-ccad0e72a21b",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      },
+      {
+        "code_symbol": "engine_mass",
+        "direction": "output",
+        "name": "Engine mass from the declared thrust-to-weight correlation",
+        "units": {
+          "expression": "kg",
+          "kind": "physical"
+        },
+        "value_type": "real_scalar",
+        "port_id": "f5464411-a5aa-42bb-9aaf-01f4ea5d614f",
+        "definition_version_id": "c955c307-f553-45a1-906a-6e8e7fb67dde"
+      }
+    ],
+    "connections": [
+      {
+        "connection_id": "bddea290-a704-4f0d-adde-da4ff6c1d866",
+        "source_ref": {
+          "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+          "port_id": "13dcaae8-b2d5-42e7-8ac6-67e2f1b9b771"
+        },
+        "target_ref": {
+          "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+          "port_id": "06d26bce-d509-4b16-8e80-3890d6ea018a"
+        }
+      },
+      {
+        "connection_id": "8602b728-e8ee-4e22-8ce5-769e98b522af",
+        "source_ref": {
+          "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+          "port_id": "17f72b2c-8bd1-4073-82c2-4bacd121d14e"
+        },
+        "target_ref": {
+          "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+          "port_id": "60bc988e-9b88-4b45-8135-95676097dc48"
+        }
+      },
+      {
+        "connection_id": "6d1af22b-8428-4fe4-8a7f-be1009739b9d",
+        "source_ref": {
+          "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+          "port_id": "c28596e9-2004-49c9-9462-f4ce38ee5040"
+        },
+        "target_ref": {
+          "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+          "port_id": "812cd90a-8827-40ad-b71c-a404938ff9a5"
+        }
+      },
+      {
+        "connection_id": "efafb984-b6cd-4322-a6df-c72bf4e2e31f",
+        "source_ref": {
+          "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+          "port_id": "402e99b0-11ee-4399-a087-464314f2f6b3"
+        },
+        "target_ref": {
+          "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+          "port_id": "81027231-5b9e-4057-be9e-334725a0731f"
+        }
+      },
+      {
+        "connection_id": "db7ce388-57ad-4f67-8815-716d0b013b36",
+        "source_ref": {
+          "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+          "port_id": "17f72b2c-8bd1-4073-82c2-4bacd121d14e"
+        },
+        "target_ref": {
+          "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+          "port_id": "6e09ada4-6b76-49fc-babe-557d1330d0ad"
+        }
+      }
+    ],
+    "boundary_mappings": [],
+    "annotations": [],
+    "source_files": [
+      {
+        "bytes": "aW1wb3J0IG1hdGgKbWFjaCA9IGlucHV0c1snbWFjaCddCnRhdSA9IGlucHV0c1sndGF1J10KYWx0aXR1ZGVfa20gPSAyLjI4MzggKiBtYWNoICsgMTUuMTMKIyBJU0EgbGF5ZXJzIGFuZCBpZGVhbCBkcnkgYWlyOyBhbHRpdHVkZSB0cmVhdGVkIGFzIGdlb3BvdGVudGlhbC4KaWYgYWx0aXR1ZGVfa20gPD0gMzIuMDoKICAgIHRlbXBlcmF0dXJlID0gMjE2LjY1ICsgYWx0aXR1ZGVfa20gLSAyMC4wCmVsc2U6CiAgICB0ZW1wZXJhdHVyZSA9IDIyOC42NSArIDIuOCAqIChhbHRpdHVkZV9rbSAtIDMyLjApCm91dHB1dHNbJ3NwZWVkJ10gPSBtYWNoICogbWF0aC5zcXJ0KDEuNCAqIDI4Ny4wNSAqIHRlbXBlcmF0dXJlKQp0dW5pbmcgPSAyLjgzMzIgKiB0YXUgLSAwLjM3NjkKc2hhcGVfZmFjdG9yID0gMS4wMTI4IC0gMC4yNzk3ICogbWF0aC5sb2codGF1IC8gMC4wMykKb3V0cHV0c1snbGlmdF9kcmFnJ10gPSBtaW4oMTQuMCwgNi4wICogKG1hY2ggKyAyLjApIC8gbWFjaCAqIHNoYXBlX2ZhY3RvciAvICgxLjAgLSBtYWNoICogbWFjaCAvIDY3My4wKSkgKiAoMS4wICsgdHVuaW5nKQpvdXRwdXRzWydpc3AnXSA9ICg0NjYwLjAgLSAzMjAuMCAqIG1hY2gpICogKDEuMCArIGlucHV0c1sncHJvcHVsc2lvbl9hZGp1c3RtZW50J10pICogaW5wdXRzWydsaHYnXSAvIDExOS45Mwo=",
+        "encoding": "base64",
+        "media_type": "text/x-python",
+        "sha256": "1f1c5d1816caace6bde33d981f0407dfb42af8824c990a78bfeefef1a357b5d0"
+      },
+      {
+        "bytes": "aW1wb3J0IG1hdGgKZXhwb25lbnQgPSBpbnB1dHNbJ3JhbmdlJ10gLyAoaW5wdXRzWydsaWZ0X2RyYWcnXSAqIGlucHV0c1snaXNwJ10gKiBpbnB1dHNbJ3NwZWVkJ10pCm91dHB1dHNbJ2Z1ZWxfZnJhY3Rpb24nXSA9IDEuMCAtIG1hdGguZXhwKC1leHBvbmVudCkKb3V0cHV0c1snZnVlbF9tYXNzJ10gPSBpbnB1dHNbJ3Rha2VvZmZfbWFzcyddICogb3V0cHV0c1snZnVlbF9mcmFjdGlvbiddCg==",
+        "encoding": "base64",
+        "media_type": "text/x-python",
+        "sha256": "1fb8304fcfc666ab134aa7579676f7b8768ef0065a14c5bd6efafc70c77afb5c"
+      },
+      {
+        "bytes": "aW1wb3J0IG1hdGgKbWFzcyA9IGlucHV0c1sndGFrZW9mZl9tYXNzJ10KdGF1ID0gaW5wdXRzWyd0YXUnXQpmdWVsX3ZvbHVtZSA9IGlucHV0c1snZnVlbF9tYXNzJ10gLyBpbnB1dHNbJ2RlbnNpdHknXQpwYXlsb2FkX3ZvbHVtZSA9IDE0MDAuMCAqIGlucHV0c1sncGFzc2VuZ2VycyddIC8gMzAwLjAKdm9sdW1lID0gKHBheWxvYWRfdm9sdW1lICsgZnVlbF92b2x1bWUpIC8gMC43CnBsYW5fYXJlYSA9ICh2b2x1bWUgLyB0YXUpICoqICgyLjAgLyAzLjApCmxvZ190YXUgPSBtYXRoLmxvZyh0YXUpCndldF9yYXRpbyA9IHRhdSAqIG1hdGguZXhwKDEuNDE0IC0gMS40MTUgKiBsb2dfdGF1IC0gMC43MzEgKiBsb2dfdGF1ICoqIDIgLSAwLjI3MiAqIGxvZ190YXUgKiogMyAtIDAuMDMxICogbG9nX3RhdSAqKiA0KQpzdHJ1Y3R1cmFsX2luZGV4ID0gKDUxNDM2LjAgLSAwLjA1NjUgKiBtYXNzKSAqIGlucHV0c1snc3RydWN0dXJhbF9zY2FsZSddCmFpcmZyYW1lID0gc3RydWN0dXJhbF9pbmRleCAqIHdldF9yYXRpbyAqIHBsYW5fYXJlYQpwYXlsb2FkX21hc3MgPSAyMDAuMCAqIGlucHV0c1sncGFzc2VuZ2VycyddCnN5c3RlbXNfbWFzcyA9IDUwMDAuMCArIDAuMSAqIG1hc3MKZW5naW5lX21hc3MgPSBtYXNzIC8gKGlucHV0c1snZW5naW5lX3JhdGlvJ10gKiBpbnB1dHNbJ2xpZnRfZHJhZyddKQpyZXF1aXJlZCA9IGlucHV0c1snZnVlbF9tYXNzJ10gKyBhaXJmcmFtZSArIHBheWxvYWRfbWFzcyArIHN5c3RlbXNfbWFzcyArIGVuZ2luZV9tYXNzCm91dHB1dHNbJ2FpcmZyYW1lX21hc3MnXSA9IGFpcmZyYW1lCm91dHB1dHNbJ3JlcXVpcmVkX21hc3MnXSA9IHJlcXVpcmVkCm91dHB1dHNbJ21hc3NfbWFyZ2luJ10gPSBtYXNzIC0gcmVxdWlyZWQKb3V0cHV0c1snZnVlbF9leHBlbnNlJ10gPSBpbnB1dHNbJ2Z1ZWxfbWFzcyddICogaW5wdXRzWydmdWVsX3ByaWNlJ10gLyAoaW5wdXRzWydwYXNzZW5nZXJzJ10gKiBpbnB1dHNbJ2xvYWRfZmFjdG9yJ10pCg==",
+        "encoding": "base64",
+        "media_type": "text/x-python",
+        "sha256": "8101e353535ac95989edbbb91b5de810d9dc6ccf36f47b0f7b4e42580d89c3ff"
+      },
+      {
+        "bytes": "aW1wb3J0IG1hdGgKbWFzcyA9IGlucHV0c1sndGFrZW9mZl9tYXNzJ10KdGF1ID0gaW5wdXRzWyd0YXUnXQpmdWVsX3ZvbHVtZSA9IGlucHV0c1snZnVlbF9tYXNzJ10gLyBpbnB1dHNbJ2RlbnNpdHknXQpwYXlsb2FkX3ZvbHVtZSA9IDE0MDAuMCAqIGlucHV0c1sncGFzc2VuZ2VycyddIC8gMzAwLjAKdm9sdW1lID0gKHBheWxvYWRfdm9sdW1lICsgZnVlbF92b2x1bWUpIC8gMC43CnBsYW5fYXJlYSA9ICh2b2x1bWUgLyB0YXUpICoqICgyLjAgLyAzLjApCmxvZ190YXUgPSBtYXRoLmxvZyh0YXUpCndldF9yYXRpbyA9IHRhdSAqIG1hdGguZXhwKDEuNDE0IC0gMS40MTUgKiBsb2dfdGF1IC0gMC43MzEgKiBsb2dfdGF1ICoqIDIgLSAwLjI3MiAqIGxvZ190YXUgKiogMyAtIDAuMDMxICogbG9nX3RhdSAqKiA0KQpzdHJ1Y3R1cmFsX2luZGV4ID0gKDUxNDM2LjAgLSAwLjA1NjUgKiBtYXNzKSAqIGlucHV0c1snc3RydWN0dXJhbF9zY2FsZSddCmFpcmZyYW1lID0gc3RydWN0dXJhbF9pbmRleCAqIHdldF9yYXRpbyAqIHBsYW5fYXJlYQpwYXlsb2FkX21hc3MgPSAyMDAuMCAqIGlucHV0c1sncGFzc2VuZ2VycyddCnN5c3RlbXNfbWFzcyA9IDUwMDAuMCArIDAuMSAqIG1hc3MKZW5naW5lX21hc3MgPSBtYXNzIC8gKGlucHV0c1snZW5naW5lX3JhdGlvJ10gKiBpbnB1dHNbJ2xpZnRfZHJhZyddKQpyZXF1aXJlZCA9IGlucHV0c1snZnVlbF9tYXNzJ10gKyBhaXJmcmFtZSArIHBheWxvYWRfbWFzcyArIHN5c3RlbXNfbWFzcyArIGVuZ2luZV9tYXNzCm91dHB1dHNbJ2FpcmZyYW1lX21hc3MnXSA9IGFpcmZyYW1lCm91dHB1dHNbJ3JlcXVpcmVkX21hc3MnXSA9IHJlcXVpcmVkCm91dHB1dHNbJ21hc3NfbWFyZ2luJ10gPSBtYXNzIC0gcmVxdWlyZWQKb3V0cHV0c1snZnVlbF9leHBlbnNlJ10gPSBpbnB1dHNbJ2Z1ZWxfbWFzcyddICogaW5wdXRzWydmdWVsX3ByaWNlJ10gLyAoaW5wdXRzWydwYXNzZW5nZXJzJ10gKiBpbnB1dHNbJ2xvYWRfZmFjdG9yJ10pCgpvdXRwdXRzWyd3ZXR0ZWRfYXJlYSddID0gd2V0X3JhdGlvICogcGxhbl9hcmVhCm91dHB1dHNbJ2VuZ2luZV9tYXNzJ10gPSBlbmdpbmVfbWFzcwo=",
+        "encoding": "base64",
+        "media_type": "text/x-python",
+        "sha256": "a9331d42d73fba6d2dc2b9fe22e4ab198c8ac075d972d9b7e2888ab24755774a"
+      }
+    ],
+    "required_capabilities": [
+      "flat_explicit_scalar",
+      "unit_declarations/1"
+    ],
+    "assumptions": [],
+    "model_revision_id": "420b8ed0-dbc6-465b-968b-3e1ca7dc0df6",
+    "parent_model_revision_id": "9f1d7d5f-b4cc-418c-83a2-a16895bc7836",
+    "originating_draft_revision": "a7d07bdd-1b36-45ac-8d99-d28cb7d1f014",
+    "digest": "e1f5614279084846e83efa23d15f9e1af47d759532876ff0a5a0be28dfb21568"
+  },
+  "inputs": [
+    {
+      "target": {
+        "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+        "port_id": "1d9e46fe-eada-40c8-bff6-c3930127207f"
+      },
+      "value": 6.0,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Cruise Mach number; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+        "port_id": "47ec637c-4c43-4c70-b20d-19c4894f7163"
+      },
+      "value": 0.18,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Kuchemann volume parameter; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+        "port_id": "4f9c1c03-e2a1-44d6-b505-c36a32b30ec8"
+      },
+      "value": 0.075,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Fractional propulsion adjustment; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "cb9e55a1-6dba-4b5c-83d6-532434e99723",
+        "port_id": "7db9ab55-3504-4227-920f-ff4ec55927f5"
+      },
+      "value": 43.15,
+      "units": "MJ/kg",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Fuel lower heating value; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+        "port_id": "895d4212-7788-4a64-821e-501366ddd8d5"
+      },
+      "value": 9000000.0,
+      "units": "m",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Cruise range; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "52284882-5aed-48ab-b09a-aaeb373a7b62",
+        "port_id": "5e873634-7b40-45b5-9aa5-6feb92b6f230"
+      },
+      "value": 574000.0,
+      "units": "kg",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Explicit current comparison choice: 100 occupied seats and a common 574 tonne screening point where specified.",
+        "evidence_version_ids": [
+          "ba119335-25d2-407e-9ebf-647f5ff78bd0"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "1271c472-01ed-4f6e-913f-023c50bd56af"
+      },
+      "value": 574000.0,
+      "units": "kg",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Explicit current comparison choice: 100 occupied seats and a common 574 tonne screening point where specified.",
+        "evidence_version_ids": [
+          "ba119335-25d2-407e-9ebf-647f5ff78bd0"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "2d895122-05e5-4521-8c33-9080943fa921"
+      },
+      "value": 800.0,
+      "units": "kg/m**3",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Declared liquid fuel density; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "81258968-7d43-42ad-839c-29b556c30625"
+      },
+      "value": 0.18,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Kuchemann volume parameter; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "5d4080d4-242d-477f-8ee9-e1ed9c7bd2bf"
+      },
+      "value": 100.0,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Design passenger capacity; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "c6356947-3f2f-4ac6-bbe4-6d202b7ad220"
+      },
+      "value": 0.001,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Printed structural index multiplier to kg per square metre; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "68d6bc5c-4505-4854-881f-a24a1eb28866"
+      },
+      "value": 1.4,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Published engine thrust-to-weight parameter; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "7a0df844-acd3-414c-8c9a-d8390df7229f"
+      },
+      "value": 0.55,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Fuel price in 2021 USD per kg; explicit case value from the linked source and screening assumptions.",
+        "evidence_version_ids": [
+          "e20dd153-3cb9-4c24-9e78-15c6aa7c8ddd",
+          "d24d9f4a-aa30-49fd-9113-e951cfd23682"
+        ]
+      },
+      "result_binding": null
+    },
+    {
+      "target": {
+        "instance_id": "98a22aaa-d885-491e-a650-35922e70ea26",
+        "port_id": "199fb588-2acf-407a-b2d4-60f0de2311ad"
+      },
+      "value": 1.0,
+      "units": "",
+      "provenance": {
+        "kind": "manual",
+        "statement": "Explicit current comparison choice: 100 occupied seats and a common 574 tonne screening point where specified.",
+        "evidence_version_ids": [
+          "ba119335-25d2-407e-9ebf-647f5ff78bd0"
+        ]
+      },
+      "result_binding": null
+    }
+  ]
+}

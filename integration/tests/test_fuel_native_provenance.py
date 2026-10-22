@@ -36,8 +36,9 @@ def test_current_support_sources_pass_without_any_allowance(source,path):
 
 
 def test_artifacts_record_schema_identities_instead_of_schema_copies():
-    from execution_fixtures import fixture
-    files=fixture()['files']
+    # The capture by the pinned producer records the current schema identities.
+    from execution_fixtures import criteria_free_fixture
+    files=criteria_free_fixture()['files']
     assert not any(path in files for path in ('provenance/support/'+Path(name).name for name in modeling_runtime.SCHEMA_IDENTITY_SOURCES))
     recorded=json.loads(files[IDENTITIES])
     assert recorded==modeling_runtime.schema_identities()
@@ -76,3 +77,24 @@ def test_provenance_and_license_allowances_are_closed_finite_inventories():
         'licenses/native/jedi-0.18.2.dist-info/METADATA':'f21e26976fba61c1ed460d48988b44b61103fcd8058a3ace8e0061417b7effa3',
         'licenses/native/psutil-7.2.2.dist-info/METADATA':'525f8ba78523cf7bc3759d62a105e7c57fd679ea702402b9449fb0746aa0217f',
         'licenses/worker/tomli-2.5.0.dist-info/METADATA':'0d7d3b46cb99dac60216978cebca446f9ec3a21fd3e1f9650086a2e373654e27'}
+
+
+
+def test_historical_artifact_passes_the_export_content_check():
+    import base64
+    import gzip
+
+    path = ROOT / 'integration/tests/fixtures/native-programs-pre-schema-split.json.gz'
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == (
+        '3fdd2de1275704b7b3fa2a59a409ecaef00bb1f18ea13bfff7bd4325ae1ea018'
+    )
+    capture = json.loads(gzip.decompress(raw))
+    for row in capture['cases']['chain']['prepared']['files']:
+        if row['role'] != 'provenance':
+            continue
+        data = base64.b64decode(capture['blobs'][row['sha256']], validate=True)
+        assert hashlib.sha256(data).hexdigest() == row['sha256']
+        if not archive.audited_provenance({row['path']}, row['path'], data):
+            archive.sensitive(data)
+    assert path.read_bytes() == raw

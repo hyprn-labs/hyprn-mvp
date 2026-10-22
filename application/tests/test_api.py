@@ -69,19 +69,43 @@ def model_revision(api):
     m=post(c,f"/studies/{sid}/models/{m['model_id']}/commits",dict(command_id=uid(),expected_revision=m["draft_revision"]))["data"]
     return s,m
 
+def creation4():
+    """``creation()`` as a model format 4 edit: the same two scaled instances, every port
+    declared dimensionless (typed units), so the committed version is a Model4."""
+    edits=copy.deepcopy(creation())
+    for port in edits[0]["ports"]:port["units"]=dict(kind="dimensionless")
+    return edits
+
+def model4_revision(api):
+    """A committed Model4 version of the private service: only a Model4 can be configured."""
+    c=api[0];s=study(api);sid=s["study_id"]
+    m=post(c,f"/studies/{sid}/models",dict(command_id=uid(),expected_revision=s["revision"],name="Independent app model",template="empty"),201)["data"]
+    m=post(c,f"/studies/{sid}/models/{m['model_id']}/edits",dict(schema_version="4",command_id=uid(),expected_revision=m["draft_revision"],edits=creation4()))["data"]
+    m=post(c,f"/studies/{sid}/models/{m['model_id']}/commits",dict(command_id=uid(),expected_revision=m["draft_revision"]))["data"]
+    assert m["schema_version"]=="4",m
+    return s,m
+
 def configuration_request(api,s,m):
-    """The public configuration3 request for a model2 revision, the only configuration a model2
-    accepts: explicit literal inputs with provenance, the current study context, no assumptions."""
+    """The public ConfigurationRequest6 for a Model4 version, the only configuration request
+    accepted: explicit literal inputs with provenance, the current study context, no criteria,
+    no approach selection and no assumptions. A dimensionless port takes the empty unit text."""
     sid=s["study_id"];cfg=candidate(m,sid)
     study=api[0].get(f"/api/1/studies/{sid}").json()["data"]
-    return dict(schema_version="3",study_id=sid,model_id=m["model_id"],model_revision_id=m["model_revision_id"],name=cfg["name"],
-        inputs=[dict(kind="literal",**{k:i[k] for k in ("target","value","units","provenance")}) for i in cfg["inputs"]],
-        criteria=cfg["criteria"],numerical=cfg["numerical"],notes=[],derivation=None,
+    return dict(schema_version="6",study_id=sid,model_id=m["model_id"],model_revision_id=m["model_revision_id"],name=cfg["name"],
+        inputs=[dict(kind="literal",target=i["target"],value=i["value"],units="",provenance=i["provenance"]) for i in cfg["inputs"]],
+        numerical=cfg["numerical"],notes=[],derivation=None,
         context_source=dict(kind="current_study",expected_study_revision=study["revision"]),
         assumptions=[],general_context_evidence_version_ids=[])
 
+def earlier_request(request,version):
+    """The request labelled with an earlier version (1 to 4), carrying criteria and, for
+    version 4, an approach selection: the earlier version alone is refused."""
+    old=dict(copy.deepcopy(request),schema_version=version,criteria=[])
+    if version=="4":old["approach_selection"]=None
+    return old
+
 def configuration_commit(api,request,**fields):
-    """A configuration3 commit pins the digest of the exact preview the engineer saw."""
+    """A configuration 6 commit pins the digest of the exact preview the engineer saw."""
     preview=post(api[0],f"/studies/{request['study_id']}/configurations/preview",request)["data"]
     body=dict(command_id=uid(),expected_revision=None,configuration_id=None,configuration=request,
               expected_preview_digest=preview["candidate_digest"])
@@ -108,7 +132,11 @@ def test_study_evidence_receipts_and_cross_study(api):
     other=study(api)
     assert c.get(f"/api/1/studies/{other['study_id']}/evidence/{note['evidence_version_id']}").status_code==404
     assert c.get(f"/api/1/studies/{sid}/commands/{command}?category=evidence").json()["data"]["state"]=="committed"
-    assert c.patch(f"/api/1/studies/{sid}",json=dict(command_id=uid(),expected_revision="stale",name="bad")).status_code==409
+    removed = c.patch(
+        f"/api/1/studies/{sid}",
+        json=dict(command_id=uid(),expected_revision="stale",name="bad"),
+    )
+    assert removed.status_code == 405
 
 def test_remote_response_loss_reconciles_one_model_after_restart(api):
     c,store,auth,model,transport,actor=api;s=study(api);sid=s["study_id"]

@@ -23,6 +23,9 @@ def write_http_response(handler,response):
     """A browser may disconnect after the application has returned its response."""
     try:
         handler.send_response(response.status_code)
+        if hasattr(response, 'elapsed'):
+            duration = response.elapsed.total_seconds() * 1000
+            handler.send_header('Server-Timing', 'app;dur=' + str(duration))
         for key,value in response.headers.multi_items():
             if key.lower() not in {'content-length','connection','transfer-encoding'}:handler.send_header(key,value)
         handler.send_header('Content-Length',str(len(response.content)))
@@ -32,16 +35,38 @@ def write_http_response(handler,response):
     return True
 
 
+def model4_authoring(source):
+    """The replayed private authoring commands of the Sizing model as a Model4 revision.
+
+    The format-4 edit envelope upgrades the draft and every port declares typed units."""
+    sys.path[:0]=[str(REPO/'modeling/tests')]
+    from test_native_generation import public_fixture
+    km,m=dict(kind='physical',expression='km'),dict(kind='physical',expression='m')
+    ports=[dict(temp_key=k,direction='input',name=k,code_symbol=k,value_type='real_scalar',
+        units=dict(km)) for k in 'abcd']
+    ports+=[dict(temp_key=k,direction='output',name=k,code_symbol=k,value_type='real_scalar',
+        units=dict(m)) for k in ('y','z','total')]
+    encoded=dict(encoding='base64',media_type='text/x-python',
+        bytes=base64.b64encode(source).decode(),sha256=hashlib.sha256(source).hexdigest())
+    edits=[dict(kind='create_definition',temp_key='sizing',definition_kind='explicit_component',
+        name='Sizing',ports=ports,source=encoded),
+        dict(kind='instantiate',temp_key='component',version_ref=dict(temp_key='sizing'))]
+    _,ruby=public_fixture()
+    start=ruby.index('edits=JSON.parse')
+    end=ruby.index('\ndraft=c.route',start)
+    payload=base64.b64encode(json.dumps(edits).encode()).decode()
+    ruby=ruby[:start]+"edits=JSON.parse(Base64.strict_decode64('"+payload+"'))"+ruby[end:]
+    envelope="'edits'=>edits})"
+    assert ruby.count(envelope)==1
+    ruby=ruby.replace(envelope,"'edits'=>edits,'schema_version'=>'4'})")
+    return ruby,edits
+
+
 def setup_model(scope,sid):
     sys.path[:0]=[str(REPO/'modeling/tests'),str(REPO/'contracts/tests')]
-    from test_native_generation import public_fixture
     from test_resolved_configuration import harness,native
     source=b"outputs['y'] = inputs['a'] * 1000\noutputs['z'] = inputs['b'] * 1000\noutputs['total'] = (inputs['a'] + inputs['b'] + inputs['c'] + inputs['d']) * 1000\n"
-    ports=[dict(temp_key=k,direction='input',name=k,code_symbol=k,value_type='real_scalar',units='km') for k in 'abcd']
-    ports += [dict(temp_key=k,direction='output',name=k,code_symbol=k,value_type='real_scalar',units='m') for k in ('y','z','total')]
-    edits=[dict(kind='create_definition',temp_key='sizing',definition_kind='explicit_component',name='Sizing',ports=ports,source=dict(encoding='base64',media_type='text/x-python',bytes=base64.b64encode(source).decode(),sha256=hashlib.sha256(source).hexdigest())),dict(kind='instantiate',temp_key='component',version_ref=dict(temp_key='sizing'))]
-    _,ruby=public_fixture();start=ruby.index('edits=JSON.parse');end=ruby.index('\ndraft=c.route',start)
-    ruby=ruby[:start]+"edits=JSON.parse(Base64.strict_decode64('"+base64.b64encode(json.dumps(edits).encode()).decode()+"'))"+ruby[end:]
+    ruby,edits=model4_authoring(source)
     ruby=ruby.replace("'study_id'=>SecureRandom.uuid", "'study_id'=>'"+sid+"'",1)
     namespace=hashlib.sha256(str(scope.root).encode()).hexdigest()
     fixed="require 'securerandom'\nfixture_counter=0\nSecureRandom.define_singleton_method(:uuid) { fixture_counter+=1; h=Digest::SHA256.hexdigest('"+namespace+"'+fixture_counter.to_s); h[0,8]+'-'+h[8,4]+'-4'+h[13,3]+'-8'+h[17,3]+'-'+h[20,12] }\n"
@@ -221,12 +246,72 @@ class Journey:
     def payload(self,rid):
         with self.store.connection() as db:return json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?',(rid,)).fetchone()[0])
 
+    def recorded_without_criteria(self,detail):
+        """A run of a configuration 6 keeps execution only: history 8 and results 3 carry no
+        criterion outcome, and its light status points to the calculations for criteria."""
+        history=detail['history']
+        assert history['history_schema_version']=='8'
+        assert 'assessment' not in history and 'approach_closure' not in history
+        results=history['results']
+        assert results['schema_version']=='3' and 'criteria' not in results
+        assert results['execution']['state']=='finished' and results['execution']['exit_code']==0
+        assert all(o['availability']=='available' for o in results['outputs'])
+        status=self.request('GET','run-status?run_id='+detail['run_id'])
+        assert [s['run_id'] for s in status]==[detail['run_id']]
+        assert status[0]['facets']['execution']==dict(value=results['execution'],reason=None)
+        assert status[0]['criteria']==dict(value=None,reason='evaluated_in_calculations')
+        return results
+
+    def brief_version(self,criteria):
+        """Save the study brief with ``criteria`` as a new brief version and return its id.
+
+        Criteria belong to the study brief; a configuration or a run never carries one."""
+        from hyprn_mvp_app.store import uid
+        state=self.request('GET','brief')
+        content=dict(schema_version='1',
+            question='Do the computed outputs meet the stated criteria?',original_question=None,
+            elaboration=None,scope='Synthetic native fixture calculations.',
+            alternatives=[],criteria=criteria,assumptions=[],limits=[],open_questions=[])
+        revision=state['draft']['revision'] if state['draft'] else None
+        draft=self.request('POST','brief/draft',
+            dict(command_id=uid(),expected_revision=revision,content=content))
+        body=dict(command_id=uid(),expected_revision=draft['revision'])
+        return self.request('POST','brief/versions',body,201)['version']['brief_version_id']
+
+    def evaluate(self,saved,brief,bindings):
+        """Evaluate the recorded runs of ``saved`` configurations through one calculation.
+
+        ``bindings`` pairs brief criterion ids with output targets. Returns
+        ``{run_id: {criterion_id: evaluation}}``; units are never converted."""
+        from hyprn_mvp_app.store import uid
+        first=saved[0]['configuration']
+        content=dict(schema_version='1',name='Criteria of '+first['name'],
+            description='Brief criteria evaluated on the recorded native runs.',
+            model_id=first['model_id'],model_revision_id=first['model_revision_id'],
+            configuration_revision_ids=[
+                s['configuration']['configuration_revision_id'] for s in saved],
+            design=dict(kind='hand_picked'),brief_version_id=brief,
+            criterion_bindings=[dict(criterion_id=c,output=t) for c,t in bindings])
+        version=self.request('POST','calculations',dict(command_id=uid(),content=content),201)
+        page=self.request('GET','calculation-versions/'+version['calculation_version_id']+'/runs')
+        return {i['run_id']:{e['criterion_id']:e for e in i['evaluations']} for i in page['items']}
+
+
+def brief_constraint(name,operator,threshold,units,**tolerance):
+    """One study brief constraint; comparison is in ``units`` exactly."""
+    from hyprn_mvp_app.store import uid
+    return dict(criterion_id=uid(),kind='constraint',name=name,
+        statement='Analytical expectation: '+name,operator=operator,threshold=threshold,
+        units=units,evidence_links=[],**tolerance)
+
 
 class NativeJourney(Journey):
     """Actual production private HTTP/JWT, with cumulative audited source overlays.
 
     A unique internal network and loopback-only ephemeral endpoint replace the
     old replay transport. No native candidate runs inside the modeling service.
+    The overlays are the cumulative reviewed units staging, so Model4 revisions with
+    typed unit declarations are materialized exactly as the producer image builds them.
     """
     def docker(self,*args,check=True):
         result=subprocess.run(['docker',*args],env=guard.clean_environment(self.scope),capture_output=True,text=True,timeout=60)
@@ -237,9 +322,8 @@ class NativeJourney(Journey):
         import secrets,time
         from hyprn_mvp_app.store import Store,uid
         from hyprn_mvp_integration.calculation import NativeExecution
-        sys.path.insert(0,str(REPO/'modeling/tests'))
-        from test_assumptions import harness,PATCHES
-        _,stage,image=harness.__wrapped__()
+        from units_model_fixture import stage_sources
+        _,stage,image=stage_sources()
         # Scoped names: hyprn-mvp-test-<scope8>-<role>.
         base=guard.SCOPE_PREFIX+self.scope.run_uuid[:8]
         self.name=base+'-modeling'
@@ -252,11 +336,12 @@ class NativeJourney(Journey):
         assert self.docker('network','inspect',self.network,check=False).returncode!=0
         self.docker('network','create','--internal','--label',self.label,self.network)
         self.network_created=True
-        mounts={'modeling_contract.rb':'app/services/modeling_contract.rb','modeling.schema.json':'config/modeling.schema.json','app/services/native_materializer.rb':'app/services/native_materializer.rb'}
-        mounts.update({name:'provenance-inputs/patches/'+name for name in PATCHES})
-        # Preserve the catalog authority exactly as staged by the production builder.
-        units=stage/'modeling.units.json'
-        if units.exists():mounts['modeling.units.json']='config/modeling.units.json'
+        mounts={'modeling_contract.rb':'app/services/modeling_contract.rb',
+            'modeling.schema.json':'config/modeling.schema.json',
+            'app/services/native_materializer.rb':'app/services/native_materializer.rb',
+            'app/services/native_program.rb':'app/services/native_program.rb',
+            'config/modeling.units.json':'config/modeling.units.json',
+            'provenance-inputs':'provenance-inputs'}
         args=['run','-d','--name',self.name,'--label',self.label,'--network',self.network,
             '--user','10001:10001','--read-only','--cap-drop','ALL',
             '--security-opt','no-new-privileges','--memory','768m','--pids-limit','128','--cpus','1',

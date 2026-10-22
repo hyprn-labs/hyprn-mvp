@@ -24,12 +24,65 @@ from hyprn_mvp_app.store import DomainError, canonical, uid, digest
 from test_assumption_authoring import env as base_env, PrivateTransport, command, url
 from test_assumptions_evidence_contracts import sample,D
 
-CATALOG = dict(schema_version='1',
-    catalog_digest='f9278b0e59aa2d410dcd14a2abc1306d3d18adcf9edbb433002f6466489939f3',
-    engine='OpenMDAO', engine_version='3.45.1',
+CATALOG = dict(
+    schema_version='1',
+    catalog_digest='9453b65bb997da3568956a53125f53ec83521c5b78d014fde8d15b4538c81f45',
+    engine='OpenMDAO',
+    engine_version='3.45.1',
     engine_source_sha256='9a812f46a371f9d10b5b17e9a21e5024b1c753ebfcee42d0e628eca4dcf3ba92',
-    supported_units=['m','km','cm','mm','s','min','h','kg','g','N','Pa','kPa','MPa','K','degC','degF','rad','deg','m/s','km/h','J/kg','kJ/kg','MJ/kg','kg/m**3','g/cm**3','m**2','cm**2','mm**2'],
-    affine_conversion=False)
+    supported_units=[
+        'm',
+        'km',
+        'cm',
+        'mm',
+        's',
+        'min',
+        'h',
+        'kg',
+        'g',
+        'N',
+        'Pa',
+        'kPa',
+        'MPa',
+        'K',
+        'degC',
+        'degF',
+        'rad',
+        'deg',
+        'm/s',
+        'km/h',
+        'J/kg',
+        'kJ/kg',
+        'MJ/kg',
+        'kg/m**3',
+        'g/cm**3',
+        'm**2',
+        'cm**2',
+        'mm**2',
+        'm**3',
+        'cm**3',
+        'mm**3',
+        'kg/m**2',
+        'g/m**2',
+        '1/m**2',
+        'J/(kg*K)',
+        'kJ/(kg*K)',
+        'J',
+        'kJ',
+        'MJ',
+        'W',
+        'kW',
+        'MW',
+        'm**3/s',
+        'kg/s',
+        'm/s**2',
+        'N*m',
+        'W/(m*K)',
+        'W/(m**2*K)',
+    ],
+    affine_conversion=False,
+)
+
 
 class UnitTransport(PrivateTransport):
     def __init__(self, store, sid):
@@ -238,7 +291,7 @@ def test_private_catalog_stream_bound_applies_before_json_parsing(monkeypatch,si
     envelope=canonical(dict(schema_version='1',request_id=uid(),data=CATALOG))
     raw=envelope+b' '*(size-len(envelope))
     parsed=[];loads=json.loads
-    def observed_loads(value):parsed.append(len(value));return loads(value)
+    def observed_loads(value):parsed.append(bytes(value));return loads(value)
     class Stream:
         status_code=200
         def __enter__(self):return self
@@ -258,7 +311,10 @@ def test_private_catalog_stream_bound_applies_before_json_parsing(monkeypatch,si
     client=ModelingClient('http://private.invalid/modeling/1',b't'*32)
     if size==16384:
         assert client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse1')[1]['data']==CATALOG
-        assert parsed==[16384]
+        # The bounded stream body is parsed exactly once; the only other parse is the
+        # schema check's canonical snapshot of that already-parsed value, never stream bytes.
+        snapshot=json.dumps(loads(raw),sort_keys=True,ensure_ascii=True,allow_nan=False,separators=(',',':')).encode()
+        assert parsed[0]==raw and len(parsed[0])==16384 and parsed[1:]==[snapshot]
     else:
         with pytest.raises(DomainError) as error:client.call(uid(),uid(),'GET','/unit-catalog',response_schema='UnitCatalogResponse1')
         assert error.value.status==503 and parsed==[]
@@ -363,3 +419,25 @@ def test_quantity_reader_adoption_keeps_legacy_semantic_source_guard(env):
     with pytest.raises(DomainError) as error:
         env['coord'].read(env['actor'],env['sid'],env['mid'],response_schema='ModelDraftResponse')
     assert error.value.code=='backend_unavailable'
+
+
+def test_model_format_discovery_and_creation_diagnostic(env):
+    enable_quantity(env)
+    caps = env['client'].get('/api/1/capabilities').json()['data']
+    assert caps['model_formats'] == dict(
+        create_request=['3'], edit_request=['4'], saved_record=['4']
+    )
+    reply = env['client'].post(
+        '/api/1/studies/' + env['sid'] + '/models',
+        json=dict(
+            command_id=uid(),
+            expected_revision='token',
+            name='Model',
+            template='empty',
+            schema_version='4',
+        ),
+    )
+    assert reply.status_code == 400
+    fields = reply.json()['error']['fields']
+    assert len(fields) == 1 and fields[0]['path'] == '/schema_version'
+    assert 'Model creation accepts request format 3' in fields[0]['message']

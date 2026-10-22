@@ -3,6 +3,7 @@
 Serves actual Workspace/client/API/Auth/Store on an ephemeral guarded socket.
 Declared private modeling transport double exercises model authoring; no native or scientific execution.
 """
+
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -28,33 +29,36 @@ def configuration_case(data, kind):
     import base64
     from copy import deepcopy
     import hashlib
-    from execution_fixtures import fixture, runtime_fixture
+    from execution_fixtures import fixture, criteria_free_fixture, runtime_fixture
     from hyprn_mvp_app.store import uid, digest, canonical
     from hyprn_mvp_app.execution import Submissions, assemble_bundle, executable_digest
     from hyprn_mvp_app.history import projection
     from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
     from hyprn_mvp_app.modeling import validate
     store,actor,sid=data['store'],data['actor'],data['sid']
-    case=fixture();model=case['frozen']['model_snapshot'];config=case['frozen']['configuration'];prepared=case['prepared']
+    # A criteria-free case is a configuration 6 on a Model4 revision with a result-protocol-3 run;
+    # every other kind is a retained configuration that carries its own criteria.
+    criteria_free=kind.startswith('criteria-free')
+    case=criteria_free_fixture() if criteria_free else fixture();model=case['frozen']['model_snapshot'];config=case['frozen']['configuration'];prepared=case['prepared']
     previous_revision=model['model_revision_id']
     model.update(model_id=uid(),model_revision_id=uid(),originating_draft_revision=uid())
     study=store.study(actor,sid)
     evidence=store.add_evidence(actor,sid,uid(),dict(evidence_schema_version='3',title='Retained calibration E1',kind='note',content='Exact retained calibration observation',source_refs=['Inert reference'],resource_scope=dict(scope_version='1',kind='study',study_id=sid)))
     eid=evidence['evidence_version_id'];legacy=kind.startswith('legacy')
     if not legacy:
-        model.update(schema_version='2',assumptions=[dict(assumption_id=uid(),owner=dict(kind='model'),statement='Retained model condition',evidence_links=[dict(evidence_version_id=eid,relation='supports')]),dict(assumption_id=uid(),owner=dict(kind='instance',instance_id=model['instances'][0]['instance_id']),statement='Retained component condition',evidence_links=[])])
-    config.update(schema_version='2' if legacy else '3',configuration_id=uid(),configuration_revision_id=uid(),study_id=sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],name='Legacy residual' if kind=='legacy-residual' else 'Legacy explicit' if legacy else 'Retained AE configuration',context_source=dict(kind='current_study',expected_study_revision=study['revision']),derivation=None,context_snapshot=dict(description=study['description'],boundary=study['boundary'],notes=['Retained note with\nits own line break', 'Separate retained note']),evidence_snapshots=[evidence])
+        model.update(schema_version=model['schema_version'] if criteria_free else '2',assumptions=[dict(assumption_id=uid(),owner=dict(kind='model'),statement='Retained model condition',evidence_links=[dict(evidence_version_id=eid,relation='supports')]),dict(assumption_id=uid(),owner=dict(kind='instance',instance_id=model['instances'][0]['instance_id']),statement='Retained component condition',evidence_links=[])])
+    config.update(schema_version=config['schema_version'] if criteria_free else '2' if legacy else '3',configuration_id=uid(),configuration_revision_id=uid(),study_id=sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],name='Legacy residual' if kind=='legacy-residual' else 'Legacy explicit' if legacy else 'Criteria-free AE configuration' if criteria_free else 'Retained AE configuration',context_source=dict(kind='current_study',expected_study_revision=study['revision']),derivation=None,context_snapshot=dict(description=study['description'],boundary=study['boundary'],notes=['Retained note with\nits own line break', 'Separate retained note']),evidence_snapshots=[evidence])
     for item in config['inputs']:item['result_binding']=None
     if kind!='legacy-residual':config['inputs'][0]['provenance']['evidence_version_ids']=[eid]
     output=next(dict(instance_id=i['instance_id'],port_id=p['port_id']) for i in model['instances'] for d in model['definitions'] if d['definition_version_id']==i['definition_version_id'] for p in d['ports'] if p['direction']=='output')
-    config['criteria']=[dict(criterion_id=uid(),target=output,operator='le',threshold=500,units='',evidence_version_ids=[] if kind=='legacy-residual' else [eid])]
+    if not criteria_free:config['criteria']=[dict(criterion_id=uid(),target=output,operator='le',threshold=500,units='',evidence_version_ids=[] if kind=='legacy-residual' else [eid])]
     if kind=='grouped':
         model['assumptions'].append(dict(assumption_id=uid(),owner=deepcopy(model['assumptions'][1]['owner']),statement='Second retained component condition',evidence_links=[dict(evidence_version_id=eid,relation='context')]))
         config['criteria'][0].update(operator='eq',absolute_tolerance=0.01,relative_tolerance=0.001)
     if legacy:config["evidence_snapshots"]=[{k:evidence[k] for k in ("evidence_version_id","kind","content","source_refs")} ]
     if not legacy:
         config.update(assumptions=[dict(assumption_id=uid(),statement='Retained configuration condition',evidence_links=[dict(evidence_version_id=eid,relation='challenges')])],general_context_evidence_version_ids=[eid])
-        config['required_capabilities'].append('configuration_assumptions/1')
+        if 'configuration_assumptions/1' not in config['required_capabilities']:config['required_capabilities'].append('configuration_assumptions/1')
     model['digest']=digest({k:v for k,v in model.items() if k!='digest'})
     config['digest']=digest({k:v for k,v in config.items() if k!='digest'})
     case['frozen']['study_revision']=study['revision']
@@ -76,7 +80,11 @@ def configuration_case(data, kind):
     bundle=assemble_bundle(run['run_id'],prepared,case['files'],case['frozen'],runtime_fixture(),dict(schema_version='1',sources=[],mappings=[]))
     request=dict(run_id=run['run_id'],scope=sid,command_id=run['command_id'],payload_digest=store.receipt(actor,sid,'run',run['command_id'])['payload_digest'],bundle_digest=bundle['manifest']['bundle_digest'])
     outputs=[dict(target=dict(instance_id=i['instance_id'],port_id=p['port_id']),value=1.0,units=p['units'],availability='available',reason=None,producer_completed=True,assigned=True) for i in model['instances'] for d in model['definitions'] if d['definition_version_id']==i['definition_version_id'] for p in d['ports'] if p['direction']=='output']
-    results=dict(schema_version='1',run_id=run['run_id'],bundle_digest=request['bundle_digest'],execution=dict(state='finished',exit_code=0,message='Synthetic UI outcome; no scientific execution'),convergence=dict(state='not_applicable',diagnostics_ref=None),optimization=dict(termination='not_applicable',feasibility='not_applicable'),completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),outputs=outputs,criteria=[dict(criterion_id=c['criterion_id'],outcome='met',reason='Synthetic UI outcome') for c in config['criteria']],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
+    if criteria_free:
+        from criteria_free import outputs_of
+        outputs=[dict(target=o['target'],value=1.0,units=o['units'],availability='available',reason=None,producer_completed=True,assigned=True) for o in outputs_of(case)]
+        results=dict(schema_version='3',run_id=run['run_id'],bundle_digest=request['bundle_digest'],execution=dict(state='finished',exit_code=0,message='Synthetic UI outcome; no scientific execution'),outputs=outputs,artifacts=[])
+    else:results=dict(schema_version='1',run_id=run['run_id'],bundle_digest=request['bundle_digest'],execution=dict(state='finished',exit_code=0,message='Synthetic UI outcome; no scientific execution'),convergence=dict(state='not_applicable',diagnostics_ref=None),optimization=dict(termination='not_applicable',feasibility='not_applicable'),completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),outputs=outputs,criteria=[dict(criterion_id=c['criterion_id'],outcome='met',reason='Synthetic UI outcome') for c in config['criteria']],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
     association=dict(store_uuid=uid(),process_uuid=uid());payload=dict(actor=actor,frozen=deepcopy(case['frozen']),request=request,status=dict(process_state='finished',exit_status=0),bundle=dict(manifest=bundle['manifest'],files={p:base64.b64encode(raw).decode() for p,raw in bundle['files'].items()}))
     payload['history']=projection(payload,dict(request=request,bundle=bundle,results=results,assessment=None,artifacts={},errors=[])|association,association)
     with store.connection(write=True) as db:
@@ -85,9 +93,9 @@ def configuration_case(data, kind):
     transport=data['transport'];transport.revisions[model['model_revision_id']]=deepcopy(model)
     draft={k:deepcopy(v) for k,v in model.items() if k not in {'model_revision_id','parent_model_revision_id','originating_draft_revision','digest'}}
     draft.update(study_id=sid,name='Retained fixture model',draft_revision=model['originating_draft_revision'])
-    if kind=='unresolved':
+    if kind in ('unresolved','criteria-free-unresolved'):
         draft['assumptions'][0]['evidence_links'][0]['evidence_version_id']=uid();draft['draft_revision']=uid()
-    validate('ModelDraft',draft);transport.draft=draft;transport.sid=sid;transport.offline=False
+    validate('ModelDraft4' if criteria_free else 'ModelDraft',draft);transport.draft=draft;transport.sid=sid;transport.offline=False
     data['props']=dict(mid=model['model_id'],revision=model,instances=model['instances'])
     return dict(sid=sid,mid=model['model_id'],rid=run['run_id'],saved=case['frozen'],evidence=evidence,fixture='Inert captured program; synthetic UI outcome only')
 
@@ -115,7 +123,7 @@ def run(*, group):
             if self.path == '/fixture/configuration-case' and self.command == 'POST' and group in {'ae-ui-configuration', 'ae-ui'}:
                 guard.scope_from_environment()
                 control = json.loads(self.rfile.read(length))
-                if control not in ({'kind':'current'}, {'kind':'legacy'}, {'kind':'legacy-residual'}, {'kind':'unresolved'}, {'kind':'grouped'}):
+                if control not in ({'kind':'current'}, {'kind':'legacy'}, {'kind':'legacy-residual'}, {'kind':'unresolved'}, {'kind':'grouped'}, {'kind':'criteria-free'}, {'kind':'criteria-free-unresolved'}):
                     return self.respond(400, b'Invalid scenario', 'text/plain')
                 value = configuration_case(data, control['kind'])
                 return self.respond(200, json.dumps(value).encode(), 'application/json')
@@ -126,7 +134,15 @@ def run(*, group):
                     data['transport'].offline = control['offline']
                 elif control == {'stale_study':True}:
                     study=data['store'].study(data['actor'],data['sid'])
-                    data['store'].update_study(data['actor'],data['sid'],uid(),study['revision'],dict(description='Concurrent study context'))
+                    from legacy_study_support import seed_legacy_context
+                    seed_legacy_context(
+                        data['store'],
+                        data['actor'],
+                        data['sid'],
+                        uid(),
+                        study['revision'],
+                        dict(description='Concurrent study context'),
+                    )
                 else: return self.respond(400, b'Invalid control', 'text/plain')
                 return self.respond(200, b'{}', 'application/json')
             if self.path == '/fixture/configuration-counts' and self.command == 'GET':
@@ -146,9 +162,33 @@ def run(*, group):
                         db.execute('DELETE FROM memberships WHERE study_id=? AND actor_id=?', (data['sid'], data['actor']))
                 return self.respond(200, b'{}', 'application/json')
             if self.path.startswith('/api/1/'):
-                # Only session and evidence writes are needed by this scaffold.
+                # Evidence tests attach sources through the real brief draft API.
                 route = urlsplit(self.path).path
-                writable = route == '/api/1/session' or (group == 'ae-ui' and (route == '/api/1/studies' or route.endswith('/model-imports'))) or route.endswith('/evidence') or (group in {'ae-ui-configuration','ae-ui'} and route.endswith('/configurations')) or '/evidence-families/' in route or (group != 'ae-ui-evidence' and any(route.endswith('/' + operation) for operation in ('preview', 'edits', 'commits')))
+                writable = (
+                    route == '/api/1/session'
+                    or (
+                        group == 'ae-ui'
+                        and (route == '/api/1/studies' or route.endswith('/model-imports'))
+                    )
+                    or (group == 'ae-ui-evidence' and route == f"/api/1/studies/{data['sid']}/brief/draft")
+                    or route.endswith('/evidence')
+                    or (
+                        group in {'ae-ui-configuration', 'ae-ui'}
+                        and route.endswith('/configurations')
+                    )
+                    or '/evidence-families/' in route
+                    or (
+                        group != 'ae-ui-evidence'
+                        and any(
+                            route.endswith('/' + operation)
+                            for operation in ('preview', 'edits', 'commits')
+                        )
+                    )
+                    or (
+                        group != 'ae-ui-evidence'
+                        and route.endswith(('/explanation/draft', '/explanation/versions'))
+                    )
+                )
                 if self.command != 'GET' and not writable:
                     return self.respond(403, b'Operation outside the bounded AE browser fixture', 'text/plain')
                 from fastapi.testclient import TestClient
@@ -193,6 +233,9 @@ def run(*, group):
             class BrowserTransport(PrivateTransport):
                 # Exact typed response double, not the native model producer.
                 offline = False
+                # Concurrent HTTP reads can briefly write auth/receipt metadata. Wait for
+                # those independent commits; a lock held across this call still fails.
+                lock_probe_timeout = 2
                 def __call__(self, method, path, raw, headers):
                     if self.offline: raise OSError('Declared private modeling outage')
                     if method == 'GET' and path.endswith('/unit-catalog'):
@@ -293,6 +336,19 @@ def run(*, group):
             draft['instances'].append(dict(instance_id=uid(),definition_version_id=definition['definition_version_id'],name='Component B'))
             draft.update(source_files=[source],annotations=[dict(element_ref=draft['instances'][1]['instance_id'],text='Original component note.')],ports=[],connections=[],boundary_mappings=[],assumptions=[],required_capabilities=[])
             validate('ModelDraft2',draft)
+            if group == 'ae-ui-configuration':
+                # New configurations (version 6) need a Model4 revision with typed units and the
+                # criteria-free capability beside resolved_configuration 3.
+                from criteria_free import CRITERIA_FREE_CAPABILITY
+                draft.update(schema_version='4',required_capabilities=['unit_declarations/1','quantity_definitions/1'])
+                for item in draft['definitions']:
+                    item['quantity_definitions']=[]
+                    for port in item['ports']:port['units']=dict(kind='dimensionless')
+                draft['ports']=[deepcopy(port) for item in draft['definitions'] for port in item['ports']]
+                validate('ModelDraft4',draft)
+                transport.caps['contract_versions'].append('1.4');transport.caps['schema_versions'].append('4')
+                transport.caps['capabilities'].append({**transport.caps['capabilities'][0],'id':'quantity_definitions','version':'1'})
+                transport.caps['capabilities'].append(deepcopy(CRITERIA_FREE_CAPABILITY))
             frozen=revision(draft);transport.revisions[frozen['model_revision_id']]=frozen
             with data['store'].connection(write=True) as db:
                 db.execute('INSERT INTO model_associations VALUES(?,?,?)',(data['sid'],draft['model_id'],uid()))
@@ -305,7 +361,7 @@ def run(*, group):
         (stage / 'tsconfig.json').write_text('{"compilerOptions":{"jsx":"react-jsx"}}')
         (stage / 'index.html').write_text('<!doctype html><html data-theme="light"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module" src="/entry.tsx"></script></body></html>')
         imports = 'import {createRoot} from "react-dom/client";\nimport {useState,useRef} from "react";\n'
-        for symbol, module in [('Workspace','Workspace'), ('HyprnMvpApi','api'), ('EvidencePicker','EvidencePicker'), ('EvidenceReferences','EvidenceView'), ('Button','design'), ('checkPackage','exports'), ('Assumptions','Assumptions'), ('ConnectedViews','GraphView'), ('ConfigurationPanel','ConfigurationPanel')]:
+        for symbol, module in [('Workspace','Workspace'), ('ContextWorkspace','ContextDetails'), ('HyprnMvpApi','api'), ('EvidencePicker','EvidencePicker'), ('EvidenceReferences','EvidenceView'), ('Button','design'), ('checkPackage','exports'), ('Assumptions','Assumptions'), ('ConnectedViews','GraphView'), ('ConfigurationPanel','ConfigurationPanel')]:
             imports += 'import {' + symbol + '} from ' + json.dumps(str(REPO/'ui/src'/module)) + ';\n'
         imports += ''.join('import '+json.dumps(str(REPO/'ui/src'/p))+';\n' for p in ('design/tokens.css','design/foundry.css','styles.css'))
         # This harness exercises actual shared components and API, not yet-integrated
@@ -318,18 +374,18 @@ function Harness() {
   const [attached,setAttached]=useState([]),[records,setRecords]=useState([]),[relation,setRelation]=useState('');
   const sid=SID;
   window.aeHarness = {close:()=>setOpen(false),owner:(value)=>setOwner(value)};
-  return <main><h1>Shared evidence component fixture</h1><p>Local draft target only; no model or configuration is saved.</p>
+  return <ContextWorkspace api={api} studyId={sid} identity={sid+owner} navigation={null}><main><h1>Shared evidence component fixture</h1><p>Local draft target only; no model or configuration is saved.</p>
     {!ready ? <Button onClick={async()=>{await api.login('owner','correct horse battery staple');setReady(true);}}>Fixture sign in</Button> : <>
       <Button onClick={()=>setOpen(true)}>Add evidence</Button><p>Attached versions: {attached.length}; relationship: {relation}</p>
       <EvidenceReferences records={records} ids={attached}/>
       {open && <EvidencePicker api={api} studyId={sid} label={owner} ownerKey={owner} assumption={!location.search.includes('general')} scope={{scope_version:'1',kind:'study',study_id:sid}} onRecords={setRecords} onClose={()=>setOpen(false)} onAttach={(record,link)=>{setRecords(old=>[record,...old]);setAttached(old=>[...old,record.evidence_version_id]);setRelation(link||'');setOpen(false);}}/>}
     </>}
-  </main>;
+  </main></ContextWorkspace>;
 }
 function ConfigurationHarness() {
   const [data,setData]=useState(null),handle=useRef(null);
   window.aeConfiguration={copy:(id)=>api.configuration(SID,id).then(value=>handle.current.copy(value.configuration,value.model_snapshot)),discard:()=>handle.current.discard()};
-  return <main><h1>Configuration owner isolation fixture</h1>{!data ? <Button onClick={async()=>{await api.login("owner","correct horse battery staple");const props=await (await fetch("/fixture")).json();const [study,model]=await Promise.all([api.study(SID),api.model(SID,props.mid)]);setData({study,model,revision:props.revision});}}>Fixture sign in</Button> : <ConfigurationPanel api={api} model={data.model} study={data.study} initialRevision={data.revision} authoringDirty={false} activeRun={false} onSubmit={async()=>{throw Error("No run in this fixture");}} onHandle={value=>handle.current=value} onEvidenceRecords={()=>{}}/>}</main>;
+  return <ContextWorkspace api={api} studyId={SID} identity={SID} navigation={null}><main><h1>Configuration owner isolation fixture</h1>{!data ? <Button onClick={async()=>{await api.login("owner","correct horse battery staple");const props=await (await fetch("/fixture")).json();const [study,model]=await Promise.all([api.study(SID),api.model(SID,props.mid)]);setData({study,model,revision:props.revision});}}>Fixture sign in</Button> : <ConfigurationPanel api={api} model={data.model} study={data.study} initialRevision={data.revision} authoringDirty={false} activeRun={false} onSubmit={async()=>{throw Error("No run in this fixture");}} onHandle={value=>handle.current=value} onEvidenceRecords={()=>{}}/>}</main></ContextWorkspace>;
 }
 createRoot(document.getElementById('root')).render(location.search.includes('configuration-harness') ? <ConfigurationHarness/> : location.search.includes('harness') ? <Harness/> : <Workspace/>);
 '''.replace('SID', json.dumps(data['sid']))

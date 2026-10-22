@@ -1,3 +1,5 @@
+import { OpenLink } from './navigation';
+import { Select } from './select';
 import { formatNumber } from './numbers';
 /*
  * HYPRN MVP Foundry components: the typed React 19 implementation of the design system
@@ -21,7 +23,14 @@ import { formatNumber } from './numbers';
  *
  * This layer imports no CSS: main.tsx imports tokens.css and then foundry.css once.
  */
-import type { ButtonHTMLAttributes, Ref, ChangeEvent, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  Ref,
+  ChangeEvent,
+  KeyboardEvent,
+  ReactElement,
+  ReactNode,
+} from 'react';
 
 export type Tone = 'alarm' | 'warning' | 'advisory' | 'ok' | 'inert' | 'running';
 
@@ -35,7 +44,8 @@ function isBlank(value: unknown): boolean {
 
 /* ---- Independently authored glyphs (24-unit viewBox, currentColor) ---- */
 
-type GlyphName = 'lock' | 'back' | 'document' | 'iris' | 'computed' | 'measured' | 'sourced' | 'inferred';
+type GlyphName =
+  'lock' | 'back' | 'document' | 'iris' | 'computed' | 'measured' | 'sourced' | 'inferred';
 
 function Glyph({ name }: { name: GlyphName }): ReactElement {
   let body: ReactElement;
@@ -55,7 +65,13 @@ function Glyph({ name }: { name: GlyphName }): ReactElement {
     case 'sourced':
       body = (
         <>
-          <path d="M6 3h8l4 4v14H6z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" />
+          <path
+            d="M6 3h8l4 4v14H6z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="miter"
+          />
           <path d="M9 12h6M9 16h6" fill="none" stroke="currentColor" strokeWidth="2" />
         </>
       );
@@ -80,7 +96,17 @@ function Glyph({ name }: { name: GlyphName }): ReactElement {
       );
       break;
     case 'inferred':
-      body = <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2.5" />;
+      body = (
+        <circle
+          cx="12"
+          cy="12"
+          r="7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeDasharray="3 2.5"
+        />
+      );
       break;
   }
   return (
@@ -108,6 +134,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
   /** primary: once per view · secondary: default · quiet: inline/tertiary · ai: apply an assistant proposal · danger: inside a confirmation only */
   variant?: 'primary' | 'secondary' | 'quiet' | 'ai' | 'danger';
+  /** Text alignment and stacked content are explicit compositions, not screen overrides. */
+  align?: 'center' | 'start';
+  stacked?: boolean;
+  iconOnly?: boolean;
   /** desk 36px (default) · sm 28px · floor 48px for touch displays */
   size?: 'desk' | 'sm' | 'floor';
   /** Icon element (for example an inline SVG); decorative, so icon-only buttons need aria-label */
@@ -115,12 +145,31 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** The one button. primary at most once per view; ai only to apply an assistant proposal; danger only inside a confirmation. */
-export function Button({ variant = 'secondary', size = 'desk', icon, className, children, type, ...rest }: ButtonProps): ReactElement {
+export function Button({
+  variant = 'secondary',
+  size = 'desk',
+  align = 'center',
+  stacked = false,
+  iconOnly = false,
+  icon,
+  className,
+  children,
+  type,
+  ...rest
+}: ButtonProps): ReactElement {
   return (
     <button
       type={type ?? 'button'}
       {...rest}
-      className={cx('hf-btn', 'hf-btn--' + variant, size !== 'desk' && 'hf-btn--' + size, className)}
+      className={cx(
+        'hf-btn',
+        'hf-btn--' + variant,
+        'hf-btn--' + size,
+        align === 'start' && 'hf-btn--start',
+        stacked && 'hf-btn--stacked',
+        (iconOnly || (!!icon && !children)) && 'hf-btn--icon',
+        className,
+      )}
     >
       {icon ? <Icon>{icon}</Icon> : null}
       {children}
@@ -160,7 +209,12 @@ export interface FieldProps {
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
   onUnitChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
   className?: string;
-  inputProps?: { type?: 'number' | 'text'; step?: string; 'aria-label'?: string; 'data-input-key'?: string };
+  inputProps?: {
+    type?: 'number' | 'text';
+    step?: string;
+    'aria-label'?: string;
+    'data-input-key'?: string;
+  };
 }
 
 function noop(): void {}
@@ -170,7 +224,12 @@ export function Field(p: FieldProps): ReactElement {
   const blank = isBlank(p.value);
   const declared: FieldState = p.state ?? 'assigned';
   const state: FieldState = blank && declared === 'assigned' ? 'unassigned' : declared;
-  const id = p.id ?? 'hf-' + String(p.label || 'field').replace(/\W+/g, '-').toLowerCase();
+  const id =
+    p.id ??
+    'hf-' +
+      String(p.label || 'field')
+        .replace(/\W+/g, '-')
+        .toLowerCase();
   const tag = blank && state !== 'invalid' ? FIELD_TAG.unassigned : FIELD_TAG[state];
   const units = p.units ?? [p.unit ?? '1'];
   const msgId = p.message ? id + '-msg' : undefined;
@@ -195,22 +254,35 @@ export function Field(p: FieldProps): ReactElement {
     state === 'readonly' || units.length < 2 ? (
       <span className="hf-field__unit">{p.unit ?? units[0]}</span>
     ) : (
-      <select value={p.unit ?? units[0]} onChange={p.onUnitChange ?? noop} aria-label={'Unit of ' + (p.label || 'value')}>
+      <Select
+        value={p.unit ?? units[0]}
+        onChange={p.onUnitChange ?? noop}
+        aria-label={'Unit of ' + (p.label || 'value')}
+      >
         {units.map((u) => (
           <option key={u} value={u}>
             {u}
           </option>
         ))}
-      </select>
+      </Select>
     );
   return (
-    <div className={cx('hf-field', 'hf-field--' + state, p.compact && 'hf-field--compact', p.className)}>
+    <div
+      className={cx(
+        'hf-field',
+        'hf-field--' + state,
+        p.compact && 'hf-field--compact',
+        p.className,
+      )}
+    >
       <label className={cx('hf-field__label', p.compact && 'hf-visually-hidden')} htmlFor={id}>
         <span className="hf-mono">{p.label}</span>
         {p.meaning ? <span className="hf-muted hf-field__meaning">{p.meaning}</span> : null}
-        {!p.compact && <span className="hf-field__tag">
-          <StatusTag tone={tag[0]}>{tag[1]}</StatusTag>
-        </span>}
+        {!p.compact && (
+          <span className="hf-field__tag">
+            <StatusTag tone={tag[0]}>{tag[1]}</StatusTag>
+          </span>
+        )}
       </label>
       <div className="hf-field__row">
         {input}
@@ -259,11 +331,16 @@ export function Tabs(p: TabsProps): ReactElement {
     if (next < 0) return;
     e.preventDefault();
     p.onChange?.(items[next].id);
-    const siblings = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    const siblings =
+      e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     siblings?.[next]?.focus();
   };
   return (
-    <div role={p.navigation ? "navigation" : "tablist"} aria-label={p.label} className={cx('hf-tabs', p.variant === 'segmented' && 'hf-tabs--segmented', p.className)}>
+    <div
+      role={p.navigation ? 'navigation' : 'tablist'}
+      aria-label={p.label}
+      className={cx('hf-tabs', p.variant === 'segmented' && 'hf-tabs--segmented', p.className)}
+    >
       {items.map((it, index) => {
         const sel = it.id === p.value;
         return (
@@ -271,9 +348,9 @@ export function Tabs(p: TabsProps): ReactElement {
             key={it.id}
             type="button"
             id={it.tabId}
-            role={p.navigation ? undefined : "tab"}
+            role={p.navigation ? undefined : 'tab'}
             aria-controls={p.navigation ? undefined : it.panelId}
-            aria-current={p.navigation && sel ? "page" : undefined}
+            aria-current={p.navigation && sel ? 'page' : undefined}
             className="hf-tab"
             aria-selected={p.navigation ? undefined : sel ? 'true' : 'false'}
             tabIndex={p.navigation || sel ? 0 : -1}
@@ -292,6 +369,7 @@ export function Tabs(p: TabsProps): ReactElement {
 /* ---- Panel ---- */
 
 export interface PanelProps {
+  help?: ReactNode;
   ref?: Ref<HTMLElement>;
   id?: string;
   hidden?: boolean;
@@ -309,14 +387,23 @@ export interface PanelProps {
 export function Panel(p: PanelProps): ReactElement {
   const Heading = ('h' + (p.headingLevel ?? 2)) as 'h2' | 'h3' | 'h4';
   return (
-    <section ref={p.ref} id={p.id} hidden={p.hidden} className={cx('hf-panel', p.tone === 'sunken' && 'hf-panel--sunken', p.className)} aria-label={p.label}>
+    <section
+      ref={p.ref}
+      id={p.id}
+      hidden={p.hidden}
+      className={cx('hf-panel', p.tone === 'sunken' && 'hf-panel--sunken', p.className)}
+      aria-label={p.label}
+    >
       {p.title ? (
         <header className="hf-panel__head">
-          <Heading className="hf-panel__title">{p.title}</Heading>
+          <div className="hf-heading-group">
+            <Heading className="hf-panel__title">{p.title}</Heading>
+            {p.help}
+          </div>
           {p.actions ? <div className="hf-panel__actions">{p.actions}</div> : null}
         </header>
       ) : null}
-      <div className={cx("hf-panel__body", p.bodyClassName)}>{p.children}</div>
+      <div className={cx('hf-panel__body', p.bodyClassName)}>{p.children}</div>
     </section>
   );
 }
@@ -392,6 +479,8 @@ export interface ReadoutProps {
   source?: string;
   size?: 'lg' | 'sm';
   missingText?: string;
+  /** Shared column sizing; numbers remain unbroken and right aligned. */
+  presentation?: 'label' | 'compact' | 'formula';
   className?: string;
 }
 
@@ -406,13 +495,18 @@ export function Readout(p: ReadoutProps): ReactElement {
       {missing ? (
         <span className="hf-readout__missing">{p.missingText || 'not computed'}</span>
       ) : (
-        <span className="hf-readout__value" title={typeof p.value === 'number' ? `Full precision: ${p.value}` : undefined}>
+        <span
+          className="hf-readout__value"
+          title={typeof p.value === 'number' ? `Full precision: ${p.value}` : undefined}
+        >
           {typeof p.value === 'number' ? formatNumber(p.value) : String(p.value)}
           {p.unit ? <span className="hf-readout__unit">{p.unit}</span> : null}
         </span>
       )}
       {p.source ? (
-        <span className={cx('hf-readout__basis', basis === 'inferred' && 'hf-readout__basis--inferred')}>
+        <span
+          className={cx('hf-readout__basis', basis === 'inferred' && 'hf-readout__basis--inferred')}
+        >
           <Icon>
             <Glyph name={b[0]} />
           </Icon>
@@ -479,17 +573,10 @@ export function SourceChip(p: SourceChipProps): ReactElement {
       <span className={'hf-chip__auth hf-chip__auth--' + auth} aria-label={auth + ' source'} />
     </>
   );
-  if (p.href) {
-    return (
-      <a className={cx('hf-chip', p.className)} href={p.href} onClick={p.onClick} title={auth + ' source'}>
-        {content}
-      </a>
-    );
-  }
-  return (
-    <button type="button" className={cx('hf-chip', p.className)} onClick={p.onClick} title={auth + ' source'}>
-      {content}
-    </button>
+  return p.href ? (
+    <OpenLink size="sm" href={p.href} className={cx('hf-chip', p.className)} onClick={p.onClick} title={auth + ' source'}>{content}</OpenLink>
+  ) : (
+    <OpenLink size="sm" className={cx('hf-chip', p.className)} onClick={p.onClick} title={auth + ' source'}>{content}</OpenLink>
   );
 }
 
@@ -519,9 +606,13 @@ export interface InferenceBlockProps {
 export function InferenceBlock(p: InferenceBlockProps): ReactElement {
   const kind = p.kind ?? 'Proposal';
   const st = PSTATE[p.status ?? 'proposed'];
-  const titleText = typeof p.title === 'string' || typeof p.title === 'number' ? String(p.title) : '';
+  const titleText =
+    typeof p.title === 'string' || typeof p.title === 'number' ? String(p.title) : '';
   return (
-    <section className={cx('hf-infer', p.className)} aria-label={titleText ? kind + ': ' + titleText : kind}>
+    <section
+      className={cx('hf-infer', p.className)}
+      aria-label={titleText ? kind + ': ' + titleText : kind}
+    >
       <header className="hf-infer__head">
         <span className="hf-infer__mark" aria-hidden="true">
           <Icon>
@@ -570,9 +661,9 @@ export function RecordBar(p: RecordBarProps): ReactElement {
         {p.detail ? <> · {p.detail}</> : null}
       </span>
       {p.onReturn || p.returnLabel ? (
-        <Button size="sm" onClick={p.onReturn} icon={<Glyph name="back" />}>
+        <OpenLink size="sm" direction="back" onClick={p.onReturn}>
           {p.returnLabel || 'Return to current model'}
-        </Button>
+        </OpenLink>
       ) : null}
     </div>
   );
@@ -582,9 +673,45 @@ export function RecordBar(p: RecordBarProps): ReactElement {
 
 export type PortState = 'connected' | 'free' | 'output' | 'unassigned';
 
-const PORT: Record<PortState, string> = { connected: 'Connected', free: 'Input', output: 'Output', unassigned: 'Needs value' };
+/** Direction is independent of selection, provenance and scientific status. */
+export function QuantityDirection({
+  direction,
+  connected = false,
+  relationship,
+}: {
+  direction: 'input' | 'output' | 'residual';
+  connected?: boolean;
+  relationship?: string;
+}) {
+  return (
+    <span className="hf-quantity-direction" title={relationship}>
+      <span
+        aria-hidden="true"
+        className={cx(
+          'hf-direction-mark',
+          'hf-direction-mark--' + direction,
+          connected && 'hf-direction-mark--connected',
+        )}
+      />
+      {direction === 'input' ? 'Input' : direction === 'output' ? 'Output' : 'Residual'}
+      {connected && (
+        <span className="sr-only"> · connected{relationship ? ' · ' + relationship : ''}</span>
+      )}
+    </span>
+  );
+}
+
+const PORT: Record<PortState, string> = {
+  connected: 'Connected',
+  free: 'Input',
+  output: 'Output',
+  unassigned: 'Needs value',
+};
 
 export interface ModelNodePort {
+  highlighted?: boolean;
+  relationship?: string;
+  content?: ReactNode;
   name: string;
   dir: 'in' | 'out';
   state?: PortState;
@@ -611,28 +738,132 @@ export interface ModelNodeProps {
 
 /** A component in the graph view: name, ports and definition version. */
 export function ModelNode(p: ModelNodeProps): ReactElement {
+  const exploring = p.ports?.some((port) => port.content);
+  const renderPort = (pt: ModelNodePort) => {
+    const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
+    const control = (
+      <Button
+        size="sm"
+        align="start"
+        className="hf-node__port"
+        data-port={pt.id}
+        title={pt.title}
+        aria-pressed={pt.selected ?? false}
+        onClick={pt.onSelect}
+      >
+        {pt.content ? (
+          <span>{pt.name}</span>
+        ) : (
+          <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+        )}
+        <span className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}>
+          {st === 'unassigned' ? <Mark tone="advisory" /> : null}
+          {pt.content ? null : PORT[st]}
+        </span>
+      </Button>
+    );
+    return (
+      <div
+        key={pt.id ?? pt.dir + pt.name}
+        className={pt.content ? 'hf-node__exploration-port' : undefined}
+        data-direction={pt.content ? pt.dir : undefined}
+        data-quantity={pt.content ? pt.id : undefined}
+        data-active={pt.selected || undefined}
+      >
+        {pt.content && pt.dir === 'in' ? null : control}
+        {pt.content}
+      </div>
+    );
+  };
   return (
-    <div className={cx('hf-node', p.status && 'hf-node--' + p.status, p.className)} data-selected={p.selected || undefined}>
-      <Button className="hf-node__head" data-instance={p.instanceId} title={p.title}
-        aria-pressed={p.nameSelected ?? p.selected ?? false} onClick={p.onSelect}>
+    <div
+      className={cx('hf-node', p.status && 'hf-node--' + p.status, p.className)}
+      data-selected={p.selected || undefined}
+    >
+      <Button
+        size="floor"
+        align="start"
+        className="hf-node__head"
+        data-instance={p.instanceId}
+        title={p.title}
+        aria-pressed={p.nameSelected ?? p.selected ?? false}
+        onClick={p.onSelect}
+      >
         {p.index != null ? <span className="hf-node__idx">{p.index}</span> : null}
         <span className="hf-node__name">{p.name}</span>
       </Button>
-      {(p.ports ?? []).map((pt) => {
-        const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
-        return <Button key={pt.id ?? pt.dir + pt.name} className="hf-node__port" data-port={pt.id} title={pt.title}
-          aria-pressed={pt.selected ?? false} onClick={pt.onSelect}>
-          <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
-          <span className={cx('hf-node__state', st === 'unassigned' && 'hf-node__state--unassigned')}>
-            {st === 'unassigned' ? <Mark tone="advisory" /> : null}{PORT[st]}
-          </span>
-        </Button>;
-      })}
-      {(p.definition || p.status) && <div className="hf-node__foot">
-        {p.definition}
-        {p.status === 'incomplete' ? <StatusTag tone="advisory">implementation missing</StatusTag> : null}
-        {p.status === 'proposed' ? <StatusTag tone="inert">proposed</StatusTag> : null}
-      </div>}
+      {exploring ? (
+        <div
+          className="hf-node__port-columns"
+          role="region"
+          aria-label={p.name + ' quantities'}
+          tabIndex={0}
+        >
+          {(['in', 'out'] as const).map((dir) => (
+            <div
+              key={dir}
+              className="hf-node__port-column"
+              aria-label={p.name + (dir === 'in' ? ' inputs' : ' outputs')}
+            >
+              {(p.ports ?? []).filter((pt) => pt.dir === dir).map(renderPort)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        (p.ports ?? []).map((pt) => {
+          const st: PortState = pt.state ?? (pt.dir === 'out' ? 'output' : 'free');
+          const control = (
+            <Button
+              size="floor"
+              align="start"
+              key={pt.id ?? pt.dir + pt.name}
+              className="hf-node__port"
+              data-port={pt.id}
+              data-highlighted={pt.highlighted || undefined}
+              title={pt.title}
+              aria-pressed={pt.selected ?? false}
+              onClick={pt.onSelect}
+            >
+              {pt.content ? (
+                <span>{pt.name}</span>
+              ) : (
+                <code>{pt.dir === 'out' ? pt.name + ' →' : '→ ' + pt.name}</code>
+              )}
+              <span
+                className={cx(
+                  'hf-node__state',
+                  st === 'unassigned' && 'hf-node__state--unassigned',
+                )}
+              >
+                {st === 'unassigned' ? <Mark tone="advisory" /> : null}
+                <QuantityDirection
+                  direction={pt.dir === 'in' ? 'input' : 'output'}
+                  connected={st === 'connected'}
+                  relationship={pt.relationship}
+                />
+                {st === 'unassigned' && ' · Needs value'}
+              </span>
+            </Button>
+          );
+          return pt.content ? (
+            <div key={pt.id ?? pt.dir + pt.name} className="hf-node__exploration-port">
+              {control}
+              {pt.content}
+            </div>
+          ) : (
+            control
+          );
+        })
+      )}
+      {(p.definition || p.status) && (
+        <div className="hf-node__foot">
+          {p.definition}
+          {p.status === 'incomplete' ? (
+            <StatusTag tone="advisory">implementation missing</StatusTag>
+          ) : null}
+          {p.status === 'proposed' ? <StatusTag tone="inert">proposed</StatusTag> : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -645,6 +876,8 @@ export interface DataTableColumn {
   numeric?: boolean;
   unit?: boolean;
   missingText?: string;
+  /** Shared column sizing; numbers remain unbroken and right aligned. */
+  presentation?: 'label' | 'compact' | 'formula';
 }
 
 export interface DataTableProps {
@@ -663,40 +896,95 @@ export interface DataTableProps {
 export function DataTable(p: DataTableProps): ReactElement {
   const cols = p.columns ?? [];
   return (
-    <div className="hf-table-wrap" role={p.regionLabel ? "region" : undefined} aria-label={p.regionLabel} tabIndex={p.regionLabel ? 0 : undefined}>
-      <table aria-label={p.label} className={cx('hf-table', p.dense && 'hf-table--dense', p.className)}>
+    <div
+      className="hf-table-wrap"
+      role={p.regionLabel ? 'region' : undefined}
+      aria-label={p.regionLabel}
+      tabIndex={p.regionLabel ? 0 : undefined}
+    >
+      <table
+        aria-label={p.label}
+        className={cx('hf-table', p.dense && 'hf-table--dense', p.className)}
+      >
         {p.caption ? <caption className="hf-visually-hidden">{p.caption}</caption> : null}
-        {p.children ?? <><thead>
-          <tr>
-            {cols.map((c) => (
-              <th key={c.key} scope="col" className={c.numeric ? 'hf-th--num' : undefined}>
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {(p.rows ?? []).map((r, i) => (
-            <tr key={i} aria-selected={p.selected === i ? 'true' : undefined}>
-              {cols.map((c) => {
-                const v = r[c.key];
-                if (c.numeric && isBlank(v)) {
-                  return (
-                    <td key={c.key} className="missing">
-                      {c.missingText || 'not computed'}
-                    </td>
-                  );
-                }
-                return (
-                  <td key={c.key} className={c.numeric ? 'num' : c.unit ? 'unit' : undefined}>
-                    {v}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody></>}
+        {p.children ?? (
+          <>
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th
+                    key={c.key}
+                    scope="col"
+                    className={cx(
+                      c.numeric && 'hf-th--num',
+                      c.presentation && `hf-col--${c.presentation}`,
+                    )}
+                  >
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(p.rows ?? []).map((r, i) => (
+                <tr key={i} aria-selected={p.selected === i ? 'true' : undefined}>
+                  {cols.map((c) => {
+                    const v = r[c.key];
+                    if (c.numeric && isBlank(v)) {
+                      return (
+                        <td key={c.key} className="missing">
+                          {c.missingText || 'not computed'}
+                        </td>
+                      );
+                    }
+                    return (
+                      <td
+                        key={c.key}
+                        data-label={typeof c.label === 'string' ? c.label : undefined}
+                        className={cx(
+                          c.numeric ? 'num' : c.unit ? 'unit' : undefined,
+                          c.presentation && `hf-col--${c.presentation}`,
+                        )}
+                      >
+                        {v}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </>
+        )}
       </table>
     </div>
+  );
+}
+
+/** Storage and editability are separate from scientific outcome. */
+export function RecordState({
+  state,
+}: {
+  state: 'draft' | 'changed' | 'saved' | 'new';
+}): ReactElement {
+  const label = {
+    draft: 'Saved draft',
+    changed: 'Unsaved changes',
+    saved: 'Saved version · read-only',
+    new: 'New draft',
+  }[state];
+  if (state === 'saved')
+    return (
+      <span className="hf-tag hf-tag--inert hf-record-state">
+        <Glyph name="lock" />
+        Read-only
+      </span>
+    );
+  return (
+    <StatusTag
+      className="hf-record-state"
+      tone={state === 'changed' ? 'warning' : state === 'new' ? 'advisory' : 'inert'}
+    >
+      {label}
+    </StatusTag>
   );
 }

@@ -27,10 +27,10 @@ def case5(linked=True,sid=None):
     repin(case)
     if linked:
         v=sample(D['ApproachVersion1']);v['study_id']=c['study_id'];b,_=link(v,m)
-        cs=sample(D['ApproachCase1']);cs['binding_id']=b['binding_id'];v['content']['cases']=[cs];signed(v)
+        signed(v)
         closure=build_closure(v,resolution(models=[m],evidence=c['evidence_snapshots']),study_id=c['study_id'])
         f['approach_closure']=closure
-        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'],case_id=cs['case_id'])
+        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'])
         repin(case)
     return case,deps
 
@@ -45,7 +45,7 @@ def test_exact_bundle5_retained_offline_and_private3(linked):
     validate_retained_bundle(bundle,request,f)
     verify_execution_bundle(bundle,request,runtime_fixture())
 
-@pytest.mark.parametrize('change',['missing','field','digest','root','family','case','model','foreign','source','null_case_binding','unused_binding'])
+@pytest.mark.parametrize('change',['missing','field','digest','root','family','case','model','foreign','source','unused_binding'])
 def test_invalid_pin_rejected_before_modeling_call(change):
     case,_=case5();f=case['frozen'];c=f['configuration']
     if change=='missing':f['approach_closure']=None
@@ -59,9 +59,7 @@ def test_invalid_pin_rejected_before_modeling_call(change):
     elif change=='source':f['model_snapshot']['source_files'][0]['bytes']='eA==';signed(f['model_snapshot'])
     else:
         v=deepcopy(f['approach_closure']['approach_versions'][0])
-        if change=='null_case_binding':v['content']['cases'][0]['binding_id']=None
-        else:
-            v['content']['steps']=[];c['approach_binding']['case_id']=None
+        v['content']['steps']=[]
         signed(v)
         if change=='unused_binding':
             # Intentionally malformed but correctly rehashed: the builder

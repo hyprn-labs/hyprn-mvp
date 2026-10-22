@@ -4,6 +4,8 @@ JSON Schema handles closed wire shapes. The small reference checks below specify
 cross-file/hash/identity obligations for producer and consumer integration tests;
 they are NOT a production validator or evidence of deployed enforcement.
 """
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import hashlib
 import json
@@ -15,8 +17,8 @@ import rfc8785
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / "contracts/schemas/execution.schema.json").read_text())
-MODEL_SCHEMA = json.loads((ROOT / "contracts/schemas/model.schema.json").read_text())
+SCHEMA = authored_schema()
+MODEL_SCHEMA = authored_schema()
 PROTOCOL = "hyprn_mvp.openmdao.program/1"
 
 
@@ -105,7 +107,7 @@ def check_program(artifact, files, expected_digest):
     by existing model validation and the later production consumer, not this
     small program-format oracle.
     """
-    validate("PreparedModelArtifact", artifact)
+    validate("PreparedModelArtifact3" if artifact["schema_version"] == "3" else "PreparedModelArtifact", artifact)
     assert artifact["prepared_digest"] == expected_digest == digest({k: v for k, v in artifact.items() if k != "prepared_digest"})
     descriptors = artifact["files"]
     assert len({f["file_id"] for f in descriptors}) == len(descriptors)
@@ -306,7 +308,7 @@ def test_capabilities_advertise_only_supported_execution_versions():
 
 
 def test_models_http_and_portable_ancestry_keep_major_one():
-    assert SCHEMA["$defs"] == MODEL_SCHEMA["$defs"]
+    assert_execution_schema()
     for schema in (SCHEMA, MODEL_SCHEMA):
         Draft202012Validator.check_schema(schema)
         # Versioned unions keep their major-one branch; later versions are added beside it.
@@ -316,7 +318,7 @@ def test_models_http_and_portable_ancestry_keep_major_one():
         assert schema["$defs"]["PreparedModelArtifactResponse"]["properties"]["schema_version"] == {"enum": ["1"]}
     spec = json.loads((ROOT / "contracts/modeling.openapi.yaml").read_text())
     assert spec["openapi"] == "3.1.0"
-    assert spec["paths"]["/models/{model_id}/prepare-execution"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/PreparedModelArtifactResponse")
+    assert spec["paths"]["/models/{model_id}/prepare-execution"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/PreparedModelArtifactResponse4")
 
 
 def test_provenance_inventory_is_closed_and_separates_original_from_patched():

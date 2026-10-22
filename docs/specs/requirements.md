@@ -40,7 +40,7 @@ Status values:
 | HUM-06 | The engineer can attach and inspect assumptions with evidence, equations, omissions, applicability, sources and checks at their declared scopes. | partial | One Assumption concept with evidence delivered for approach, model, component and configuration; document citations (DOC-01), an authored equations field and applicability evaluation remain |
 | HUM-07 | Input provenance is typed (brief, source, property, constant, judgement, numerical, result) and inherited from a study parameter register; configurations record only deviations. | planned | Agents §9 gap 2 |
 | HUM-08 | Currency quantities carry a currency unit and price year. | planned | Agents §9 gap 6 |
-| HUM-09 | The engineer can write a Modeling approach (question, context, method steps, assumptions, limits, cases) linked to exact model and configuration versions, and see cases with their results. | delivered | UI target §3.4 |
+| HUM-09 | The engineer can write a Modeling approach (question, context, method steps, assumptions, limits) linked to exact model and configuration versions, and trace the study answer directly to its configurations, runs and evidence. | delivered | UI target §3.4 |
 | HUM-10 | A study has one conclusion record: answer, claims labelled computed, sourced or judgement and linked to exact runs, outputs and evidence, confidence and open questions. | planned | Agents §9 gap 3; interim evidence note |
 
 ## 3. Versions and edits
@@ -108,7 +108,7 @@ Status values:
 
 | ID | Requirement | Status | Notes |
 |---|---|---|---|
-| PKG-01 | An Owner can author and release a workspace-local method package (procedure, applicability, assets, cases, checks, review requirements) and apply a release to a study's Modeling approach, with requirements enforced by HYPRN MVP. | planned | After identity and invited collaboration |
+| PKG-01 | An Owner can author and release a workspace-local method package (procedure, applicability, assets, example configurations, checks, review requirements) and apply a release to a study's Modeling approach, with requirements enforced by HYPRN MVP. | planned | After identity and invited collaboration |
 | PKG-02 | A person, or an agent acting for an eligible person, can record an attributed scientific review of exact subjects for a named use, with limitations and objections; a review recorded by an agent is labelled agent-recorded. | planned | With method packages; ADR-0003 |
 
 ## 10. Identity, access and collaboration

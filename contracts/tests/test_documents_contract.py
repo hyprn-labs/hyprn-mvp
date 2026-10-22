@@ -1,4 +1,6 @@
 """Documents 25.1 structural wire tests, not runtime/native qualification."""
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema, case_removal_digests
 import copy
 import hashlib
 import json
@@ -8,8 +10,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMAS = [json.loads((ROOT / ("contracts/schemas/" + name + ".schema.json")).read_text())
-           for name in ("model", "execution")]
+SCHEMAS = [authored_schema()]
 S = SCHEMAS[0]
 ID = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -42,6 +43,26 @@ WIDENED_IN_PLACE = {
         "required": ["artifact_versions", "bundle_versions", "program_protocols", "historical_artifact_versions",
                      "historical_bundle_versions"], "additionalProperties": False},
 }
+
+
+def prior_unit_definition(name, definition):
+    """Reverse only the separately approved additive engineering-unit suffix."""
+    if name not in ('UnitDeclaration1', 'UnitCatalog1'):
+        return definition
+    definition = copy.deepcopy(definition)
+    suffix = ['m**3', 'cm**3', 'mm**3', 'kg/m**2', 'g/m**2', '1/m**2',
+              'J/(kg*K)', 'kJ/(kg*K)', 'J', 'kJ', 'MJ', 'W', 'kW', 'MW',
+              'm**3/s', 'kg/s', 'm/s**2', 'N*m', 'W/(m*K)', 'W/(m**2*K)']
+    if name == 'UnitDeclaration1':
+        units = definition['oneOf'][2]['properties']['expression']['enum']
+    else:
+        catalogue = definition['properties']['supported_units']
+        assert catalogue['minItems'] == catalogue['maxItems'] == 48
+        catalogue['minItems'] = catalogue['maxItems'] = 28
+        units = catalogue['items']['enum']
+    assert units[28:] == suffix
+    del units[28:]
+    return definition
 
 
 def definition_digest(value):
@@ -145,8 +166,15 @@ def test_documents_contracts_prior_definitions_and_mixed_units_branches_remain_e
     for schema, baseline in zip(SCHEMAS, BASELINE):
         assert schema["$id"] == baseline["id"]
         for name in baseline["names"]:
+            if name in case_removal_digests():
+                expected = case_removal_digests()[name]
+                if expected is None:
+                    assert name not in schema['$defs']
+                else:
+                    assert definition_digest(schema['$defs'][name]) == expected
+                continue
             released = WIDENED_IN_PLACE.get(name, schema["$defs"][name])
-            assert definition_digest(released) == PRIOR_DEFINITIONS[name], name
+            assert definition_digest(prior_unit_definition(name, released)) == PRIOR_DEFINITIONS[name], name
         # The only in-place changes of prior definitions are exactly these two widenings.
         assert schema["$defs"]["ModelPackage"] == {"oneOf": WIDENED_IN_PLACE["ModelPackage"]["oneOf"]
                                                    + [{"$ref": "#/$defs/ModelPackage4"}]}
@@ -154,7 +182,7 @@ def test_documents_contracts_prior_definitions_and_mixed_units_branches_remain_e
         widened["properties"]["bundle_versions"]["items"]["enum"].append("8")
         widened["properties"]["bundle_versions"]["maxItems"] = 6
         assert schema["$defs"]["ExecutionVersions"] == widened
-    assert SCHEMAS[0]["$defs"] == SCHEMAS[1]["$defs"]
+    assert_execution_schema()
 
 
 def test_documents_contracts_all_routes_have_typed_requests_outcomes_and_permissions():
@@ -354,13 +382,13 @@ MODEL3 = MODEL2 | dict(schema_version="3",
 APPROACH_VERSION = dict(schema_version="1", approach_id=ID, approach_version_id=OTHER,
     study_id=ID, version_number=1, predecessor_version_id=None,
     content=dict(schema_version="1", question="Pressure", scope="Pipe", limitations="",
-        open_questions="", model_bindings=[], steps=[], assumptions=[], cases=[], basis_refs=[]),
+        open_questions="", model_bindings=[], steps=[], assumptions=[], basis_refs=[]),
     created_by=ID, created_at="2026-10-11T08:40:00Z", digest=HASH)
 CLOSURE2 = dict(schema_version="2", root_approach_version_id=OTHER,
     root_approach_digest=HASH, approach_versions=[APPROACH_VERSION], models=[MODEL2],
     configurations=[], run_contexts=[], evidence=[RECORD4], digest=HASH)
 BINDING4 = dict(approach_id=ID, approach_version_id=OTHER, approach_digest=HASH,
-    closure_digest=HASH, case_id=None)
+    closure_digest=HASH)
 RUNTIME4 = dict(image_digest="sha256:"+HASH, architecture="arm64", python_version="3.12",
     worker_entrypoint="hyprn_mvp_integration.worker", policy_digest=HASH)
 
@@ -550,7 +578,7 @@ def test_documents_citation_contracts_null_history_is_disjoint_and_integrity_is_
 
 
 def test_documents_citation_contracts_new_definition_refs_resolve_and_closed_shapes_are_equal():
-    assert SCHEMAS[0]["$defs"] == SCHEMAS[1]["$defs"]
+    assert_execution_schema()
     for schema in SCHEMAS: Draft202012Validator.check_schema(schema)
     def walk(value):
         if isinstance(value, dict):
@@ -682,12 +710,19 @@ def test_documents_citation_contracts_every_previous_definition_including_aliase
     assert set(REPAIR25R_ORIGINALS) == set(REPAIR25R_CORRECTED_HASHES)
     for schema in SCHEMAS:
         for name in names:
+            if name in case_removal_digests():
+                expected = case_removal_digests()[name]
+                if expected is None:
+                    assert name not in schema['$defs']
+                else:
+                    assert definition_digest(schema['$defs'][name]) == expected
+                continue
             released = schema["$defs"][name]
             if name in REPAIR25R_ORIGINALS:
                 assert definition_digest(released) == REPAIR25R_CORRECTED_HASHES[name], name
                 released = REPAIR25R_ORIGINALS[name]
             released = WIDENED_IN_PLACE.get(name, released)
-            assert definition_digest(released) == PRIOR_DEFINITIONS[name], name
+            assert definition_digest(prior_unit_definition(name, released)) == PRIOR_DEFINITIONS[name], name
 
 
 def test_documents_citation_contracts_model_assumption_resolution_keeps_exact_revision_and_new_evidence():

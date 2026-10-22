@@ -26,17 +26,12 @@ class UnitsGuardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.scope = fixture.scope_from_environment()
 
-    def test_mixed_repair_selection_is_fixed_and_default_targets_preserved(self):
-        expected = (
-            'deployment/tests/test_units_native.py::test_native_mixed_legacy_selected_repair',
-            'deployment/tests/test_units_native.py::test_http_fixture_response_disconnect_boundary',
-        )
-        self.assertEqual(runner.targets_for('units-native', units_mixed_repair=True), expected)
+    def test_units_native_targets_are_the_reviewed_group(self):
         self.assertEqual(runner.targets_for('units-native'), runner.GROUPS['units-native'])
         with self.assertRaisesRegex(ValueError, 'Required target missing'):
-            runner.targets_for('units-native', units_mixed_repair=True, repo=self.scope.root/'tmp/absent')
+            runner.targets_for('units-native', repo=self.scope.root/'tmp/absent')
 
-    def test_effective_native_collections_are_disjoint_data_only(self):
+    def test_effective_native_collection_is_data_only(self):
         import ast
         from types import SimpleNamespace
         source = runner.REPO / 'deployment/tests/test_units_native.py'
@@ -60,11 +55,11 @@ class UnitsGuardTests(unittest.TestCase):
         # The fixture module is a target too, but contains no test declarations.
         (inert.parent / 'units_native_fixture.py').write_text('')
         all_nodes = {}
-        for mixed, expected_count in ((False, 14), (True, 5)):
+        for label, expected_count in (('default', 14),):
             captured = []
             fake_pytest = SimpleNamespace(main=lambda args, **kw: captured.extend(args) or 5)
             with patch.dict(sys.modules, {'pytest': fake_pytest}), patch.object(sys, 'path', list(sys.path)), patch.dict(os.environ), patch.object(fixture, 'scope_from_environment', return_value=self.scope), patch.object(fixture, 'create_native_fixture', return_value=(self.scope, None)) as native, patch.object(runner, 'PROJECTION_SCOPE'), patch.object(runner, 'NATIVE_BACKEND'), patch.object(Path, 'write_text'):
-                self.assertEqual(runner.contracts_child('units-native', units_mixed_repair=mixed), 1)
+                self.assertEqual(runner.contracts_child('units-native'), 1)
                 native.assert_called_once_with(self.scope)
             # Use the exact trusted child's argv against inert declarations.
             env = fixture.clean_environment(self.scope)
@@ -74,12 +69,9 @@ class UnitsGuardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             nodes = [line for line in result.stdout.splitlines() if line.startswith('deployment/tests/') and '::' in line]
             self.assertEqual(len(nodes), expected_count, result.stdout)
-            all_nodes[str(mixed)] = nodes
+            all_nodes[label] = nodes
             names = {line.split('::')[1].split('[')[0] for line in nodes}
-            if mixed:
-                self.assertEqual(names, {'test_native_mixed_legacy_selected_repair', 'test_http_fixture_response_disconnect_boundary'})
-            else:
-                self.assertEqual(names, {'test_native_compounds_histories_and_archive', 'test_actual_private_scope_and_inert_import', 'test_malicious_and_affine_rejected_atomically', 'test_http_fixture_response_disconnect_boundary'})
+            self.assertEqual(names, {'test_native_compounds_histories_and_archive', 'test_actual_private_scope_and_inert_import', 'test_malicious_and_affine_rejected_atomically', 'test_http_fixture_response_disconnect_boundary'})
         fixture.scoped_path(self.scope, 'evidence/effective-native-collection.json').write_text(json.dumps(all_nodes, indent=2))
         self.assertNotIn('test_units_native', sys.modules)
         self.assertNotIn('units_native_fixture', sys.modules)
@@ -100,73 +92,38 @@ class UnitsGuardTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout), ['MJ/kg', 'J/kg', 'N', 'dimensionless'])
         fixture.scoped_path(self.scope, 'evidence/retained-unit-expectations.json').write_text(result.stdout)
 
-    def test_mixed_repair_wrong_groups_refuse_before_scope_import_or_write(self):
-        for group in set(runner.GROUPS) - {'units-native'}:
-            with self.subTest(group=group), patch.object(fixture, 'allocate_scope') as allocate, patch.object(fixture, 'scope_from_environment') as scope, patch.object(fixture, 'create_native_fixture') as native:
-                with self.assertRaisesRegex(ValueError, 'units-native'):
-                    runner.run_group(group, units_mixed_repair=True)
-                with self.assertRaisesRegex(ValueError, 'units-native'):
-                    runner.contracts_child(group, units_mixed_repair=True)
-                allocate.assert_not_called();scope.assert_not_called();native.assert_not_called()
-
-    def test_mixed_repair_child_preserves_interpreter_and_scope_guards(self):
-        with patch.dict(os.environ, {}, clear=True), patch.object(fixture, 'create_native_fixture') as native:
-            with self.assertRaises(ValueError):
-                runner.contracts_child('units-native', units_mixed_repair=True)
-            native.assert_not_called()
-        with patch.object(fixture, 'scope_from_environment', return_value=self.scope), patch.object(sys, 'executable', '/usr/bin/python3'), patch.object(fixture, 'create_native_fixture') as native:
-            with self.assertRaisesRegex(ValueError, 'reviewed interpreter'):
-                runner.contracts_child('units-native', units_mixed_repair=True)
-            native.assert_not_called()
-
-    def test_mixed_missing_or_skipped_function_refused_before_allocation(self):
-        repo = fixture.scoped_path(self.scope, 'tmp/mixed-targets-' + str(uuid4()))
-        path = repo / 'deployment/tests/test_units_native.py'
-        path.parent.mkdir(parents=True)
-        bodies = (
-            'def different(): pass',
-            '@pytest.mark.skip(reason="fixture")\ndef test_native_mixed_legacy_selected_repair(): pass',
-            'pytestmark = pytest.mark.skipif(False, reason="fixture")\ndef test_native_mixed_legacy_selected_repair(): pass',
-        )
-        original = runner.targets_for
-        for body in bodies:
-            path.write_text(body + '\ndef test_http_fixture_response_disconnect_boundary(): pass\n')
-            with patch.object(runner, 'targets_for', side_effect=lambda group, **kw: original(group, repo=repo, **kw)), patch.object(fixture, 'allocate_scope') as allocate, patch.object(runner.subprocess, 'run') as launch:
-                with self.assertRaisesRegex(ValueError, 'Required test (missing|skipped)'):
-                    runner.run_group('units-native', units_mixed_repair=True)
-                allocate.assert_not_called(); launch.assert_not_called()
-
-    def test_mixed_exact_child_argv_and_clean_environment(self):
+    def test_builder_discovery_refuses_invalid_inventory_before_copying(self):
         from types import SimpleNamespace
-        scope = fixture.allocate_scope(fixture.new_scope())
-        with patch.object(fixture, 'new_scope', return_value=scope), patch.object(fixture, 'allocate_scope', return_value=scope), patch.object(runner, 'require_environment'), patch.object(runner.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')) as launch:
-            self.assertEqual(runner.run_group('units-native', units_mixed_repair=True), 0)
-        args, kwargs = launch.call_args
-        self.assertEqual(args[0], [fixture.APPROVED_PYTHON, '-B', str(Path(runner.__file__).resolve()), '--units-native-child', '--units-mixed-repair'])
-        self.assertEqual(kwargs['env'], fixture.clean_environment(scope))
-        self.assertEqual(kwargs['cwd'], runner.REPO)
+        missing = str(self.scope.root / 'absent-builder')
+        inventories = ('', '[]', json.dumps([{'Name': 'buildx', 'Path': missing}]),
+                       json.dumps([{'Name': 'buildx'}, {'Name': 'buildx'}]))
+        for inventory in inventories:
+            with self.subTest(inventory=inventory):
+                inspected = SimpleNamespace(stdout=inventory)
+                with patch.object(runner.subprocess, 'run', return_value=inspected) as inspect:
+                    with patch.object(fixture, 'scoped_path') as destination:
+                        with self.assertRaises(ValueError):
+                            runner.prepare_image_builder(self.scope)
+                        destination.assert_not_called()
+                inspect.assert_called_once_with(
+                    ['docker', 'info', '--format', '{{json .ClientInfo.Plugins}}'],
+                    text=True, capture_output=True, check=True, timeout=60,
+                )
 
-    def test_mixed_incomplete_skipped_failed_or_foreign_collection_cannot_pass(self):
+    def test_incomplete_skipped_failed_or_foreign_collection_cannot_pass(self):
         from types import SimpleNamespace
         def result(passed=5, failed=0, skipped=0):
             return SimpleNamespace(passed=passed, failed=failed, skipped=skipped)
-        self.assertTrue(runner.pytest_qualification_passed(0, result(), [], mixed=True))
-        for status, counts, imports in ((0,result(0),[]),(0,result(4),[]),(0,result(6),[]),(0,result(skipped=1),[]),(0,result(failed=1),[]),(5,result(),[]),(0,result(),['openmdao'])):
-            self.assertFalse(runner.pytest_qualification_passed(status,counts,imports,mixed=True))
-        self.assertTrue(runner.pytest_qualification_passed(0,result(10),[],mixed=False))
-
-    def test_mixed_illegal_cli_combinations_refuse_without_native_setup(self):
-        for argv in (['--group','units-guards','--units-mixed-repair'], ['--units-worker-child','--units-mixed-repair']):
-            with patch.object(sys,'argv',['checks.py',*argv]), patch.object(fixture,'allocate_scope') as allocate, patch.object(fixture,'create_native_fixture') as native:
-                self.assertNotEqual(runner.main(),0)
-                allocate.assert_not_called();native.assert_not_called()
+        self.assertTrue(runner.pytest_qualification_passed(0, result(), []))
+        for status, counts, imports in ((0,result(0),[]),(0,result(skipped=1),[]),(0,result(failed=1),[]),(5,result(),[]),(0,result(),['openmdao'])):
+            self.assertFalse(runner.pytest_qualification_passed(status,counts,imports))
 
     def test_units_routes_are_closed_and_match_plan_commands(self):
         expected = {
             'units-guards', 'units-contracts', 'units-staging', 'units-model',
             'units-api', 'units-public-types', 'units-resolution', 'units-configuration',
             'units-bundle', 'units-history', 'units-launcher', 'units-worker',
-            'units-attestation', 'units-native',
+            'units-attestation', 'units-native', 'units-engineering', 'units-origin',
             'units-ui-authoring', 'units-ui-configuration', 'units-ui-reading', 'units-ui-history',
         }
         self.assertEqual({g for g in runner.GROUPS if g.startswith('units-')}, expected)
@@ -197,7 +154,8 @@ class UnitsGuardTests(unittest.TestCase):
 
     def test_units_privileges_and_interpreters_are_bounded(self):
         self.assertEqual(runner.UNITS_NATIVE_GROUPS, {
-            'units-history', 'units-launcher', 'units-worker', 'units-attestation', 'units-native',
+            'units-history', 'units-launcher', 'units-worker', 'units-attestation',
+            'units-native', 'units-engineering', 'units-origin',
         })
         for group in runner.UNITS_APP_GROUPS | set(runner.UNITS_BROWSER_GROUPS):
             self.assertEqual(runner.GROUP_INTERPRETERS[group], fixture.APPROVED_CONTRACT_PYTHON)
@@ -428,19 +386,77 @@ class UnitsStagingTests(unittest.TestCase):
 
     def test_units_staging_generator_pinned_catalog_and_factors(self):
         import subprocess, hashlib
-        result = self.trusted_python((self.runtime.REPO / 'modeling/generate_unit_catalog.py').read_text())
+
+        result = self.trusted_python(
+            (self.runtime.REPO / 'modeling/generate_unit_catalog.py').read_text()
+        )
         catalog = json.loads(result.stdout)
         self.assertEqual(catalog['version'], '3.45.1')
-        self.assertEqual(len(catalog['supported_units']), 29)
-        self.assertEqual(len(set(catalog['supported_units'])), 29)
-        body = {k:v for k,v in catalog.items() if k != 'catalog_digest'}
-        self.assertEqual(catalog['catalog_digest'], hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest())
+        self.assertEqual(len(catalog['supported_units']), 49)
+        self.assertEqual(len(set(catalog['supported_units'])), 49)
+        body = {k: v for k, v in catalog.items() if k != 'catalog_digest'}
+        self.assertEqual(
+            catalog['catalog_digest'],
+            hashlib.sha256(
+                json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+            ).hexdigest(),
+        )
         probe = """
 import hashlib, inspect, json
 from pathlib import Path
 import openmdao
 from openmdao.utils import units
-names=['','m','km','cm','mm','s','min','h','kg','g','N','Pa','kPa','MPa','K','degC','degF','rad','deg','m/s','km/h','J/kg','kJ/kg','MJ/kg','kg/m**3','g/cm**3','m**2','cm**2','mm**2']
+names=[
+    '',
+    'm',
+    'km',
+    'cm',
+    'mm',
+    's',
+    'min',
+    'h',
+    'kg',
+    'g',
+    'N',
+    'Pa',
+    'kPa',
+    'MPa',
+    'K',
+    'degC',
+    'degF',
+    'rad',
+    'deg',
+    'm/s',
+    'km/h',
+    'J/kg',
+    'kJ/kg',
+    'MJ/kg',
+    'kg/m**3',
+    'g/cm**3',
+    'm**2',
+    'cm**2',
+    'mm**2',
+    'm**3',
+    'cm**3',
+    'mm**3',
+    'kg/m**2',
+    'g/m**2',
+    '1/m**2',
+    'J/(kg*K)',
+    'kJ/(kg*K)',
+    'J',
+    'kJ',
+    'MJ',
+    'W',
+    'kW',
+    'MW',
+    'm**3/s',
+    'kg/s',
+    'm/s**2',
+    'N*m',
+    'W/(m*K)',
+    'W/(m**2*K)',
+]
 pairs=[]
 for a in names:
     for b in names:
@@ -453,25 +469,37 @@ for a in names:
 print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,source=hashlib.sha256(Path(inspect.getfile(units)).read_bytes()).hexdigest())))
 """
         checked = self.trusted_python(probe)
-        trusted=json.loads(checked.stdout)
+        trusted = json.loads(checked.stdout)
         self.assertEqual(trusted['version'], '3.45.1')
         self.assertEqual(catalog['source_sha256'], trusted['source'])
         self.assertEqual(catalog['supported_units'], trusted['names'])
-        expected=trusted['pairs']
+        expected = trusted['pairs']
         self.assertEqual(catalog['linear_pairs'], expected)
-        pairs={(a,b):factor for a,b,factor,offset in expected}
-        for pair,value in {( 'MJ/kg','J/kg'):1e6, ('g/cm**3','kg/m**3'):1000, ('cm**2','m**2'):1e-4, ('mm**2','m**2'):1e-6}.items():
+        pairs = {(a, b): factor for a, b, factor, offset in expected}
+        for pair, value in {
+            ('MJ/kg', 'J/kg'): 1e6,
+            ('g/cm**3', 'kg/m**3'): 1000,
+            ('cm**2', 'm**2'): 1e-4,
+            ('mm**2', 'm**2'): 1e-6,
+            ('cm**3', 'm**3'): 1e-6,
+            ('g/m**2', 'kg/m**2'): 1e-3,
+            ('kJ/(kg*K)', 'J/(kg*K)'): 1000,
+            ('MW', 'W'): 1e6,
+            ('N*m', 'J'): 1,
+        }.items():
             self.assertAlmostEqual(pairs[pair], value)
-        self.assertNotIn(('degC','K'), pairs)
-        self.assertEqual(pairs['degC','degC'],1)
+        self.assertNotIn(('degC', 'K'), pairs)
+        self.assertEqual(pairs['degC', 'degC'], 1)
         self.native_base()
+        legacy = json.loads((self.stage / 'config/modeling.units.json').read_text())
+        self.assertTrue(all(row in catalog['linear_pairs'] for row in legacy['linear_pairs']))
         self.apply(self.runtime.stage_units_native_patch(self.stage).read_text())
-        self.assertEqual((self.stage/'config/modeling.units.json').read_text(), result.stdout)
+        self.assertEqual((self.stage / 'config/modeling.units.json').read_text(), result.stdout)
 
     def test_units_staging_both_routes_and_inventory(self):
         self.native_base()
-        adapter=self.runtime.stage_modeling_contract(self.stage).read_text()
-        units=self.runtime.stage_units_native_patch(self.stage).read_text()
+        adapter = self.runtime.stage_modeling_contract(self.stage).read_text()
+        units = self.runtime.stage_units_native_patch(self.stage).read_text()
         self.apply(units)
         native=(self.stage/'app/services/native_materializer.rb').read_text()
         program=(self.stage/'app/services/native_program.rb').read_text()
@@ -497,6 +525,10 @@ print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,sourc
         target.write_text(adapter)
         import subprocess
         quantity=(self.runtime.REPO/'upstream/whatsopt-patches/090-quantity-definitions.patch').read_text()
+        # The adapter-only criteria-free patch follows 090; unwind it first, exactly.
+        criteria_free=(self.runtime.REPO/'upstream/whatsopt-patches/100-configurations-without-criteria.patch').read_text()
+        reverse100=subprocess.run(['patch','--batch','--fuzz=0','-R','-p1'],cwd=self.stage,input=criteria_free,capture_output=True,text=True)
+        self.assertEqual(reverse100.returncode,0,reverse100.stdout+reverse100.stderr)
         reverse090=subprocess.run(['patch','--batch','--fuzz=0','-R','-p1'],cwd=self.stage,input=quantity,capture_output=True,text=True)
         self.assertEqual(reverse090.returncode,0,reverse090.stdout+reverse090.stderr)
         baseline080=target.read_text()
@@ -509,9 +541,11 @@ print(json.dumps(dict(version=openmdao.__version__,names=names,pairs=pairs,sourc
         self.apply(raw)
         self.assertEqual(target.read_text(),baseline080)
         self.apply(quantity)
+        self.apply(criteria_free)
         self.assertEqual(target.read_text(),adapter)
         self.assertEqual(native_before,{name:(self.stage/name).read_bytes() for name in native_before})
         self.assertEqual((complete/'provenance-inputs/patches/090-quantity-definitions.patch').read_text(),quantity)
+        self.assertEqual((complete/'provenance-inputs/patches/100-configurations-without-criteria.patch').read_text(),criteria_free)
 
         recipe=(self.runtime.REPO/'deployment/modeling.Dockerfile').read_text()
         self.assertLess(recipe.index('COPY assumptions.patch'),recipe.index('COPY units.patch'))

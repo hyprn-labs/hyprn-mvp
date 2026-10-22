@@ -1,0 +1,224 @@
+# Continuous modeling approach UI — integration candidate
+
+Status: implementation committed; integrated browser acceptance pending with the root
+executor under the focused delivery amendment. This is not phase completion, human
+acceptance, a completed scientific assessment, or deployment evidence.
+
+## Source and scope
+
+- Implementation: `d969ccfb777f98fac03de300c667a785e51521d6`.
+- Parent for the tested candidate: `c756b19` (answer API integration). Earlier local
+  prerequisites: plan `991aa1f`, result-format follow-ups `de2eeb8` and `9dd4e8c`.
+- Owned changes: ApproachPanel, ApproachMethod, ApproachFindings, scoped styles,
+  approach browser tests, findings-native and unit-native browser selectors,
+  approach-layout UI contract assertions, control map, UI target and layout notes.
+- No backend, API client, generated contracts, configuration components, assumption
+  owners, runtime inputs, live records, STATE, ROADMAP or HANDOVER changes.
+- The external user-approved minimal mock supplied composition only. Its illustrative
+  questions, values and answers were not imported as product or study data.
+
+The reader now follows the complete saved question, expandable methods, compact
+expandable cases and final study answer. Section links preserve the workspace route.
+Methods retain canonical exact model views and assumption owners. All associated
+configuration/run links remain present. Outputs use the shared table, with units,
+missing-value reasons and explicit zero; full precision and execution/criteria remain
+supporting details. Scientific prose comes only from exact-approach answer records;
+saved study answers open the exact case-answer versions they cite. Basis reads are
+bounded by study, session and current access; denied or changed identities clear them.
+Historical records explicitly state that answers are not included in that record.
+
+Range formatting of changed functions accounts for much of the line delta. The
+changed-line style gate requires formatting; unrelated owners were not reformatted.
+
+## Verification
+
+Every check below ran through `./hyprn-mvp dev check <group>`, with an isolated runner
+scope. Scope UUIDs identify external evidence; no screenshots or stores are tracked.
+
+Final candidate, source-identical to the implementation commit:
+
+| Command | Result | Evidence scope |
+| --- | --- | --- |
+| `./hyprn-mvp dev check combined-static` | 6 stages passed, 0 failed; design, tokens, UI contracts, criterion checks, TypeScript, build | `bb909eb6-9d62-43ef-9a98-9dfb1db2900d` |
+| `./hyprn-mvp dev check style-ratchet` | 33 passed, 0 failed, 0 skipped | `9178a1e4-d213-46c0-96d7-37d2cc43c4ac` |
+| `git diff --check` | passed | candidate tree |
+| `./hyprn-mvp dev check guard` | 116 passed, 0 failed; implementation commit plus this checkpoint | `9b6cf5cf-4863-41a8-891e-cfb4c55ab02b` |
+
+All failed or superseded executor runs:
+
+| Group / scope | Result and disposition |
+| --- | --- |
+| combined-static / `036e50d5-3ff6-48ad-b937-f98b58546ab9` | Design/tokens passed; source checker failed on obsolete Study limits wiring. Updated scoped assertions. |
+| combined-static / `7faf95ad-fd05-4a4a-bb24-a2070f8d0fe7` | Design/tokens passed; source checker expected removed chapter tab IDs. Replaced with continuous-navigation guards. |
+| combined-static / `4e968632-faaf-4afb-953a-addd10a02fe4` | 6 stages passed; superseded by answer integration and final changes. |
+| approach-ui-method / `8880d886-0cc9-40b2-ba36-329a435ed4cd` | 8 reported passes, 2 failures, 0 reported skips, then a 150-second subprocess timeout. Collapsed step actions and partial-link selector were corrected. Model-description rebind test timed out without a final assertion report; integrated rerun remains required. Source/test edits during this early run mean it is not final acceptance evidence. |
+| style-ratchet / `6c5d10aa-170a-4e8b-a586-b3917c7d7dac` | 32 passed, 1 failed: 145 changed long lines. Scoped range formatting corrected them. |
+| combined-static / `1e72e483-2a74-4055-bcbb-9d581962c5bb` | 6 stages passed; superseded by formatting and final changes. |
+| combined-static / `a283e639-ea5d-4bba-8eaa-7626ccbb9cd7` | Design/tokens passed; source checker failed on formatting-sensitive slice spelling. Updated the assertion without dropping its bound. |
+| style-ratchet / `c2500dcd-b980-4160-aa56-a65674cccb93` | 33 passed; superseded by final changes. |
+| combined-static / `0ef1d980-2a97-446e-aafc-2b0f6655b459` | 6 stages passed; superseded by final changes. |
+| approach-ui-reading / `4053a763-4a84-43ad-8706-e28fbfc4a419` | 16 passed, 3 failed, 0 skipped, 105.85 seconds. All three new scenarios requested a model-package fixture absent from the lightweight reading group; they failed before UI assertions. Moved them to the method group, which supplies that fixture. Existing 16 reading scenarios passed. |
+| combined-static / `7dd5a76f-4c90-4641-8f6c-42f63db73d72` | Design/tokens passed; source checker rejected a retired output-region label. Reused the canonical Output values label. |
+| style-ratchet / `e9f61f64-c2a1-4b8a-b9a7-68141296b970` | 32 passed, 1 failed: two changed long lines. Wrapped import and shortened invariant test title. |
+| combined-static / `8ff56566-4ddc-4976-b84f-fc8ee36a3f82` | 6 stages passed; followed only by browser-helper and session assertion changes. |
+| style-ratchet / `1ccad64b-b500-45fa-beab-6309c625fea6` | 33 passed; followed by those test changes. |
+
+An early method screenshot was inspected: `polish-method-saved-light.png`, scope
+`8880d886-0cc9-40b2-ba36-329a435ed4cd`, SHA-256
+`30bfef1aa734be9ec006d226f4a94436fccf46b63d59f301f198068ccba8ee3d`.
+The reading scope includes `s5-approach-question-200-dark.png`, SHA-256
+`372e02a6300003d16880eb99d26f8da3bfedec239f86eb9c01f78c9207b96794`.
+These are intermediate visual artifacts, not final visual or human acceptance.
+
+## Cleanup and remaining acceptance
+
+The two browser commands exited. Four orphaned Chrome processes from the completed
+executor scopes were identified by their exact scoped profile paths and terminated;
+zero matching browser processes remain. Other processes were not targeted. External
+test artifacts remain for diagnosis.
+No live store or live browser profile was used. The dependency symlink remains
+ignored. No tracked files were deleted; the implementation commit left a clean tree.
+
+Root owns one integrated acceptance union after its serialized native lane:
+
+- `approach-ui-reading`, `approach-ui-method`, `approach-ui-assumptions`,
+  `approach-ui-configuration`, `approach-ui-history` (changed shared selectors and
+  continuous reader affect all five groups).
+- `findings-native-read` using the reviewed durable fixture, and `units-native`
+  for the updated exact-step helper; root chooses whether its native union also
+  needs to regenerate the findings fixture.
+- Final combined-static/style on any integration or corrective source delta,
+  plus actual UI inspection in both themes and narrow/200-percent layouts.
+
+The three new method scenarios exercise section focus/route retention, persisted
+answer revision pinning and sign-out clearing, and failed answer reads versus true
+unassessed states. They are authored but have not yet passed their correct fixture
+group. No browser success is claimed for the final candidate. Root explicitly owns
+this remaining verification under the approved integrated-batch cadence.
+
+## Self-check
+
+Implementation commit exists; explicit owned paths only; no file deletions. Final
+candidate static and style checks passed. Browser qualification remains open.
+
+## Fixture follow-up
+
+Root preflight found that the method fixture refused the new answer POST before
+the saved-answer browser scenario could run. Its closed write allowlist now admits
+only POST to the exact study answers collection, only in the method group. The
+reading group still refuses it; DELETE and descendant POST routes remain refused.
+Browser assertions cover these three negative cases. Other scenario actions use
+existing permitted model-import, evidence, approach and session routes. No product
+API or production permission changes were made.
+
+`./hyprn-mvp dev check style-ratchet`: 33 passed, 0 failed, 0 skipped; scope
+`a42f4cfe-ea7d-41eb-8178-8589a0ff2338`. Browser runs remain assigned to root's
+integrated union; none were started during its active native lane.
+
+All 17 earlier executor scopes and this follow-up scope were archived externally
+with per-file SHA-256 verification before release: 18 scopes, 353 evidence/metadata
+files, no remaining source scopes. The archive includes a release ledger and each
+scope's hash manifest. No live or other executor scope was targeted.
+
+## Focused saved-answer scenario correction
+
+Root's method run in scope `8339069c-aab6-4849-b8dc-674ac8e5c254` reported
+16 passed, 1 failed. The failure was the final persistence assertion after login:
+the browser remained on Profile instead of reopening the saved approach. Earlier
+answer creation, revision-pinned basis and clearing assertions passed. The scenario
+now waits for sign-out to finish before reloading and restores the exact saved
+approach route before login. This changes only the test, not product behavior.
+`git diff --check` passed. No browser or native checks were started; root retains
+the focused rerun. Historical acceptance expansion is no longer requested.
+
+## Verified product-mode reload correction
+
+The next root run, scope `55fed85f-e60f-4075-b1b0-5ef9d00b9301`, again reported
+16 passed, 1 failed, but at a different point: Username could not be found. Its
+DOM showed the controller verification harness. Completed sign-out replaces the
+URL with `/ui/`; the fixture selects Workspace only with its `workspace` query.
+Reloading therefore switched away from the product. The test now opens a fresh
+`/ui/?workspace` document with the captured exact approach hash after confirmed
+sign-out, then signs in. Product code is unchanged.
+
+`./hyprn-mvp dev check approach-ui-method`: **17 passed, 0 failed, 0 skipped**,
+exit 0, 114.74 seconds; scope `f5955298-06d5-48d6-8add-d77ca3fa7b63`.
+This run exercised the exact final test delta, including saved answers, exact
+case-answer revision basis, sign-out clearing and persistence after fresh login.
+`git diff --check` passed. No native or additional history groups were run.
+
+The successful scope's 141 evidence/metadata files were hashed, archived externally
+and released after confirming no scoped process remained. Executor archive totals:
+19 released scopes, 494 verified files. Root-owned failure scopes remain root-owned.
+
+## Current-reader cleanup and Overview entry
+
+Implementation `ecdc50e67ff5be07a3613b5cedae70392950906a` removes the per-case
+Coverage incomplete badge and duplicate case pagination notes. The existing usage
+pagination control remains. Empty case evidence is hidden in readers; the same
+canonical owner remains available in editing and when citations exist.
+
+The old Overview entry was unversioned, so the controller intentionally opened its
+draft authoring state even though Overview displayed a saved question. The approved
+correction passes the exact version already displayed by Overview to the entry.
+Draft is used only when the question read confirms no saved version. Loading or
+failed reads do not silently fall back to Draft. Edit approach and the Draft
+selector retain their explicit authoring behavior. The only change inside
+ApproachAssumptions is the Overview question callback's selected-version value;
+assumption ownership and editing are unchanged.
+
+Focused checks on the source-identical candidate:
+
+- `./hyprn-mvp dev check combined-static`: 6 stages passed, 0 failed; scope
+  `720a5042-ce16-470f-b4b4-e6c0367fe847`.
+- `./hyprn-mvp dev check style-ratchet`: 33 passed, 0 failed, 0 skipped; scope
+  `5585c025-fb7c-4fa6-9962-c323c6af1cf9`.
+- `git diff --check`: passed.
+
+Existing focused assertions now check the exact Overview route/selection and absent
+empty case evidence. No browser matrix was repeated for this narrow follow-up;
+root owns the current live Overview-to-saved-answer inspection. Automated checks
+do not imply human acceptance. Both new scopes were archived with verified hashes
+and released: executor totals 21 scopes and 507 evidence/metadata files, no remaining
+executor scopes. No live authoring records or other executor scopes were touched.
+
+## Continuous Overview and grouped answer support
+
+Implementation `35ceed6` makes Overview the read-only continuous reader for its
+exact latest saved approach. The existing question loader supplies the loaded
+saved record; no current draft is substituted. Question and details precede three
+section panels. The case filter is always visible. Supporting results group exact
+run, configuration and cited case-answer links; Sources remain separate. Cited
+records open on demand in fenced dialogs, without recursive answer prose in the
+main reader. Technical identities remain available in Record details.
+
+The shared approach guard now saves draft edits from Models, Overview and the
+approach editor. Model method links with no saved approach version open the draft
+and retain its selected step. Existing saved links keep their exact version.
+Root owns the shared method/model implementation and the integrated browser proof;
+this executor updated related source-control assertions and added direct Overview
+section/filter coverage to the focused method scenario.
+
+Verification on the implementation candidate, before the source-identical commit:
+
+- `./hyprn-mvp dev check combined-static`: 6 stages passed, 0 failed, 3.14 seconds;
+  scope `f5f9c58e-4999-4669-bf3e-8b7c1e878f1f`. Earlier candidate and baseline
+  checks also passed all 6 stages in scopes `78258f7f-8758-490a-b3bd-524a6839f881`
+  and `d97ef41d-c58a-4e19-ae7b-1c645f491b2e`.
+- `./hyprn-mvp dev check style-ratchet`: initially 32 passed, 1 failed because
+  changed lines retained formatting violations; scope
+  `5571328f-4afd-4ea2-8586-ac97b341de46`. After scoped formatting, 33 passed,
+  0 failed, 0 skipped in 8.61 seconds; scope
+  `faf03065-ac3a-4479-a266-00a5ff435786`.
+- `git diff --check`: passed after removing one trailing whitespace line.
+- No browser, native execution, deployment or live-data mutation by this executor.
+  Root retains the focused integrated method group and live Overview inspection.
+  Automated checks do not establish human acceptance or full-phase completion.
+
+All five new scopes were identity-checked, their evidence and scope metadata copied
+to the existing external archive, each copied file verified by SHA-256, and their
+stores released. Archive totals: 26 released scopes, 541 verified files. Release
+ledger SHA-256: `0fd76be94e6d2fb4fbb8a71017f681d6b9d86295bb1bac3814ce0e2f86478a12`.
+No root-owned scopes were targeted. Baseline merge `ad2dea6` preserves the prior
+executor history and has the same tree as primary `6a97a66`; only implementation
+`35ceed6` and this checkpoint are integration candidates.

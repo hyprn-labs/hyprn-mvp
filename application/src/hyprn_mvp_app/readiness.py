@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import math
 import re
 import sqlite3
+from .database import DatabaseUnavailable
 import sys
 import time
 from time import time as wall_time
@@ -26,6 +27,8 @@ def transient_lock_error(error):
     SQLITE_LOCKED (base code 6, "database table is locked") is a conflict inside
     one connection or shared cache that waiting cannot clear; it is not transient.
     """
+    if isinstance(error, DatabaseUnavailable):
+        return True
     if not isinstance(error, sqlite3.OperationalError):
         return False
     code = getattr(error, 'sqlite_errorcode', None)
@@ -57,6 +60,13 @@ class ObservationPublisher:
         self.store, self.native, self.monotonic, self.sleep = store, native, monotonic, sleep
         self.last = None
         self.stalled = False
+        self.ready_window = None
+
+    def ready(self):
+        """Owner's successfully published observation; never a user-scoped read."""
+        now = wall_time()
+        return (self.ready_window is not None
+                and self.ready_window[0] <= now < self.ready_window[1])
 
     def stall(self, iterations, error):
         """The dispatcher failed `iterations` consecutive iterations on store
@@ -67,9 +77,10 @@ class ObservationPublisher:
             print(f'dispatcher: ERROR store contention for {iterations} consecutive iterations ({error}); '
                   'publishing executor unavailable until an iteration succeeds', file=sys.stderr, flush=True)
         self.last = None
+        self.ready_window = None
         try:
             self.refresh()
-        except sqlite3.OperationalError as failure:
+        except (sqlite3.OperationalError, DatabaseUnavailable) as failure:
             if not transient_lock_error(failure):
                 raise
             # Still locked: the next iteration's refresh retries (self.last is None).
@@ -86,12 +97,13 @@ class ObservationPublisher:
         if self.last is not None and tick-self.last < PUBLICATION_INTERVAL:
             return False
         self.last = tick
+        self.ready_window = None
         # A slow authority check must not manufacture a newer freshness window.
         observed = wall_time()
         if self.stalled:
             try:
                 self.store.publish_execution_observation('unavailable', 'executor_unavailable', observed)
-            except sqlite3.OperationalError as error:
+            except (sqlite3.OperationalError, DatabaseUnavailable) as error:
                 if transient_lock_error(error):
                     self.last = None
                 raise
@@ -110,11 +122,13 @@ class ObservationPublisher:
             status, reason = 'unavailable', 'attestation_invalid'
         try:
             self.store.publish_execution_observation(status, reason, observed, runtime)
-        except sqlite3.OperationalError as error:
+        except (sqlite3.OperationalError, DatabaseUnavailable) as error:
             # Not published: let the dispatcher's next iteration try again, not 10 s later.
             if transient_lock_error(error):
                 self.last = None
             raise
+        if status == 'ready':
+            self.ready_window = (observed, observed + OBSERVATION_LIFETIME)
         return True
 
     def stopped(self):
@@ -123,11 +137,12 @@ class ObservationPublisher:
         Bounded retries under store lock contention. Returns whether it was
         published; a lock that outlasts the retries never masks why the dispatcher exits.
         """
+        self.ready_window = None
         for attempt in range(STOP_ATTEMPTS):
             try:
                 self.store.publish_execution_observation('unavailable', 'executor_unavailable', wall_time())
                 return True
-            except sqlite3.OperationalError as error:
+            except (sqlite3.OperationalError, DatabaseUnavailable) as error:
                 if not transient_lock_error(error):
                     raise
                 if attempt + 1 < STOP_ATTEMPTS:
@@ -182,7 +197,7 @@ def execution_readiness(store, model, actor, study):
     model_reason = None
     try:
         status, payload = model.call(actor, study, 'GET', '/capabilities',
-                                     response_schema='CapabilitiesResponse', resources=[study])
+                                     response_schema='CapabilitiesResponseRead3', resources=[study])
         if status != 200:
             raise ValueError('Unexpected capabilities status')
         capabilities = [c for c in payload['data']['capabilities'] if c['id']==CAPABILITY]
@@ -212,8 +227,12 @@ def supports_descriptive_execution(capabilities, model):
     """Check the exact backend contract; operational readiness remains separate."""
     if not isinstance(capabilities,dict):return False
     execution=capabilities.get('execution_versions',{})
-    if ('8' not in execution.get('bundle_versions',[]) or '2' not in execution.get('artifact_versions',[])
-            or 'hyprn_mvp.openmdao.program/1' not in execution.get('program_protocols',[])):
+    pairs = [('8','2'), ('10','3')]
+    if not any(
+        bundle in execution.get('bundle_versions', [])
+        and artifact in execution.get('artifact_versions', [])
+        for bundle, artifact in pairs
+    ) or 'hyprn_mvp.openmdao.program/1' not in execution.get('program_protocols', []):
         return False
     if model['schema_version'] not in capabilities.get('schema_versions',[]):return False
     advertised={(c.get('id'),c.get('version')) for c in capabilities.get('capabilities',[]) if c.get('supported') is True}

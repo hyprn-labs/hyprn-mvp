@@ -2,7 +2,7 @@
 
 ## What it is
 
-HYPRN MVP is an engineering feasibility workspace. An engineer states a technical question, builds a computational model from Python components, runs it on explicit cases and judges what the results are worth, with every number traceable to the exact model, inputs and evidence it came from.
+HYPRN MVP is an engineering feasibility workspace. An engineer states a technical question, builds a computational model from Python components, executes explicit configurations and judges what the results are worth, with every number traceable to the exact model, inputs and evidence it came from.
 
 HYPRN MVP reuses established open tools for the hard parts: WhatsOpt for model composition and code generation (behind a private, replaceable modeling service), OpenMDAO for numerical computation, AiiDA for execution lifecycle and retained records, and later OpenTURNS for uncertainty. HYPRN MVP owns the study, the API, the user interface, access control and the honesty of what is shown.
 
@@ -14,13 +14,14 @@ Engineers and engineering teams who assess technical ideas early: is a concept f
 
 | Step | What the engineer does |
 |---|---|
-| Question | States the study question, context, scope and limits. |
-| Modeling approach | Explains the method: steps, choices, assumptions, evidence and the cases to examine. |
-| Model | Composes Python components connected through quantities with meanings and units; views it as a graph or an XDSM diagram; saves immutable model versions. |
-| Configurations | Specifies a case: an exact model version, explicit inputs with units and provenance, and criteria the outputs are checked against. Saved configurations never change. |
-| Runs | Executes a configuration in an isolated worker; the run keeps exactly what it used and what it produced, including failures. |
-| Evidence and assumptions | Attaches sources and assumptions where they apply, and sees every current assumption with its evidence in one place. |
-| Conclusion | Answers the question, with each claim marked as computed, sourced or judgement and linked to the runs and evidence behind it. |
+| Study brief | States the question, alternatives, ordered criteria, assumptions, limits and open questions. |
+| Model | Composes Python components connected through quantities with meanings and units; edits the graph and quantities, then saves exact model versions. Model explanations describe the purpose, basis and calculation logic for those versions. |
+| Configurations | Supplies every free input with units and provenance for one exact model version. Saved configurations never change. |
+| Calculations | Groups configurations of one model version, binds study criteria to outputs, and requests runs. A sampled calculation records its ranges, joint design and separate training/check points. |
+| Runs | Executes a configuration in an isolated worker and retains exactly what it used and produced, including failures. Criteria are evaluated in the calculation that binds them. |
+| Estimates | Fits and assesses a surrogate against declared accuracy targets. Joint exploration distinguishes original results, eligible estimates and unavailable results; moving inputs does not rerun sampling. |
+| Evidence and assumptions | Attaches exact sources and assumptions to the statements and quantities they support. |
+| Study answer | Answers a pinned brief with comparisons citing calculations and runs, interpretation, limits and a saved exploration basis. The engineer can inspect the underlying model and result basis. |
 
 Any earlier run can be reopened unchanged, even after the model was edited or the modeling service is unavailable.
 
@@ -46,17 +47,16 @@ HYPRN MVP is one product with two editions over the same core; the installation 
 
 Agents are users of HYPRN MVP, not its developers. They act for a person, never with more authority than that person, and reach HYPRN MVP only through a curated set of typed tools that call the same API as the UI.
 
-- **Local:** a desktop coding agent (Codex or Claude Code) works on one study through the local MCP tool server, from a study folder outside the source repository, with a short-lived per-study token.
-- **Cloud:** a provider-managed agent works in an assistant panel; HYPRN MVP executes its tool calls and the provider holds no HYPRN MVP credential.
+- **Local and cloud:** a provider-managed agent works in the embedded Assistant panel. HYPRN executes its tools through the public API; the provider holds no HYPRN credential. External MCP and ChatGPT connections are retired.
 - **Writes:** agents create studies, versions, evidence, configurations, runs and (later) scientific reviews directly, within the person's authority; every write is attributed to the agent acting for that person and listed for them in HYPRN MVP, and a review an agent records is labelled as such. Agents may change or remove draft material, but never delete saved work, archive or restore anything, or change who has access (ADR-0003).
 
 ## Roadmap horizon
 
 | Horizon | Content |
 |---|---|
-| Now | Manual modeling workflow: studies, modeling approach, models, configurations, runs, evidence and assumptions, archive and restore. |
+| Now | Study briefs, model explanations, models, configurations, calculations, retained runs, assessed estimates and study answers; evidence, assumptions, archive and restore. Local demonstration and focused verification do not replace release qualification. |
 | Next | Local edition packaging (`./hyprn-mvp setup` / `start`); agent tools for the local edition (read-only first, then attributed authoring); source documents (upload, collections, reading, search, annotation, exact citations). |
-| Later | Cloud edition with workspaces, identity and the assistant panel; conclusion records and typed provenance; coupled solves and derivatives; uncertainty; method packages and scientific reviews; selected optimization families. |
+| Later | Cloud edition with workspaces, identity and the assistant panel; extended typed provenance; coupled solves and derivatives; uncertainty; method packages and scientific reviews; selected optimization families. |
 
 ## Further reading
 

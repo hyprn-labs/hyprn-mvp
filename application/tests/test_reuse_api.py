@@ -100,13 +100,21 @@ def api(tmp_path):
     return dict(client=client,store=store,auth=auth,actor=actor,sid=sid,rid=rid,case=case,model=model,candidate=candidate,bundle=bundle)
 
 
+@pytest.fixture
+def api6(tmp_path):
+    """Configuration 6 on a captured Model4 case over the real public API: one protocol-3
+    source run and a version-6 candidate whose first input is bound to its first output."""
+    from runs_criteria_free_support import reuse_api
+    return reuse_api(tmp_path,ORIGIN)
+
+
 def path(api,suffix):return '/api/1/studies/'+api['sid']+'/'+suffix
 
 
 def preview(api,candidate=None):
     response=api['client'].post(path(api,'configurations/preview'),json=candidate or api['candidate'])
     assert response.status_code==200,response.text
-    validate('ConfigurationPreview2',response.json()['data'])
+    validate('ConfigurationPreview8',response.json()['data'])
     return response.json()['data']
 
 
@@ -117,10 +125,23 @@ def commit_body(api):
 def test_inventory_reads_fresh_retained_bytes_offline_and_pages(api):
     api['model'].offline=True;c=api['client'];route=path(api,'result-sources')
     page=c.get(route,params={'limit':1});assert page.status_code==200,page.text
-    data=page.json()['data'];validate('ResultSourcePage',data)
+    data = page.json()['data']
+    validate('ResultSourcePage2', data)
     assert len(data['items'])==1 and data['next_cursor']
     item=data['items'][0];assert item['source_run_id']==api['rid'] and item['labels']['model_name'] is None
     assert item['native_availability']=='not_rechecked' and item['value']==150
+    next_page=c.get(route,params={'limit':1,'cursor':data['next_cursor']}).json()['data']
+    assert next_page['items'][0]['source_output']!=item['source_output'] and next_page['next_cursor'] is None
+    assert not api['model'].calls
+
+
+def test_inventory_reads_protocol3_sources_offline_with_execution_outcome_only(api6):
+    api=api6;api['model'].offline=True;c=api['client'];route=path(api,'result-sources')
+    page=c.get(route,params={'limit':1});assert page.status_code==200,page.text
+    data=page.json()['data'];validate('ResultSourcePage3',data)
+    assert len(data['items'])==1 and data['next_cursor']
+    item=data['items'][0];assert item['source_run_id']==api['rid'] and item['value']==150
+    assert item['outcomes']=={'execution':api['results']['execution']} and 'criteria' not in api['results']
     next_page=c.get(route,params={'limit':1,'cursor':data['next_cursor']}).json()['data']
     assert next_page['items'][0]['source_output']!=item['source_output'] and next_page['next_cursor'] is None
     assert not api['model'].calls
@@ -146,10 +167,13 @@ def test_inventory_session_current_membership_scoped_cursor(api):
     assert c.get(route).status_code==404
 
 
-def test_preview_commit_replay_receipt_and_retained_run_schema(api):
-    c=api['client'];body=commit_body(api);before=copy.deepcopy(api['bundle'])
+def test_preview_commit_replay_receipt_and_retained_run_schema(api6):
+    api=api6;c=api['client'];body=commit_body(api);before=copy.deepcopy(api['bundle'])
     response=c.post(path(api,'configurations'),json=body);assert response.status_code==201,response.text
     saved=response.json()['data'];linked=saved['configuration']['inputs'][0]
+    validate('FrozenConfigurationRead9',saved)
+    # A configuration carries no criteria; they are evaluated through calculation bindings.
+    assert saved['schema_version']=='9' and 'criteria' not in saved['configuration']
     assert linked['value']==linked['result_binding']['original_value']==150
     assert linked['result_binding']['labels']['model_name'] is None
     api['model'].offline=True
@@ -158,13 +182,17 @@ def test_preview_commit_replay_receipt_and_retained_run_schema(api):
     assert receipt.status_code==200 and receipt.json()['data']['result']==saved
     assert c.post(path(api,'configurations'),json=body|{'expected_preview_digest':'b'*64}).status_code==409
     assert api['bundle']==before
-    detail=c.get(path(api,'runs/'+api['rid']));assert detail.status_code==200 and detail.json()['data']['history']['bundle']['schema_version']=='3'
+    detail=c.get(path(api,'runs/'+api['rid']));assert detail.status_code==200,detail.text
+    history=detail.json()['data']['history']
+    assert history['bundle']['schema_version']=='11' and history['results']['schema_version']=='3'
+    assert 'criteria' not in history['results'] and 'assessment' not in history
 
 
-@pytest.mark.parametrize('forgery',['value','units','result_binding','process_uuid','source_study','source_run','digest','duplicate','stale_context'])
-def test_public_request_rejects_forged_authority(api,forgery):
-    candidate=copy.deepcopy(api['candidate']);item=candidate['inputs'][0]
+@pytest.mark.parametrize('forgery',['value','units','result_binding','process_uuid','source_study','source_run','digest','duplicate','stale_context','criteria'])
+def test_public_request_rejects_forged_authority(api6,forgery):
+    api=api6;candidate=copy.deepcopy(api['candidate']);item=candidate['inputs'][0]
     if forgery in ('value','units','result_binding','process_uuid'):item[forgery]=150 if forgery=='value' else 'forged'
+    elif forgery=='criteria':candidate['criteria']=[]
     elif forgery=='source_study':candidate['study_id']=uid()
     elif forgery=='source_run':item['source_run_id']=uid()
     elif forgery=='digest':item['expected_results_digest']='a'*64
@@ -173,9 +201,11 @@ def test_public_request_rejects_forged_authority(api,forgery):
     response=api['client'].post(path(api,'configurations/preview'),json=candidate)
     assert response.status_code in (400,404,409),response.text
     assert len(response.json()['error']['fields'])<=20
+    assert not any(call[2]=='POST' for call in api['model'].calls)
 
 
-def test_commit_requires_exact_preview_and_current_authorization(api):
+def test_commit_requires_exact_preview_and_current_authorization(api6):
+    api=api6
     c=api['client'];body=commit_body(api)
     assert c.post(path(api,'configurations'),json=body|{'expected_preview_digest':'a'*64}).status_code==409
     assert c.post(path(api,'configurations'),json={k:v for k,v in body.items() if k!='expected_preview_digest'}).status_code==400
@@ -201,7 +231,8 @@ def test_inventory_run_scan_bound_and_stable_high_water(api,monkeypatch):
 
 
 @pytest.mark.parametrize('change',['source_changed','source_missing','revoke','foreign_source'])
-def test_save_rechecks_sources_after_preview(api,change):
+def test_save_rechecks_sources_after_preview(api6,change):
+    api=api6
     body=commit_body(api)
     with api['store'].connection(write=True) as db:
         if change=='source_changed':db.execute('UPDATE run_associations SET process_uuid=? WHERE run_id=?',(uid(),api['rid']))
@@ -213,7 +244,8 @@ def test_save_rechecks_sources_after_preview(api,change):
     with api['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==1
 
 
-def test_acknowledgement_loss_reopens_same_command_and_immutable_saved_binding(api):
+def test_acknowledgement_loss_reopens_same_command_and_immutable_saved_binding(api6):
+    api=api6
     c=api['client'];body=commit_body(api)
     result=c.post(path(api,'configurations'),json=body);assert result.status_code==201
     # Drop acknowledgement, recreate the application, then reconcile exact receipt.
@@ -237,17 +269,25 @@ const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES20
  const client=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
  const [[,PublicApi],...otherApis]=Object.entries(client).filter(([name,value])=>typeof value==='function'&&/Api$/.test(name));assert.equal(otherApis.length,0);
  const api=new PublicApi();api.actor='owner';api.csrf='csrf';const calls=[];
- const command={command_id:'original-command',expected_revision:null,configuration_id:null,expected_preview_digest:'a'.repeat(64),configuration:{schema_version:'2',study_id:'study',name:'Exact original',inputs:[{kind:'run_result',source_run_id:'source'}]}};
+ const command={command_id:'original-command',expected_revision:null,configuration_id:null,expected_preview_digest:'a'.repeat(64),configuration:{schema_version:'6',study_id:'study',name:'Exact original',inputs:[{kind:'run_result',source_run_id:'source'}]}};
  const original=structuredClone(command);let retry=false;
- global.fetch=async(url,options)=>{calls.push({url,body:options.body});if(options.method==='GET')return new Response(JSON.stringify({error:{code:'resource_not_found',outcome:'unchanged'}}),{status:404});if(!retry)throw new Error('Lost acknowledgement');return new Response(JSON.stringify({data:{configuration:{}}}),{status:201});};
- await assert.rejects(api.commitConfiguration2(command),/Lost acknowledgement/);
+ const missing={error:{code:'resource_not_found',outcome:'unchanged',
+   recovery:'resend_same_command'}};
+ global.fetch=async(url,options)=>{calls.push({url,body:options.body});
+   if(options.method==='GET')return new Response(JSON.stringify(missing),{status:404});
+   if(!retry)throw new Error('Lost acknowledgement');
+   return new Response(JSON.stringify({data:{configuration:{}}}),{status:201});};
+ await assert.rejects(api.commitConfiguration6(command),/Lost acknowledgement/);
  command.configuration.name='Edited after request';command.command_id='replacement';
  assert.deepEqual(api.pending.body,original);await api.reconcile();assert.equal(api.retryReady,true);
  retry=true;await api.retryOriginal();const writes=calls.filter(c=>c.body);
  assert.equal(writes.length,2);assert.equal(writes[0].body,writes[1].body);assert.equal(api.pending,null);
  retry=false;calls.length=0;await assert.rejects(api.submitRun('study','revision'),/Lost acknowledgement/);
  const accepted=structuredClone(api.pending.body);assert.equal(accepted.configuration_revision_id,'revision');
- global.fetch=async(url,options)=>{calls.push({url,body:options.body});return new Response(JSON.stringify({data:{command_id:accepted.command_id,state:'uncertain',result:{run_id:'run'},error:null}}));};
+ const uncertain={data:{command_id:accepted.command_id,state:'uncertain',result:{run_id:'run'},
+   error:null,recovery:'uncertain'}};
+ global.fetch=async(url,options)=>{calls.push({url,body:options.body});
+   return new Response(JSON.stringify(uncertain));};
  await api.reconcile();assert.deepEqual(api.pending.body,accepted);assert.equal(api.retryReady,false);
  await assert.rejects(api.retryOriginal(),/Check the original/);assert.equal(calls.filter(c=>c.body).length,1);
  console.log('Exact save retry and uncertain-run no redispatch verified');
@@ -258,10 +298,18 @@ const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES20
     assert 'verified' in result.stdout
 
 
-def test_literal_request2_remains_supported_and_capabilities_are_bounded(api):
-    candidate=copy.deepcopy(api['candidate']);config=api['case']['frozen']['configuration']
+def test_literal_request6_is_supported_older_requests_are_refused_and_capabilities_are_bounded(api6):
+    api=api6;candidate=copy.deepcopy(api['candidate']);config=api['case']['frozen']['configuration']
     candidate['inputs']=[dict(kind='literal',**{k:v for k,v in i.items() if k!='result_binding'}) for i in config['inputs']]
     result=preview(api,candidate);assert all(i['result_binding'] is None for i in result['resolved_candidate']['inputs'])
+    # New configurations are written only as version 6: older requests are refused unchanged.
+    older={k:v for k,v in candidate.items() if k not in ('assumptions','general_context_evidence_version_ids')}
+    older.update(schema_version='2',criteria=[],evidence_version_ids=[])
+    command=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=older,expected_preview_digest='a'*64)
+    for route,body in (('configurations/preview',older),('configurations',command)):
+        response=api['client'].post(path(api,route),json=body)
+        assert response.status_code==422 and response.json()['error']['code']=='unsupported_record_version',response.text
+    with api['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==1
     caps=api['client'].get('/api/1/capabilities').json()['data']
     assert 'result_linked_inputs/1' in caps['engineering']
     assert caps['limits']['result_source_outputs']==50 and caps['limits']['result_source_runs']==100
@@ -270,7 +318,8 @@ def test_literal_request2_remains_supported_and_capabilities_are_bounded(api):
     assert not any('modified' in x for x in caps['engineering'])
 
 
-def test_generated_public_schemas_match_actual_responses_and_are_reproducible(api,tmp_path):
+def test_generated_public_schemas_match_actual_responses_and_are_reproducible(api6,tmp_path):
+    api=api6
     output=tmp_path/'openapi.json';result=subprocess.run([sys.executable,'-B',str(ROOT/'application/generate_contract.py'),'--output',str(output)],capture_output=True,text=True)
     assert result.returncode==0,result.stderr
     assert output.read_bytes()==(ROOT/'contracts/hyprn-mvp.openapi.yaml').read_bytes()

@@ -30,7 +30,7 @@ for (const late of ['pending', 'error']) test(`newer terminal detail survives la
     await route.fulfill({ json: { schema_version: '1', data: count === 1 ? pending : record } });
   });
   // Re-select so the first pending response starts the actual polling effect.
-  await page.getByRole('button', { name: 'Back to run history', exact: true }).click();
+  await page.getByRole('button', { name: 'Return to run history', exact: true }).click();
   await page.getByRole('button', { name: `Inspect run ${id}`, exact: true }).click();
   await expect.poll(() => !!delayed).toBe(true);
   await page.getByRole('button', { name: 'Refresh run status', exact: true }).click();
@@ -47,22 +47,26 @@ for (const late of ['pending', 'error']) test(`newer terminal detail survives la
   expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
 });
 
-test('newer history list survives the late initial response', async ({ page }) => {
+test('returning to history while the first list read is in flight applies that read once', async ({ page }) => {
   let first: Route | undefined, calls = 0;
   const { state } = await open(page, async fixture => {
     const item = { run_id: id, state: fixture.detail.state, process_state: fixture.detail.process_state, configuration_revision_id: fixture.detail.history.configuration.configuration_revision_id };
-    await page.route(`**/api/1/studies/${sid}/runs`, async route => {
+    // History reads are paged, so the list request carries query parameters.
+    await page.route(new RegExp(`/api/1/studies/${sid}/runs(\\?|$)`), async route => {
       if (++calls === 1) { first = route; return; }
       await route.fulfill({ json: { schema_version: '1', data: [item] } });
     });
   });
-  // History list and run detail are separate views now; return to the list explicitly.
-  await page.getByRole('button', { name: 'Back to run history', exact: true }).click();
-  await expect(page.getByRole('button', { name: `Inspect run ${id}`, exact: true })).toBeVisible();
+  // History list and run detail are separate views; return to the list explicitly.
+  await page.getByRole('button', { name: 'Return to run history', exact: true }).click();
+  await expect(page.getByText('Loading run history…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh runs', exact: true })).toBeDisabled();
   await expect.poll(() => !!first).toBe(true);
-  await first!.fulfill({ json: { schema_version: '1', data: [] } });
-  await page.waitForTimeout(100);
+  expect(calls).toBe(1);
+  const item = { run_id: id, state: state.detail.state, process_state: state.detail.process_state, configuration_revision_id: state.detail.history.configuration.configuration_revision_id };
+  await first!.fulfill({ json: { schema_version: '1', data: [item] } });
   await expect(page.getByRole('button', { name: `Inspect run ${id}`, exact: true })).toBeVisible();
+  expect(calls).toBe(1);
   expect(state.writes).toEqual([]); expect(state.unknown).toEqual([]);
 });
 
@@ -74,11 +78,11 @@ test('late detail failure cannot alter another selection or remounted history', 
     if (++count === 1) return route.fulfill({ json: { schema_version: '1', data: pending } });
     delayed = route;
   });
-  await page.getByRole('button', { name: 'Back to run history', exact: true }).click();
+  await page.getByRole('button', { name: 'Return to run history', exact: true }).click();
   await page.getByRole('button', { name: `Inspect run ${id}`, exact: true }).click();
   await page.getByRole('button', { name: 'Refresh run status', exact: true }).click();
   await expect.poll(() => !!delayed).toBe(true);
-  await page.getByRole('button', { name: 'Back to run history', exact: true }).click();
+  await page.getByRole('button', { name: 'Return to run history', exact: true }).click();
   await delayed!.abort('failed');
   await expect(page.getByRole('region', { name: 'Run details' })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);

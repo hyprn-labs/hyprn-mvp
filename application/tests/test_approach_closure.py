@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import pytest
 from hyprn_mvp_app.store import digest, uid
-from hyprn_mvp_app.modeling import SCHEMA
+from hyprn_mvp_app.contracts import definitions
 from hyprn_mvp_app.approach_closure import build_closure, validate_closure, validate_saved
 
 @pytest.mark.parametrize('change',[None,'output','value','units','conversion','failed'])
@@ -38,7 +38,7 @@ def test_result_binding_uses_exact_retained_output_and_conversion(change):
         with pytest.raises(ValueError):closure(v,**kwargs)
 
 
-D=SCHEMA['$defs']
+D=definitions()
 SID=uid()
 
 def sample(s):
@@ -166,7 +166,7 @@ def test_assumption_origin_keeps_old_proposal_but_rejects_active_duplicate():
 
 def config(m,approach=None):
     c=sample(D['ConfigurationRevision4']);c.update(study_id=SID,model_id=m['model_id'],model_revision_id=m['model_revision_id'])
-    c['approach_binding']=None if approach is None else dict(approach_id=approach['approach_versions'][0]['approach_id'],approach_version_id=approach['root_approach_version_id'],approach_digest=approach['root_approach_digest'],closure_digest=approach['digest'],case_id=None)
+    c['approach_binding']=None if approach is None else dict(approach_id=approach['approach_versions'][0]['approach_id'],approach_version_id=approach['root_approach_version_id'],approach_digest=approach['root_approach_digest'],closure_digest=approach['digest'])
     return signed(c)
 
 def test_nested_prior_configuration_authenticates_ancestor_subclosure_digest():
@@ -222,7 +222,7 @@ def test_model_and_configuration_citations_have_exact_bytes_and_scope():
 def test_scientific_cycle_is_rejected_without_chasing_family_ancestry():
     m=model();v=version();link(v,m);cfg=config(m)
     v['content']['basis_refs']=[dict(kind='configuration',configuration_revision_id=cfg['configuration_revision_id'],reason='Circular',relation='context')];signed(v)
-    cfg['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest='a'*64,case_id=None);signed(cfg)
+    cfg['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest='a'*64);signed(cfg)
     with pytest.raises(ValueError,match='cycle'):closure(v,models=[m],configurations=[cfg])
 
 def test_typed_depth_bound_uses_longest_shared_path():
@@ -261,22 +261,9 @@ def test_aggregate_bytes_and_combined_prior_record_limit():
     runs=[sample(D['ApproachRunContext1']) for _ in range(32)]
     with pytest.raises(ValueError,match='Prior record limit'):closure(models=[m],configurations=configs,run_contexts=runs)
 
-def test_saved_envelope_rejects_another_root_and_case_binding():
+def test_saved_envelope_rejects_another_root():
     v=version();c=closure(v)
     with pytest.raises(ValueError):validate_saved(dict(version=version(),closure=c))
-    m=model();v=version();link(v,m);ancestor=closure(v,models=[m]);cfg=config(m,ancestor)
-    cfg['approach_binding']['case_id']=uid();signed(cfg)
-    outer=version();outer['content']['basis_refs']=[dict(kind='configuration',configuration_revision_id=cfg['configuration_revision_id'],reason='Case',relation='context')];signed(outer)
-    with pytest.raises(ValueError,match='case'):closure(outer,models=[m],approach_versions=[v],configurations=[cfg])
-
-def test_pinned_case_requires_a_matching_nonnull_model_binding():
-    m=model();v=version();b,_=link(v,m)
-    case=sample(D['ApproachCase1']);case['binding_id']=None
-    v['content']['cases']=[case];signed(v)
-    ancestor=closure(v,models=[m]);cfg=config(m,ancestor)
-    cfg['approach_binding']['case_id']=case['case_id'];signed(cfg)
-    outer=version();outer['content']['basis_refs']=[dict(kind='configuration',configuration_revision_id=cfg['configuration_revision_id'],reason='Case',relation='context')];signed(outer)
-    with pytest.raises(ValueError,match='case'):closure(outer,models=[m],approach_versions=[v],configurations=[cfg])
 
 @pytest.mark.parametrize('change',['result_run','result_bundle','missing_as_zero'])
 def test_run_results_repeated_identities_and_missing_values(change):

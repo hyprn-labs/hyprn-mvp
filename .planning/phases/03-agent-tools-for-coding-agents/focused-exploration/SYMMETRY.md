@@ -1,0 +1,17 @@
+# Independent controls and symmetric exploration
+
+User-approved correction to compact exploration: show every independent input; only connected/intermediate quantities are hidden. Saved input subsets no longer remove controls. Explicit covary groups retain one representative and the same linked-value behavior. Choose outcomes retains the existing saved output selection API; no contract or numerical changes.
+
+Shared design-system layout has matching input/output panel bounds, a central expandable Model node and one outcome per row. Controls use natural label heights with compact value/unit boxes; plots and their explanation actions have consistent spacing. Narrow containers stack in reading order. How calculated / How estimated replaces Result basis; pending/unavailable results have honest separate labels. The existing calculation run and surrogate assessment readers are preserved. `/hyprn` guidance and layout documentation now agree that independent inputs cannot be hidden by display choices.
+
+## Verification
+
+- `./hyprn-mvp dev check combined-static --keep-scope`: 9/9 stages passed in 4.63 s, scope `207ee0b9-53b7-4174-8eb8-60049e65121c`. Live review identified excessive vertical space from wrapping/equal-height input rows. After the CSS correction, 9/9 stages passed in 4.60 s, scope `ce2dc4fb-c466-44d1-ae4a-8424d40e94f0`. No failed check. All checks run through the pinned local edition in isolated stores with live ports protected.
+- Helper regression checks independent controls with missing declared ranges and legacy saved subsets, excludes connected quantities, honors explicit linked representatives, preserves intermediate outcome selection and leaves the basis unchanged.
+- Served UI: 12 independent controls (14 model inputs with two explicit linked pairs), three outcomes, no Fixed inputs disclosure. Baseline How calculated opens its real run action. Simultaneous interior selection returns real estimates and curves; How estimated opens the existing kriging assessment. Expanded graph shows 14 controls, five connected inputs and 11 estimates, then collapses with the same selected vector. Mach 5.72 → 5.75 updates all three visible estimates.
+- Public readback confirms the same complete 120-point sampling operation and ready surrogate identity. No samples, configurations, runs or fits were created. Existing default-boundary coverage limitations remain explicit.
+- Updated existing browser-suite navigation/label expectations for the new default; the full expensive numerical browser fixture suite was not rerun. Actual served UI interactions above supplement the focused static/helper checks. Full release qualification and human acceptance remain separate.
+
+External evidence: task scratch `hyprn-exploration-symmetry`, including verified-records.json, UI delivery manifest/previous-index recovery and final screenshot. UI assets were atomically published to the existing demo; numerical runtime fingerprint unchanged, no service restart. Other session's export padding and unrelated planning/research files remain untouched and unstaged.
+
+Committed-tree check: implementation `9b0eebe` passed all 9 combined-static stages in an isolated archive (4.74 s; scope `8a8aa6a8-ef9d-47c0-b416-516e34d8bc7f`). Final live columns have identical 1453px height and top position with no horizontal overflow; opening Assistant stacks them into equal-width sections without overflow. The full-page screenshot was inspected. Only this verification paragraph follows the tested commit.

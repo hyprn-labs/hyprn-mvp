@@ -59,7 +59,7 @@ test('discard before inspect and copy restores every component field without sav
   const portSymbol = await page.getByLabel('Port 1 symbol', { exact: true }).inputValue();
   const portCount = await page.getByRole('button', { name: /^Remove port / }).count();
   let writes = 0; page.on('request', r => { if (['POST', 'PATCH'].includes(r.method())) writes++; });
-  for (const action of [`Inspect run ${rid}`, 'Copy configuration to draft']) {
+  for (const action of [`Inspect run ${rid}`, 'Create new version']) {
     await page.getByLabel('Component name', { exact: true }).fill('Discard me');
     await page.getByLabel('Load Python source file').setInputFiles({ name: 'discard.py', mimeType: 'text/x-python', buffer: Buffer.from('outputs["u"] = 99\n') });
     await expect(page.getByRole('status')).toContainText('Source file loaded locally');
@@ -72,7 +72,7 @@ test('discard before inspect and copy restores every component field without sav
     await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await page.getByRole('button', { name: action, exact: true }).click();
     await page.getByRole('button', { name: 'Model', exact: true }).click();
-    if (action === 'Copy configuration to draft') await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+    if (action === 'Create new version') await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await openModelTools(page);
     await page.getByRole('button', { name: 'Select First', exact: true }).click();
     const portDetails = page.getByText('Inputs/outputs', { exact: true }); if (!await page.getByLabel('Port 1 name', { exact: true }).isVisible()) await portDetails.click();
@@ -131,7 +131,7 @@ test('explicit configuration runs once and retained history copies only into a d
   expect(first.history.results.outputs.every((o: { availability: string }) => o.availability === 'available')).toBeTruthy();
   expect(first.history.results.outputs.map((o: { value: number }) => o.value).sort((a: number, b: number) => a - b)).toEqual([5, 25]);
   expect(first.history.results.criteria[0].outcome).toBe('met');
-  await page.getByRole('button', { name: 'Copy configuration to draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Create new version', exact: true }).click();
   await expect(page.getByText('Configuration copied to an unsaved draft. No run submitted.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run model', exact: true })).toBeDisabled();
   expect((await (await page.request.get(`/api/1/studies/${sid}/runs`)).json()).data).toHaveLength(1);
@@ -180,7 +180,7 @@ test('retained history keyboard controls and stable desktop/narrow captures use 
   await page.waitForTimeout(300);
   await page.getByRole('heading', { name: 'Outputs', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: evidencePath('history-narrow-viewport.png') });
-  await page.getByRole('button', { name: 'Copy configuration to draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Create new version', exact: true }).click();
   await expect(page.getByText('Configuration copied to an unsaved draft. No run submitted.', { exact: true })).toBeVisible();
   await page.getByLabel('First · x value', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: evidencePath('configuration-narrow-viewport.png') });
@@ -303,7 +303,7 @@ test('downstream failure keeps upstream evidence, unresolved criteria and model-
   expect(original.history.results.outputs.some((o: { value: number }) => o.value === 5)).toBeTruthy();
   await page.route(`**/api/1/studies/${sid}/models/**`, route => route.abort('failed'));
   await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('button', { name: 'Reload model', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh model', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Runs', exact: true }).click();
   await page.getByRole('button', { name: `Inspect run ${rows[0].run_id}`, exact: true }).click();

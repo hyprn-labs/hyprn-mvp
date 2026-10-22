@@ -1,6 +1,15 @@
 import { test, expect, Page, Route } from 'playwright/test';
 import { ownerPassword } from './support/served';
 
+// The owner's receipt answer for the original run command: the run is the outcome (adopt).
+const adopt = (f: { command: string; run: unknown }) => (route: Route) =>
+  route.fulfill({
+    json: {
+      schema_version: '1',
+      data: { command_id: f.command, state: 'committed', result: f.run, recovery: 'adopt' },
+    },
+  });
+
 async function fixture(page: Page) {
   await page.goto('/ui/');
   await page.getByLabel('Username').fill('owner');
@@ -17,7 +26,7 @@ async function fixture(page: Page) {
   await page.route(`**/api/1/studies/${origin}/execution-readiness`, route => route.fulfill({ json: { schema_version: '1', data: { status: 'ready', capability: 'flat_explicit_scalar', reasons: [], observed_at: new Date().toISOString(), expires_at: new Date(Date.now() + 600000).toISOString() } } }));
   await page.getByLabel('New model name').fill('Submission scope'); await page.getByLabel('Starting model').selectOption('two_component_example');
   await page.getByRole('button', { name: 'Create model', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh model', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Configurations', exact: true }).click();
   await page.getByRole('button', { name: 'Commit model snapshot', exact: true }).click();
   await expect(page.getByText('Model snapshot committed. Enter or review every input.', { exact: true })).toBeVisible();
@@ -43,7 +52,7 @@ for (const outcome of ['acknowledgement', 'recovery'] as const) test(`${outcome}
   await expect(page.getByRole('heading', { name: f.names[0], exact: true })).toBeVisible();
   if (outcome === 'acknowledgement') await f.delayed!.fulfill({ json: { schema_version: '1', data: f.run } });
   else {
-    await page.route(`**/api/1/studies/${f.origin}/commands/${f.command}?category=run`, route => route.fulfill({ json: { schema_version: '1', data: { command_id: f.command, state: 'committed', result: f.run } } }));
+    await page.route(`**/api/1/studies/${f.origin}/commands/${f.command}?category=run`, adopt(f));
     await page.getByRole('button', { name: 'Check original command', exact: true }).click();
   }
   await expect(page.getByRole('button', { name: 'Open original run', exact: true })).toBeVisible();
@@ -60,7 +69,7 @@ for (const outcome of ['acknowledgement', 'recovery'] as const) test(`${outcome}
 test('original-context recovery still selects its run without resubmission', async ({ page }) => {
   const f = await fixture(page); await page.getByRole('button', { name: 'Run model', exact: true }).click(); await expect.poll(() => !!f.delayed).toBe(true);
   await f.delayed!.abort('failed'); await expect(page.getByRole('button', { name: 'Check original command', exact: true })).toBeVisible();
-  await page.route(`**/api/1/studies/${f.origin}/commands/${f.command}?category=run`, route => route.fulfill({ json: { schema_version: '1', data: { command_id: f.command, state: 'committed', result: f.run } } }));
+  await page.route(`**/api/1/studies/${f.origin}/commands/${f.command}?category=run`, adopt(f));
   await page.getByRole('button', { name: 'Check original command', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Run details', exact: true })).toContainText(f.run.run_id); expect(f.posts).toBe(1);
   await expect(page.getByRole('button', { name: 'Open original run', exact: true })).toHaveCount(0);

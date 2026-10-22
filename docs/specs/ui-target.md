@@ -6,6 +6,8 @@ Related specifications: architecture and contracts (`docs/specs/architecture-and
 
 A plain-language wording pass is in progress, so the labels quoted below are the current wording, not a frozen list.
 
+> **Being replaced (2026-10-18).** ADR-0007 retires the modeling approach, ADR-0008 defines one study answer and ADR-0009 makes calculations a primitive; `.planning/phases/03-agent-tools-for-coding-agents/consistency/DECISIONS.md` records the resulting placement (Overview: study brief, answer and answer exploration; Models: models, versions and model explanations; Calculations: calculations, configurations and runs). Where this document still describes the approach page, approach versions or the old study tabs, those decisions govern; the placement table is rewritten as the migration batches land.
+
 ## 1. What the UI is for
 
 HYPRN MVP is a workspace where engineers state a study question, build computational models, configure and run them, and judge what the results are worth with cited evidence. The UI is the human client of the HYPRN MVP API. Assistants (a provider-hosted managed agent in the cloud edition, local coding agents through MCP in the local edition) are a second client of the same API; they never get a privileged route. Their writes are attributed and shown to the person they act for in the HYPRN MVP UI, and they never delete saved records, archive or restore anything, or manage access (ADR-0003, `docs/adr/0003-agent-write-rights-revised.md`).
@@ -29,19 +31,18 @@ Every piece of information has exactly one editable home. Everywhere else shows 
 | Study archive state | Home row (Archive / Restore) | Home Archived view |
 | Study question, context, approach assumptions, limits | Modeling approach (edit mode) › Study details | Study question box and Study details dialog on Overview and the approach page; retained approach reader in configurations and runs |
 | Method steps | Modeling approach › Methods | Retained approach reader; "Why" in the model view |
-| Cases | Modeling approach › Cases & results (one card per case) | Run header "Case: … · View case"; configuration "View case in approach" |
 | Model composition, components, connections, source | Models › model draft | Canonical model view, read-only, in model versions, Run › Model, configuration "View model version", approach "Open model version" |
 | Quantities (ports) | Models › model view › Edit ports | Quantities table below the canvas; run and configuration contexts add Value and Provenance |
 | Model and component assumptions | Model view Details (nothing selected for the model; component selected for the component) | Evidence page; Run › Evidence |
-| Configuration (context, inputs and provenance, criteria, configuration assumptions, approach and case link) | Configurations › draft editor | Saved configuration, Run › Configuration, approach case cards |
-| Run outcomes and outputs | Computed and immutable; no editable home | Run › Results; Overview recent runs; case cards; result picker |
+| Configuration (context, inputs and provenance, criteria, configuration assumptions, approach link) | Configurations › draft editor | Saved configuration, Run › Configuration |
+| Run outcomes and outputs | Computed and immutable; no editable home | Run › Results; result picker |
 | Evidence sources | Evidence page › Sources | "View evidence" wherever cited |
 | Exact identities, digests, serialized records | The record's own Record details dialog | Nowhere inline |
 
 Consequences that the UI must keep:
 
 - A configuration shows only what the configuration adds. It links to its model's assumptions in one line instead of repeating them, and never shows study conditions or limits.
-- A run shows its own record. Study-level context is reached through "View modeling approach" or "View case", not repeated on the run.
+- A run shows its own record. Study-level context is reached through "View modeling approach", not repeated on the run.
 - Full identities appear once, in Record details. Lists may show a short display ID to distinguish rows; short IDs are never request identities.
 
 ### 2.2 Read-only views reuse the canonical component
@@ -117,46 +118,45 @@ The application is a single-page React client with hash deep links that name exp
 
 ### 3.3 Overview
 
-- **Study question box** at the top, read from the latest saved approach version only (a draft is never study context). **See more details** at its bottom-right opens the **Study details** dialog: Study question (agreed question, original wording, elaboration, each with attribution) · Study context (scope, open questions) · Assumptions (approach-owned, with evidence) · Limits (with evidence; limits apply to the whole study).
-- **About this study**: Edit, description, and one action, **View modeling approach**.
-- **Recent runs**: run name and short ID with Execution and Criteria tags. **Recent configurations**: name and revision. Full identities are only in Record details.
+- The latest saved approach is the main reading page. **About this study** contains the full study question and **See more details**; editing is an explicit separate action.
+- Two clear section panels follow: **Reasoning and methods**, **Answer to the study question**. These reuse the versioned approach reader directly. There is no duplicate recent-runs/configurations dashboard or bare jump-link menu.
+- Answer text, supporting results/sources and technical record identities are separate. Supporting-result cards link directly to exact configurations and runs. Qualitative exploration choices come from the saved exploration design.
 
 ### 3.4 Modeling approach
 
 - Header: back to Overview, version select, Edit approach / save draft / save approach version, overflow with Record details and Earlier work. The same study question box and Study details dialog as Overview; in edit mode Study details is where approach assumptions and limits are added and edited.
-- **Methods**: method map on the left; the selected step on the right with its status, **Open model version**, and two tabs:
-  - Explanation: purpose, why this method, transformation, then one line "Implemented in Model version … · N inputs · M outputs" (or, for a proposed step, its intended inputs and outputs in prose and the remaining work).
-  - Assumptions & evidence: the step's references to approach, model, component and configuration assumptions, read-only, plus rationale evidence.
-  - Open model version opens the canonical model view read-only, with the step's components traced, its quantities highlighted and the table scoped to them until "Show all quantities".
-- **Cases & results**: results summary first (honest counts, coverage, the fixed-threshold disclaimer, case filter, refresh, and a **Study limits** link that opens Study details at Limits). Then one card per case: question, Create configuration, its runs (name, short ID, Execution, Criteria, criterion facts, View run), configurations not yet run, and "Why this case" (rationale, model version, evidence). Then a "No specific case" card and a "Remaining method work" card.
+- One continuous page follows the full saved engineering question: **Reasoning and methods**, then **Answer to the study question**. Each part has a bordered section panel. There are no chapter tabs or separate method map.
+- Methods expand in place to show purpose, basis and reasoning, calculation, dependencies and unresolved work. Proposed and partially linked methods remain explicit. Model selection handles several exact versions; **View model details** opens the canonical read-only model view with the relevant components and quantities highlighted. Assumption and evidence references use their canonical owners alongside the explanation.
+- Supporting results link directly to each cited configuration and run. No newest-run inference supplies scientific basis. Outputs retain units and missing-value reasons in their run view.
+- The study answer cites exact configurations, runs and evidence. Empty assessments are explicit; successful execution and met criteria do not imply a scientific answer. Study limits remain in Study details.
 
 ### 3.5 Models and the canonical model view
 
 - Models list with **New model** (empty or from a starting model) and Open model.
 - Model page: back to all models, name and version select (draft or read-only version), **Save model version**, Create configuration, overflow (rename, reload, import and compare, Record details for versions). A "Units incomplete" disclosure lists quantities whose unit is still unspecified; such drafts can be saved, but execution stays blocked until units are resolved.
 - **Canonical model view** (one component, reused everywhere a model is shown):
-  - Toolbar: **Graph | XDSM** toggle, clear selection, show or hide Components and Details. Authoring actions (add component, connect ports, overflow) appear only in the current draft.
+  - Toolbar: **Graph | XDSM** toggle, clear selection, show or hide Details. Authoring actions (add component, connect ports, overflow) appear only in the current draft.
   - Canvas with a Details panel beside it, and the **Quantities** table below at full width in its own scroll region.
   - Details, nothing selected: the model's summary and its **Assumptions**, plus a count of component assumptions.
-  - Details, component selected: **What it computes** (each linked method step's transformation text, then **View source**, a read-only text view that is never run; in a draft, Edit source), **Why** (every linked method step with its purpose and rationale and a link back to that step in the modeling approach), and the component's **Assumptions**. Method steps are linked by exact implementation references, never by name.
-  - Quantities table: Quantity (symbol and name) · Component · Direction (with "from …", "to …", "set in configuration" or "model result" folded in) · Definition · Unit, plus Value and Provenance in configuration and run contexts. Filters for text, component, direction and availability. Selecting a component in the graph, XDSM or table scopes and highlights its rows.
-  - Edit ports and component edits open as dialogs. There is no ports table in Details, no incoming or outgoing lists and no notes.
+  - Details, component selected: the same Purpose, Basis and reasoning, Calculation in plain words and Python function as the overview method. Source comes from the exact model; the overview is read-only. The current model panel edits the existing approach draft explanation and model source and retains assumption authoring. Saved model contexts retain their saved method explanation. Exact implementation references link methods, never names.
+  - Quantities table: Quantity (symbol and name) · Component · Direction (with "from …", "to …", "set in configuration" or "model result" folded in) · Definition · Unit, plus Value and Provenance in configuration and run contexts. Filters for text and direction, with component selection providing the scope. Selecting a component in the graph, XDSM or table scopes and highlights its rows.
+  - Edit ports and component edits open as dialogs; port-metadata paste is absent. There is no ports table in Details, no incoming or outgoing lists and no notes.
 
 ### 3.6 Configurations
 
 - List with New configuration; each row names the configuration, its revision and model version.
 - Saved configuration: header with name, revision and model version, read-only tag, Record details, **Copy configuration to draft**. Then, in this fixed order, which is the same for drafts, saved configurations and runs:
-  1. **Context**: description, a strip naming the linked approach version and case with View modeling approach and View case in approach, and supporting evidence.
+  1. **Context**: description, a strip naming the linked approach version with View modeling approach, and supporting evidence.
   2. **Inputs**: value, unit and provenance per free input; connected inputs are shown, not assigned.
   3. **Criteria**: numbered criterion records (quantity, comparison in words, threshold and unit, tolerances, evidence).
   4. **Assumptions**: the configuration's own, then one line "Model assumptions: N in Model version … · View model assumptions".
   - Then **Run this configuration** with its readiness reason, and **View model version** (the canonical model view of that exact version with the configuration's values).
-- Draft editor: the same order with dedicated edit actions, input tools (including **Use a run result** for result-linked inputs), criteria editing, Add assumption, the approach and case picker, and Save configuration.
+- Draft editor: the same order with dedicated edit actions, input tools (including **Use a run result** for result-linked inputs), criteria editing, Add assumption, the approach picker, and Save configuration.
 
 ### 3.7 Runs
 
 - History: newest first; failed and incomplete runs stay listed. Opening a run replaces the list.
-- Run detail: record bar "Run record · Read-only" with Back to run history; heading with the configuration name and one context line (short run ID, case, View case); actions **Record details** (run ID, configuration revision, model version, start time, criterion evaluator, digests, dependencies), **Export**, **Create modified run**, and Refresh status while pending.
+- Run detail: record bar "Saved run · read-only" with Return to run history; heading with the configuration name and one context line (short run ID); actions **Record details** (run ID, configuration revision, model version, start time, criterion evaluator, digests, dependencies), **Export**, **Create modified run**, and Refresh status while pending.
 - Tabs **Results · Model · Configuration · Evidence**:
   - Results: Execution and Criteria tags; a failed run's execution diagnostic; outputs as readouts and a table, with full-precision values on request and "not computed" for missing outputs.
   - Model: the canonical model view, read-only, with this run's values.
@@ -227,7 +227,7 @@ Local edition (decided in `docs/specs/agents.md`): there is no in-app conversati
 - Decided: the canvas is a view, never a second editable model graph. Every structural edit (add, connect, disconnect, remove, rename, edit ports or source) dispatches the same typed, revision-checked edit command through the HYPRN MVP API that the manual editors and the agent's model-editing tool use. The canvas holds no model state that outlives the API snapshot it was drawn from; a rejected or stale command leaves the canvas showing the server's state plus the user's preserved proposal.
 - Drag-to-connect is a convenience over the same command with a keyboard equivalent. Node positions are a presentation preference; they never change solver or execution order. Feedback loops stay visibly loops.
 - Recommended engines: xyflow (React Flow, MIT) with dagre (MIT) layout for the Graph projection and for study canvases (linked records, evidence, run lineage); XDSMjs (Apache-2.0) for the XDSM projection. Today's Graph and XDSM views are HYPRN MVP's own rendering and stay until a replacement passes the same interaction and accessibility checks.
-- Viewers the numerical frameworks already produce (model structure diagrams, reports, case views) are generated in the restricted worker, kept as run artifacts and shown through the HYPRN MVP API in a sandboxed frame, instead of being rebuilt (recommended).
+- Viewers the numerical frameworks already produce (model structure diagrams, reports) are generated in the restricted worker, kept as run artifacts and shown through the HYPRN MVP API in a sandboxed frame, instead of being rebuilt (recommended).
 
 ### 4.6 Authored documents
 
@@ -256,7 +256,7 @@ Plots must name their dataset, units and inclusion filters, offer a table and ra
 | One Assumption concept; no notes in the UI; Evidence page lists current assumptions grouped by owner | Decided |
 | Canonical model view: Graph \| XDSM on top, quantities table below, component "what it computes and why" | Decided |
 | Study-wide archive and restore from Home; studies never deleted | Decided |
-| Overview About card with only View modeling approach; See more details → Study details; study conditions and limits only on the approach page | Decided |
+| Overview About card with only Open modeling approach (before an approach version exists); See more details → Study details; study conditions and limits only on the approach page | Decided |
 | Section name shown once; footer "Third-party software notices" | Decided |
 | Plain-language wording | Decided principle; wording pass in progress; `design-system/Naming.md` is the authority |
 | Question box on both Overview and the approach page; quiet Archive button; stacked What / Why / Assumptions details; "Connected to" folded into Direction; per-criterion outcomes in the run's Configuration tab; no separate Record details in Run › Configuration; identical assumptions not grouped on the Evidence page; "What it computes" from the step's transformation text | Implemented as defaults; **acceptance pending** |
@@ -275,7 +275,7 @@ Licensing note that constrains the UI indirectly: the modeling service is a patc
 
 ## 7. Known UI debt
 
-**Acceptance.** The current screen composition (canonical model view, assumption simplification, run outcomes, Study details, case cards, Evidence index, Home archive) is implemented and passes automated checks. Human acceptance of the implemented result is pending, and any of the defaults in section 5 may be revised.
+**Acceptance.** The current screen composition (canonical model view, assumption simplification, run outcomes, Study details, Evidence index, Home archive) is implemented and passes automated checks. Human acceptance of the implemented result is pending, and any of the defaults in section 5 may be revised.
 
 **Wording.** The plain-language pass is in progress. Known leftovers: "Recorded outputs", "Exact values", the "Scientific outcomes" accessible name, "Source and ports are retained for this version", "Definition not recorded", "Recorded limitations (legacy text)", the comparison dialog's "Exact …" labels, the canvas footer "1 connections", "View all runs/configurations", and `design-system/Naming.md` entries for Archive and Restore. The blank unit label ("Dimensionless" versus a marked blank) and the availability reason "Unavailable: Unknown" need a decision.
 

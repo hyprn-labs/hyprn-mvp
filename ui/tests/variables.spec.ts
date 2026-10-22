@@ -13,7 +13,7 @@ async function fixture(page: Page) {
   const study = await post('/studies', { command_id: crypto.randomUUID(), name: 'Variables ' + crypto.randomUUID() });
   const model = await post(`/studies/${study.study_id}/models`, { command_id: crypto.randomUUID(), expected_revision: study.revision, name: 'Inspection fixture', template: 'two_component_example' });
   await page.evaluate(hash => { window.location.hash = hash; }, `v=1&study=${study.study_id}&model=${model.model_id}&view=model`);
-  await expect(page.getByRole('button', { name: 'Reload model', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh model', exact: true })).toBeVisible();
   return { study, model, post };
 }
 
@@ -67,7 +67,7 @@ test('repeated definitions keep distinct rows and grouped exchanges trace every 
   const added = next.instances.filter((i: any) => !model.instances.some((old: any) => old.instance_id === i.instance_id));
   const output = definition.ports.find((p: any) => p.direction === 'output'), inputs = definition.ports.filter((p: any) => p.direction === 'input');
   next = await post(base + '/edits', { command_id: crypto.randomUUID(), expected_revision: next.draft_revision, edits: [...added.map((i: any) => ({ kind: 'rename_instance', instance_id: i.instance_id, name: 'Repeated instance' })), ...[[added[0], inputs[0]], [added[0], inputs[1]], [added[1], inputs[0]]].map(([i, p], index) => ({ kind: 'connect', temp_key: 'link' + index, source_ref: { instance_id: first.instance_id, port_id: output.port_id }, target_ref: { instance_id: i.instance_id, port_id: p.port_id } }))] });
-  await page.getByRole('button', { name: 'Reload model' }).click();
+  await page.getByRole('button', { name: 'Refresh model' }).click();
   const views = page.getByRole('region', { name: 'Connected model views', exact: true });
   const exchange = views.locator(`[data-group="${first.instance_id}:${added[0].instance_id}"]`).first(); await exchange.focus(); await exchange.press('Enter');
   await expect(views.locator('[data-selected-link]')).toHaveCount(2);
@@ -115,6 +115,6 @@ test('missing and failed outputs never become zero; explicit zero remains a real
   const draft = variableRows(snapshot, projection, { kind: 'configuration_draft', inputs: [{ target: { instance_id: 'a', port_id: 'in' }, value: '0', units: 'm', statement: 'Measured zero' }] });
   expect(draft[0].value).toBe('0'); expect(draft[1].value).toBe('Not computed');
   const rows = variableRows(snapshot, projection, { kind: 'run', history: { configuration: null, results: { outputs: [{ target: { instance_id: 'a', port_id: 'out' }, value: 0, units: 'm', availability: 'unavailable', reason: 'producer_failed' }] } } as any });
-  expect(rows[1].value).toBe('—'); expect(rows[1].availability).toBe('unavailable');
+  expect(rows[1].value).toBe('not computed'); expect(rows[1].availability).toBe('unavailable');
   expect(rows[1].provenance).toBe('Retained run output · Producer failed');
 });

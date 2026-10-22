@@ -1,11 +1,12 @@
+import { DialogActions } from './design';
 import { quantityDefinitions } from './quantityDefinitions';
 import { unitLabel } from './unitLabels';
 import { DataTable } from './design';
-import { Button, DialogFrame } from './design';
+import { Button, DialogFrame, SectionHeader } from './design';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, HyprnMvpApi, message, sourceText, validateEditCommand } from './api';
-import type { ApplyRead4, ModelDraftRead4, ModelRevisionRead4, ConfigurationRevision, ConfigurationCandidate, ConfigurationPreview3, EvidenceSnapshot } from './api';
-import { configurationContext, modelAssumptions, recordLimitations, recordedModelAssumptions, unreadableModelAssumptions } from './recordViews';
+import type { ApplyRead4, ModelDraftRead4, ModelRevisionRead4, ConfigurationRevisionRead6, ConfigurationCandidate, ConfigurationCandidate6, ConfigurationPreview3, EvidenceSnapshot } from './api';
+import { configurationContext, modelAssumptions, recordLimitations, recordedModelAssumptions, unreadableModelAssumptions, configurationCriteria } from './recordViews';
 
 /** Assumption changes cannot be compared when either side's format is unreadable; say so. */
 const unreadableAssumptions = (models: Array<ModelDraftRead4 | ModelRevisionRead4 | null>) => models.some(model => unreadableModelAssumptions(modelAssumptions(model)));
@@ -88,17 +89,98 @@ export function ChangePreview({ api, proposal }: { api: HyprnMvpApi; proposal: C
     catch (e) { setError(e); setPreview(null); }
     finally { setBusy(false); }
   }
-  return <DialogFrame ref={dialog} aria-labelledby="change-preview-title" onCancel={e => { e.preventDefault(); if (!busy) proposal.finish(null); }} className="change-preview">
-    <h2 id="change-preview-title">Preview changes</h2><p>Save these changes together. Existing configurations and runs stay unchanged.</p>
-    {busy && <p role="status">Checking changes…</p>}
-    {error != null && <div role="alert"><p>{message(error)}</p>{error instanceof ApiError && error.detail.fields.map((field, i) => <p key={i}>{field.path}: {field.message}</p>)}</div>}
-    {preview && <DifferenceTable before={base} after={preview} />}
+  return (
+    <DialogFrame
+      ref={dialog}
+      aria-labelledby="change-preview-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) proposal.finish(null);
+      }}
+      width="wide"
+      className="change-preview"
+    >
+      <SectionHeader level={2} id="change-preview-title" title="Preview changes" help="model" />
+      <p>Save these changes together. Existing configurations and runs stay unchanged.</p>
+      {busy && <p role="status">Checking changes…</p>}
+      {error != null && (
+        <div role="alert">
+          <p>{message(error)}</p>
+          {error instanceof ApiError &&
+            error.detail.fields.map((field, i) => (
+              <p key={i}>
+                {field.path}: {field.message}
+              </p>
+            ))}
+        </div>
+      )}
+      {preview && <DifferenceTable before={base} after={preview} />}
 
-    {error != null && !api.pending && <Button disabled={busy} onClick={async () => { setBusy(true); try { setCurrent(await api.model(base.study_id, base.model_id)); } catch (e) { setError(e); } finally { setBusy(false); } }}>Review current revision</Button>}
-    {current && <section aria-label="Current revision differences"><h3>Current revision differences</h3><p>{current.draft_revision}</p><DifferenceTable before={base} after={current} /><Button disabled={busy || !!api.pending} onClick={() => { setBase(current); setCommand({ ...command, command_id: crypto.randomUUID(), expected_revision: current.draft_revision }); setCurrent(null); }}>Re-preview preserved proposal</Button><p>Re-preview keeps every proposed edit and its explicit definition/version references. Incompatible references must be corrected in the editor.</p></section>}
-    {api.pending && <p>Check the original command in command recovery. This proposal cannot submit a second command while its outcome is uncertain.</p>}
-    <div className="actions"><Button ref={safe} disabled={busy} onClick={() => proposal.finish(null)}>{proposal.safe}</Button><Button className="primary" disabled={busy || !preview || !!api.pending} onClick={() => void apply()}>{proposal.apply}</Button></div>
-  </DialogFrame>;
+      {error != null && !api.pending && (
+        <Button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              setCurrent(await api.model(base.study_id, base.model_id));
+            } catch (e) {
+              setError(e);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Review current revision
+        </Button>
+      )}
+      {current && (
+        <section aria-label="Current revision differences">
+          <h3>Current revision differences</h3>
+          <p>{current.draft_revision}</p>
+          <DifferenceTable before={base} after={current} />
+          <Button
+            disabled={busy || !!api.pending}
+            onClick={() => {
+              setBase(current);
+              setCommand({
+                ...command,
+                command_id: crypto.randomUUID(),
+                expected_revision: current.draft_revision,
+              });
+              setCurrent(null);
+            }}
+          >
+            Re-preview preserved proposal
+          </Button>
+          <p>
+            Re-preview keeps every proposed edit and its explicit definition/version references.
+            Incompatible references must be corrected in the editor.
+          </p>
+        </section>
+      )}
+      {api.pending && (
+        <p>
+          Check the original command in command recovery. This proposal cannot submit a second
+          command while its outcome is uncertain.
+        </p>
+      )}
+      <DialogActions
+        primary={
+          <Button
+            variant="primary"
+            disabled={busy || !preview || !!api.pending}
+            onClick={() => void apply()}
+          >
+            {proposal.apply}
+          </Button>
+        }
+      >
+        <Button ref={safe} disabled={busy} onClick={() => proposal.finish(null)}>
+          {proposal.safe}
+        </Button>
+      </DialogActions>
+    </DialogFrame>
+  );
 }
 
 type HumanChange = { id: string; label: string; before: string; after: string; evidence?: boolean };
@@ -114,7 +196,7 @@ function HumanChanges({rows, label}: {rows: HumanChange[]; label: string}) {
 }
 
 /** Format only server-reported stable owner/use changes, with exact retained titles. */
-export function ConfigurationChanges({before,after,changes,model}: {before: ConfigurationRevision; after: ConfigurationCandidate; changes: ConfigurationPreview3['changes']; model?: ModelRevisionRead4}) {
+export function ConfigurationChanges({before,after,changes,model}: {before: ConfigurationRevisionRead6; after: ConfigurationCandidate | ConfigurationCandidate6; changes: ConfigurationPreview3['changes']; model?: ModelRevisionRead4}) {
   const evidence = (value: typeof before | typeof after, id: string) => evidenceLabel(value.evidence_snapshots,id);
   // Every format that records assumptions and explicit general context (Configuration3 and 4) is read.
   const assumption = (value: typeof before | typeof after, id: string) => { const context = configurationContext(value); return context.kind === 'supported' && context.assumptions.kind === 'recorded' ? context.assumptions.items.find(a => a.assumption_id === id) : undefined; };
@@ -132,10 +214,10 @@ export function ConfigurationChanges({before,after,changes,model}: {before: Conf
   }
   for (const path of new Set(changes.filter(c => evidenceUseChange(c.path)).map(c => c.path.split('/').slice(0,3).join('/')))) {
     const [,kind,index]=path.split('/');
-    const item=kind==='inputs' ? after.inputs[Number(index)] ?? before.inputs[Number(index)] : after.criteria[Number(index)] ?? before.criteria[Number(index)];
+    const item=kind==='inputs' ? after.inputs[Number(index)] ?? before.inputs[Number(index)] : configurationCriteria(after)[Number(index)] ?? configurationCriteria(before)[Number(index)];
     const instance=model?.instances.find(i=>i.instance_id===item?.target.instance_id);
     const port=model?.definitions.find(d=>d.definition_version_id===instance?.definition_version_id)?.ports.find(p=>p.port_id===item?.target.port_id);
-    const labels=(value: typeof before | typeof after) => (kind==='inputs' ? value.inputs[Number(index)]?.provenance.evidence_version_ids : value.criteria[Number(index)]?.evidence_version_ids)?.map(id=>evidence(value,id)).join('\n') ?? '';
+    const labels=(value: typeof before | typeof after) => (kind==='inputs' ? value.inputs[Number(index)]?.provenance.evidence_version_ids : configurationCriteria(value)[Number(index)]?.evidence_version_ids)?.map(id=>evidence(value,id)).join('\n') ?? '';
     rows.push({evidence:true,id:path,label:(kind==='inputs' ? 'Input' : 'Criterion')+' evidence · '+(instance?.name ?? 'Component')+' · '+(port?.name ?? 'Output'),before:labels(before),after:labels(after)});
   }
   return rows.length ? <HumanChanges rows={rows} label="Assumption and evidence changes" /> : null;

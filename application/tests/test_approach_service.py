@@ -261,11 +261,11 @@ def test_failed_basis_retains_null_results_without_becoming_numeric_source(run_e
     assert p['resolved']['run_contexts'][0]['association']['process_uuid']
 
 def test_derived_usage_reads_actual_pins_and_preserves_saved_closure(env):
-    c,m,_,_=link(env);result,_=save(env,draft(env,req(c)));saved=result['saved'];v=saved['version'];revision=config(m);revision.update(study_id=env['sid'],schema_version='4',approach_binding=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=saved['closure']['digest'],case_id=None));signed(revision)
+    c,m,_,_=link(env);result,_=save(env,draft(env,req(c)));saved=result['saved'];v=saved['version'];revision=config(m);revision.update(study_id=env['sid'],schema_version='4',approach_binding=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=saved['closure']['digest']));signed(revision)
     frozen=dict(schema_version='4',configuration=revision,model_snapshot=m,study_revision=uid(),approach_closure=saved['closure'])
     with env['store'].connection(write=True) as db:db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(revision['configuration_revision_id'],revision['configuration_id'],env['sid'],json.dumps(frozen)))
-    page=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],dict(limit=20,cursor=None,case_id=None));validate('ApproachUsagePage1',page)
-    assert page['items']==[dict(kind='configuration',configuration_revision_id=revision['configuration_revision_id'],case_id=None)]
+    page=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],dict(limit=20,cursor=None));validate('ApproachUsagePage1',page)
+    assert page['items']==[dict(kind='configuration',configuration_revision_id=revision['configuration_revision_id'])]
     assert env['service'].read(env['actor'],env['sid'],v['approach_version_id'])==saved
 
 
@@ -342,17 +342,19 @@ def test_request_content_byte_limit_is_enforced_before_resolution(env):
     with pytest.raises(DomainError) as err:preview(env,req(c))
     assert err.value.code=='limit_exceeded' and env['calls']==[]
 
-def test_usage_pagination_case_filter_and_run_are_real_persisted_links(env):
-    c,m,b,_=link(env);case=sample(D['ApproachCase1']);case['binding_id']=b['binding_id'];c['cases']=[case]
-    result,_=save(env,draft(env,req(c)));saved=result['saved'];v=saved['version'];r=config(m);r.update(study_id=env['sid'],schema_version='4',approach_binding=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=saved['closure']['digest'],case_id=case['case_id']));signed(r)
+def test_usage_pagination_and_run_are_real_persisted_links(env):
+    c,m,b,_=link(env)
+    result,_=save(env,draft(env,req(c)));saved=result['saved'];v=saved['version'];r=config(m);r.update(study_id=env['sid'],schema_version='4',approach_binding=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=saved['closure']['digest']));signed(r)
     frozen=dict(schema_version='4',configuration=r,model_snapshot=m,study_revision=uid(),approach_closure=saved['closure']);rid=uid()
     with env['store'].connection(write=True) as db:
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(r['configuration_revision_id'],r['configuration_id'],env['sid'],json.dumps(frozen)))
-        db.execute('INSERT INTO run_associations VALUES(?,?,?,?,?,?)',(rid,env['sid'],r['configuration_revision_id'],uid(),None,None))
-    query=dict(limit=1,cursor=None,case_id=case['case_id']);p=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query)
+        db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                   'command_id,store_uuid,process_uuid) VALUES(?,?,?,?,?,?)',
+                   (rid,env['sid'],r['configuration_revision_id'],uid(),None,None))
+    query=dict(limit=1,cursor=None);p=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query)
     assert p['items'][0]['kind']=='configuration' and p['next_cursor']
     p=env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query | {'cursor':p['next_cursor']})
-    assert p['items']==[dict(kind='run',run_id=rid,configuration_revision_id=r['configuration_revision_id'],case_id=case['case_id'])] and p['next_cursor'] is None
+    assert p['items']==[dict(kind='run',run_id=rid,configuration_revision_id=r['configuration_revision_id'])] and p['next_cursor'] is None
     with pytest.raises(DomainError):env['service'].usage(env['actor'],env['sid'],v['approach_version_id'],query | {'case_id':uid()})
 
 def test_configuration_basis_keeps_authorized_frozen_model_without_backend(env):

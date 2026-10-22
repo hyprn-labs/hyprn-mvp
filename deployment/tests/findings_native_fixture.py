@@ -596,10 +596,51 @@ def load_existing_backend():
     return backend
 
 
+def bind_scope_interpreter(group):
+    """The working copy's scope record names this checkout's approved interpreter.
+
+    The interpreter is an environment binding, not retained content: the pinned record names the
+    producer's interpreter. Only the preflight of a fresh working copy, before any continuation
+    baseline exists, rebinds it, and only while the record still holds the pinned bytes and every
+    other field equals the retained identity. A working copy baselined under another interpreter
+    is refused.
+    """
+    require_original()
+    if durable_fixture.native_scope() != ORIGINAL.root:
+        raise ValueError('Native working root differs from its identity')
+    marker=guard.no_symlinks(ORIGINAL.root/'scope.json')
+    raw=marker.read_bytes()
+    bound=json.loads(raw)
+    expected=guard.Scope(ORIGINAL.root,ORIGINAL.run_uuid,guard.SCOPE_PREFIX+ORIGINAL.run_uuid,
+        ORIGINAL.profile_uuid,ORIGINAL.store_uuid).record()
+    if bound==expected:
+        return
+    pinned=durable_fixture.verified_file(durable_fixture.SCOPE_PREFIX+'/scope.json').read_bytes()
+    if raw!=pinned or dict(bound,interpreter=None)!=dict(expected,interpreter=None):
+        raise ValueError('Retained scope record differs beyond its interpreter binding')
+    if group!='findings-native-preflight' or os.path.lexists(CONTINUATION):
+        raise ValueError(
+            'Only the preflight of a fresh working copy rebinds its interpreter; '
+            're-materialize the working copy')
+    mode=marker.stat().st_mode&0o777
+    durable_write(marker,(json.dumps({**bound,'interpreter':expected['interpreter']},indent=2)+'\n').encode())
+    marker.chmod(mode)
+
+
+def scope_binding():
+    """Pinned and working interpreter of the scope record, recorded in the preflight attempt."""
+    pinned=durable_fixture.verified_file(durable_fixture.SCOPE_PREFIX+'/scope.json').read_bytes()
+    working=guard.no_symlinks(ORIGINAL.root/'scope.json').read_bytes()
+    return dict(pinned_interpreter=json.loads(pinned)['interpreter'],
+        bound_interpreter=json.loads(working)['interpreter'],
+        pinned_sha256=sha(pinned),bound_sha256=sha(working),rebound=pinned!=working)
+
+
 def run_retained(group):
     if group not in {'findings-native-preflight','findings-native','findings-native-read'}:
         raise ValueError('Unknown retained group')
     require_original()
+    bind_scope_interpreter(group)
     scope=retained_scope()
     command=[scope.interpreter,'-B',str(REPO/'deployment/checks.py'),'--'+group+'-child']
     result=subprocess.run(command,cwd=REPO,env=guard.clean_environment(scope),capture_output=True,text=True)
@@ -638,6 +679,7 @@ def child(group):
         attempt=CONTINUATION/f'attempt-{number:04d}'; attempt.mkdir(mode=0o700)
         if group == 'findings-native-preflight':
             baseline=capture_baseline(attempt,before)
+            durable_write(attempt/'scope-binding.json',canonical(scope_binding()),exclusive=True)
             preserved=verify_preserved(before)
             if state is None:
                 journal.advance('baselined',baseline_sha256=sha((attempt/'baseline.json').read_bytes()),baseline_attempt=attempt.name)
@@ -1036,7 +1078,7 @@ class NativeContinuation:
         self.source=self.request('GET','runs/'+ORIGINAL.source_run)
         config=original['history']['configuration'];model=original['history']['model_snapshot']
         assert config['approach_binding'] is None and self.source['history']['configuration']['approach_binding'] is None
-        bid=identifier('model-binding');self.case_id=identifier('case')
+        bid=identifier('model-binding')
         content=dict(schema_version='1',question='What qualifications accompany the retained specific energy?',scope='One original-source pinned native continuation.',
             limitations='No new validity assessment.',open_questions='Independent engineering review remains pending.',steps=[
                 dict(step_id=identifier('step'),title='Convert retained specific energy',purpose='Inspect exact source qualifications',
@@ -1044,8 +1086,6 @@ class NativeContinuation:
                     intent=dict(transformation='Identity in J/kg',inputs='Retained specific energy in MJ/kg',outputs='Specific energy in J/kg',depends_on_step_ids=[]),
                     implementation_state='linked',implementation_refs=[dict(kind='model',binding_id=bid)],assumption_refs=[],evidence_links=[])],
             model_bindings=[dict(binding_id=bid,model_id=model['model_id'],model_revision_id=model['model_revision_id'])],
-            cases=[dict(case_id=self.case_id,title='Retained energy case',question='Does the retained input preserve its qualifications?',
-                rationale='An upstream failed criterion does not rewrite downstream facets.',binding_id=bid,evidence_links=[])],
             assumptions=[],basis_refs=[])
         state=self.request('GET','approach')
         revision=state['draft']['revision'] if state['draft'] else None
@@ -1075,7 +1115,7 @@ class NativeContinuation:
                     provenance=input_['provenance'])],criteria=deepcopy(config['criteria']),numerical=deepcopy(config['numerical']),
                 context_source=dict(kind='current_study',expected_study_revision=study['revision']),notes=['One original-source native Findings proof'],
                 assumptions=[],general_context_evidence_version_ids=config['general_context_evidence_version_ids'],derivation=None,
-                approach_selection=dict(approach_version_id=self.version['version']['approach_version_id'],case_id=self.case_id))
+                approach_selection=dict(approach_version_id=self.version['version']['approach_version_id']))
             preview=self.request('POST','configurations/preview',value)
             self.emit('configuration-preview.json',dict(body=value,response=preview))
             assert preview['compatibility']['compatible']
@@ -1086,11 +1126,11 @@ class NativeContinuation:
         assert binding['original_value']==1 and binding['original_units']=='MJ/kg'
         assert binding['conversion']['factor']==1000000 and binding['conversion']['destination_value']==1000000
         pin=self.saved['configuration']['approach_binding']
-        assert pin['approach_version_id']==self.version['version']['approach_version_id'] and pin['case_id']==self.case_id
+        assert pin['approach_version_id']==self.version['version']['approach_version_id']
         assert self.saved['approach_closure'] and pin['closure_digest']
         run=self.command('run','runs',dict(configuration_revision_id=self.saved['configuration']['configuration_revision_id']),202)
         self.rid=run['run_id']
-        self.journal.advance('baselined',run_id=self.rid,authoring=dict(case_id=self.case_id,version=self.version,saved=self.saved))
+        self.journal.advance('baselined',run_id=self.rid,authoring=dict(version=self.version,saved=self.saved))
 
     def execute_once(self):
         self.runtime()
@@ -1121,7 +1161,7 @@ class NativeContinuation:
     def read_recorded(self):
         state=self.journal.read()
         self.rid=state['run_id']
-        self.version=state['authoring']['version'];self.saved=state['authoring']['saved'];self.case_id=state['authoring']['case_id']
+        self.version=state['authoring']['version'];self.saved=state['authoring']['saved']
         self.source=self.request('GET','runs/'+ORIGINAL.source_run)
         return self.finish()
 
@@ -1135,7 +1175,7 @@ class NativeContinuation:
         browser_scope=guard.allocate_scope(guard.new_scope(url=self.url))
         root=browser_scope.root
         manifest=dict(study_id=self.sid,password=self.password,approach_version_id=self.version['version']['approach_version_id'],
-            case_id=self.case_id,configuration_name=self.saved['configuration']['name'],run_id=self.rid,
+            configuration_name=self.saved['configuration']['name'],run_id=self.rid,
             source_id=ORIGINAL.source_run,downstream=detail,source=self.source,mode=mode)
         durable_write(root/'artifacts/findings-input.json',canonical(manifest),exclusive=True)
         durable_write(root/'artifacts/package.json',b'{"type":"module"}',exclusive=True)
@@ -1176,7 +1216,7 @@ class NativeContinuation:
             offline=self.browser('offline',detail)
         assert self.scientific_rows()==before
         self.stop_web()
-        proof=dict(source=self.source,downstream=detail,saved=self.saved,version=self.version,case_id=self.case_id,payload=payload,
+        proof=dict(source=self.source,downstream=detail,saved=self.saved,version=self.version,payload=payload,
             process_count=self.count(),prepared_process_count=self.journal.read()['prepared_process_count'],
             inert_canary=self.journal.read()['inert_canary'],uncached=not node.base.caching.is_created_from_cache,
             source_result_link=source.uuid,browser=dict(online=online,offline=offline,scientific_rows_unchanged=True,model_stopped=True))
@@ -1196,6 +1236,9 @@ class NativeContinuation:
             labels=info['Labels'] if kind=='network' else info['Config']['Labels']
             assert labels['org.hyprn-mvp.test-scope']==self.scope.run_uuid
             if kind=='container':
+                # A graceful stop lets the private modeling service close its copied stores, so
+                # no write-ahead log blocks the immutable read below, also after a failure.
+                self.docker('stop',name,check=False)
                 durable_write(self.attempt/(name+'.log'),(self.docker('logs',name).stdout).encode(),exclusive=True)
                 self.docker('rm','-f',name)
             else:self.docker('network','rm',name)

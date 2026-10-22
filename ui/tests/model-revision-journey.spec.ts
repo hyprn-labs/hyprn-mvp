@@ -108,7 +108,7 @@ test('empty authoring to 7/49, coefficient edit to 9/81, unrelated equation and 
     const second = await run(page, sid, [9,81]);
     expect(second.history.configuration.model_revision_id).not.toBe(first.history.configuration.model_revision_id);
     expect(second.history.model_snapshot.source_files.some((s:any) => Buffer.from(s.bytes,'base64').toString() === source2)).toBeTruthy();
-    await page.getByRole('button', { name: 'Copy configuration to draft', exact: true }).click();
+    await page.getByRole('button', { name: 'Create new version', exact: true }).click();
     await page.getByLabel('Scale · x value', { exact: true }).fill('4');
     await page.getByRole('button', { name: 'Commit configuration', exact: true }).click();
     await expect(page.getByText('Configuration committed. Run is a separate action.', { exact: true })).toBeVisible();

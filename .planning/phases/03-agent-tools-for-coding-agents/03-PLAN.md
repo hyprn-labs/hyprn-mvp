@@ -170,6 +170,14 @@ Output: the agent principal and its authorization intersection (including agent 
 
 ## How this plan is executed
 
+**Pending-work amendment (2026-10-14):** read
+[DELIVERY-PLAN.md](../../DELIVERY-PLAN.md) before dispatch. Its A–D waves, named
+slices and explicit dependency replacements govern pending work; unchanged task
+actions, invariants and acceptance remain binding. C proves a restricted evidence
+write on both desktop clients, then D expands to full authoring and real runs.
+Completed checkpoints remain unchanged. Original task and phase completion still
+require all original acceptance, including the platform connection probes in E.
+
 - Phase 3 starts after Phase 1 completes (task 1.10 verified). Every path, package and identifier in this plan uses the final names: `application/src/hyprn_mvp_app/`, `contracts/hyprn-mvp.openapi.yaml`, the session cookie `hyprn_mvp_session`, `HYPRN_MVP_*` variables, `./hyprn-mvp` and `deployment/checks.py`.
 - One numbered task per fresh executor context. Each task stages explicit paths only, ends with atomic commits and a checkpoint file `phases/03-agent-tools-for-coding-agents/checkpoints/<task>.md` in the planning directory: commits; exact commands with pass and fail counts and every failure; source and artifact identities (contract digest, registry version, playbook and tool-definition hashes, image ids when built); scratch scopes and scratch installations created and released; remaining risks.
 - The orchestrating session reruns the task's acceptance commands on the committed tree, compares the commits' files with the task's Files list, and only then dispatches a dependent task. Tasks run in parallel only when their file sets are disjoint; the shared files in the waves table are edited by one task at a time across Phases 2 to 4.

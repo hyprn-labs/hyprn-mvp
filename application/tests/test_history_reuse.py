@@ -10,13 +10,19 @@ from aiida import orm
 from checks import NATIVE_BACKEND, PROJECTION_SCOPE
 from test_result_dependencies import source, native, linked_bundle, rehash
 from test_results import retained_record
-from test_result_bindings import env, saved2, prepared2
+from test_result_bindings import env6, saved2, prepared2
 from test_bridge import wire
 from hyprn_mvp_app.store import canonical, digest, Store, uid, DomainError
 from hyprn_mvp_app.history import History, projection
 from hyprn_mvp_app.execution import Submissions
 from hyprn_mvp_integration.results import retained_bundle
 from aiida.common.links import LinkType
+
+
+@pytest.fixture
+def env(env6):
+    """A configuration 6 with one protocol-3 source run: new configurations are version 6 only."""
+    return env6
 
 
 def repository(bundle):

@@ -12,6 +12,8 @@ from execution_fixtures import fixture, runtime_fixture
 from hyprn_mvp_app.store import Store, DomainError, canonical, digest, uid
 from hyprn_mvp_app.execution import Submissions, assemble_bundle, executable_digest
 from hyprn_mvp_app.history import projection
+from hyprn_mvp_app.modeling import validate
+from runs_criteria_free_support import ModelingDouble, bindings_env
 
 
 @pytest.fixture
@@ -30,9 +32,16 @@ def env(tmp_path,request):
         db.execute('INSERT INTO model_associations VALUES(?,?,?)', (study['study_id'], config['model_id'], uid()))
         db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(config['configuration_id'],study['study_id'],config['configuration_revision_id']))
     service = Submissions(store, None, None)
-    def source():
+    def source(*, current=False):
         run = service.submit(actor, study['study_id'], dict(command_id=uid(), configuration_revision_id=config['configuration_revision_id']))
-        rid = run['run_id']; bundle = assemble_bundle(rid, case['prepared'], case['files'], case['frozen'], runtime_fixture())
+        prepared = copy.deepcopy(case['prepared'])
+        if current:
+            prepared.update(schema_version='3', result_protocol_version='2')
+            prepared['prepared_digest'] = digest(
+                {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+            )
+        rid = run['run_id']
+        bundle = assemble_bundle(rid, prepared, case['files'], case['frozen'], runtime_fixture())
         request = dict(run_id=rid, scope=study['study_id'], command_id=run['command_id'], payload_digest=store.receipt(actor,study['study_id'],'run',run['command_id'])['payload_digest'], bundle_digest=bundle['manifest']['bundle_digest'])
         outputs = json.loads(case['files'][case['prepared']['entrypoint']['bindings_path']])['outputs']
         results = dict(schema_version='1', run_id=rid, bundle_digest=request['bundle_digest'],
@@ -40,6 +49,10 @@ def env(tmp_path,request):
             optimization=dict(termination='not_applicable',feasibility='not_applicable'), completeness=dict(expected=len(outputs),available=len(outputs),failed=0,unavailable=0),
             outputs=[dict(target=o['target'],value=150+i,units=o['units'],availability='available',reason=None,producer_completed=True,assigned=True) for i,o in enumerate(outputs)],
             criteria=[], applicability=dict(state='unassessed',evidence_refs=[]), artifacts=[])
+        if current:
+            for key in ('convergence', 'optimization', 'completeness', 'applicability'):
+                del results[key]
+            results['schema_version'] = '2'
         association = dict(store_uuid=uid(),process_uuid=uid())
         payload = dict(actor=actor, frozen=copy.deepcopy(case['frozen']), request=request,
             bundle=dict(manifest=bundle['manifest'],files={p:base64.b64encode(raw).decode() for p,raw in bundle['files'].items()}))
@@ -54,6 +67,13 @@ def env(tmp_path,request):
         inputs=[dict(kind='run_result', target=config['inputs'][0]['target'], source_run_id=rid, source_output=results['outputs'][0]['target'], expected_results_digest=digest(results),provenance=config['inputs'][0]['provenance']),
             *[dict(kind='literal',**i) for i in config['inputs'][1:]]], criteria=[], numerical=config['numerical'],context_source=dict(kind='current_study',expected_study_revision=study['revision']),notes=[],evidence_version_ids=[],derivation=None)
     return dict(store=store,actor=actor,sid=study['study_id'],case=case,rid=rid,results=results,request=request,source=source)
+
+
+@pytest.fixture
+def env6(tmp_path,request):
+    """Configuration 6 on a captured Model4 case with one protocol-3 source run; new
+    configurations are authored only as version 6."""
+    return bindings_env(tmp_path,getattr(request,'param','chain'))
 
 
 def bindings(env):
@@ -103,26 +123,11 @@ def test_cursor_rejects_cross_actor_study_query_and_malformed(env):
     with pytest.raises(DomainError):service.inventory(env['actor'],other,limit=1,cursor=cursor)
 
 
-class CoordinatorDouble:
-    """Compatibility boundary double; native catalog itself was checked in 02-01."""
-    def __init__(self,env):self.env=env;self.hook=lambda:None;self.offline=False;self.sent=[];self.factor=1;self.destination_units=None
-    def read(self,actor,sid,mid,path,**kwargs):
-        if self.offline:raise AssertionError('Mutable modeling access during retained read/replay')
-        model=copy.deepcopy(self.env['case']['frozen']['model_snapshot'])
-        if path.startswith('/revisions/'):return dict(data=model)
-        candidate=copy.deepcopy(kwargs['body']['configuration_candidate']);self.sent.append(candidate)
-        self.hook()
-        proof=dict(schema_version=candidate['schema_version'], model_revision_id=model['model_revision_id'],model_digest=model['digest'],candidate_digest=digest(candidate),
-            compatible=True,diagnostics=[],required_capabilities=model['required_capabilities'],validator_identity='bounded-test-double')
-        if candidate['schema_version']=='2':
-            proof['input_interpretations']=[dict(target=i['target'],conversion=dict(policy='openmdao-linear-catalog-1',catalog_digest='a'*64,source_units=i['units'],destination_units=self.destination_units if self.destination_units is not None else i['units'],factor=self.factor,destination_value=i['value']*self.factor)) for i in candidate['inputs']]
-        return dict(data=proof)
-
-
 def authoring(env):
     from hyprn_mvp_app.configuration import Configurations
-    coordinator=CoordinatorDouble(env)
-    return Configurations(env['store'],coordinator),coordinator
+    from hyprn_mvp_app.modeling import Coordinator
+    model=ModelingDouble(env['case'])
+    return Configurations(env['store'],Coordinator(env['store'],model)),model
 
 
 def commit_body(env,service):
@@ -130,16 +135,20 @@ def commit_body(env,service):
     return dict(command_id=uid(),expected_revision=None,configuration_id=None,configuration=copy.deepcopy(env['request']),expected_preview_digest=preview['candidate_digest'])
 
 
-def test_preview_commit_independently_resolve_and_replay_without_model_or_source(env):
-    service,coordinator=authoring(env);before=env['store'].path.read_bytes()
+def test_preview_commit_independently_resolve_and_replay_without_model_or_source(env6):
+    env=env6;service,coordinator=authoring(env);before=env['store'].path.read_bytes()
     body=commit_body(env,service)
     assert env['store'].path.read_bytes()==before
     saved=service.commit(env['actor'],env['sid'],body)
     assert len(coordinator.sent)==2
     for sent in coordinator.sent:
-        assert not set(sent)&{'context_source','derivation'}
+        assert sent['schema_version']=='5'
+        assert not set(sent)&{'context_source','derivation','criteria'}
         assert all('result_binding' not in i for i in sent['inputs'])
         assert 'result_linked_inputs/1' not in sent['required_capabilities']
+    # A configuration carries no criteria; they are evaluated through calculation bindings.
+    assert saved['schema_version']=='9' and saved['configuration']['schema_version']=='6'
+    assert not set(saved)&{'criteria','approach_closure'} and not set(saved['configuration'])&{'criteria','approach_binding'}
     linked=saved['configuration']['inputs'][0]
     assert linked['value']==linked['result_binding']['original_value']==150
     coordinator.offline=True
@@ -153,11 +162,12 @@ def test_preview_commit_independently_resolve_and_replay_without_model_or_source
 
 
 @pytest.mark.parametrize('change',['preview','source','study','model','evidence','family','revoked'])
-def test_commit_races_fail_without_partial_configuration(env,change):
-    service,coordinator=authoring(env)
+def test_commit_races_fail_without_partial_configuration(env6,change):
+    env=env6;service,coordinator=authoring(env)
     if change=='evidence':
-        note=env['store'].add_evidence(env['actor'],env['sid'],uid(),dict(scope=None,kind='note',content='Pinned',source_refs=[]))
-        env['request']['evidence_version_ids']=[note['evidence_version_id']]
+        note=env['store'].add_evidence(env['actor'],env['sid'],uid(),dict(evidence_schema_version='3',title='Pinned',kind='note',content='Pinned',
+            source_refs=[],resource_scope=dict(scope_version='1',kind='study',study_id=env['sid'])))
+        env['request']['general_context_evidence_version_ids']=[note['evidence_version_id']]
     body=commit_body(env,service)
     if change=='preview':body['expected_preview_digest']='b'*64
     if change=='family':body.update(configuration_id=env['case']['frozen']['configuration']['configuration_id'],expected_revision='stale')
@@ -176,15 +186,17 @@ def test_commit_races_fail_without_partial_configuration(env,change):
     with env['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==1
 
 
-@pytest.mark.parametrize('kind',['number','resolved','duplicate','missing_evidence','stale_context'])
-def test_public_request_cannot_forge_resolved_authority(env,kind):
-    service,_=authoring(env);r=env['request']
+@pytest.mark.parametrize('kind',['number','resolved','duplicate','missing_evidence','stale_context','criteria'])
+def test_public_request_cannot_forge_resolved_authority(env6,kind):
+    env=env6;service,coordinator=authoring(env);r=env['request']
     if kind=='number':r['inputs'][0]['value']=123
     elif kind=='resolved':r['inputs'][0]['result_binding']={}
     elif kind=='duplicate':r['inputs'].append(copy.deepcopy(r['inputs'][0]))
     elif kind=='missing_evidence':r['inputs'][0]['provenance']['evidence_version_ids']=[uid()]
+    elif kind=='criteria':r['criteria']=[]
     else:r['context_source']['expected_study_revision']='stale'
     with pytest.raises(DomainError):service.preview(env['actor'],env['sid'],r)
+    assert not coordinator.sent
 
 
 def test_criterion_failed_source_and_labels_survive_rename_and_model_outage(env):
@@ -198,8 +210,24 @@ def test_criterion_failed_source_and_labels_survive_rename_and_model_outage(env)
         db.execute('DELETE FROM model_associations WHERE study_id=?',(env['sid'],))
     r=copy.deepcopy(env['request']['inputs'][0]);r['expected_results_digest']=digest(p['history']['results'])
     item=bindings(env).resolve(env['actor'],env['sid'],r)
-    assert item['outcomes']['criteria']==[criterion] and item['outcomes']['applicability']['state']=='unassessed'
+    assert item['outcomes']['criteria']==[criterion]
+    assert set(item['outcomes'])=={'execution','criteria'}
     assert item['labels']['model_name'] is None and item['labels']['run_name']==env['case']['frozen']['configuration']['name']
+
+
+def test_protocol3_source_reports_execution_only_and_labels_survive_rename_and_model_outage(env6):
+    env=env6
+    with env['store'].connection(write=True) as db:
+        db.execute("UPDATE studies SET name='Renamed' WHERE study_id=?",(env['sid'],))
+        db.execute('DELETE FROM model_associations WHERE study_id=?',(env['sid'],))
+    item=bindings(env).resolve(env['actor'],env['sid'],env['request']['inputs'][0])
+    validate('ResultSource3',item)
+    assert set(item['outcomes'])=={'execution'} and item['outcomes']['execution']==env['results']['execution']
+    assert 'criteria' not in env['results'] and item['value']==150 and item['results_digest']==digest(env['results'])
+    assert item['labels']['model_name'] is None and item['labels']['run_name']==env['case']['frozen']['configuration']['name']
+    page=bindings(env).inventory(env['actor'],env['sid'],limit=50)
+    validate('ResultSourcePage3',page)
+    assert item in page['items'] and all(set(i['outcomes'])=={'execution'} for i in page['items'])
 
 
 class NativeResolverDouble:
@@ -239,17 +267,18 @@ def prepared2(env,frozen):
 
 
 @pytest.mark.parametrize('mode',['one','two','fanout','multi'])
-def test_bundle3_freezes_full_private_and_dependency_domains(env,mode):
+def test_bundle11_freezes_full_private_and_dependency_domains(env6,mode):
     from hyprn_mvp_app.execution import validate_retained_bundle
     from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
-    frozen=saved2(env,mode);native=NativeResolverDouble()
+    env=env6;frozen=saved2(env,mode);native=NativeResolverDouble()
     deps=bindings(env).dependencies(env['actor'],env['sid'],frozen['configuration'],native)
     assert len(deps['sources'])==(2 if mode=='multi' else 1)
     assert len(deps['mappings'])==(1 if mode=='one' else 2)
     prepared,files=prepared2(env,frozen)
     bundle=assemble_bundle(uid(),prepared,files,frozen,runtime_fixture(),deps)
     m=bundle['manifest'];c=frozen['configuration'];private=project_scientific_configuration(c)
-    assert m['schema_version']=='3' and m['configuration_digest']==c['digest']!=m['modeling_configuration_digest']
+    assert m['schema_version']=='11' and m['configuration_digest']==c['digest']!=m['modeling_configuration_digest']
+    assert private['schema_version']=='5' and 'criteria' not in private and 'criteria' not in c
     assert m['modeling_configuration_digest']==prepared['configuration_digest']==private['digest']
     assert bundle['files']['configuration.json']==canonical(c)
     assert bundle['files']['modeling-configuration.json']==canonical(private)
@@ -262,7 +291,8 @@ def test_bundle3_freezes_full_private_and_dependency_domains(env,mode):
 
 
 @pytest.mark.parametrize('fault',['missing','changed','revoked','source_race','uncertain'])
-def test_preclaim_failure_is_zero_launch_and_uncertain_never_relaunched(env,fault):
+def test_preclaim_failure_is_zero_launch_and_uncertain_never_relaunched(env6,fault):
+    env=env6
     frozen=saved2(env);native=NativeResolverDouble();prepared,files=prepared2(env,frozen)
     service=Submissions(env['store'],lambda *args:(prepared,files),native)
     run=service.submit(env['actor'],env['sid'],dict(command_id=uid(),configuration_revision_id=frozen['configuration']['configuration_revision_id']))
@@ -280,26 +310,32 @@ def test_preclaim_failure_is_zero_launch_and_uncertain_never_relaunched(env,faul
         row=db.execute('SELECT state,payload FROM outbox WHERE run_id=?',(run['run_id'],)).fetchone()
     if fault=='uncertain':assert row['state']=='uncertain' and native.launches==1
     else:assert json.loads(row['payload'])['preparation_state']=='preparation_failed' and native.launches==0
+    # Result-bound inputs are always resolved through the exact retained source before a claim.
+    if fault!='revoked':assert native.calls and native.calls[0][0]['source_run_id']==env['rid']
 
 
-def test_old_literal_commit_and_original_source_bytes_are_unchanged(env):
-    service,coordinator=authoring(env);config=env['case']['frozen']['configuration']
-    candidate={k:v for k,v in config.items() if k not in ('digest','configuration_id','configuration_revision_id','parent_revision_id')}
+@pytest.mark.parametrize('version',['1','2','3','4'])
+def test_older_requests_are_refused_and_original_source_bytes_are_unchanged(env6,version):
+    # New configurations are written only as version 6; older request versions are refused
+    # before any modeling contact and leave the retained source run untouched.
+    env=env6;service,coordinator=authoring(env)
     with env['store'].connection() as db:
         original=db.execute('SELECT payload FROM outbox WHERE run_id=?',(env['rid'],)).fetchone()[0]
-    preview,_,_=service.preview(env['actor'],env['sid'],candidate)
-    assert preview['schema_version']=='1' and preview['candidate_digest']==digest(candidate)
-    body=dict(command_id=uid(),expected_revision=None,configuration=candidate)
-    old=service.commit(env['actor'],env['sid'],body)
-    assert old['configuration']['schema_version']=='1'
-    assert not set(old['configuration'])&{'context_source','derivation'}
+    candidate=dict(copy.deepcopy(env['request']),schema_version=version,criteria=[])
+    body=dict(command_id=uid(),expected_revision=None,configuration_id=None,configuration=candidate,expected_preview_digest='a'*64)
+    for call in (lambda:service.preview(env['actor'],env['sid'],candidate),lambda:service.commit(env['actor'],env['sid'],body)):
+        with pytest.raises(DomainError) as error:call()
+        assert (error.value.code,error.value.status)==('unsupported_record_version',422)
+    assert not coordinator.calls
+    with env['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==1
     saved2(env)
     with env['store'].connection() as db:
         assert db.execute('SELECT payload FROM outbox WHERE run_id=?',(env['rid'],)).fetchone()[0]==original
 
 
 @pytest.mark.parametrize('fault',['association','value','digest','output','extra','uuid','count','alias'])
-def test_native_resolver_response_cannot_supply_new_authority(env,fault):
+def test_native_resolver_response_cannot_supply_new_authority(env6,fault):
+    env=env6
     frozen=saved2(env,'multi' if fault=='alias' else 'one');native=NativeResolverDouble();resolve=native.resolve_results
     def forged(sources):
         result=resolve(sources)
@@ -341,14 +377,16 @@ def test_inventory_limit_is_bounded_integer(env,limit):
     with pytest.raises(DomainError):bindings(env).inventory(env['actor'],env['sid'],limit=limit)
 
 
-def test_result_requests_bound_distinct_sources_before_fetch(env):
+def test_result_requests_bound_distinct_sources_before_fetch(env6):
+    env=env6
     service,coordinator=authoring(env)
     env['request']['inputs']=[env['request']['inputs'][0]|dict(target=dict(instance_id=uid(),port_id=uid()),source_run_id=uid()) for _ in range(65)]
     with pytest.raises(DomainError,match='limit_exceeded'):service.preview(env['actor'],env['sid'],env['request'])
     assert not coordinator.sent
 
 
-def test_concurrent_save_and_dispatch_replays_allocate_once(env):
+def test_concurrent_save_and_dispatch_replays_allocate_once(env6):
+    env=env6
     from concurrent.futures import ThreadPoolExecutor
     service,_=authoring(env);body=commit_body(env,service)
     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -363,14 +401,21 @@ def test_concurrent_save_and_dispatch_replays_allocate_once(env):
     assert native.launches==1
 
 
-def test_static_preparation_sends_only_exact_private_snapshot(env):
+def test_static_preparation_sends_only_exact_private_snapshot(env6):
     from hyprn_mvp_app.execution import StaticPreparation
     from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
-    frozen=saved2(env);prepared,files=prepared2(env,frozen)
+    from runs_criteria_free_support import capabilities
+    env=env6;frozen=saved2(env);prepared,files=prepared2(env,frozen)
     class ModelBoundary:
         def call(self,actor,sid,method,path,body=None,**kwargs):
+            if path=='/capabilities':
+                # The criteria-free modeling service advertises bundle 10/11 and artifact 3/4.
+                caps=capabilities(env['case']);caps['execution_versions']=dict(artifact_versions=['3','4'],bundle_versions=['10','11'],
+                    program_protocols=['hyprn_mvp.openmdao.program/1'],historical_artifact_versions=['1','2'],historical_bundle_versions=['1','2','3','4','5','6','8'])
+                caps['capabilities'].append(dict(caps['capabilities'][0],id='flat_explicit_scalar',version='1'))
+                validate('Capabilities3',caps);return 200,dict(data=caps)
             if method=='POST':
-                self.body=body
+                self.body=body;self.request_schema=kwargs['request_schema']
                 assert body['configuration_snapshot']==project_scientific_configuration(frozen['configuration'])
                 assert body['configuration_digest']==body['configuration_snapshot']['digest']==prepared['configuration_digest']
                 return 200,dict(data=prepared)
@@ -379,17 +424,20 @@ def test_static_preparation_sends_only_exact_private_snapshot(env):
     model=ModelBoundary()
     assert StaticPreparation(model)(env['actor'],env['sid'],uid(),frozen)==(prepared,files)
     assert model.body['configuration_digest']!=frozen['configuration']['digest']
+    assert model.request_schema=='Prepare2' and model.body['configuration_snapshot']['schema_version']=='5'
+    assert 'criteria' not in model.body['configuration_snapshot'] and prepared['schema_version']=='4'
 
 
-def test_literal_v2_has_empty_hashed_dependency_file(env):
-    r=env['request'];r['inputs']=[dict(kind='literal',**i) for i in env['case']['frozen']['configuration']['inputs']]
+def test_literal_request6_has_empty_hashed_dependency_file(env6):
+    env=env6;r=env['request'];r['inputs']=[dict(kind='literal',**{k:i[k] for k in ('target','value','units','provenance')}) for i in env['case']['frozen']['configuration']['inputs']]
     frozen=saved2(env);deps=bindings(env).dependencies(env['actor'],env['sid'],frozen['configuration'],None)
     assert deps==dict(schema_version='1',sources=[],mappings=[])
     prepared,files=prepared2(env,frozen);bundle=assemble_bundle(uid(),prepared,files,frozen,runtime_fixture(),deps)
     assert bundle['files']['result-dependencies.json']==canonical(deps)
 
 
-def test_prepared_resume_rechecks_sources_without_regeneration(env):
+def test_prepared_resume_rechecks_sources_without_regeneration(env6):
+    env=env6
     frozen=saved2(env);native=NativeResolverDouble();prepared,files=prepared2(env,frozen)
     service=Submissions(env['store'],lambda *args:(prepared,files),native)
     run=service.submit(env['actor'],env['sid'],dict(command_id=uid(),configuration_revision_id=frozen['configuration']['configuration_revision_id']))
@@ -401,15 +449,14 @@ def test_prepared_resume_rechecks_sources_without_regeneration(env):
     assert service.read(env['actor'],env['sid'],run['run_id'])['state']=='preparation_failed' and native.launches==0
 
 
-@pytest.mark.parametrize('env',['units'],indirect=True)
-def test_original_scalar_and_units_remain_unchanged_under_trusted_linear_conversion(env):
+@pytest.mark.parametrize('env6',['units'],indirect=True)
+def test_original_scalar_and_units_remain_unchanged_under_trusted_linear_conversion(env6):
     # Change only the current destination fixture port; retained source bytes are
     # independently frozen in SQLite. This test exercises app interpretation,
     # not the catalog producer or actual OpenMDAO conversion.
-    model=env['case']['frozen']['model_snapshot']
-    for definition in model['definitions']:
-        for port in definition['ports']:
-            if port['direction']=='input':port['units']='m'
+    env=env6;model=env['case']['frozen']['model_snapshot']
+    for port in [*model['ports'],*(p for definition in model['definitions'] for p in definition['ports'])]:
+        if port['direction']=='input':port['units']=dict(kind='physical',expression='m')
     model['digest']=digest({k:v for k,v in model.items() if k!='digest'})
     service,coordinator=authoring(env);coordinator.factor=1000;coordinator.destination_units='m'
     saved=service.commit(env['actor'],env['sid'],commit_body(env,service))
@@ -501,13 +548,13 @@ def test_history_retained_refuses_unrecorded_and_tampered_receipts(env, monkeypa
         db.execute('UPDATE receipts SET payload_digest=? ' + where, (original[0], *params))
     assert service.retained(env['actor'], env['sid'], env['rid']).history['results'] == env['results']
     # A receipt changed while the retained context is being verified is a conflict.
-    read = History.read
+    read = History._read_saved
     def tampered(self, *args, **kwargs):
         value = read(self, *args, **kwargs)
         with store.connection(write=True) as db:
             db.execute('UPDATE receipts SET result=? ' + where, (json.dumps(dict(tampered=True)), *params))
         return value
-    monkeypatch.setattr(History, 'read', tampered)
+    monkeypatch.setattr(History, '_read_saved', tampered)
     with pytest.raises(DomainError) as error:
         service.retained(env['actor'], env['sid'], env['rid'])
     assert (error.value.code, error.value.status) == ('reference_conflict', 409)

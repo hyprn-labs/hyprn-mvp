@@ -1,4 +1,5 @@
 """Actual private Rails/native static path in fresh confined tmpfs stores."""
+from hyprn_mvp_app.contracts import authored_schema
 import base64
 import hashlib
 import json
@@ -58,13 +59,13 @@ puts 'PROJECTION_RESULT='+JSON.generate({'proof'=>proof,'candidate'=>candidate,'
     catalog_section = patch.split('+++ b/config/modeling.units.json\n', 1)[1].split('\n--- ', 1)[0]
     catalog = json.loads('\n'.join(line[1:] for line in catalog_section.splitlines() if line.startswith('+')))
     assert all(unit in result['catalog']['supported_units'] for unit in catalog['supported_units'])
-    assert len(result['catalog']['supported_units']) == 29
+    assert len(result['catalog']['supported_units']) == 49
     assert catalog['engine'] == 'OpenMDAO' and catalog['version'] == '3.45.1'
-    assert artifact['schema_version'] == result['legacy']['schema_version'] == '2'
+    assert artifact['schema_version'] == result['legacy']['schema_version'] == '3'
     assert artifact['configuration_digest'] == projected['digest']
     assert artifact['entrypoint']['protocol'] == 'hyprn_mvp.openmdao.program/1'
     assert artifact['generator_identity']['name'] == 'WhatsOpt::OpenmdaoGenerator'
-    assert artifact['result_protocol_version'] == '1'
+    assert artifact['result_protocol_version'] == '2'
     assert any(c['id']=='resolved_configuration' and c['version']=='3' and c['supported'] for c in result['capabilities']['capabilities'])
     files = {p: base64.b64decode(raw) for p, raw in result['files'].items()}
     from test_native_program_contract import check_program
@@ -149,10 +150,10 @@ def test_private_schema_copy_and_legacy_result_preservation(harness):
     patch = (ROOT / 'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
     section = patch.split('+++ b/config/modeling.schema.json\n', 1)[1].split('\n--- ', 1)[0]
     embedded = json.loads('\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')))
-    # Production stages the current reviewed schema beside the cumulative
-    # 040–070 adapter; the original 040 schema remains a historical baseline.
-    assert json.loads(harness[2].read_bytes())['$defs'] == DEFS
-    assert DEFS == json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_bytes())['$defs']
+    # Production stages the authored model schema beside the cumulative adapter;
+    # the original patch schema remains a historical baseline.
+    assert harness[2].read_bytes() == (ROOT / 'contracts/schemas/model.schema.json').read_bytes()
+    assert DEFS == authored_schema()['$defs']
     # The tracked 040 patch is the historical baseline of the legacy concrete shapes: the
     # current read unions were split from these definitions without changing them.
     legacy = embedded['$defs']
@@ -244,3 +245,45 @@ puts 'PROJECTION_RESULT='+JSON.generate(m)
         if bad=='duplicate':q.append(dict(q[0],statement='Different'))
         else:q[0]['port_id']=value['model_id']
         with pytest.raises(DomainError):unit_readiness(value)
+
+
+def test_criteria_free_configuration_prepares_under_result_protocol_3(harness):
+    """A private configuration 5 (no criteria) of a Model4 version is compatible and prepares
+    as artifact 4 pinning result protocol 3; it is refused for an older model format."""
+    _, setup = public_fixture()
+    result = native(harness, setup + """
+current=c.route('GET',path,{},nil)[1]['data']
+up=c.route('POST',path+'/edits',{}, {'schema_version'=>'4','command_id'=>SecureRandom.uuid,'expected_revision'=>current['draft_revision'],'edits'=>[{'kind'=>'rename_instance','instance_id'=>m['instances'][0]['instance_id'],'name'=>'Format 4'}]})[1]['data']
+m4=c.route('POST',path+'/commits',{}, {'command_id'=>SecureRandom.uuid,'expected_revision'=>up['draft_revision']})[1]['data']
+cfg5=cfg.except('criteria').merge('schema_version'=>'5','model_revision_id'=>m4['model_revision_id'],'required_capabilities'=>m4['required_capabilities'],'configuration_revision_id'=>SecureRandom.uuid)
+cfg5['digest']=ModelingContract.digest(cfg5.except('digest'))
+candidate=cfg5.except('digest','configuration_id','configuration_revision_id','parent_revision_id')
+proof=c.route('POST',path+'/configuration-compatibility',{}, {'model_revision_id'=>m4['model_revision_id'],'configuration_candidate'=>candidate})[1]['data']
+prepared=c.route('POST',path+'/prepare-execution',{}, {'command_id'=>SecureRandom.uuid,'model_revision_id'=>m4['model_revision_id'],'configuration_snapshot'=>cfg5,'configuration_digest'=>cfg5['digest']})[1]['data']
+older=cfg5.merge('model_revision_id'=>m['model_revision_id'],'required_capabilities'=>m['required_capabilities'])
+older['digest']=ModelingContract.digest(older.except('digest'))
+refused=begin
+  c.route('POST',path+'/configuration-compatibility',{}, {'model_revision_id'=>m['model_revision_id'],'configuration_candidate'=>older.except('digest','configuration_id','configuration_revision_id','parent_revision_id')})
+  'accepted'
+rescue ModelingContract::Failure
+  'refused'
+end
+puts 'PROJECTION_RESULT='+JSON.generate({'model'=>m4,'older_model'=>m,'proof'=>proof,'prepared'=>prepared,'configuration'=>cfg5,'refused'=>refused,'capabilities'=>c.route('GET','/capabilities',{},nil)[1]['data']})
+""")
+    from hyprn_mvp_app.modeling import validate
+    validate('ModelingConfigurationRevision5', result['configuration'])
+    assert result['model']['schema_version'] == '4' and result['older_model']['schema_version'] != '4'
+    assert result['proof']['schema_version'] == '2' and result['proof']['compatible']
+    artifact = result['prepared']
+    validate('PreparedModelArtifact4', artifact)
+    assert (artifact['schema_version'], artifact['result_protocol_version']) == ('4', '3')
+    assert artifact['configuration_digest'] == result['configuration']['digest']
+    assert result['refused'] == 'refused'
+    capabilities = result['capabilities']
+    validate('Capabilities3', capabilities)
+    assert any(
+        c['id'] == 'criteria_free_configuration' and c['version'] == '1' and c['supported']
+        for c in capabilities['capabilities']
+    )
+    assert capabilities['execution_versions']['artifact_versions'] == ['3', '4']
+    assert capabilities['execution_versions']['bundle_versions'] == ['10', '11']

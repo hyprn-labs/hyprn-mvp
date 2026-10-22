@@ -1,0 +1,27 @@
+# Record and control consistency
+
+## Delivered
+
+Implementation: `55bc055`, test-label follow-up `b11f8ba`, final reader/header fixes `5179806`. Existing page layouts retained. Shared ResourceCard stacks Open study and bordered Archive/Restore at the right. PanelToggle reverses the same chevrons for navigation, assistant and details. Native Select owns the centred arrow and 12 px inset. RecordDetails is first below each owning title, followed by state and one main-reader identity; reference labels omit repeated versions while selectors and technical provenance retain exact identities. Statement intermediaries are removed; evidence opens directly and an in-reader context prevents nested View evidence actions. Header actions wrap within their own desktop half and stack on narrow screens.
+
+## Integrated delivery and verification
+
+Final source is committed tree `5179806` (including concurrent compact exploration `513345d`), plus the pre-existing export-card padding amendment space-5 → space-6. Other unstaged work remains untouched. Final source-byte comparison confirmed this exact delta. All commands used the local edition entry point and isolated scratch stores:
+
+- `./hyprn-mvp dev check combined-static --keep-scope`: 9/9 stages, no failures, 4.60 s; scope `4ba288b6-95c0-48af-8e6b-a4fc8dd5c2ec`. Design/tokens/ownership/contract, tooling, component smoke/helper tests, TypeScript and Vite.
+- `./hyprn-mvp dev check ui-navigation`: 18/18, no skipped/flaky tests, 18.55 s; scope `27276603-cbde-4fd1-8d08-35755b389f9a`.
+- `./hyprn-mvp dev check ui-reading`: final integrated run 32/33, one failure, 34.19 s; scope `bf23d079-bac0-40d8-b66e-052002ddc553`. The compact exploration commit exports four new components absent from DesignSpecimen. Product reading tests passed; this completeness failure remains open for the exploration/design-specimen maintainer. Before integration this group passed 33/33 (`f9b15c4e-223d-4a8f-be75-4348b4035c2c`). Do not describe final reading qualification as green.
+- `./hyprn-mvp dev check foundry-nav`: 11/11, including genuine 200% zoom and long run titles, 33.25 s; scope `1ef79af1-998d-4cee-b611-f7bd7cc14600`, before compact exploration integration.
+- `./hyprn-mvp dev check ae-ui-evidence`: 13/13, 28.90 s; scope `9a048f5a-a46e-4a73-b77c-e6ea0d2e5346`, before the final presentation-only header/reference-label delta. Actual HTTP/API/auth/store; private modeling transport double, no scientific execution.
+
+Real app on port 54821: Studies right-side equal-width actions with 8 px gap, archive dialog cancelled, both themes; reversible menu and independent details/assistant expansion/restoration; direct evidence with zero nested evidence buttons; configuration/model/approach/run metadata order; dropdown 12 px inset, 40 px text reservation and zero vertical offset. Final run title/actions top offset 0, metadata below title, no page overflow at 390 px; keyboard export actions reachable. Viewport and original dark theme restored. Final integrated Overview retains three authored independent controls and compact outcomes; shared panel chevrons still identical. No authoring records or numerical runs changed by this task.
+
+Final live index SHA-256: `8e5211e18f918ed6c0c1deee785ede7fbadd2f372569e66510edd988755f9535`. UI-only asset/index refresh; runtime fingerprint unchanged. An intermediate isolated build lacked the other session's newly committed compact Overview; final tree comparison caught it, the snapshot was reconciled and integrated UI redeployed and checked. Subsequent uncommitted exploration refinements are outside this delivery.
+
+## Failure and recovery record
+
+Initial checks caught: missing Select mapping in the test TS loader; stale contract/list/version-label assertions; undefined space-10 token (replaced with existing space-8 + space-2); quantity-dialog focus race (wait for closure); old calculation navigation button locators (now tabs); run geometry sampled during the loading placeholder (wait for retained name). Final focused passes above supersede those failures. Explicit staging preflight stopped on concurrent Layouts edits; preserved both contributions. Whitespace gate caught two blank lines, corrected before commit. Permission review timed out once before starting a check; permitted retry succeeded. One browser click detached during menu re-render; fresh state and normal locator retry succeeded.
+
+Additional broader suites were inspected but are not qualified: approach-ui-reading 16/18 (`a026be97-211b-489d-9f5d-34f25e49f839`) included a subsequently migrated saved-version label and retired Cases navigation; ae-ui-configuration 2/14 (`2c843e38-5bfb-4a08-b8ae-f4e99fb394c2`) included removed Context/Run Evidence UI, older saved-state/record names, and reference-name expectations subsequently migrated. Fixture logs also reported broken pipes and a database lock. Full failure reports remain in external check evidence; no checks were skipped or converted to passing. Their fixture migration and full release qualification remain with the UI/release maintainers.
+
+External task evidence: `hyprn-record-polish/verification.json`, `artifact-hashes.json`, real-browser PNGs and `ui-delivery/{baseline,delivery}.json` plus recoverable previous index. Default check scopes were released by the runner; kept build scopes were copied to task evidence then released. Human visual acceptance remains separate and pending.

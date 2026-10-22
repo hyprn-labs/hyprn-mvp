@@ -1,4 +1,5 @@
 """Every public operation documents closed typed responses and aligns with actual routes."""
+from hyprn_mvp_app.contracts import authored_schema
 import json
 import re
 from pathlib import Path
@@ -29,7 +30,8 @@ def test_all_routes_and_representative_responses_match_contract(api):
     response=c.post("/api/1/studies",json=dict(command_id=uid(),name="Contract"))
     check(response)
     response=c.patch(f"/api/1/studies/{sid}",json=dict(command_id=uid(),expected_revision="stale",name="Changed"))
-    check(response)
+    assert response.status_code == 405
+    assert 'patch' not in SPEC['paths']['/studies/{study_id}']
     check(c.post(f"/api/1/studies/{sid}/runs",json=dict(command_id=uid(),configuration_revision_id=uid())))
 
 def test_history_list_detail_and_binary_download_match_contract(submission):
@@ -81,7 +83,7 @@ def test_readiness_and_scope_snapshot_contracts_are_closed_and_typed(api):
         answer=c.get(path);assert answer.status_code==200;check(answer)
     transport.fail_before=True;check(c.get(path));check(c.get(path+'?status=ready'))
     assert c.get(path.replace(sid,uid())).status_code==404
-    model=json.loads((Path(__file__).resolve().parents[2]/'contracts/schemas/model.schema.json').read_text())
+    model=authored_schema()
     def rewrite(value):
         if isinstance(value,dict):return {k:v.replace('#/$defs/','#/components/schemas/') if k=='$ref' else rewrite(v) for k,v in value.items()}
         if isinstance(value,list):return [rewrite(v) for v in value]

@@ -13,14 +13,14 @@ from aiida import orm
 from pathlib import Path
 
 import scoped_fixture as guard
-from approach_native_fixture import ApproachJourney, source, literal, criterion
+from approach_native_fixture import ApproachJourney, source, literal
 from hyprn_mvp_app.store import uid
 
 REPO=Path(__file__).resolve().parents[2]
 
 
 class UnitsJourney(ApproachJourney):
-    def start(self):
+    def start(self, *, resume=False, historical=False):
         import secrets,time
         from hyprn_mvp_app.store import Store,uid
         from hyprn_mvp_integration.calculation import NativeExecution
@@ -31,10 +31,18 @@ class UnitsJourney(ApproachJourney):
         base=guard.SCOPE_PREFIX+self.scope.run_uuid[:8]
         self.name=base+'-modeling'
         self.network=base+'-private';self.label='org.hyprn-mvp.test-scope='+self.scope.run_uuid
-        root=guard.scoped_path(self.scope,'artifacts/private-http');root.mkdir()
-        store=root/'modeling';store.mkdir();store.chmod(0o777)
-        key=guard.scoped_path(self.scope,'artifacts/fixture-model-key');key.write_text(secrets.token_hex(64));key.chmod(0o444)
-        rails=root/'rails.key';rails.write_text(secrets.token_hex(64));rails.chmod(0o444)
+        root = guard.scoped_path(self.scope, 'artifacts/private-http')
+        root.mkdir(exist_ok=resume)
+        store = root / 'modeling'
+        store.mkdir(exist_ok=resume)
+        store.chmod(0o777)
+        key=guard.scoped_path(self.scope,'artifacts/fixture-model-key')
+        rails=root/'rails.key'
+        if not resume:
+            key.write_text(secrets.token_hex(64))
+            key.chmod(0o444)
+            rails.write_text(secrets.token_hex(64))
+            rails.chmod(0o444)
         assert self.docker('inspect',self.name,check=False).returncode!=0
         assert self.docker('network','inspect',self.network,check=False).returncode!=0
         self.docker('network','create','--internal','--label',self.label,self.network)
@@ -85,16 +93,38 @@ class UnitsJourney(ApproachJourney):
             assert client.get(self.model_url+'/capabilities',headers={'Authorization':'Bearer forged'}).status_code==401
             assert client.post(self.model_url.replace('/modeling/1','')+'/api/v1/analyses/1/hyprn_mvp/run').status_code==404
         self.store=Store(self.scope.root/'artifacts/combined.sqlite')
-        self.setup=dict(model_url=self.model_url,password='fixture-'+uid(),production_http=True)
+        setup_path = self.scope.root / 'artifacts/combined-setup.json'
+        prior = json.loads(setup_path.read_text()) if resume else None
+        self.setup = dict(model_url=self.model_url,
+                          password=prior['password'] if prior else 'fixture-' + uid(),
+                          production_http=True)
         (self.scope.root/'artifacts/combined-setup.json').write_text(json.dumps(self.setup))
         self.start_web()
-        result=self.http.post('/api/1/studies',json=dict(command_id=uid(),name='Force evidence journey'))
-        assert result.status_code==201,result.text
-        self.study=result.json()['data'];self.sid=self.study['study_id']
+        if resume:
+            manifest = self.scope.root / 'artifacts/exploration-browser-input.json'
+            self.sid = json.loads(manifest.read_text())['study_id']
+            self.study=self.http.get('/api/1/studies/'+self.sid).json()['data']
+        else:
+            result = self.http.post('/api/1/studies',
+                                    json=dict(command_id=uid(), name='Force evidence journey'))
+            assert result.status_code==201,result.text
+            self.study = result.json()['data']
+            self.sid = self.study['study_id']
         with self.store.connection() as db:self.actor=db.execute("SELECT actor_id FROM users WHERE username='owner'").fetchone()[0]
-        guard.prepare_worker_fixture(self.scope,self.backend)
+        if not resume:
+            guard.prepare_worker_fixture(self.scope, self.backend)
         self.native=NativeExecution(backend=self.backend,root=self.scope.root)
-        assert self.native.require_attestation()['passed']
+        if historical:
+            assert resume, 'Historical reads require an existing scoped store'
+            def prohibited(*args, **kwargs):
+                raise AssertionError('Historical replay cannot execute numerical or candidate code')
+            for method in ('explore', 'surrogate', 'launch', 'launch_budgeted'):
+                setattr(self.native, method, prohibited)
+            self.store.publish_execution_observation(
+                'unavailable', 'executor_unavailable', time.time()
+            )
+        else:
+            assert self.native.require_attestation()['passed']
         self.identity=dict(image=image,network=self.network,container=self.name,transport='production ModelingClient HTTP/JWT',
             internal_network=json.loads(self.docker('network','inspect',self.network).stdout)[0]['Internal'],
             source_hashes={str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in stage.rglob('*') if p.is_file()},
@@ -142,45 +172,43 @@ class UnitsJourney(ApproachJourney):
         assert login.status_code==200,login.text
         self.http.headers.update({'Origin':self.url,'X-CSRF-Token':login.json()['data']['csrf_token']})
 
-    def validate_seed_contract(self,run_ids,*,mixed=False):
-        """Validate genuine retained HTTP responses against the advertised operation."""
-        from jsonschema import Draft202012Validator,FormatChecker,ValidationError
-        from copy import deepcopy
+    def validate_seed_contract(self,run_ids):
+        """Validate genuine retained seed responses against the advertised operation.
+
+        Every run here is of a configuration 6, so every seed is a ModifiedRunSeed8."""
+        from jsonschema import Draft202012Validator,FormatChecker
         spec=json.loads((REPO/'contracts/hyprn-mvp.openapi.yaml').read_text())
-        response=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']['get']['responses']['200']['content']['application/json']['schema']
-        validator=Draft202012Validator(dict(response,components=spec['components']),format_checker=FormatChecker())
-        # The previous operation union: the shared seed read union without ModifiedRunSeed4.
-        components=deepcopy(spec['components'])
-        union=components['schemas']['ModifiedRunSeed']['oneOf']
-        assert {'$ref':'#/components/schemas/ModifiedRunSeed4'} in union
-        components['schemas']['ModifiedRunSeed']['oneOf']=[v for v in union if not v['$ref'].endswith('/ModifiedRunSeed4')]
-        stale=Draft202012Validator(dict(response,components=components),format_checker=FormatChecker())
+        operation=spec['paths']['/studies/{study_id}/runs/{run_id}/modified-run-seed']['get']
+        response=operation['responses']['200']['content']['application/json']['schema']
+        validator=Draft202012Validator(dict(response,components=spec['components']),
+            format_checker=FormatChecker())
         responses=[]
         for rid in run_ids:
             reply=self.http.get('/api/1/studies/'+self.sid+'/runs/'+rid+'/modified-run-seed')
             assert reply.status_code==200,reply.text
-            envelope=reply.json();validator.validate(envelope)
-            if envelope['data']['schema_version']=='4':
-                try:stale.validate(envelope)
-                except ValidationError:pass
-                else:raise AssertionError('Seed4 must fail the previous operation union')
+            envelope=reply.json()
+            validator.validate(envelope)
             responses.append(envelope)
-        assert sorted(v['data']['schema_version'] for v in responses)==(['4'] if mixed else ['3']+['4']*6)
-        proof=dict(passed=True,responses=responses,old_operation_rejects_seed4=True,
-            openapi_sha256=hashlib.sha256((REPO/'contracts/hyprn-mvp.openapi.yaml').read_bytes()).hexdigest())
+        assert [v['data']['schema_version'] for v in responses]==['8']*len(run_ids)
+        contract=(REPO/'contracts/hyprn-mvp.openapi.yaml').read_bytes()
+        proof=dict(passed=True,responses=responses,
+            openapi_sha256=hashlib.sha256(contract).hexdigest())
         (self.scope.root/'evidence/native-seed-operation-contract.json').write_text(json.dumps(proof,indent=2))
         return proof
 
-    def browser(self,records,*,mixed=None):
+    def browser(self,records):
         """Current UI reads genuine frozen records while the real model is down."""
         import subprocess
         from dataclasses import replace
+        mixed=None
         before=self.process_count()
-        assert before==(1 if mixed else 7)
-        self.validate_seed_contract([r[0] for r in records],mixed=mixed is not None)
+        # One native process per retained record: reads never launch another.
+        assert before==len(records)
+        self.validate_seed_contract([r[0] for r in records])
         evidence=self.scope.root/'evidence'
         manifest=dict(study_id=self.sid,records=[dict(run_id=r,detail=h,configuration=c) for r,h,c,_ in records],
-            password=self.setup['password'],outage_expected=True,process_count=before,mixed=mixed)
+            password=self.setup['password'],outage_expected=True,process_count=before,mixed=mixed,
+            scientific_answers=getattr(self, 'scientific_answers', None))
         # Fixture-only credentials stay in private scoped artifacts, not reports.
         (self.scope.root/'artifacts/native-browser-input.json').write_text(json.dumps(manifest))
         (self.scope.root/'artifacts/package.json').write_text('{"type":"module"}')
@@ -243,9 +271,8 @@ class UnitsJourney(ApproachJourney):
             (self.scope.root/'evidence/frozen-before-later-draft.json').write_text(json.dumps(dict(
                 run_id=rid,bundle_sha256=hashlib.sha256(before).hexdigest(),later_draft=later),indent=2))
         self.dispatch(rid);detail=self.request('GET','runs/'+rid)
-        assert detail['state']=='recorded' and not detail['history']['errors'],detail
-        assert detail['history']['history_schema_version']=='4'
-        assert detail['history']['results']['execution']['state']=='finished'
+        assert detail['state']=='recorded' and not detail['history']['errors'],json.dumps(detail)
+        self.recorded_without_criteria(detail)
         assert self.process_count()==n+1
         self.dispatch(rid);assert self.process_count()==n+1
         assert self.request('POST','runs',body,202)['run_id']==rid
@@ -265,7 +292,8 @@ class UnitsJourney(ApproachJourney):
         return rid,detail,node
 
 
-    def model(self,name,edits,version='3'):
+    def model(self,name,edits,version='4'):
+        """Commit a model of ``version``; format 4 is reached by a format-4 edit envelope."""
         study=self.http.get('/api/1/studies/'+self.sid).json()['data']
         body=dict(command_id=uid(),expected_revision=study['revision'],name=name,template='empty')
         if version=='3':body['schema_version']='3'
@@ -273,7 +301,7 @@ class UnitsJourney(ApproachJourney):
         draft=self.edit(draft,edits,version)
         return draft,self.commit(draft)
 
-    def edit(self,draft,edits,version='3'):
+    def edit(self,draft,edits,version='4'):
         body=dict(schema_version=version,command_id=uid(),expected_revision=draft['draft_revision'],edits=edits)
         result=self.request('POST','models/'+draft['model_id']+'/edits',body)
         assert not self.canary()['candidate_side_effect']
@@ -290,11 +318,15 @@ class UnitsJourney(ApproachJourney):
         return client.call(self.actor,self.sid,method,path,body)[1]['data']
 
     def prepared(self,model):
+        """Prepare ``model`` with a private configuration 5 (no criteria) that supplies every
+        free input; the producer only generates, it never executes."""
         from test_unit_declarations import config
         from hyprn_mvp_app.store import digest
         class Context:study=self.sid
         value=config(model,Context())
-        value.update(configuration_id=uid(),configuration_revision_id=uid(),parent_revision_id=None)
+        del value['criteria']
+        value.update(schema_version='5',required_capabilities=list(model['required_capabilities']),
+            configuration_id=uid(),configuration_revision_id=uid(),parent_revision_id=None)
         value['digest']=digest(value)
         return self.private('POST','/models/'+model['model_id']+'/prepare-execution',
             dict(command_id=uid(),model_revision_id=model['model_revision_id'],

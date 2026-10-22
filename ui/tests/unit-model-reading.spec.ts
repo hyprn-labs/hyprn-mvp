@@ -45,9 +45,10 @@ async function seeded(page:Page,schema='3'):Promise<ReaderFixture> {
 }
 async function openRevision(page:Page,f:ReaderFixture) {
   await page.goto('/ui/#v=1&view=model&study='+f.study_id+'&model='+f.model_id+'&revision='+f.before.model_revision_id);
-  await expect(page.getByText('Read-only model version',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true}).first()).toBeVisible();
 }
 async function inspectXdsm(page:Page,symbol:string,label:string) {
+  await page.getByRole('tab',{name:'Component',exact:true}).click();
   await page.getByRole('tab',{name:'XDSM',exact:true}).click();
   const select=page.getByRole('button',{name:symbol+' · free input',exact:true});
   const inspector=page.getByRole('region',{name:'Selection inspector',exact:true});
@@ -58,11 +59,13 @@ async function inspectXdsm(page:Page,symbol:string,label:string) {
   // The Details panel has no ports table; the selected component's quantities are the
   // highlighted rows of the one quantities table below the canvas.
   await expect(inspector.locator('table')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Quantities',exact:true}).click();
   await expect(page.getByRole('table',{name:'Quantities',exact:true}).getByRole('row').filter({has:page.locator('code').filter({hasText:new RegExp('^'+symbol+'$')})})).toContainText(label);
 }
 for(const schema of ['1','2','3']) test('@units-reading exact schema '+schema+' tables graph XDSM and connection inspector',async({page})=>{
   const f=await seeded(page,schema),unknown=schema==='3'?'Not specified':'Dimensionless';
   await expect(page.getByRole('tab',{name:'Variables',exact:true})).toHaveCount(0);
+  await page.getByRole('tab',{name:'Quantities',exact:true}).click();
   if(await page.getByRole('button',{name:'Show all quantities',exact:true}).isVisible())await page.getByRole('button',{name:'Show all quantities',exact:true}).click();
   const table=page.getByRole('table',{name:'Quantities',exact:true});
   for(const [symbol,label] of [['unknown',unknown],['ratio','Dimensionless'],['legacy','Dimensionless'],['speed','m/s'],['flow','m/s']]) {
@@ -77,49 +80,69 @@ for(const schema of ['1','2','3']) test('@units-reading exact schema '+schema+' 
   }
   await inspectXdsm(page,'unknown',unknown);await inspectXdsm(page,'ratio','Dimensionless');await inspectXdsm(page,'speed','m/s');
   await page.locator('#panel-XDSM').getByRole('button',{name:'1 connection flow → incoming',exact:true}).click();
+  await page.getByRole('tab',{name:'Component',exact:true}).click();
   const inspector=page.getByRole('region',{name:'Selection inspector',exact:true});
   await expect(inspector.getByRole('button',{name:'Energy law · flow · m/s',exact:true})).toBeVisible();
   await expect(inspector.getByRole('button',{name:'Receiver · incoming · m/s',exact:true})).toBeVisible();
   expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('revision')).toBe(f.before.model_revision_id);
 });
-// Quantities table (Quantity, Component, Direction, Definition, Unit): the 350px inspector
-// ports table is gone by construction; units stay on one readable line in their own column and
-// the definition wraps per word inside its own cell.
-async function portTableReadable(page:Page) {
-  const table=page.getByRole('table',{name:'Quantities',exact:true});
-  await expect(page.getByRole('region',{name:'Selection inspector',exact:true}).locator('table')).toHaveCount(0);
-  await expect(table.locator('thead th').nth(3)).toHaveText('Definition');await expect(table.locator('thead th').nth(4)).toHaveText('Unit');
-  const rows=await table.evaluate(t=>[...t.querySelectorAll('tbody tr')].map(tr=>{const cell=(n:number)=>{const e=tr.children[n] as HTMLElement,r=document.createRange();r.selectNodeContents(e);return {text:e.textContent,lines:r.getClientRects().length,fits:e.scrollWidth<=e.clientWidth,textRight:r.getBoundingClientRect().right,cellRight:e.getBoundingClientRect().right};};return {definition:cell(3),units:cell(4)};}));
-  expect(rows.length).toBeGreaterThan(0);
-  for(const row of rows){expect(row.units.lines,JSON.stringify(row)).toBe(1);expect(row.units.fits,JSON.stringify(row)).toBe(true);expect(row.definition.fits,JSON.stringify(row)).toBe(true);expect(row.definition.textRight,JSON.stringify(row)).toBeLessThanOrEqual(row.definition.cellRight+1);}
+// This legacy fixture has no quantity definitions. Keep the honest notice and readable units.
+async function portTableReadable(page: Page) {
+  await page.getByRole('tab',{name:'Quantities',exact:true}).click();
+  const table = page.getByRole('table', { name: 'Quantities', exact: true });
+  const inspector = page.getByRole('region', { name: 'Selection inspector', exact: true });
+  await expect(inspector.locator('table')).toHaveCount(0);
+  await expect(table.getByRole('columnheader', { name: 'Definition', exact: true })).toHaveCount(0);
+  await expect(page.getByText('No quantity definitions provided.', { exact: true })).toHaveCount(0);
+  await expect(table.getByRole('columnheader', { name: 'Unit', exact: true })).toBeVisible();
+  const rows = await table.locator('tbody td.unit').evaluateAll(cells => cells.map(cell => {
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    return {
+      text: cell.textContent,
+      lines: range.getClientRects().length,
+      fits: cell.scrollWidth <= cell.clientWidth,
+      textRight: range.getBoundingClientRect().right,
+      cellRight: cell.getBoundingClientRect().right,
+    };
+  }));
+  expect(rows.length).toBe(4);
+  expect(rows.map(row => row.text).sort()).toEqual([
+    'Dimensionless', 'Not specified', 'm/s', 'm/s',
+  ]);
+  for (const row of rows) {
+    expect(row.lines, JSON.stringify(row)).toBe(1);
+    expect(row.fits, JSON.stringify(row)).toBe(true);
+    expect(row.textRight, JSON.stringify(row)).toBeLessThanOrEqual(row.cellRight + 1);
+  }
   return rows;
 }
-async function approachPicker(page:Page,f:ReaderFixture) {
-  await page.goto('/ui/#v=1&view=approach&study='+f.study_id);
-  await page.getByRole('button',{name:'Create modeling approach',exact:true}).click();
-  await page.getByRole('button',{name:'Add method step',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Method step',exact:true});
-  await dialog.getByLabel('Step title',{exact:true}).fill('Read exact unit intent');
-  await dialog.getByLabel('Implementation status',{exact:true}).selectOption('linked');
-  await dialog.getByLabel('Implementation model',{exact:true}).selectOption(f.model_id);
-  await dialog.getByLabel('Implementation model version',{exact:true}).selectOption(f.before.model_revision_id);
-  return dialog;
-}
-test('@units-reading approach references resolve occurrence through exact definition version',async({page})=>{
-  const f=await seeded(page),dialog=await approachPicker(page,f);
-  const labels=['Energy law · unknown · input · Not specified','Energy law · ratio · input · Dimensionless','Energy law · speed · input · m/s','Energy law · flow · m/s → Receiver · incoming · m/s'];
-  for(const label of labels) await dialog.getByRole('checkbox',{name:label,exact:true}).check();
-  await expect(dialog).not.toContainText('old_flow');await expect(dialog).not.toContainText('[object Object]');
-  await dialog.getByRole('button',{name:'Apply step',exact:true}).click();
-  // The step names its exact references in one implementation line and opens its model
-  // version in the canonical view, where the referenced quantities keep their exact units.
-  const detail=page.getByRole('region',{name:'Selected method step',exact:true});
-  await expect(detail).toContainText('Implemented in Model version '+f.before.model_revision_id.slice(0,8)+' · 4 inputs · 1 output');
-  await detail.getByRole('button',{name:'Open model version',exact:true}).click();
-  const inspector=page.getByRole('dialog',{name:'Model version '+f.before.model_revision_id.slice(0,8),exact:true});
-  await expect(inspector).toContainText('Not specified');await expect(inspector).toContainText('Dimensionless');await expect(inspector).toContainText('m/s');
-  await page.keyboard.press('Escape');
+test('@units-reading saved model revision requires explicit new version and preserves draft', async ({ page }) => {
+  const f = await seeded(page);
+  const base = `/api/1/studies/${f.study_id}/models/${f.model_id}`;
+  const draft = (await (await page.request.get(base)).json()).data;
+  const savedPath = `${base}/revisions/${f.before.model_revision_id}`;
+  const original = (await (await page.request.get(savedPath)).json()).data;
+  await expect(page.getByRole('button', { name: 'Create new version', exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Model version', exact: true })
+    .selectOption(f.after.model_revision_id);
+  await expect(page.getByRole('button', { name: 'Create new version', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit component', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save model version', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Model explanation', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit explanation', exact: true })).toHaveCount(0);
+  const writes: string[] = [];
+  page.on('request', request => {
+    if (['POST', 'PATCH', 'DELETE'].includes(request.method())) writes.push(request.url());
+  });
+  await page.getByRole('button', { name: 'Create new version', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Model version', exact: true })).toHaveValue('draft');
+  await expect(page.getByRole('button', { name: 'Save model version', exact: true })).toBeVisible();
+  expect((await (await page.request.get(base)).json()).data).toEqual(draft);
+  expect((await (await page.request.get(savedPath)).json()).data).toEqual(original);
+  expect(writes).toEqual([]);
 });
+
 for(const schema of ['3','2','1']) test('@units-reading exact schema '+schema+' assumption changes',async({page})=>{
   const f=await seeded(page,schema);
   // Actual consumer component with schema-validated exact public snapshots.
@@ -175,30 +198,36 @@ test('@units-reading light dark narrow and genuine 200 percent keyboard evidence
       for(const theme of ['light','dark']) {
         await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
         await page.getByRole('tab',{name:'Graph',exact:true}).click();
-        const port=page.locator('#panel-Graph .hf-node__port[title^="unknown · "]');await port.focus();await page.keyboard.press('Enter');await expect(page.locator('#panel-Graph [data-instance="'+f.producer_id+'"]')).toHaveAttribute('aria-pressed','true');
+        const port = page.locator('#panel-Graph .hf-node__port[title^="unknown · "]');
+        await port.focus();
+        await page.keyboard.press('Enter');
+        await expect(port).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('#panel-Graph .hf-node__port[aria-pressed="true"]'))
+          .toHaveCount(1);
+        await expect(page.locator('#panel-Graph [data-instance="' + f.producer_id + '"]'))
+          .toHaveAttribute('aria-pressed', 'false');
         await page.getByRole('tab',{name:'Graph',exact:true}).scrollIntoViewIfNeeded();await capture('reader-graph-'+size+'-'+theme);
         await inspectXdsm(page,'unknown','Not specified');await capture('reader-xdsm-'+size+'-'+theme);
+        await page.getByRole('tab',{name:'Component',exact:true}).click();
         await page.getByRole('region',{name:'Selection inspector',exact:true}).scrollIntoViewIfNeeded();geometry.push({name:'port-table-'+size+'-'+theme,rows:await portTableReadable(page)});await capture('reader-inspector-'+size+'-'+theme);
         const scroll=page.getByRole('region',{name:'Quantities table',exact:true});await scroll.focus();await expect(scroll).toBeFocused();await capture('reader-variables-'+size+'-'+theme);
       }
     }
-    await mode('desktop');const dialog=await approachPicker(page,f);
-    await expect(dialog.getByRole('checkbox',{name:'Energy law · flow · m/s → Receiver · incoming · m/s',exact:true})).toBeVisible();
+    await mode('desktop');
+    await openRevision(page,f);
+    await page.getByLabel('Model version',{exact:true}).selectOption(f.after.model_revision_id);
     for(const size of ['desktop','narrow','200']) {
       await mode(size);
       for(const theme of ['light','dark']) {
         await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
-        const choice=dialog.getByRole('checkbox',{name:'Energy law · unknown · input · Not specified',exact:true});
-        await choice.focus();await expect(choice).toBeFocused();await choice.scrollIntoViewIfNeeded();await capture('reader-references-'+size+'-'+theme);
-        const action=dialog.getByRole('button',{name:'Apply step',exact:true});await action.focus();await expect(action).toBeFocused();await action.scrollIntoViewIfNeeded();await capture('reader-reference-actions-'+size+'-'+theme);
+        const action=page.getByRole('button',{name:'Create new version',exact:true});
+        await action.focus();await expect(action).toBeFocused();
+        await action.scrollIntoViewIfNeeded();await capture('reader-version-actions-'+size+'-'+theme);
       }
     }
-    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Add method step',exact:true})).toBeFocused();
     await mode('desktop');
-    // Cancel restored the prior empty approach; use existing version navigation.
-    await page.getByRole('button',{name:'Back to overview',exact:true}).click();
-    await expect(page.getByRole('button',{name:'View modeling approach',exact:true})).toBeVisible();
-    await openRevision(page,f);await page.getByLabel('Model version',{exact:true}).selectOption('draft');
+    await page.getByRole('button',{name:'Create new version',exact:true}).click();
+    await expect(page.getByLabel('Model version',{exact:true})).toHaveValue('draft');
     await page.getByRole('button',{name:'＋ Component',exact:true}).click();
     const add=page.getByRole('dialog',{name:'Add component',exact:true});await add.getByLabel('New component name').fill('New unresolved component');await add.getByLabel('Input symbols').fill('x');await add.getByLabel('Output symbols').fill('y');await add.getByRole('button',{name:'Add component',exact:true}).click();
     const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});await expect(preview).toContainText('Not specified');
@@ -213,11 +242,12 @@ test('@units-reading light dark narrow and genuine 200 percent keyboard evidence
 test('@units-reading preview preserves before and after unit meanings',async({page})=>{
   await seeded(page);
   await page.getByLabel('Model version',{exact:true}).selectOption('draft');
-  await page.getByRole('button',{name:'Edit ports',exact:true}).click();
-  const ports=page.getByRole('dialog',{name:'Edit ports',exact:true});
-  await ports.getByLabel('Port 1 units',{exact:true}).selectOption('dimensionless');
-  await ports.getByLabel('Port 2 units',{exact:true}).selectOption('physical');
-  await ports.getByLabel('Port 2 units spelling',{exact:true}).fill('J/kg');
+  await page.getByRole('button',{name:'Component actions',exact:true}).click();
+  await page.getByRole('button',{name:'Manage quantities',exact:true}).click();
+  const ports=page.getByRole('dialog',{name:'Manage quantities',exact:true});
+  await ports.getByLabel('Quantity 1 units',{exact:true}).selectOption('dimensionless');
+  await ports.getByLabel('Quantity 2 units',{exact:true}).selectOption('physical');
+  await ports.getByLabel('Quantity 2 units spelling',{exact:true}).fill('J/kg');
   await page.keyboard.press('Escape');await page.getByRole('button',{name:'Save component',exact:true}).click();
   const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});
   const row=preview.getByRole('row').filter({hasText:'Energy law · ports'});
@@ -228,3 +258,114 @@ test('@units-reading preview preserves before and after unit meanings',async({pa
   await expect(row.getByRole('cell').nth(1)).toContainText('speed · m/s');
   await expect(preview).not.toContainText('[object Object]');
 });
+
+test('@units-reading quantity definitions persist through row edit save and reload', async ({
+  page,
+}) => {
+  await seeded(page);
+  await page.getByLabel('Model version', { exact: true }).selectOption('draft');
+  await page.getByRole('tab', { name: 'Quantities', exact: true }).click();
+  const row = page
+    .getByRole('table', { name: 'Quantities', exact: true })
+    .getByRole('row')
+    .filter({ has: page.locator('code').filter({ hasText: /^unknown$/ }) });
+  for (const statement of ['Explicit optional scientific definition.', '']) {
+    const action = row.getByRole('button', { name: 'Edit quantity', exact: true });
+    await action.click();
+    const dialog = page.getByRole('dialog', { name: 'Edit quantity', exact: true });
+    await expect(dialog.locator('[data-port-definition]')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Add input quantity' })).toHaveCount(0);
+    const field = dialog.getByLabel('Quantity 1 definition', { exact: true });
+    await expect(field).toBeFocused();
+    await field.fill(statement);
+    await dialog.getByRole('button', { name: 'Preview quantity changes', exact: true }).click();
+    const preview = page.getByRole('dialog', { name: 'Preview changes', exact: true });
+    await expect(preview).toBeVisible();
+    await preview.getByRole('button', { name: 'Apply changes', exact: true }).click();
+    await expect(preview).not.toBeVisible();
+    await page.reload();
+    await page.getByLabel('Username').fill('owner');
+    await page.getByLabel('Password').fill('correct horse battery staple');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('tab', { name: 'Quantities', exact: true }).click();
+    if (statement) await expect(row).toContainText(statement);
+    else {
+      await expect(row).not.toContainText('Explicit optional scientific definition.');
+      await expect(
+        page.getByText('No quantity definitions provided.', { exact: true }),
+      ).toHaveCount(0);
+    }
+  }
+});
+
+test('@units-reading source save preview stays visible from model explanation', async ({
+  page,
+}) => {
+  await seeded(page);
+  await page.getByLabel('Model version', { exact: true }).selectOption('draft');
+  await page.getByRole('tab', { name: 'Python', exact: true }).click();
+  const source = page.getByLabel('Python source', { exact: true });
+  const draft = (await source.inputValue()) + '\n# Local source draft\n';
+  await source.fill(draft);
+  await page.getByRole('tab', { name: 'Model explanation', exact: true }).click();
+  await page.getByRole('button', { name: 'Models', exact: true }).click();
+  const guard = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
+  await guard.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: 'Preview changes', exact: true });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole('button', { name: 'Apply changes', exact: true })).toBeEnabled();
+  await preview.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(guard).not.toBeVisible();
+  await page.getByRole('tab', { name: 'Diagram', exact: true }).click();
+  await expect(source).toHaveValue(draft);
+});
+
+test('@units-reading component metadata persists with exact history', async ({page}) => {
+  const fixture = await seeded(page);
+  await page.getByLabel('Model version', {exact: true}).selectOption('draft');
+  await page.locator(`.connected-graph [data-instance="${fixture.producer_id}"]`).click();
+  await page.getByRole('tab', {name: 'Component', exact: true}).click();
+  await page.getByRole('button', {name: 'Edit component', exact: true}).click();
+  const dialog = page.getByRole('dialog', {name: 'Edit component', exact: true});
+  await expect(dialog.getByText('Assumptions', {exact: true})).toHaveCount(0);
+  await dialog.getByLabel('Component name', {exact: true}).fill('Energy transformation');
+  await dialog.getByLabel('Component explanation', {exact: true})
+    .fill('Computes energy from the explicitly supplied velocity.');
+  await dialog.getByRole('button', {name: 'Done', exact: true}).click();
+  await page.getByRole('tab', {name: 'Python', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Edit component', exact: true})).toBeHidden();
+  await expect(page.getByRole('button', {name: 'Edit quantities', exact: true})).toBeHidden();
+  await expect(page.getByRole('button', {name: /Expand source|Collapse source/})).toHaveCount(0);
+  await page.getByRole('tab', {name: 'Component', exact: true}).click();
+  await page.getByRole('button', {name: 'Save component', exact: true}).click();
+  const preview = page.getByRole('dialog', {name: 'Preview changes', exact: true});
+  await preview.getByRole('button', {name: 'Keep editing', exact: true}).click();
+  await page.getByRole('button', {name: 'Edit component', exact: true}).click();
+  await expect(dialog.getByLabel('Component name', {exact: true}))
+    .toHaveValue('Energy transformation');
+  await expect(dialog.getByLabel('Component explanation', {exact: true}))
+    .toHaveValue('Computes energy from the explicitly supplied velocity.');
+  await dialog.getByRole('button', {name: 'Done', exact: true}).click();
+  await page.getByRole('button', {name: 'Save component', exact: true}).click();
+  await preview.getByRole('button', {name: 'Apply changes', exact: true}).click();
+  await expect(preview).not.toBeVisible();
+  await page.reload();
+  await page.getByLabel('Username').fill('owner');
+  await page.getByLabel('Password').fill('correct horse battery staple');
+  await page.getByRole('button', {name: 'Sign in', exact: true}).click();
+  await page.locator(`.connected-graph [data-instance="${fixture.producer_id}"]`).click();
+  const reader = page.getByRole('region', {name: 'Selection inspector', exact: true});
+  await expect(reader).toContainText('Energy transformation');
+  await expect(reader).toContainText('Computes energy from the explicitly supplied velocity.');
+  await page.locator(`.connected-graph [data-instance="${fixture.receiver_id}"]`).click();
+  await expect(reader).toContainText('Receives the recorded flow.');
+  await page.getByLabel('Model version', {exact: true})
+    .selectOption(fixture.before.model_revision_id);
+  await page.locator(`.connected-graph [data-instance="${fixture.producer_id}"]`).click();
+  await expect(reader).toContainText('Energy law');
+  await expect(reader).toContainText('Recorded energy transformation.');
+  await expect(reader).not.toContainText('Computes energy from the explicitly supplied velocity.');
+  await expect(reader.getByRole('button', {name: 'Edit component', exact: true})).toHaveCount(0);
+});
+
+

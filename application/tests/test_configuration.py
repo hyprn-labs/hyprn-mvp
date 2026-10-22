@@ -1,4 +1,7 @@
-"""Public configuration preview and freeze for a model2 revision (configuration3 requests)."""
+"""Public configuration preview and freeze for a Model4 version (configuration 6 requests, no
+criteria). Earlier request versions are refused before any allocation."""
+
+from legacy_study_support import seed_legacy_context
 import copy
 import hashlib
 import json
@@ -7,11 +10,11 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from hyprn_mvp_app.api import create_app
 from hyprn_mvp_app.store import Store,digest
-from test_api import api,study,model_revision,post,uid,ORIGIN,candidate,configuration_request,configuration_commit
+from test_api import api,study,model4_revision,post,uid,ORIGIN,candidate,configuration_request,configuration_commit,earlier_request
 from model_client import ruby  # Bound to this scope's owned modeling container by the api fixture.
 
 def config(api):
-    s,m=model_revision(api)
+    s,m=model4_revision(api)
     return s,m,configuration_request(api,s,m)
 
 def remote_inventory():
@@ -22,11 +25,18 @@ def configuration_rows(store):
     with sqlite3.connect(store.path) as db:
         return db.execute("SELECT COUNT(*) FROM configurations").fetchone()[0]
 
+def configuration_receipts(store):
+    with sqlite3.connect(store.path) as db:
+        return db.execute("SELECT COUNT(*) FROM receipts WHERE category='configuration'").fetchone()[0]
+
 def test_preview_is_pure_in_both_stores_and_checks_exact_digests(api):
     c,store,_,_,transport,_=api;s,m,cfg=config(api)
     before=store.path.read_bytes();files=sorted(p.name for p in store.path.parent.iterdir());remote=remote_inventory()
     result=post(c,f"/studies/{s['study_id']}/configurations/preview",cfg)["data"]
-    assert result["compatibility"]["compatible"] and result["request_digest"]==digest(cfg)
+    assert result["schema_version"]=="8" and result["compatibility"]["compatible"] and result["request_digest"]==digest(cfg)
+    # The resolved candidate carries no criteria and no approach binding.
+    assert result["resolved_candidate"]["schema_version"]=="6"
+    assert not {"criteria","approach_binding","approach_selection"}&result["resolved_candidate"].keys()
     assert result["candidate_digest"]==digest(result["resolved_candidate"]) and result["model_digest"]==m["digest"]
     assert store.path.read_bytes()==before and sorted(p.name for p in store.path.parent.iterdir())==files
     assert remote_inventory()==remote
@@ -53,12 +63,21 @@ def test_configuration_freezes_model_context_evidence_replay_and_outage(api):
     cfg["inputs"][0]["provenance"]["evidence_version_ids"]=[evidence["evidence_version_id"]]
     body=configuration_commit(api,cfg)
     frozen=post(c,f"/studies/{sid}/configurations",body,201)["data"]
+    assert frozen["schema_version"]=="9" and frozen["configuration"]["schema_version"]=="6"
+    assert not {"criteria","approach_binding"}&frozen["configuration"].keys() and "approach_closure" not in frozen
     snapshots=frozen["configuration"]["evidence_snapshots"]
     assert [x["evidence_version_id"] for x in snapshots]==[evidence["evidence_version_id"]]
     assert {k:snapshots[0][k] for k in ("kind","content","source_refs")}=={k:evidence[k] for k in ("kind","content","source_refs")}
     assert frozen["model_snapshot"]==m
     current=store.study(actor,sid)
-    store.update_study(actor,sid,uid(),current["revision"],{"description":"Later context"})
+    seed_legacy_context(
+        store,
+        actor,
+        sid,
+        uid(),
+        current['revision'],
+        {'description': 'Later context'},
+    )
     transport.fail_before=True
     restarted=TestClient(create_app(Store(store.path),auth,model),base_url=ORIGIN)
     restarted.cookies.update(c.cookies);restarted.headers.update(c.headers)
@@ -88,3 +107,20 @@ def test_family_head_cas_tamper_evidence_and_backend_outage(api):
     assert [f["code"] for f in refused.json()["error"]["fields"]]==["unresolved_evidence"]
     post(c,path,{**body,"command_id":uid(),"configuration":evil},422)
     assert configuration_rows(store)==2
+
+def test_earlier_configuration_request_versions_are_refused_before_allocation(api):
+    """New configurations are version 6 only: a request 1 to 4 (with criteria) is refused on
+    preview and save, reaches no private compatibility check and saves nothing."""
+    c,store,_,_,transport,_=api;s,m,cfg=config(api);sid=s["study_id"];path=f"/studies/{sid}/configurations"
+    before=len(transport.calls)
+    for version in ("1","2","3","4"):
+        old=earlier_request(cfg,version)
+        commit=dict(command_id=uid(),expected_revision=None,configuration_id=None,configuration=old,expected_preview_digest="0"*64)
+        for suffix,payload in (("/preview",old),("",commit)):
+            refused=post(c,path+suffix,payload,422)["error"]
+            assert refused["code"]=="unsupported_record_version" and refused["outcome"]=="unchanged",refused
+    # Version 6 has no criteria or approach selection fields to carry.
+    for extra in (dict(criteria=[]),dict(approach_selection=None)):
+        assert post(c,path+"/preview",dict(cfg,**extra),400)["error"]["code"]=="invalid_request"
+    assert not any(p.endswith("/configuration-compatibility") for _,p in transport.calls[before:])
+    assert configuration_rows(store)==0 and configuration_receipts(store)==0

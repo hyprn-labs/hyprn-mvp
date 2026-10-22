@@ -2,7 +2,11 @@
 
 Source bytes are inert captured artifacts. Native computation/UI journey is the
 later checkpoint; these tests exercise retained authority and durable commands.
+New modified configurations are authored only as version 6 (no criteria) from protocol-3
+runs of configuration 6 (``api6``); retained configuration 1-2 runs (``api``) still seed.
 """
+
+from legacy_study_support import seed_legacy_context
 import base64
 import copy
 import json
@@ -13,25 +17,27 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
-from test_reuse_api import api, path, ROOT, ORIGIN, commit_body
-from hyprn_mvp_app.store import canonical, digest, uid, DomainError
+from test_reuse_api import api, api6, path, ROOT, ORIGIN, commit_body
+from hyprn_mvp_app.store import canonical, digest, evidence_snapshot, uid, DomainError
 from hyprn_mvp_app.modeling import validate
 from hyprn_mvp_app.history import History, projection
 from hyprn_mvp_app.execution import Submissions, assemble_bundle, executable_digest
 from hyprn_mvp_app.scientific_configuration import project_scientific_configuration
 from execution_fixtures import runtime_fixture
+from criteria_free import bind_case, insert_case, record_run
+from runs_criteria_free_support import retain as retain_protocol3
 
 
 def seed(api,rid=None):
     r=api['client'].get(path(api,'runs/'+(rid or api['rid'])+'/modified-run-seed'))
     assert r.status_code==200,r.text
-    value=r.json()['data'];validate('ModifiedRunSeed1',value);return value
+    value=r.json()['data'];validate('ModifiedRunSeed'+value['schema_version'],value);return value
 
 
 def preview(api,request):
     r=api['client'].post(path(api,'configurations/preview'),json=request)
     assert r.status_code==200,r.text
-    value=r.json()['data'];validate('ConfigurationPreview2',value);return value
+    value=r.json()['data'];validate('ConfigurationPreview8',value);return value
 
 
 def body(api,request):
@@ -40,7 +46,7 @@ def body(api,request):
 
 def update_study(api,**changes):
     store=api['store'];study=store.study(api['actor'],api['sid'])
-    return store.update_study(api['actor'],api['sid'],uid(),study['revision'],changes)
+    return seed_legacy_context(store, api['actor'],api['sid'],uid(),study['revision'],changes)
 
 
 def payload(api,rid=None):
@@ -52,8 +58,13 @@ def alter_projection(api,change):
     with api['store'].connection(write=True) as db:db.execute('UPDATE outbox SET payload=? WHERE run_id=?',(json.dumps(p),api['rid']))
 
 
+def retain6(api,frozen,*,dependencies=None):
+    """Retain a protocol-3 terminal run of a saved configuration 6; never mutate its source."""
+    return retain_protocol3(api['store'],api['actor'],api['sid'],api['case'],frozen,dependencies)[0]
+
+
 def retain(api,frozen,*,dependencies=None):
-    """Retain a new synthetic terminal run after real API save; never mutate its source."""
+    """Retain a new synthetic terminal run of a retained configuration 1-2; never mutate its source."""
     store=api['store'];c=frozen['configuration'];run=Submissions(store,None,None).submit(api['actor'],api['sid'],dict(command_id=uid(),configuration_revision_id=c['configuration_revision_id']))
     prepared=copy.deepcopy(api['case']['prepared']);private=project_scientific_configuration(c)
     prepared.update(configuration_revision_id=c['configuration_revision_id'],configuration_digest=private['digest'])
@@ -83,14 +94,36 @@ def test_seed_is_exact_read_only_during_model_outage_and_cancel(api):
     assert seed(api)==value and api['store'].path.read_bytes()==before
 
 
-def test_changed_context_requires_explicit_choice_and_exact_observed_revision(api):
+def test_configuration6_seed_is_exact_read_only_and_carries_no_criteria(api6):
+    api=api6;api['model'].offline=True;before=api['store'].path.read_bytes();source=copy.deepcopy(payload(api))
+    value=seed(api);config=api['case']['frozen']['configuration'];request=value['configuration']
+    assert api['store'].path.read_bytes()==before and payload(api)==source and not api['model'].calls
+    assert value['schema_version']=='8' and request['schema_version']=='6'
+    # A configuration carries no criteria and no approach selection; criteria are
+    # evaluated through calculation bindings.
+    assert not set(request)&{'criteria','approach_selection','evidence_version_ids'}
+    assert value['source_configuration']==config and 'criteria' not in value['source_configuration']
+    assert request['context_override']==dict(schema_version='1',description=config['context_snapshot']['description'],boundary=config['context_snapshot']['boundary'])
+    assert request['derivation']==dict(source_run_id=api['rid'],source_configuration_digest=config['digest'])
+    assert request['context_source']['kind']=='source_run' and request['context_source']['choice_confirmed']
+    assert request['inputs']==[dict(kind='literal',**{k:i[k] for k in ('target','value','units','provenance')}) for i in config['inputs']]
+    assert value['source_runtime']==api['bundle']['manifest']['runtime']
+    assert value['runtime_comparison']['state']=='unavailable'
+    assert not value['context_changed'] and not value['requires_context_choice']
+    assert seed(api)==value and api['store'].path.read_bytes()==before
+
+
+def test_changed_context_requires_explicit_choice_and_exact_observed_revision(api6):
+    api=api6;source=api['case']['frozen']['configuration']['context_snapshot']
     current=update_study(api,description='New question',boundary='New boundary');value=seed(api);request=value['configuration']
     assert value['context_changed'] and value['requires_context_choice'] and not request['context_source']['choice_confirmed']
-    assert value['source_context']['description']=='' and value['current_context']['description']=='New question'
+    assert value['source_context']['description']==source['description'] and value['current_context']['description']=='New question'
     response=api['client'].post(path(api,'configurations/preview'),json=request)
     assert response.status_code==409 and response.json()['error']['code']=='context_choice_required'
     request['context_source']['choice_confirmed']=True
-    historical=preview(api,request);assert historical['resolved_candidate']['context_snapshot']['description']==''
+    historical=preview(api,request);assert historical['resolved_candidate']['context_snapshot']['description']==source['description']
+    # Selecting today's study context drops the inherited override explicitly.
+    request.pop('context_override')
     request['context_source']=dict(kind='current_study',expected_study_revision=current['revision'])
     selected=preview(api,request);assert selected['resolved_candidate']['context_snapshot']['description']=='New question'
     assert any(c['path']=='/context_snapshot/description' for c in selected['changes'])
@@ -99,18 +132,20 @@ def test_changed_context_requires_explicit_choice_and_exact_observed_revision(ap
     assert response.status_code==409 and response.json()['error']['code']=='stale_revision'
 
 
-def test_save_new_family_delta_runtime_and_independent_submission_replay(api):
-    source=copy.deepcopy(payload(api));request=seed(api)['configuration'];request['name']='Modified price';request['inputs'][0]['value']+=1
+def test_save_new_family_delta_runtime_and_independent_submission_replay(api6):
+    api=api6;source=copy.deepcopy(payload(api));request=seed(api)['configuration'];request['name']='Modified price';request['inputs'][0]['value']+=1
     command=body(api,request);response=api['client'].post(path(api,'configurations'),json=command)
     assert response.status_code==201,response.text
     saved=response.json()['data'];c=saved['configuration'];original=source['frozen']['configuration']
+    assert saved['schema_version']=='9' and c['schema_version']=='6' and 'criteria' not in c
     assert c['configuration_id']!=original['configuration_id'] and c['parent_revision_id'] is None
     assert c['derivation']['source_configuration_revision_id']==original['configuration_revision_id']
     changes={v['path']:v for v in c['derivation']['changes']}
     assert changes['/inputs/0/value']['before_digest']==digest(original['inputs'][0]['value'])
     assert changes['/inputs/0/value']['after_digest']==digest(request['inputs'][0]['value'])
     assert c['derivation']['source_runtime']==api['bundle']['manifest']['runtime']
-    assert all(call[2]=='POST' for call in api['model'].calls),api['model'].calls
+    # The retained origin supplies the model: today's model revision is never read.
+    assert {(call[2],call[3].rsplit('/',1)[-1]) for call in api['model'].calls}<={('GET','capabilities'),('POST','configuration-compatibility')},api['model'].calls
     api['model'].offline=True
     assert api['client'].post(path(api,'configurations'),json=command).json()['data']==saved
     assert api['client'].post(path(api,'configurations'),json=command|{'expected_preview_digest':'a'*64}).status_code==409
@@ -122,9 +157,9 @@ def test_save_new_family_delta_runtime_and_independent_submission_replay(api):
     assert payload(api)==source
 
 
-@pytest.mark.parametrize('change',['model','revision','digest','source','context_source','context_digest','snapshot','runtime','changes','numerical'])
-def test_forged_derivation_context_model_and_metadata_rejected(api,change):
-    request=seed(api)['configuration']
+@pytest.mark.parametrize('change',['model','revision','digest','source','context_source','context_digest','snapshot','runtime','changes','numerical','criteria','approach'])
+def test_forged_derivation_context_model_and_metadata_rejected(api6,change):
+    api=api6;request=seed(api)['configuration']
     if change=='model':request['model_id']=uid()
     elif change=='revision':request['model_revision_id']=uid()
     elif change=='digest':request['derivation']['source_configuration_digest']='a'*64
@@ -134,6 +169,8 @@ def test_forged_derivation_context_model_and_metadata_rejected(api,change):
     elif change=='snapshot':request['context_snapshot']={'description':'forged'}
     elif change=='runtime':request['derivation']['source_runtime']=runtime_fixture()['runtime']
     elif change=='changes':request['derivation']['changes']=[]
+    elif change=='criteria':request['criteria']=[]
+    elif change=='approach':request['approach_selection']=None
     else:request['numerical']['mode']='invented'
     response=api['client'].post(path(api,'configurations/preview'),json=request)
     assert response.status_code in (400,404,409,422),response.text
@@ -141,8 +178,8 @@ def test_forged_derivation_context_model_and_metadata_rejected(api,change):
 
 
 @pytest.mark.parametrize('change',['family','expected_revision'])
-def test_derivation_cannot_advance_existing_family(api,change):
-    command=body(api,seed(api)['configuration']);command['configuration_id' if change=='family' else 'expected_revision']=api['case']['frozen']['configuration']['configuration_id']
+def test_derivation_cannot_advance_existing_family(api6,change):
+    api=api6;command=body(api,seed(api)['configuration']);command['configuration_id' if change=='family' else 'expected_revision']=api['case']['frozen']['configuration']['configuration_id']
     r=api['client'].post(path(api,'configurations'),json=command);assert r.status_code==400 and r.json()['error']['code']=='invalid_request',r.text
 
 
@@ -173,8 +210,15 @@ def test_complete_failed_record_is_eligible_and_does_not_supply_reusable_results
     assert api['client'].get(path(api,'result-sources')).json()['data']['items']==[]
 
 
-def test_seed_authorization_queries_csrf_and_revoked_replay(api):
-    route=path(api,'runs/'+api['rid']+'/modified-run-seed');c=api['client']
+def test_failed_protocol3_record_is_eligible_and_does_not_supply_reusable_results(api6):
+    api=api6;rid,results=record_run(api['store'],api['actor'],api['sid'],api['case'],failed=True)
+    assert 'criteria' not in results and seed(api,rid)['source_run_id']==rid
+    items=api['client'].get(path(api,'result-sources')).json()['data']['items']
+    assert items and all(i['source_run_id']==api['rid'] for i in items)
+
+
+def test_seed_authorization_queries_csrf_and_revoked_replay(api6):
+    api=api6;route=path(api,'runs/'+api['rid']+'/modified-run-seed');c=api['client']
     assert TestClient(c.app,base_url=ORIGIN).get(route,headers={'X-Actor-ID':api['actor']}).status_code==401
     foreign=api['store'].create_study(uid(),uid(),'Other')['study_id']
     assert c.get(route.replace(api['sid'],foreign)).status_code==404
@@ -186,8 +230,9 @@ def test_seed_authorization_queries_csrf_and_revoked_replay(api):
     assert c.get(route).status_code==404 and c.post(path(api,'configurations'),json=command).status_code==404
 
 
-def test_runtime_observation_changes_and_expires_without_changing_seed_authority(api,monkeypatch):
+def test_runtime_observation_changes_and_expires_without_changing_seed_authority(api6,monkeypatch):
     import hyprn_mvp_app.readiness as readiness
+    api=api6
     now=[1000.];monkeypatch.setattr(readiness,'wall_time',lambda:now[0]);runtime=runtime_fixture()['runtime']
     api['store'].publish_execution_observation('ready',None,1000.,runtime)
     value=seed(api);assert value['runtime_comparison']['state']=='same'
@@ -197,8 +242,8 @@ def test_runtime_observation_changes_and_expires_without_changing_seed_authority
     assert seed(api)['source_runtime']==runtime
 
 
-def test_model_outage_at_compatibility_keeps_seed_and_request(api,monkeypatch):
-    request=seed(api)['configuration'];before=copy.deepcopy(request)
+def test_model_outage_at_compatibility_keeps_seed_and_request(api6,monkeypatch):
+    api=api6;request=seed(api)['configuration'];before=copy.deepcopy(request)
     def offline(*a,**kw):raise DomainError('backend_unavailable',503,outcome='unknown')
     monkeypatch.setattr(api['model'],'call',offline)
     response=api['client'].post(path(api,'configurations/preview'),json=request)
@@ -217,39 +262,47 @@ def test_generated_route_schema_and_types_match(api,tmp_path):
     assert types.read_bytes()==(ROOT/'ui/src/contract.ts').read_bytes()
 
 
-def test_preserves_binding_evidence_and_notes_until_explicit_replacement(api):
+def test_preserves_binding_evidence_and_notes_until_explicit_replacement(api6):
     from hyprn_mvp_app.result_bindings import ResultBindings
-    note=api['client'].post(path(api,'evidence'),json=dict(command_id=uid(),evidence_schema_version='2',
+    api=api6
+    note=api['client'].post(path(api,'evidence'),json=dict(command_id=uid(),evidence_schema_version='3',title='Historical evidence',
         resource_scope=dict(scope_version='1',kind='study',study_id=api['sid']),kind='note',content='Historical evidence',source_refs=[]))
     assert note.status_code==201,note.text
     eid=note.json()['data']['evidence_version_id'];request=copy.deepcopy(api['candidate']);request['notes']=['Historical assumption']
-    request['evidence_version_ids']=[eid];request['inputs'][0]['provenance']['evidence_version_ids']=[eid]
+    request['general_context_evidence_version_ids']=[eid];request['inputs'][0]['provenance']['evidence_version_ids']=[eid]
     saved_response=api['client'].post(path(api,'configurations'),json=body(api,request));assert saved_response.status_code==201,saved_response.text
     saved=saved_response.json()['data']
     class Resolver:
         def resolve_results(self,rows):return [dict(row,result_uuid=uid()) for row in rows]
     dependencies=ResultBindings(api['store']).dependencies(api['actor'],api['sid'],saved['configuration'],Resolver())
-    rid=retain(api,saved,dependencies=dependencies);original=copy.deepcopy(payload(api,rid))
+    rid=retain6(api,saved,dependencies=dependencies);original=copy.deepcopy(payload(api,rid))
     request=seed(api,rid)['configuration']
     assert request['inputs'][0]['kind']=='run_result' and request['inputs'][0]['source_run_id']==api['rid']
-    assert request['evidence_version_ids']==[eid] and request['notes']==['Historical assumption']
+    assert request['general_context_evidence_version_ids']==[eid] and request['notes']==['Historical assumption']
     request['name']='Modified linked attempt'
     resolved=preview(api,request)['resolved_candidate']
     assert resolved['inputs'][0]['result_binding']==saved['configuration']['inputs'][0]['result_binding']
     assert resolved['evidence_snapshots']==saved['configuration']['evidence_snapshots']
-    linked=request['inputs'][0];request['inputs'][0]=dict(kind='literal',target=linked['target'],value=42,units='m',provenance=linked['provenance'])
+    linked=request['inputs'][0];request['inputs'][0]=dict(kind='literal',target=linked['target'],value=42,units='',provenance=linked['provenance'])
     resolved=preview(api,request)['resolved_candidate'];assert resolved['inputs'][0]['result_binding'] is None
     assert any(c['path']=='/inputs/0/result_binding' for c in resolved['derivation']['changes'])
     assert payload(api,rid)==original
-    request['evidence_version_ids']=[]
-    assert api['client'].post(path(api,'configurations/preview'),json=request).status_code==409
+    # A cited evidence version stays pinned until every citation is explicitly replaced.
+    request['general_context_evidence_version_ids']=[]
+    resolved=preview(api,request)['resolved_candidate']
+    assert [s['evidence_version_id'] for s in resolved['evidence_snapshots']]==[eid]
+    request['inputs'][0]['provenance']['evidence_version_ids']=[]
+    assert preview(api,request)['resolved_candidate']['evidence_snapshots']==[]
+    request['inputs'][0]['provenance']['evidence_version_ids']=[uid()]
+    assert api['client'].post(path(api,'configurations/preview'),json=request).status_code==422
 
 
 @pytest.mark.parametrize('race',['study','source','membership'])
-def test_commit_rechecks_origin_and_study_after_private_compatibility(api,monkeypatch,race):
-    request=seed(api)['configuration'];command=body(api,request);original=api['model'].call
+def test_commit_rechecks_origin_and_study_after_private_compatibility(api6,monkeypatch,race):
+    api=api6;request=seed(api)['configuration'];command=body(api,request);original=api['model'].call
     def change(*a,**kw):
         result=original(*a,**kw)
+        if a[2]!='POST':return result
         if race=='study':update_study(api,description='Concurrent edit')
         else:
             with api['store'].connection(write=True) as db:
@@ -262,11 +315,11 @@ def test_commit_rechecks_origin_and_study_after_private_compatibility(api,monkey
     with api['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==1
 
 
-def test_concurrent_identical_save_and_submit_allocate_once(api):
+def test_concurrent_identical_save_and_submit_allocate_once(api6):
     from concurrent.futures import ThreadPoolExecutor
     from hyprn_mvp_app.configuration import Configurations
     from hyprn_mvp_app.modeling import Coordinator
-    command=body(api,seed(api)['configuration']);service=Configurations(api['store'],Coordinator(api['store'],api['model']))
+    api=api6;command=body(api,seed(api)['configuration']);service=Configurations(api['store'],Coordinator(api['store'],api['model']))
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(lambda _:service.commit(api['actor'],api['sid'],copy.deepcopy(command)),range(2)))
     assert results[0]==results[1]
     submit=dict(command_id=uid(),configuration_revision_id=results[0]['configuration']['configuration_revision_id'])
@@ -278,8 +331,8 @@ def test_concurrent_identical_save_and_submit_allocate_once(api):
         assert db.execute('SELECT COUNT(*) FROM run_associations').fetchone()[0]==2
 
 
-def test_failed_derivation_cannot_bypass_successful_result_eligibility(api):
-    alter_projection(api,lambda p:p['history']['results']['execution'].update(state='failed',exit_code=1))
+def test_failed_derivation_cannot_bypass_successful_result_eligibility(api6):
+    api=api6;alter_projection(api,lambda p:p['history']['results']['execution'].update(state='failed',exit_code=1))
     request=seed(api)['configuration'];source=payload(api)['history']['results'];item=request['inputs'][0]
     request['inputs'][0]=dict(kind='run_result',target=item['target'],source_run_id=api['rid'],source_output=source['outputs'][0]['target'],expected_results_digest=digest(source),provenance=item['provenance'])
     response=api['client'].post(path(api,'configurations/preview'),json=request)
@@ -308,57 +361,20 @@ def test_modified_runner_refuses_native_interpreter(monkeypatch):
     with pytest.raises(ValueError,match='reviewed interpreter'):checks.contracts_child('modified')
 
 
-@pytest.fixture
-def current_api(api,monkeypatch):
-    """Current Model2/Configuration3 history; inert program and synthetic results.
-
-    Reuses the existing guarded fixture builder. No native process or scientific
-    execution is claimed; real public API, auth, SQLite and bundle readers apply.
-    """
-    from types import SimpleNamespace
-    from ae_ui_fixture import configuration_case
-    from test_assumptions_evidence_contracts import sample,D
-    data=dict(api,transport=SimpleNamespace(revisions={}))
-    source=configuration_case(data,'current');api['rid']=source['rid']
-    retained=payload(api);files={k:base64.b64decode(v) for k,v in retained['bundle']['files'].items()}
-    prepared=json.loads(files['preparation.json'])
-    api['case']=dict(frozen=source['saved'],prepared=prepared,files={row['path']:files[row['path']] for row in prepared['files']})
-    api['model'].case=api['case'];original=api['model'].call
-    def call(actor,sid,method,route,body=None,**kwargs):
-        if route!='/capabilities':return original(actor,sid,method,route,body,**kwargs)
-        if api['model'].offline:raise AssertionError('Retained read contacted modeling')
-        caps=sample(D['Capabilities']);cap=sample(D['Capabilities']['properties']['capabilities']['items'])
-        cap.update(id='resolved_configuration',version='3',supported=True)
-        caps.update(contract_versions=['1.2'],schema_versions=['1','2'],capabilities=[cap],
-            generator_identity=copy.deepcopy(api['case']['prepared']['generator_identity']))
-        validate('Capabilities',caps)
-        return 200,dict(data=caps)
-    monkeypatch.setattr(api['model'],'call',call)
-    return api
-
-
 def current_request(api):
-    response=api['client'].get(path(api,'runs/'+api['rid']+'/modified-run-seed'))
-    assert response.status_code==200,response.text
-    value=response.json()['data'];validate('ModifiedRunSeed2',value)
+    value=seed(api);assert value['schema_version']=='8'
     request=value['configuration'];request['context_source']['choice_confirmed']=True
     request['context_override']=dict(schema_version='1',description='Edited inherited question',boundary=value['source_context']['boundary'])
     request['notes']=['An explicit configuration note']
     return request
 
 
-def current_preview(api,request):
-    response=api['client'].post(path(api,'configurations/preview'),json=request)
-    assert response.status_code==200,response.text
-    value=response.json()['data'];validate('ConfigurationPreview3',value);return value
-
-
-def test_modified_context_retains_exact_origin_and_next_seed_during_outage(current_api):
-    api=current_api;original=canonical(payload(api));source=copy.deepcopy(api['case']['frozen'])
+def test_modified_context_retains_exact_origin_and_next_seed_during_outage(api6):
+    api=api6;original=canonical(payload(api));source=copy.deepcopy(api['case']['frozen'])
     current=update_study(api,description='Today\'s different study',boundary='Different scope')
-    request=current_request(api);p=current_preview(api,request);candidate=p['resolved_candidate']
+    request=current_request(api);p=preview(api,request);candidate=p['resolved_candidate']
     expected=dict(description=request['context_override']['description'],boundary=source['configuration']['context_snapshot']['boundary'],notes=request['notes'])
-    assert candidate['context_snapshot']==expected
+    assert candidate['context_snapshot']==expected and 'criteria' not in candidate
     changes={v['path']:v for v in p['changes']}
     assert changes['/context_snapshot/description']['after']==expected['description']
     assert '/context_snapshot/boundary' not in changes
@@ -367,10 +383,10 @@ def test_modified_context_retains_exact_origin_and_next_seed_during_outage(curre
     response=api['client'].post(path(api,'configurations'),json=command);assert response.status_code==201,response.text
     saved=response.json()['data'];assert saved['configuration']['context_snapshot']==expected
     assert api['client'].post(path(api,'configurations'),json=command).json()['data']==saved
-    rid=retain(api,saved)
+    rid=retain6(api,saved)
     api['model'].offline=True
     response=api['client'].get(path(api,'runs/'+rid+'/modified-run-seed'));assert response.status_code==200,response.text
-    next_seed=response.json()['data'];validate('ModifiedRunSeed2',next_seed)
+    next_seed=response.json()['data'];validate('ModifiedRunSeed8',next_seed)
     assert next_seed['source_context']==expected and next_seed['configuration']['notes']==expected['notes']
     assert next_seed['configuration']['derivation']['source_configuration_digest']==saved['configuration']['digest']
     assert History(api['store']).read(api['actor'],api['sid'],rid)['configuration']==saved['configuration']
@@ -380,21 +396,19 @@ def test_modified_context_retains_exact_origin_and_next_seed_during_outage(curre
 
 
 @pytest.mark.parametrize('failure',['unconfirmed','stale','forged_digest','foreign_run','revoked','source_race'])
-def test_modified_override_preserves_source_guards_and_atomicity(current_api,monkeypatch,failure):
-    api=current_api;update_study(api,description='Changed study');request=current_request(api)
-    p=current_preview(api,request)
+def test_modified_override_preserves_source_guards_and_atomicity(api6,monkeypatch,failure):
+    api=api6;update_study(api,description='Changed study');request=current_request(api)
+    p=preview(api,request)
     command=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=request,expected_preview_digest=p['candidate_digest'])
     if failure=='unconfirmed':request['context_source']['choice_confirmed']=False
     elif failure=='stale':request['context_source']['observed_study_revision']='stale'
     elif failure=='forged_digest':request['derivation']['source_configuration_digest']='0'*64
     elif failure=='foreign_run':
-        other=api['store'].create_study(api['actor'],uid(),'Other study')
-        foreign=dict(api,sid=other['study_id'])
-        from types import SimpleNamespace
-        from ae_ui_fixture import configuration_case
-        record=configuration_case(dict(foreign,transport=SimpleNamespace(revisions={})),'current')
-        request['derivation']['source_run_id']=record['rid']
-        request['context_source']['source_run_id']=record['rid']
+        other=api['store'].create_study(api['actor'],uid(),'Other study')['study_id']
+        case=bind_case('chain',other,study_revision=api['store'].study(api['actor'],other)['revision']);insert_case(api['store'],other,case)
+        foreign,_=record_run(api['store'],api['actor'],other,case)
+        request['derivation']['source_run_id']=foreign
+        request['context_source']['source_run_id']=foreign
     elif failure=='revoked':
         with api['store'].connection(write=True) as db:db.execute('DELETE FROM memberships WHERE study_id=?',(api['sid'],))
     else:
@@ -418,16 +432,21 @@ SNAPSHOT_FIELDS = ('evidence_version_id', 'kind', 'content', 'source_refs', 'evi
 
 
 def legacy_evidence_source(api):
-    """A deterministic configuration-2 retained run citing one stored evidence version."""
+    """A deterministic configuration-2 retained run citing one stored evidence version.
+
+    New configuration 2 writes are refused, so the retained record is stored directly, exactly
+    as an earlier save froze it; reading it must still work."""
     note=api['client'].post(path(api,'evidence'),json=dict(command_id=uid(),evidence_schema_version='2',
         resource_scope=dict(scope_version='1',kind='study',study_id=api['sid']),kind='note',content='Historical evidence',source_refs=[]))
     assert note.status_code==201,note.text
-    eid=note.json()['data']['evidence_version_id'];request=copy.deepcopy(api['candidate'])
-    source=api['case']['frozen']['configuration']['inputs'][0]
-    request['inputs'][0]=dict(kind='literal',**{k:copy.deepcopy(source[k]) for k in ('target','value','units','provenance')})
-    request['evidence_version_ids']=[eid];request['inputs'][0]['provenance']['evidence_version_ids']=[eid]
-    saved=api['client'].post(path(api,'configurations'),json=body(api,request));assert saved.status_code==201,saved.text
-    saved=saved.json()['data'];assert saved['configuration']['schema_version']=='2'
+    eid=note.json()['data']['evidence_version_id'];saved=copy.deepcopy(api['case']['frozen']);c=saved['configuration']
+    c.update(configuration_id=uid(),configuration_revision_id=uid(),
+        evidence_snapshots=[evidence_snapshot(api['store'].evidence_version(api['actor'],api['sid'],eid),legacy_configuration=True)])
+    c['inputs'][0]['provenance']['evidence_version_ids']=[eid]
+    c['digest']=digest({k:v for k,v in c.items() if k!='digest'});validate('ConfigurationRevision2',c)
+    with api['store'].connection(write=True) as db:
+        db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(c['configuration_revision_id'],c['configuration_id'],api['sid'],json.dumps(saved)))
+        db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(c['configuration_id'],api['sid'],c['configuration_revision_id']))
     rid=retain(api,saved);snapshot=payload(api,rid)['frozen']['configuration']['evidence_snapshots']
     assert [s['evidence_version_id'] for s in snapshot]==[eid] and set(snapshot[0])==set(SNAPSHOT_FIELDS)
     return rid,eid
@@ -478,3 +497,4 @@ def test_legacy_evidence_mismatch_in_any_snapshot_field_is_incomplete_record(api
     assert response.status_code==422 and response.json()['error']['code']=='incomplete_record',response.text
     assert 'Historical evidence' not in response.text
     assert payload(api,rid)==retained
+

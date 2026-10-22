@@ -1,5 +1,5 @@
 import { useEffect, useState, useId } from 'react';
-import { Button, Select, TextInput } from './design';
+import { Button, FieldHint, Select, TextInput } from './design';
 import { HyprnMvpApi, message } from './api';
 import { evidenceAccessLost } from './EvidenceView';
 import type { UnitCatalog1 } from './contract';
@@ -28,15 +28,15 @@ export function UnitGuidance({guidance}: {guidance: UnitGuidanceState}) {
 }
 type Props = { label: string; value: UnitDraft; onChange: (value: UnitDraft) => void; catalog: UnitCatalog1 | null; disabled?: boolean; resolvedOnly?: boolean };
 export function UnitEditor({label,value,onChange,catalog,disabled,resolvedOnly=false}: Props) {
-  const suggestions = useId();
+  const suggestions = useId(), hint = useId();
   let error = '';
   if (catalog && value.kind === 'physical') { try { unitDeclaration(value,catalog); } catch (e) { error = message(e); } }
-  return <div>
-    <label>{label}<Select aria-label={label} disabled={disabled || !catalog} value={value.kind} onChange={e => onChange(e.target.value === 'physical' ? {kind:'physical',expression:''} : e.target.value === 'dimensionless' ? {kind:'dimensionless'} : {kind:'unspecified'})}>
+  return <div className="hf-unit-editor">
+    <label>Units<Select aria-label={label} disabled={disabled || !catalog} value={value.kind} onChange={e => onChange(e.target.value === 'physical' ? {kind:'physical',expression:''} : e.target.value === 'dimensionless' ? {kind:'dimensionless'} : {kind:'unspecified'})}>
       <option value="unspecified" disabled={resolvedOnly}>Not specified</option><option value="dimensionless">Dimensionless</option><option value="physical">Physical units</option>
     </Select></label>
-    {value.kind === 'physical' && <><label>{label} spelling<br/><TextInput aria-label={label+' spelling'} list={suggestions} value={value.expression} maxLength={64} disabled={disabled} aria-invalid={!!error} onChange={e => onChange({kind:'physical',expression:e.target.value})}/></label>
-      <datalist id={suggestions}>{catalog?.supported_units.map(unit=><option key={unit} value={unit}/>)}</datalist><p>Choose a supported spelling from the suggestions.</p></>}
+    {value.kind === 'physical' && <><label>Unit symbol<TextInput aria-label={label+' spelling'} list={suggestions} aria-describedby={hint} value={value.expression} maxLength={64} disabled={disabled} aria-invalid={!!error} onChange={e => onChange({kind:'physical',expression:e.target.value})}/></label>
+      <datalist id={suggestions}>{catalog?.supported_units.map(unit=><option key={unit} value={unit}/>)}</datalist><FieldHint id={hint}>Choose a unit from the suggestions.</FieldHint></>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }

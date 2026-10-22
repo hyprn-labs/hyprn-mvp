@@ -10,3 +10,8 @@ Who acted, when a record was written through an assistant: "{agent} for {user}".
 - **When it appears.** Only when the record's receipt actor is an agent. A record a person wrote carries no chip: the absence of the chip means a person did it. Historical views show the attribution stored with that version or run, never a current name.
 - **Where it sits.** At the end of a row's metadata line, after a heading's state tag, or first in the metadata line of an Agent activity row. Status tags stay at the right end of their row. One chip per record per screen.
 - **Not a proposal.** The `ai` colour is limited to the mark. An agent's saved record is not assistant-suggested content, so it never sits in an `InferenceBlock`. A scientific review recorded by an assistant also carries the label "Recorded by an assistant" beside the chip.
+
+Human names are captured from the effective display alias (account name when blank)
+when a new attribution is created. Profile edits never change saved authorship;
+legacy entries retain the account-name fallback. Every evidence and explanation
+reader uses the same API-supplied names through RecordAttribution.

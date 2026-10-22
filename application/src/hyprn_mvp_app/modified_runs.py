@@ -37,8 +37,10 @@ def changes(source,candidate):
     previous=deepcopy(source)
     for item in previous['inputs']:item.setdefault('result_binding',None)
     for key in ('name','inputs','criteria','numerical','context_snapshot','evidence_snapshots'):
-        walk(previous[key],candidate[key],'/'+key)
-    if source.get('schema_version') in ('3','4') or candidate.get('schema_version') in ('3','4'):
+        # Configuration 6 has no criteria; a key absent on both sides is no change.
+        if key in previous or key in candidate:
+            walk(previous.get(key,missing),candidate.get(key,missing),'/'+key)
+    if source.get('schema_version') in ('3','4','6') or candidate.get('schema_version') in ('3','4','6'):
         # Assumption identity survives reordering; citation identity includes its
         # relationship so simultaneous supports/challenges remain independent.
         def assumptions(config):
@@ -55,9 +57,9 @@ def changes(source,candidate):
 
 
 def seedable(payload):
-    """Explicit refusal before integrity checks: only deterministic configurations 1-4 seed."""
+    """Explicit refusal before integrity checks: only deterministic configurations 1-4 and 6 seed."""
     config=payload.get('frozen',{}).get('configuration',{})
-    if config.get('schema_version') not in ('1','2','3','4'):raise unsupported()
+    if config.get('schema_version') not in ('1','2','3','4','6'):raise unsupported()
     if config.get('numerical',{}).get('mode')!='deterministic':raise unsupported()
 
 
@@ -67,7 +69,7 @@ class ModifiedRuns:
     def retained(self,actor,sid,rid):
         """A terminal retained run usable as a modified-run seed (History owns the reading).
 
-        Eligibility added here: a deterministic configuration 1-4, a finished (exit 0) or
+        Eligibility added here: a deterministic configuration 1-4 or 6, a finished (exit 0) or
         failed (exit 1) complete outcome and a closed runtime identity. Refusals are
         ``incomplete_record`` 422, except ``record_not_ready``, ``unsupported_record_version``,
         ``resource_not_found`` and ``reference_conflict``, which propagate.
@@ -81,14 +83,14 @@ class ModifiedRuns:
                 raise ValueError('Source record identity mismatch')
             complete_outcome(result,model,config)
             runtime_identity(manifest['runtime'])
-            # Bundle4/5/6 authenticate the complete immutable citation closure.
+            # Bundle4 onwards (configurations 3, 4 and 6) authenticate the complete immutable citation closure.
             # Seed reads must remain possible when today's library is offline;
             # preview/commit separately rechecks exact selected evidence rows.
             # Configuration 1/2 bundles do not authenticate that closure, so each
             # retained snapshot is compared, field by field, with its immutable
             # stored evidence version. This is a consistency check only: a mismatch
             # refuses, and the stored row is never returned or merged.
-            if config['schema_version'] not in ('3','4'):
+            if config['schema_version'] not in ('3','4','6'):
                 for snapshot in config['evidence_snapshots']:
                     stored=self.store.evidence_version(actor,sid,snapshot['evidence_version_id'])
                     if any(stored.get(k)!=v for k,v in snapshot.items()):raise ValueError('Source evidence mismatch')
@@ -108,12 +110,12 @@ class ModifiedRuns:
                     source_output=deepcopy(binding['source_output']),expected_results_digest=binding['results_digest'],provenance=deepcopy(item['provenance'])))
             else:inputs.append(dict(kind='literal',**{k:deepcopy(item[k]) for k in ('target','value','units','provenance')}))
         request=dict(schema_version='2',study_id=sid,model_id=config['model_id'],model_revision_id=config['model_revision_id'],name=config['name'],
-            inputs=inputs,criteria=deepcopy(config['criteria']),numerical=deepcopy(config['numerical']),notes=deepcopy(config['context_snapshot']['notes']),
+            inputs=inputs,criteria=None if config['schema_version']=='6' else deepcopy(config['criteria']),numerical=deepcopy(config['numerical']),notes=deepcopy(config['context_snapshot']['notes']),
             evidence_version_ids=[s['evidence_version_id'] for s in config['evidence_snapshots']],
             context_source=dict(kind='source_run',source_run_id=rid,source_configuration_digest=config['digest'],observed_study_revision=study['revision'],choice_confirmed=not changed),
             derivation=dict(source_run_id=rid,source_configuration_digest=config['digest']))
         source_runtime=runtime_identity(payload['bundle']['manifest']['runtime'])
-        if config['schema_version'] in ('3','4'):
+        if config['schema_version'] in ('3','4','6'):
             request['schema_version']=config['schema_version']
             request.pop('evidence_version_ids')
             request.update(assumptions=deepcopy(config['assumptions']),
@@ -123,16 +125,37 @@ class ModifiedRuns:
             current_study_revision=study['revision'],context_changed=changed,requires_context_choice=changed,source_runtime=source_runtime,
             runtime_comparison=runtime_comparison(self.store,actor,sid,source_runtime))
         if config['schema_version']=='3':value['schema_version']='2'
+        elif config['schema_version']=='6':
+            # Configuration 6: no criteria and no approach selection.
+            request.pop('criteria')
+            request['context_override']=dict(schema_version='1',**{k:config['context_snapshot'][k] for k in ('description','boundary')})
+            value.update(schema_version='8',source_configuration=deepcopy(config))
         elif config['schema_version']=='4':
             pin=config['approach_binding']
-            request.update(approach_selection={k:pin[k] for k in ('approach_version_id','case_id')} if pin else None,
+            request.update(approach_selection={k:pin[k] for k in ('approach_version_id',)} if pin else None,
                 context_override=dict(schema_version='1',**{k:config['context_snapshot'][k] for k in ('description','boundary')}))
-            value.update(schema_version={'3':'3','4':'4','6':'6'}[history['history_schema_version']],source_configuration=deepcopy(config),approach_closure=deepcopy(history['approach_closure']))
+            value.update(
+                schema_version='7'
+                if history['bundle'].get(
+                    'input_schema_version', history['bundle']['schema_version']
+                )
+                == '9'
+                else {'5': '3', '6': '4', '8': '6'}[
+                    history['bundle'].get(
+                        'input_schema_version', history['bundle']['schema_version']
+                    )
+                ],
+                source_configuration=deepcopy(config),
+                approach_closure=deepcopy(history['approach_closure']),
+            )
         validate('ModifiedRunSeed'+value['schema_version'],value)
         return value
 
     def authoring(self,actor,sid,request,study):
         origin=request['derivation'];record=self.retained(actor,sid,origin['source_run_id']);config=record[0]['configuration']
+        if config['schema_version']=='6' and request['schema_version']!='6':
+            raise DomainError('invalid_configuration',422,fields=[dict(path='/schema_version',code='invalid',
+                message='Use configuration version 6 to modify this run.',element_ref=None)])
         if config['schema_version']=='4' and request['schema_version']!='4':
             raise DomainError('invalid_configuration',422,fields=[dict(path='/schema_version',code='invalid',
                 message='Use configuration version 4 and explicitly keep, change or remove the approach selection.',element_ref=None)])

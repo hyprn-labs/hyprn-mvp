@@ -56,7 +56,7 @@ def addition_a(monkeypatch, *, mixed=False):
     repo=Path(__file__).resolve().parents[2]
     sys.path[:0]=[str(repo/'modeling/tests'),str(repo/'contracts/tests')]
     from test_resolved_configuration import harness, native as generate
-    from test_native_generation import public_fixture
+    from combined_fixture import model4_authoring
     # Refuse unsafe roots before build, native node allocation or execution.
     for unsafe in (launcher.ROOT,Path('/private/tmp'),scope.root/'tmp'):
         with pytest.raises(ValueError):launcher.fixture_runtime_root(unsafe)
@@ -66,12 +66,8 @@ def addition_a(monkeypatch, *, mixed=False):
     store=Store(scope.root/'artifacts/journey.sqlite');actor=uid()
     study=store.create_study(actor,uid(),'Fresh sizing and linked comparison');sid=study['study_id']
     source=b"outputs['y'] = inputs['a'] * 1000\noutputs['z'] = inputs['b'] * 1000\noutputs['total'] = (inputs['a'] + inputs['b'] + inputs['c'] + inputs['d']) * 1000\n"
-    ports=[dict(temp_key=k,direction='input',name=k,code_symbol=k,value_type='real_scalar',units='km') for k in 'abcd']
-    ports += [dict(temp_key=k,direction='output',name=k,code_symbol=k,value_type='real_scalar',units='m') for k in ('y','z','total')]
-    edits=[dict(kind='create_definition',temp_key='sizing',definition_kind='explicit_component',name='Sizing',ports=ports,source=dict(encoding='base64',media_type='text/x-python',bytes=base64.b64encode(source).decode(),sha256=hashlib.sha256(source).hexdigest())),dict(kind='instantiate',temp_key='component',version_ref=dict(temp_key='sizing'))]
-    _,ruby=public_fixture()
-    start=ruby.index('edits=JSON.parse');end=ruby.index('\ndraft=c.route',start)
-    ruby=ruby[:start]+"edits=JSON.parse(Base64.strict_decode64('"+base64.b64encode(json.dumps(edits).encode()).decode()+"'))"+ruby[end:]
+    # The Sizing model is authored as a Model4 revision with typed unit declarations.
+    ruby,edits=model4_authoring(source)
     ruby=ruby.replace("'study_id'=>SecureRandom.uuid", "'study_id'=>'"+sid+"'",1)
     # Replay public authoring commands with fixture-scoped stable IDs when B
     # later asks the real private generator about this exact immutable model.
@@ -82,7 +78,8 @@ def addition_a(monkeypatch, *, mixed=False):
     result=generate(native_harness,ruby+'''
 cases=[]
 [[0.002,0.003,0.001,0.001],[0.005,0.007,0.001,0.001],[2,3,2,5]].each_with_index do |values,index|
- cfg=Marshal.load(Marshal.dump(cfg));cfg['schema_version']='3';cfg['configuration_id']=SecureRandom.uuid;cfg['configuration_revision_id']=SecureRandom.uuid
+ cfg=Marshal.load(Marshal.dump(cfg));cfg['schema_version']='5';cfg.delete('criteria');cfg['required_capabilities']=m['required_capabilities'].dup
+ cfg['configuration_id']=SecureRandom.uuid;cfg['configuration_revision_id']=SecureRandom.uuid
  cfg['name']=index==2 ? 'Linked comparison' : 'Sizing '+index.to_s
  cfg['context_snapshot']={'description'=>'','boundary'=>'','notes'=>[]}
  cfg['inputs'].each_with_index { |input,n| input['value']=values[n];input['units']=index==2 ? 'm' : 'km' }
@@ -113,7 +110,8 @@ puts 'PROJECTION_RESULT='+JSON.generate({'model'=>m,'cases'=>cases})
     monkeypatch.setattr(orm.CalcJobNode,'store',inspect_store)
     for index,case in enumerate(result['cases']):
         config=copy.deepcopy(case['configuration']);config.pop('digest')
-        config.update(context_source=dict(kind='current_study',expected_study_revision=study['revision']),derivation=None)
+        # The private configuration 5 is the projection of this application revision 6.
+        config.update(schema_version='6',context_source=dict(kind='current_study',expected_study_revision=study['revision']),derivation=None)
         for item in config['inputs']:item['result_binding']=None
         if index==2:
             for n,(item,(source_index,symbol)) in enumerate(zip(config['inputs'],[(0,'y'),(0,'z'),(0,'y'),(1,'y')])):
@@ -125,13 +123,12 @@ puts 'PROJECTION_RESULT='+JSON.generate({'model'=>m,'cases'=>cases})
                 item['result_binding']={k:resolved[k] for k in ('source_run_id','source_output','results_digest','source_configuration_digest','labels')}
                 item['result_binding'].update(original_value=resolved['value'],original_units=resolved['units'],conversion=interpretation)
             config['required_capabilities'].append('result_linked_inputs/1')
-        # A model2 is configured only as configuration3 or 4: the public revision adds the
-        # assumption fields its private configuration3 projection drops.
+        # The public revision 6 adds the assumption fields its private configuration 5 drops.
         config.update(assumptions=[],general_context_evidence_version_ids=[])
         config['required_capabilities'].append('configuration_assumptions/1')
         config['digest']=digest(config)
         assert project_scientific_configuration(config)==case['configuration']
-        frozen=dict(configuration=config,model_snapshot=model,study_revision=study['revision'])
+        frozen=dict(schema_version='9',configuration=config,model_snapshot=model,study_revision=study['revision'])
         with store.connection(write=True) as db:
             db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(config['configuration_revision_id'],config['configuration_id'],sid,json.dumps(frozen)))
             db.execute('INSERT INTO configuration_families VALUES(?,?,?)',(config['configuration_id'],sid,config['configuration_revision_id']))
@@ -188,6 +185,7 @@ def addition_b(monkeypatch):
     import base64, copy, hashlib
     from concurrent.futures import ThreadPoolExecutor
     from hyprn_mvp_app.configuration import Configurations
+    from hyprn_mvp_app.modeling import Coordinator
     from hyprn_mvp_app.modified_runs import ModifiedRuns
     from hyprn_mvp_app.execution import Submissions
     from hyprn_mvp_app.readiness import ObservationPublisher
@@ -212,6 +210,8 @@ def addition_b(monkeypatch):
         Replays the identical fixture authoring commands; never substitutes a
         generated graph/program or implements unit conversion in the test.
         """
+        supports_units=staticmethod(Coordinator.supports_units)
+        supports_quantities=staticmethod(Coordinator.supports_quantities)
         def __init__(self):
             self.calls=[];self.capabilities=None
             # Configuration3 previews read the private capability advertisement first.
@@ -446,9 +446,11 @@ def test_combined(monkeypatch):
             return original_store(node,*args,**kwargs)
         monkeypatch.setattr(orm.CalcJobNode,'store',observe)
         template=j.private.initial['configuration']
-        # A model2 is configured only through configuration request 3 or 4.
-        candidate=dict(schema_version='3',study_id=j.sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],name='Sizing 0',
-            inputs=[dict(kind='literal',**i) for i in template['inputs']],criteria=[],numerical=template['numerical'],
+        # A Model4 is configured only through configuration request 6: explicit literal
+        # inputs in unit spellings, never a criterion.
+        literals=[dict(kind='literal',target=i['target'],value=i['value'],units='km',provenance=i['provenance']) for i in template['inputs']]
+        candidate=dict(schema_version='6',study_id=j.sid,model_id=model['model_id'],model_revision_id=model['model_revision_id'],name='Sizing 0',
+            inputs=literals,numerical=template['numerical'],
             context_source=dict(kind='current_study',expected_study_revision=j.study['revision']),notes=[],assumptions=[],
             general_context_evidence_version_ids=[],derivation=None)
         # Evidence and context are nonempty public data in the same fresh journey.
@@ -470,6 +472,7 @@ def test_combined(monkeypatch):
             assert rows[0]==rows[1];rid=rows[0]['run_id'];before=count()
             j.dispatch(rid);detail=req('GET','runs/'+rid)
             assert detail['state']=='recorded' and detail['history']['results']['execution']['state']=='finished',detail
+            j.recorded_without_criteria(detail)
             assert count()==before+1
             j.dispatch(rid);assert count()==before+1
             replay=req('POST','runs',body,202)
@@ -523,11 +526,9 @@ def test_combined(monkeypatch):
         guard.change_worker_fixture_identity(scope)
         rid,detail=run(saved);remember(rid)
         assert values(detail)==dict(y=2,z=3,total=14)
-        outcomes=detail['history']['results']
-        assert outcomes['convergence']['state']=='not_applicable'
-        assert outcomes['optimization']==dict(termination='not_applicable',feasibility='not_applicable')
-        assert outcomes['completeness']==dict(expected=3,available=3,failed=0,unavailable=0)
-        assert outcomes['applicability']['state']=='unassessed' and outcomes['criteria']==[]
+        # Results 3 keep execution and outputs only; criteria are judged in calculations.
+        outcomes=j.recorded_without_criteria(detail)
+        assert len(outcomes['outputs'])==3
         assert detail['runtime_comparison']['state']=='different' and detail['runtime_comparison']['basis']=='prepared_bundle'
         deps=json.loads(base64.b64decode(j.payload(rid)['bundle']['files']['result-dependencies.json']))
         expected=sorted(('upstream_results__'+s['label'],s['result_uuid']) for s in deps['sources'])

@@ -1,44 +1,22 @@
-"""Configuration3 contracts through real application boundaries and isolated stores.
+"""Configuration 6 assumption and evidence contracts through real application boundaries and isolated stores.
 
+New configurations carry no criteria and no approach binding; they pin an exact Model4 version.
 Private compatibility is an explicit transport fixture, not native numerical proof.
 """
 from copy import deepcopy
 import json
-import sqlite3
 
 import pytest
+from ae_criteria_free_config import configuration6, signed
+from criteria_free import bind_case, insert_case, record_run
 from test_assumption_authoring import env, evidence, revision, statement, sample, D
 from hyprn_mvp_app.configuration import Configurations
 from hyprn_mvp_app.store import DomainError, digest, uid
-from hyprn_mvp_app.modeling import Coordinator, ModelingClient
-from test_result_bindings import env as binding_env
 
 
 @pytest.fixture
 def config(env):
-    t=env['transport'];cap=deepcopy(t.caps['capabilities'][0])
-    cap.update(id='resolved_configuration',version='3');t.caps['capabilities'].append(cap)
-    e=evidence(env);eid=e['evidence_version_id']
-    t.draft['assumptions']=[statement(eid)]
-    model=revision(t.draft);t.revisions[model['model_revision_id']]=model
-    original=t.__call__
-    def transport(method,path,raw,headers):
-        if not path.endswith('/configuration-compatibility'):return original(method,path,raw,headers)
-        with sqlite3.connect(env['store'].path,timeout=0) as db:
-            db.execute('BEGIN IMMEDIATE');db.rollback()
-        body=json.loads(raw);candidate=body['configuration_candidate']
-        t.calls.append((method,path,deepcopy(body)))
-        if t.hook:t.hook(method,path,body)
-        proof=sample(D['CompatibilityResult2'])
-        proof.update(compatible=True,candidate_digest=digest(candidate),model_digest=model['digest'],
-            model_revision_id=model['model_revision_id'],required_capabilities=candidate['required_capabilities'])
-        return 200,dict(schema_version='1',request_id=uid(),data=proof)
-    env['coord'].model.transport=transport
-    request=sample(D['ConfigurationRequest3'])
-    request.update(study_id=env['sid'],model_id=env['mid'],model_revision_id=model['model_revision_id'],
-        context_source=dict(kind='current_study',expected_study_revision=env['study']['revision']),
-        assumptions=[{k:v for k,v in statement(eid).items() if k!='owner'}],general_context_evidence_version_ids=[eid])
-    return env,Configurations(env['store'],env['coord']),request,model,e
+    return configuration6(env)
 
 
 def preview(config):
@@ -56,34 +34,27 @@ def counts(env):
         return tuple(db.execute('SELECT COUNT(*) FROM '+table).fetchone()[0] for table in ('configurations','configuration_families','outbox'))
 
 
-@pytest.mark.parametrize('version',['3','4'])
 @pytest.mark.parametrize('action',['preview','commit'])
-@pytest.mark.parametrize('location',['input','criterion'])
-def test_duplicate_input_evidence_is_field_error_before_save(config,version,action,location):
+def test_duplicate_input_evidence_is_field_error_before_save(config,action):
     e,c,r,m,record=config
-    r['schema_version']=version
-    if version=='4':r['approach_selection']=None
-    item=sample(D['LiteralRequest']);eid=record['evidence_version_id']
-    item['provenance']['evidence_version_ids']=[eid];r['inputs']=[item]
-    criterion=sample(D['Criterion']);criterion['evidence_version_ids']=[eid];r['criteria']=[criterion]
+    item=r['inputs'][0];eid=record['evidence_version_id']
+    item['provenance']['evidence_version_ids']=[eid]
     good=preview(config)
     # Same version cited by input, assumption and general context is valid.
     assert good['resolved_candidate']['evidence_snapshots']==[record]
-    citations=item['provenance']['evidence_version_ids'] if location=='input' else criterion['evidence_version_ids']
+    assert 'criteria' not in good['resolved_candidate']
+    citations=item['provenance']['evidence_version_ids']
     citations.append(eid)
     bad=deepcopy(good)
     bad['resolved_candidate']['inputs'][0]['provenance']=deepcopy(item['provenance'])
-    bad['resolved_candidate']['criteria']=deepcopy(r['criteria'])
     bad['candidate_digest']=digest(bad['resolved_candidate'])
     with pytest.raises(DomainError) as error:
         if action=='preview':preview(config)
         else:c.commit(e['actor'],e['sid'],body(config,bad))
     assert error.value.code=='invalid_configuration' and error.value.status==422
-    field='/inputs/0/provenance/evidence_version_ids/1' if location=='input' else '/criteria/0/evidence_version_ids/1'
-    owner=item['target']['port_id'] if location=='input' else criterion['criterion_id']
-    assert error.value.fields==[dict(path=field,
+    assert error.value.fields==[dict(path='/inputs/0/provenance/evidence_version_ids/1',
         code='duplicate_evidence',message='This evidence version is already cited in this field.',
-        element_ref=owner)]
+        element_ref=item['target']['port_id'])]
     assert counts(e)==(0,0,0)
     # Independent worker still rejects malformed input after application repair.
     from hyprn_mvp_integration.worker import verify_assumption_closure
@@ -92,32 +63,72 @@ def test_duplicate_input_evidence_is_field_error_before_save(config,version,acti
         verify_assumption_closure(invalid,m)
     citations.pop()
     saved=c.commit(e['actor'],e['sid'],body(config,good))
+    assert saved['configuration']['schema_version']=='6' and 'criteria' not in saved['configuration']
     assert saved['configuration']['inputs'][0]['provenance']['evidence_version_ids']==[eid]
 
 
-@pytest.mark.parametrize('version',['1','2'])
-@pytest.mark.parametrize('assumptions',['unknown_citation','empty'])
 @pytest.mark.parametrize('action',['preview','commit'])
-def test_legacy_authoring_rejects_model2_pairing_without_allocation(config,version,assumptions,action):
-    e,c,request,model,_=config
-    model['assumptions']=[] if assumptions=='empty' else [statement(uid())]
-    model['digest']=digest({k:v for k,v in model.items() if k!='digest'})
-    if version=='1':
-        candidate=sample(D['ConfigurationCandidate1'])
-        candidate.update(study_id=e['sid'],model_id=e['mid'],model_revision_id=model['model_revision_id'],
-            context_snapshot=dict(description=e['study']['description'],boundary=e['study']['boundary'],notes=[]))
-    else:
-        candidate=deepcopy(request)
-        candidate.pop('assumptions');candidate.pop('general_context_evidence_version_ids')
-        candidate.update(schema_version='2',evidence_version_ids=[])
+@pytest.mark.parametrize('citation',['evidence','none'])
+def test_new_configuration_refuses_criteria_and_their_evidence_citations(config,action,citation):
+    # Study criteria live in the study brief; a new configuration carries none, so neither a
+    # criterion nor a criterion evidence citation can be saved through it.
+    e,c,r,_,record=config
+    criterion=sample(D['Criterion'])
+    criterion['evidence_version_ids']=[record['evidence_version_id']] if citation=='evidence' else []
+    r['criteria']=[criterion]
     e['transport'].calls.clear()
     with pytest.raises(DomainError) as error:
-        if action=='preview':c.preview(e['actor'],e['sid'],candidate)
+        if action=='preview':preview(config)
         else:c.commit(e['actor'],e['sid'],dict(command_id=uid(),configuration_id=None,expected_revision=None,
-            configuration=candidate,**({'expected_preview_digest':'0'*64} if version=='2' else {})))
-    assert error.value.code=='invalid_configuration' and error.value.status==422
+            configuration=r,expected_preview_digest='0'*64))
+    assert (error.value.code,error.value.status)==('invalid_request',400) and error.value.fields
+    assert counts(e)==(0,0,0) and e['transport'].calls==[]
+    response=e['client'].post('/api/1/studies/'+e['sid']+'/configurations/preview',json=r)
+    assert response.status_code==400 and response.json()['error']['code']=='invalid_request'
+    assert counts(e)==(0,0,0) and e['transport'].calls==[]
+
+
+@pytest.mark.parametrize('version',['1','2','3','4'])
+@pytest.mark.parametrize('action',['preview','commit'])
+def test_new_writes_refuse_earlier_request_versions_without_allocation(config,version,action):
+    e,c,request,model,_=config
+    if version=='1':
+        candidate=sample(D['ConfigurationCandidate1'])
+        candidate.update(study_id=e['sid'],model_id=model['model_id'],model_revision_id=model['model_revision_id'],
+            context_snapshot=dict(description=e['study']['description'],boundary=e['study']['boundary'],notes=[]))
+    else:
+        candidate=deepcopy(request);candidate.update(schema_version=version,criteria=[])
+        if version=='2':
+            candidate.pop('assumptions');candidate.pop('general_context_evidence_version_ids')
+            candidate['evidence_version_ids']=[]
+        if version=='4':candidate['approach_selection']=None
+    e['transport'].calls.clear()
+    commit=dict(command_id=uid(),configuration_id=None,expected_revision=None,
+        configuration=candidate,**({} if version=='1' else {'expected_preview_digest':'0'*64}))
+    with pytest.raises(DomainError) as error:
+        if action=='preview':c.preview(e['actor'],e['sid'],candidate)
+        else:c.commit(e['actor'],e['sid'],commit)
+    assert (error.value.code,error.value.status)==('unsupported_record_version',422)
+    route='/api/1/studies/'+e['sid']+'/configurations'+('/preview' if action=='preview' else '')
+    response=e['client'].post(route,json=candidate if action=='preview' else commit)
+    assert response.status_code==422 and response.json()['error']['code']=='unsupported_record_version'
+    assert counts(e)==(0,0,0) and e['transport'].calls==[]
+
+
+@pytest.mark.parametrize('action',['preview','commit'])
+def test_configuration6_requires_a_model4_version_without_allocation(config,action):
+    e,c,request,_,_=config;t=e['transport']
+    earlier=revision(t.draft);t.revisions[earlier['model_revision_id']]=earlier
+    assert earlier['schema_version']=='2'
+    request.update(model_id=e['mid'],model_revision_id=earlier['model_revision_id'])
+    t.calls.clear()
+    with pytest.raises(DomainError) as error:
+        if action=='preview':preview(config)
+        else:c.commit(e['actor'],e['sid'],dict(command_id=uid(),configuration_id=None,expected_revision=None,
+            configuration=request,expected_preview_digest='0'*64))
+    assert (error.value.code,error.value.status)==('invalid_configuration',422)
     assert counts(e)==(0,0,0)
-    assert not any(path.endswith('/configuration-compatibility') for _,path,_ in e['transport'].calls)
+    assert not any(path.endswith('/configuration-compatibility') for _,path,_ in t.calls)
 
 
 def test_full_closure_contradictory_relationships_and_immutable_save(config):
@@ -127,16 +138,18 @@ def test_full_closure_contradictory_relationships_and_immutable_save(config):
     assert counts(e)==(0,0,0) and candidate['evidence_snapshots']==[record]
     assert candidate['assumptions']==r['assumptions'] and candidate['general_context_evidence_version_ids']==[eid]
     b=body(config,p);saved=c.commit(e['actor'],e['sid'],b)
+    assert saved['schema_version']=='9' and saved['configuration']['schema_version']=='6'
+    assert not {'criteria','approach_binding'}&set(saved['configuration']) and 'approach_closure' not in saved
     assert saved['model_snapshot']==m and saved['configuration']['evidence_snapshots']==[record]
     assert c.commit(e['actor'],e['sid'],b)==saved and counts(e)==(1,1,0)
     before=deepcopy(saved);r['general_context_evidence_version_ids']=[];r['assumptions']=[]
     assert preview(config)['resolved_candidate']['evidence_snapshots']==[record]
-    m['assumptions']=[];m['digest']=digest({k:v for k,v in m.items() if k!='digest'})
+    m['assumptions']=[];signed(m)
     assert preview(config)['resolved_candidate']['evidence_snapshots']==[]
     assert c.read(e['actor'],e['sid'],saved['configuration']['configuration_revision_id'])==before
 
 
-@pytest.mark.parametrize('location',['model','assumption','input','criterion','general'])
+@pytest.mark.parametrize('location',['model','assumption','input','general'])
 @pytest.mark.parametrize('foreign',[False,True])
 def test_unavailable_exact_reference_diagnostics_preview_and_commit_zero_allocation(config,location,foreign):
     e,c,r,m,_=config
@@ -144,11 +157,8 @@ def test_unavailable_exact_reference_diagnostics_preview_and_commit_zero_allocat
     if location=='model':m['assumptions'][0]['evidence_links'][0]['evidence_version_id']=eid
     elif location=='assumption':r['assumptions'][0]['evidence_links'][0]['evidence_version_id']=eid
     elif location=='general':r['general_context_evidence_version_ids']=[eid]
-    elif location=='input':
-        item=sample(D['LiteralRequest']);item['provenance']['evidence_version_ids']=[eid];r['inputs']=[item]
-    else:
-        item=sample(D['Criterion']);item['evidence_version_ids']=[eid];r['criteria']=[item]
-    m['digest']=digest({k:v for k,v in m.items() if k!='digest'})
+    else:r['inputs'][0]['provenance']['evidence_version_ids']=[eid]
+    signed(m)
     for action in ('preview','commit'):
         with pytest.raises(DomainError) as error:
             if action=='preview':preview(config)
@@ -159,7 +169,7 @@ def test_unavailable_exact_reference_diagnostics_preview_and_commit_zero_allocat
         assert 'PRIVATE FOREIGN' not in str(fields)
         if location in ('model','assumption'):
             assert fields[0]['element_ref']==(m if location=='model' else r)['assumptions'][0]['assumption_id']
-        assert fields[0]['path'].endswith('/0' if location in ('general','input','criterion') else '/evidence_version_id')
+        assert fields[0]['path'].endswith('/0' if location in ('general','input') else '/evidence_version_id')
         assert counts(e)==(0,0,0)
 
 
@@ -181,15 +191,20 @@ def test_commit_transaction_rechecks_all_pins_without_remote_io(config,race):
     assert counts(e)==(0,0,0)
 
 
-@pytest.mark.parametrize('bad',['contract','schema','version','unsupported','malformed','outage','status'])
+@pytest.mark.parametrize('bad',['contract','schema','resolved_version','resolved_unsupported','criteria_free_version',
+    'criteria_free_unsupported','criteria_free_absent','malformed','outage','status'])
 @pytest.mark.parametrize('action',['preview','commit'])
 def test_configuration_support_fails_closed_without_compatibility_or_allocation(config,bad,action):
     e,c,r,_,_=config;t=e['transport']
     b=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=r,expected_preview_digest='0'*64)
+    entry=lambda name:next(cap for cap in t.caps['capabilities'] if cap['id']==name)
     if bad=='contract':t.caps['contract_versions']=['1.1']
     elif bad=='schema':t.caps['schema_versions']=['1']
-    elif bad=='version':t.caps['capabilities'][-1]['version']='2'
-    elif bad=='unsupported':t.caps['capabilities'][-1]['supported']=False
+    elif bad=='resolved_version':entry('resolved_configuration')['version']='2'
+    elif bad=='resolved_unsupported':entry('resolved_configuration')['supported']=False
+    elif bad=='criteria_free_version':entry('criteria_free_configuration')['version']='2'
+    elif bad=='criteria_free_unsupported':entry('criteria_free_configuration')['supported']=False
+    elif bad=='criteria_free_absent':t.caps['capabilities'].remove(entry('criteria_free_configuration'))
     elif bad=='malformed':t.caps['extra']=True
     else:
         original=e['coord'].model.transport
@@ -200,7 +215,8 @@ def test_configuration_support_fails_closed_without_compatibility_or_allocation(
         e['coord'].model.transport=unavailable
     discovery=e['client'].get('/api/1/capabilities')
     assert discovery.status_code==200
-    assert 'configuration_assumptions/1' in discovery.json()['data']['unavailable']
+    if not bad.startswith('criteria_free'):
+        assert 'configuration_assumptions/1' in discovery.json()['data']['unavailable']
     with pytest.raises(DomainError) as error:
         if action=='preview':preview(config)
         else:c.commit(e['actor'],e['sid'],b)
@@ -232,12 +248,11 @@ def test_configuration_capability_revocation_suppresses_success_and_failure(conf
     assert counts(e)==(0,0,0)
 
 
-def test_all_five_uses_sorted_closure_and_legacy_snapshot_shapes(config):
-    e,c,r,m,record=config;records=[record,evidence(e),evidence(e),evidence(e),evidence(e)]
+def test_all_four_uses_sorted_closure_and_legacy_snapshot_shapes(config):
+    e,c,r,m,record=config;records=[record,evidence(e),evidence(e),evidence(e)]
     r['assumptions'][0]['evidence_links'][0]['evidence_version_id']=records[1]['evidence_version_id']
-    item=sample(D['LiteralRequest']);item['provenance']['evidence_version_ids']=[records[2]['evidence_version_id']];r['inputs']=[item]
-    criterion=sample(D['Criterion']);criterion['evidence_version_ids']=[records[3]['evidence_version_id']];r['criteria']=[criterion]
-    r['general_context_evidence_version_ids']=[records[4]['evidence_version_id']]
+    r['inputs'][0]['provenance']['evidence_version_ids']=[records[2]['evidence_version_id']]
+    r['general_context_evidence_version_ids']=[records[3]['evidence_version_id']]
     p=preview(config)
     assert p['resolved_candidate']['evidence_snapshots']==sorted(records,key=lambda e:e['evidence_version_id'])
     for version in ('1','2'):
@@ -254,12 +269,17 @@ def test_all_five_uses_sorted_closure_and_legacy_snapshot_shapes(config):
 def test_public_dispatch_and_truthful_config_capabilities(config):
     e,_,r,_,_=config;client=e['client'];path='/api/1/studies/'+e['sid']+'/configurations'
     caps=client.get('/api/1/capabilities').json()['data']
-    assert 'configuration/3' in caps['contract_versions'] and 'configuration_assumptions/1' in caps['engineering']
+    # Discovery advertises only the configuration version a preview accepts.
+    assert 'configuration/6' in caps['contract_versions'] and 'configuration_assumptions/1' in caps['engineering']
+    assert not {'configuration/2','configuration/3'} & set(caps['contract_versions'])
+    assert 'model/4' in caps['contract_versions']
     p=client.post(path+'/preview',json=r)
     assert p.status_code==200,p.text
+    assert p.json()['data']['schema_version']=='8' and 'approach_closure' not in p.json()['data']
     result=client.post(path,json=body(config,p.json()['data']))
     assert result.status_code==201,result.text
-    assert result.json()['data']['configuration']['schema_version']=='3'
+    assert result.json()['data']['schema_version']=='9'
+    assert result.json()['data']['configuration']['schema_version']=='6'
 
 
 @pytest.mark.parametrize('bad',['duplicate_id','root_owner','wrong_revision','bad_digest'])
@@ -269,37 +289,26 @@ def test_semantic_configuration_and_exact_model_reject(config,bad):
     elif bad=='root_owner':m['assumptions'][0]['owner']=dict(kind='instance',instance_id=m['root_instance_id'])
     elif bad=='wrong_revision':m['model_revision_id']=uid()
     else:m['digest']='0'*64
-    if bad not in ('bad_digest','duplicate_id'):m['digest']=digest({k:v for k,v in m.items() if k!='digest'})
+    if bad not in ('bad_digest','duplicate_id'):signed(m)
     with pytest.raises(DomainError):preview(config)
     assert counts(e)==(0,0,0)
 
 
 @pytest.mark.parametrize('race',['none','source','revoked_source'])
-def test_result_source_value_projection_and_transaction_pin(binding_env,config,race):
-    e=binding_env;r=deepcopy(e['request']);r.pop('evidence_version_ids')
-    r.update(schema_version='3',assumptions=[],general_context_evidence_version_ids=[])
-    model=e['case']['frozen']['model_snapshot'];caps=config[0]['transport'].caps
-    calls=[]
-    def transport(method,path,raw,headers):
-        with sqlite3.connect(e['store'].path,timeout=0) as db:db.execute('BEGIN IMMEDIATE');db.rollback()
-        if path.endswith('/capabilities'):data=caps
-        elif '/revisions/' in path:data=model
-        else:
-            candidate=json.loads(raw)['configuration_candidate'];calls.append(deepcopy(candidate))
-            data=dict(schema_version='2',model_revision_id=model['model_revision_id'],model_digest=model['digest'],
-                candidate_digest=digest(candidate),compatible=True,diagnostics=[],required_capabilities=model['required_capabilities'],
-                validator_identity='explicit-private-transport',input_interpretations=[dict(target=i['target'],conversion=dict(
-                    policy='openmdao-linear-catalog-1',catalog_digest='a'*64,source_units=i['units'],destination_units=i['units'],
-                    factor=1,destination_value=i['value'])) for i in candidate['inputs']])
-        return 200,dict(schema_version='1',request_id=uid(),data=deepcopy(data))
-    coord=Coordinator(e['store'],ModelingClient('http://private.invalid/modeling/1',b't'*32,transport=transport))
-    c=Configurations(e['store'],coord);p=c.preview(e['actor'],e['sid'],r)[0]
+def test_result_source_value_projection_and_transaction_pin(config,race):
+    e,c,r,m,_=config
+    source=bind_case('chain',e['sid']);insert_case(e['store'],e['sid'],source)
+    rid,results=record_run(e['store'],e['actor'],e['sid'],source)
+    item=r['inputs'][0]
+    r['inputs'][0]=dict(kind='run_result',target=item['target'],source_run_id=rid,source_output=results['outputs'][0]['target'],
+        expected_results_digest=digest(results),provenance=item['provenance'])
+    calls=e['transport'].calls;p=c.preview(e['actor'],e['sid'],r)[0]
     b=dict(command_id=uid(),configuration_id=None,expected_revision=None,configuration=r,expected_preview_digest=p['candidate_digest'])
     original=e['store'].command
     def command(*args,**kwargs):
         with e['store'].connection(write=True) as db:
-            if race=='source':db.execute('UPDATE run_associations SET process_uuid=? WHERE run_id=?',(uid(),e['rid']))
-            if race=='revoked_source':db.execute("UPDATE outbox SET state='uncertain' WHERE run_id=?",(e['rid'],))
+            if race=='source':db.execute('UPDATE run_associations SET process_uuid=? WHERE run_id=?',(uid(),rid))
+            if race=='revoked_source':db.execute("UPDATE outbox SET state='uncertain' WHERE run_id=?",(rid,))
         return original(*args,**kwargs)
     e['store'].command=command;before=counts(e)
     if race!='none':
@@ -307,10 +316,12 @@ def test_result_source_value_projection_and_transaction_pin(binding_env,config,r
         assert counts(e)==before
     else:
         saved=c.commit(e['actor'],e['sid'],b)['configuration']
-        assert saved['inputs'][0]['value']==150
-        assert saved['inputs'][0]['result_binding']['original_value']==150
-        assert calls[-1]['schema_version']=='3' and all('result_binding' not in i for i in calls[-1]['inputs'])
-        assert calls[-1]['required_capabilities']==model['required_capabilities']
+        assert saved['inputs'][0]['value']==results['outputs'][0]['value']
+        assert saved['inputs'][0]['result_binding']['original_value']==results['outputs'][0]['value']
+        candidate=[body for _,path,body in calls if path.endswith('/configuration-compatibility')][-1]['configuration_candidate']
+        assert candidate['schema_version']=='5' and 'criteria' not in candidate
+        assert all('result_binding' not in i for i in candidate['inputs'])
+        assert candidate['required_capabilities']==m['required_capabilities']
 
 
 @pytest.mark.parametrize('race',['evidence','association','reader'])

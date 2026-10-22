@@ -11,9 +11,11 @@ export {
   InferenceBlock,
   Ledger,
   ModelNode,
+  QuantityDirection,
   Panel,
   Readout,
   RecordBar,
+  RecordState,
   SourceChip,
   StatusTag,
   Tabs,
@@ -46,8 +48,93 @@ export { ActionIcon } from './primitives';
 export type { ActionIconName } from './primitives';
 export { CriterionRecord } from './primitives';
 export type { CriterionRecordProps } from './primitives';
-export { TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress } from './primitives';
+export {
+  FormField,
+  FieldHint,
+  TextInput,
+  TextArea,
+  Select,
+  Checkbox,
+  Disclosure,
+  DialogFrame,
+  DialogActions,
+  FormActions,
+  SectionHeader,
+  ActionDialog,
+  HelpButton,
+  SectionHelp,
+  RecordNavigation,
+  DetailTabs,
+  FilePicker,
+  Progress,
+} from './primitives';
 
 export { GraphCanvas } from './graph';
-export { SourceSurface } from './source';
+export { SourceSurface, SourceReader } from './source';
 export { formatNumber } from './numbers';
+export {
+  ContentColumn,
+  PageHeader,
+  ReturnLink,
+  VersionSelect,
+  lineageVersions,
+  SavedField,
+} from './pageHeader';
+export type { ColumnWidth } from './pageHeader';
+
+export { BrandLogo } from './BrandLogo';
+export {
+  QualitativeChoice,
+  AnswerExplorationPanel,
+  ExplorationFocus,
+  ExplorationLegend,
+  ExplorationQuantity,
+  InterpretationPanel,
+  AnswerProse,
+  QuantitySlider,
+  QuantityResult,
+  ResponseCurve,
+} from './exploration';
+export {
+  Assertion,
+  AssertionList,
+  EvidenceStack,
+  ReadingSection,
+  ReadingStack,
+  TransferSection,
+  ActionGroup,
+} from './compositions';
+
+export {
+  WorkspaceShell,
+  CalculationNavigation,
+  CollectionToolbar,
+  MetricGrid,
+  NavigationRail,
+  FeatureUnavailable,
+  ResourceCard,
+  SettingsSection,
+  ContextualPanel,
+  DetailsDock,
+  DetailsLayer,
+  EvidenceButton,
+  AssistantPane,
+  ClaimCard,
+  ReadingContents,
+} from './workspace';
+export { RecordDetails } from './records';
+
+export { EvidenceReading } from './evidence';
+
+export { CreateVersionAction } from './pageHeader';
+
+export { CollectionStatus } from './collections';
+export type { CollectionState, CollectionEntity } from './collections';
+
+export { ErrorAllowance } from './errorAllowance';
+export { TableControls } from './tableControls';
+export { SurrogateValidation, type ValidationRow } from './validation';
+export { ToggleField, AssistantComposer, ConversationLog, ConversationMessage } from './assistant';
+
+export { OpenLink } from './navigation';
+export type { OpenLinkProps } from './navigation';

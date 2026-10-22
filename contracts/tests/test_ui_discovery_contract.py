@@ -1,4 +1,6 @@
 """Additive private discovery contract: closed wire shapes and unchanged roots."""
+from hyprn_mvp_app.contracts import authored_schema
+from test_schema_sources import assert_execution_schema
 import copy
 import json
 from pathlib import Path
@@ -8,7 +10,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / 'contracts/schemas/model.schema.json').read_text())
+SCHEMA = authored_schema()
 
 
 def validate(kind, value):
@@ -61,6 +63,6 @@ def test_openapi_listing_has_exact_parameters_responses_and_schema_refs():
     assert {'200', '400', '401', '403', '404', '413', '503'} <= set(route['responses'])
     assert route['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/RevisionListResponse')
     assert spec['info']['version'] == '1.3.0'
-    for schema in [SCHEMA, json.loads((ROOT / 'contracts/schemas/execution.schema.json').read_text())]:
+    for schema in [SCHEMA, authored_schema()]:
         Draft202012Validator.check_schema(schema)
-        assert schema['$defs'] == SCHEMA['$defs']
+        assert_execution_schema()

@@ -5,11 +5,14 @@ The frozen bundle contract (assembly and every admission check) lives in
 Candidate bytes remain inert here.
 """
 import base64
+from collections import OrderedDict
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 from .contracts import DomainError, canonical, check_digest, uid
 from .execution_bundle import (MAX_BYTES, assemble_bundle, closed, safe_path, uses_polish_envelope,
                                validate_frozen_configuration, validate_preparation, validate_retained_bundle)
-from .history import History, association, projection, stored_request
+from .history import History, association, projection, run_association, stored_request
 from .result_bindings import ResultBindings
 from .scientific_configuration import project_scientific_configuration
 # Temporary forwarding aliases for test imports only; production code
@@ -21,39 +24,66 @@ from .execution_bundle import (MAX_FILES, executable_digest, frozen_version, mod
                                validate_scientific_snapshot, validate_unit_catalog, verify_files)
 
 class StaticPreparation:
-    def __init__(self,model):self.model=model
+    def __init__(self,model):
+        self.model=model
+        # Inert bytes only: never cache authority, manifests, validation or results.
+        # The dispatcher serializes calls; eviction/restart simply downloads again.
+        self._files=OrderedDict()
+        self._file_bytes=0
     def __call__(self,actor,sid,command,frozen):
         from uuid import UUID,uuid5
         validate_frozen_configuration(frozen)
         if uses_polish_envelope(frozen['model_snapshot'],frozen.get('approach_closure')):
-            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponse',resources=[sid])
+            status,response=self.model.call(actor,sid,'GET','/capabilities',response_schema='CapabilitiesResponseRead3',resources=[sid])
             from .readiness import supports_descriptive_execution
             if status!=200 or not supports_descriptive_execution(response.get('data'),frozen['model_snapshot']):
                 raise ValueError('Modeling backend lacks exact descriptive execution support')
         config=project_scientific_configuration(frozen['configuration']);mid=config['model_id']
         # Separate from public run/authoring commands; stable across crashes.
-        private_command=str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact2:'+sid))
+        private_command=str(uuid5(UUID(command),'hyprn_mvp.prepare.artifact3:'+sid))
         body=dict(command_id=private_command,model_revision_id=config['model_revision_id'],
                   configuration_snapshot=config,configuration_digest=config['digest'])
         _,response=self.model.call(actor,sid,'POST',f'/models/{mid}/prepare-execution',body,
-            request_schema='Prepare',resources=[mid])
+            request_schema='Prepare2' if config['schema_version']=='5' else 'Prepare',resources=[mid])
         if set(response)!={'data'} or not isinstance(response['data'],dict):raise ValueError('Invalid preparation response')
         prepared=response['data']
-        if prepared.get('schema_version')!='2':raise ValueError('Unsupported preparation version; create a new schema2 run command')
-        closed('PreparedModelArtifact',prepared)
+        if prepared.get('schema_version') not in ('2', '3', '4'):
+            raise ValueError('Unsupported preparation version; create a new schema2 run command')
+        closed('PreparedModelArtifactRead4',prepared)
+        # A configuration without criteria runs only under result protocol 3, and only it does.
+        if (prepared['schema_version']=='4')!=(config['schema_version']=='5'):
+            raise ValueError('Preparation does not match the configuration version')
         if len({f['file_id'] for f in prepared['files']})!=len(prepared['files']):raise ValueError('Duplicate file identity')
         files={};total=0
         for item in prepared['files']:
             path=safe_path(item['path'])
             if path in files:raise ValueError('Duplicate prepared file')
-            _,response=self.model.call(actor,sid,'GET',f"/preparations/{prepared['preparation_id']}/files/{item['file_id']}",
-                response_schema='ByteFileResponse',resources=[mid])
-            raw=base64.b64decode(response['data']['bytes'],validate=True)
+            key=(actor,sid,item['sha256'],item['size'],item['media_type'])
+            raw=self._files.get(key)
+            if raw is None:
+                file_path=f"/preparations/{prepared['preparation_id']}/files/{item['file_id']}"
+                _,response=self.model.call(actor,sid,'GET',file_path,
+                    response_schema='ByteFileResponse',resources=[mid])
+                raw=base64.b64decode(response['data']['bytes'],validate=True)
+                if (response['data']['sha256']!=item['sha256']
+                        or response['data']['media_type']!=item['media_type']):
+                    raise ValueError('Prepared file mismatch')
             total+=len(raw)
-            if total>MAX_BYTES or response['data']['sha256']!=item['sha256'] or response['data']['media_type']!=item['media_type']:
+            if total>MAX_BYTES:
                 raise ValueError('Prepared file mismatch')
             files[path]=raw
         validate_preparation(prepared,files,frozen)
+        # Populate only after complete hash, size, model and input-binding validation.
+        for item in prepared['files']:
+            key=(actor,sid,item['sha256'],item['size'],item['media_type'])
+            raw=files[item['path']]
+            if key not in self._files:
+                self._files[key]=raw
+                self._file_bytes+=len(raw)
+            self._files.move_to_end(key)
+            while self._file_bytes>MAX_BYTES or len(self._files)>MAX_FILES:
+                _,removed=self._files.popitem(last=False)
+                self._file_bytes-=len(removed)
         return prepared,files
 
 class Submissions:
@@ -67,72 +97,75 @@ class Submissions:
         self.store,self.prepare,self.native=store,prepare,native
         self.fault=lambda point:None
 
-    def submit(self,actor,sid,body):
+    def submit(self,actor,sid,body,*,expected_runtime=None):
         command=body['command_id'];revision=body['configuration_revision_id']
         payload=dict(operation='submit_run',target=sid,configuration_revision_id=revision)
+        if expected_runtime is not None:
+            payload['expected_runtime'] = expected_runtime
+        budget = body.get('execution_budget')
+        if budget is not None:
+            from .contracts import execution_wall_seconds
+
+            if not isinstance(budget, dict) or set(budget) != {'wall_seconds'}:
+                raise DomainError('invalid_request', 400)
+            try:
+                execution_wall_seconds(budget['wall_seconds'])
+            except ValueError:
+                raise DomainError('invalid_request', 400) from None
+            payload['execution_budget'] = budget
+
         def accept(db):
             row=db.execute('SELECT payload FROM configurations WHERE study_id=? AND configuration_revision_id=?',(sid,revision)).fetchone()
             if row is None:raise DomainError('resource_not_found',404)
             frozen=json.loads(row['payload'])
-            if frozen['configuration']['schema_version'] in ('3','4') or frozen['model_snapshot']['schema_version'] in ('2','3','4'):
+            if frozen['configuration']['schema_version'] in ('3','4','6') or frozen['model_snapshot']['schema_version'] in ('2','3','4'):
                 validate_frozen_configuration(frozen)
                 if frozen['configuration']['study_id']!=sid:raise ValueError('Configuration study mismatch')
             run_id=uid();result=dict(run_id=run_id,command_id=command,state='accepted_run',
                 receipt_url=f'/api/1/studies/{sid}/commands/{command}?category=run')
-            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,command_id) VALUES(?,?,?,?)',(run_id,sid,revision,command))
-            db.execute('INSERT INTO outbox VALUES(?,?,?)',(run_id,'accepted_run',json.dumps(dict(actor=actor,frozen=json.loads(row['payload'])))))
+            # The acceptance time is written once, in the acceptance transaction, and never
+            # changes; it stays out of the receipt and the outbox payload.
+            accepted_at=datetime.now(timezone.utc).isoformat(
+                timespec='microseconds').replace('+00:00','Z')
+            db.execute('INSERT INTO run_associations(run_id,study_id,configuration_revision_id,'
+                       'command_id,accepted_at) VALUES(?,?,?,?,?)',
+                       (run_id,sid,revision,command,accepted_at))
+            db.execute(
+                'INSERT INTO outbox VALUES(?,?,?)',
+                (
+                    run_id,
+                    'accepted_run',
+                    json.dumps(
+                        dict(
+                            actor=actor,
+                            frozen=json.loads(row['payload']),
+                            **({'execution_budget': budget} if budget is not None else {}),
+                            **({'expected_runtime': expected_runtime}
+                               if expected_runtime is not None else {}),
+                        )
+                    ),
+                ),
+            )
             self.fault('before_receipt')
             return result
-        result=self.store.command(actor,sid,'run',command,payload,accept,receipt_state='accepted_run')
+        result=self.store.command(actor,sid,'run',command,payload,accept,
+            receipt_state='accepted_run',attribute=lambda accepted:[('run',accepted['run_id'],None)])
         self.fault('after_receipt')
         return self.read(actor,sid,result['run_id'])
 
     def read(self,actor,sid,run_id):
-        with self.store.connection() as db:
-            self.store.authorize(db,actor,sid)
-            row=db.execute('SELECT r.command_id,o.state,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id=?',(sid,run_id)).fetchone()
-            if row is None:raise DomainError('resource_not_found',404)
-            payload=json.loads(row['payload'])
-            state=payload.get('preparation_state',row['state']) if row['state']=='accepted_run' else row['state']
-            result=dict(run_id=run_id,command_id=row['command_id'],state=state,**payload.get('status',{}),
-                receipt_url=f"/api/1/studies/{sid}/commands/{row['command_id']}?category=run")
-        config=payload.get('frozen',{}).get('configuration',{})
-        derivation=config.get('derivation') if config.get('schema_version') in ('2','3') else None
-        if derivation:
-            from .readiness import runtime_identity,runtime_comparison,compare_runtimes
-            try:
-                check_digest(config)
-                source=runtime_identity(derivation['source_runtime'])
-            except (ValueError,TypeError,KeyError):
-                # Corrupt historical source identity is not a publishable DTO.
-                # Existing History still describes the retained record error.
-                return result
-            if 'bundle' not in payload:
-                result['runtime_comparison']=runtime_comparison(self.store,actor,sid,source)
-            else:
-                current=None
-                try:
-                    bundle=dict(manifest=payload['bundle']['manifest'],files={p:base64.b64decode(b,validate=True) for p,b in payload['bundle']['files'].items()})
-                    validate_retained_bundle(bundle,payload['request'],payload['frozen'])
-                    current=runtime_identity(bundle['manifest']['runtime'])
-                except (ValueError,TypeError,KeyError): pass
-                # Never substitute today's observation for a corrupt or missing
-                # prepared identity, nor restore the derivation source runtime.
-                result['runtime_comparison']=compare_runtimes(source,current,basis='prepared_bundle')
-        return result
+        return History(self.store).submission_read(actor, sid, run_id)
 
     def hydrate(self,actor,sid,run_id):
         """Explicit authorized read/cache of an existing association; never dispatch."""
         with self.store.connection() as db:
-            self.store.authorize(db,actor,sid)
-            row=db.execute('SELECT r.*,o.state FROM run_associations r JOIN outbox o USING(run_id) WHERE r.study_id=? AND r.run_id=?',(sid,run_id)).fetchone()
-            if row is None:raise DomainError('resource_not_found',404)
+            row,_=History(self.store).run_row(db,actor,sid,run_id,payload=False)
             if row['state']!='recorded' or row['process_uuid'] is None:raise DomainError('history_not_recorded',409)
         self._record(run_id,association(row),actor=actor)
 
     def _record(self,run_id,record,*,actor=None):
         with self.store.connection() as db:
-            row=db.execute('SELECT r.*,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.run_id=?',(run_id,)).fetchone()
+            row=run_association(db,run_id)
             if actor is not None:self.store.authorize(db,actor,row['study_id'])
             payload=json.loads(row['payload'])
             stored_request(row,payload,self.store.command_receipt(db,row['study_id'],'run',row['command_id']))
@@ -142,7 +175,7 @@ class Submissions:
         retained=self.native.read_record(payload['request'],expected)
         saved=projection(payload,retained,expected)
         with self.store.connection(write=True) as db:
-            row=db.execute('SELECT * FROM run_associations WHERE run_id=?',(run_id,)).fetchone()
+            row=run_association(db,run_id,payload=False)
             if actor is not None:self.store.authorize(db,actor,row['study_id'])
             if row['process_uuid'] is not None and association(row)!=expected:
                 raise ValueError('Recorded process association cannot change')
@@ -170,101 +203,273 @@ class Submissions:
         db.execute("UPDATE receipts SET state=?,result=? WHERE scope=? AND category='run' AND command_id=?",
                    (state,json.dumps(result),sid,command))
 
-    def dispatch(self,run_id,*,prepare_only=False):
+    def dispatch_batch(self, run_ids):
+        if hasattr(self.store, 'database'):
+            # A batch cannot borrow another actor's row authority. Preserve batching
+            # within each verified actor, and recheck every item during dispatch.
+            groups = {}
+            for run_id in run_ids:
+                for job in self.store.background_jobs('run', run_id):
+                    groups.setdefault(job['actor_id'], []).append(run_id)
+            for items in groups.values():
+                with self.store.background_actor('run', items[0]) as admitted:
+                    if admitted:
+                        self._dispatch_batch(items)
+            return
+        return self._dispatch_batch(run_ids)
+
+    def _dispatch_batch(self, run_ids):
+        """Claim a bounded group under the existing dispatch lock, then cross once.
+
+        Each receipt remains independent. Any ambiguous response leaves original
+        requests uncertain; normal lookup can adopt them but never redispatch.
+        """
+        from .contracts import BATCH_RUN_LIMIT, EXECUTION_WALL_DEFAULT
+
+        if (
+            not isinstance(run_ids, list)
+            or not 1 <= len(run_ids) <= BATCH_RUN_LIMIT
+            or len(set(run_ids)) != len(run_ids)
+        ):
+            raise ValueError('Distinct bounded run identities required')
+        if len(run_ids) == 1:
+            return self.dispatch(run_ids[0])
+        with self._dispatch_lock():
+            pending = []
+            for run_id in run_ids:
+                self._dispatch_locked(run_id, deferred=pending)
+            if not pending:
+                return
+            try:
+                with self.store.connection() as db:
+                    for row, payload, _ in pending:
+                        self.store.authorize(db, payload['actor'], row['study_id'], write=True)
+                items = [
+                    dict(
+                        bundle=bundle,
+                        request=payload['request'],
+                        wall_seconds=payload.get('execution_budget', {}).get(
+                            'wall_seconds', EXECUTION_WALL_DEFAULT
+                        ),
+                    )
+                    for _, payload, bundle in pending
+                ]
+                records = self.native.launch_batch(items)
+                if (
+                    not isinstance(records, list)
+                    or len(records) != len(items)
+                    or any(
+                        not isinstance(record, dict)
+                        or set(record) != {'request', 'record'}
+                        or record['request'] != item['request']
+                        for item, record in zip(items, records, strict=True)
+                    )
+                ):
+                    raise ValueError('Independent native response identity mismatch')
+            except (OSError, TimeoutError, RuntimeError, ValueError, DomainError):
+                with self.store.connection(write=True) as db:
+                    for row, _, _ in pending:
+                        self._state(
+                            db, row['study_id'], row['command_id'], row['run_id'], 'uncertain'
+                        )
+                return
+            for (row, _, _), record in zip(pending, records, strict=True):
+                self._record(row['run_id'], record['record'])
+
+    @contextmanager
+    def _dispatch_lock(self):
         import fcntl
         import os
-        # One OS lock serializes all dispatcher threads and processes sharing this
-        # application store. No custom scheduler, expiring lease or background queue.
-        lock=self.store.path.with_suffix('.dispatch.lock')
-        fd=os.open(lock,os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
-        try:
-            fcntl.flock(fd,fcntl.LOCK_EX)
-            with self.store.connection() as db:
-                row=db.execute('SELECT r.*,o.state,o.payload FROM run_associations r JOIN outbox o USING(run_id) WHERE r.run_id=?',(run_id,)).fetchone()
-                if row is None:raise DomainError('resource_not_found',404)
-                row=dict(row);payload=json.loads(row['payload'])
-                if row['state']=='accepted_run':row['state']=payload.get('preparation_state',row['state'])
-                receipt=self.store.command_receipt(db,row['study_id'],'run',row['command_id'])
-            if row['state'] in ('recorded','preparation_failed'):return
-            if row['state'] in ('dispatching','uncertain'):
-                try:
-                    matches=self.native.matches(payload['request'])
-                    if len(matches)==1:
-                        self._record(run_id,self.native.inspect(matches[0]));return
-                except (OSError,TimeoutError,RuntimeError):pass
-                with self.store.connection(write=True) as db:self._state(db,row['study_id'],row['command_id'],run_id,'uncertain')
-                return
-            # Current membership is checked again before preparation or claim.
-            # Claimed/uncertain work above remains reconciliation-only.
-            try:
-                with self.store.connection() as db:self.store.authorize(db,payload['actor'],row['study_id'],write=True)
-            except DomainError as error:
-                self._preparation_failure(row,error.code,status=error.status)
-                return
-            if row['state']=='prepared' and payload['bundle']['manifest'].get('schema_version') not in ('2','3','4','5','6','8'):
-                self._preparation_failure(row, 'unsupported_execution_version')
-                return
-            self.native.require_attestation()
-            if row['state']!='prepared':
-                try:
-                    dependencies=None
-                    if (payload['frozen']['configuration']['schema_version'] in ('3','4')
-                            or payload['frozen']['model_snapshot']['schema_version'] in ('2','3','4')):
-                        validate_frozen_configuration(payload['frozen'])
-                    if payload['frozen']['configuration']['schema_version'] in ('2','3','4'):
-                        dependencies=ResultBindings(self.store).dependencies(payload['actor'],row['study_id'],payload['frozen']['configuration'],self.native)
-                    prepared,files=self.prepare(payload['actor'],row['study_id'],row['command_id'],payload['frozen'])
-                    bundle=assemble_bundle(run_id,prepared,files,payload['frozen'],self.native.bundle_runtime(),dependencies)
-                except DomainError as error:
-                    if error.status>=500:return  # Visible pending; no claim crossed.
-                    self._preparation_failure(row,error.code,status=error.status)
-                    return
-                except (ValueError,KeyError,TypeError) as error:
-                    self._preparation_failure(row,'unsupported_execution_version' if str(error).startswith('Unsupported') else 'invalid_preparation')
-                    return
-                request=dict(run_id=run_id,scope=row['study_id'],command_id=row['command_id'],payload_digest=receipt['payload_digest'],bundle_digest=bundle['manifest']['bundle_digest'])
-                payload.update(request=request,bundle=dict(manifest=bundle['manifest'],files={p:base64.b64encode(b).decode() for p,b in bundle['files'].items()}))
-                with self.store.connection(write=True) as db:
-                    db.execute('UPDATE outbox SET payload=? WHERE run_id=?',(json.dumps(payload),run_id))
-                    self._state(db,row['study_id'],row['command_id'],run_id,'prepared')
-                self.fault('after_prepare')
-            if prepare_only:return
-            request=payload['request']
-            bundle=dict(manifest=payload['bundle']['manifest'],files={p:base64.b64decode(b,validate=True) for p,b in payload['bundle']['files'].items()})
-            validate_retained_bundle(bundle,request,payload['frozen'])
-            self.fault('before_claim')
-            try:
-                source_records={}
-                config=payload['frozen']['configuration']
-                if config['schema_version'] in ('2','3','4'):
-                    resolver=ResultBindings(self.store)
-                    source_records=resolver.verify_configuration(payload['actor'],row['study_id'],config)
-                    # A prepared retry must verify the same native results again;
-                    # it must never silently rebuild its immutable bundle.
-                    current=resolver.dependencies(payload['actor'],row['study_id'],config,self.native)
-                    if canonical(current)!=bundle['files']['result-dependencies.json']:raise DomainError('reference_conflict',409)
-                with self.store.connection(write=True) as db:
-                    self.store.authorize(db,payload['actor'],row['study_id'],write=True)
-                    if source_records:History(self.store).recheck(db,payload['actor'],row['study_id'],[r[2] for r in source_records.values()])
-                    db.execute('UPDATE outbox SET payload=? WHERE run_id=?',(json.dumps(payload),run_id))
-                    self._state(db,row['study_id'],row['command_id'],run_id,'dispatching')
-            except DomainError as error:
-                # The claim transaction rolled back. Persist a terminal failure
-                # so one revoked actor cannot poison the serialized queue.
-                self._preparation_failure(row,error.code,status=error.status)
-                return
-            self.fault('after_claim')
-            try:record=self.native.launch(bundle,request)
-            except (OSError,TimeoutError,RuntimeError,ValueError):
-                with self.store.connection(write=True) as db:self._state(db,row['study_id'],row['command_id'],run_id,'uncertain')
-                return
-            self._record(run_id,record)
-        finally:
-            fcntl.flock(fd,fcntl.LOCK_UN);os.close(fd)
 
-    def _preparation_failure(self,row,code,*,status=422):
-        error=dict(code=code,status=status,current_revision=None,fields=[],outcome='unchanged')
+        fd = os.open(
+            self.store.lock_path('.dispatch.lock'),
+            os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW,
+            0o600,
+        )
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    def dispatch(self, run_id, *, prepare_only=False):
+        with self.store.background_actor('run', run_id) as admitted:
+            if admitted:
+                with self._dispatch_lock():
+                    self._dispatch_locked(run_id, prepare_only=prepare_only)
+
+    def _dispatch_locked(self, run_id, *, prepare_only=False, deferred=None):
+        with self.store.connection() as db:
+            row = run_association(db, run_id)
+            if row is None:
+                # Queue discovery is not continuing authority. Expired or revoked
+                # delegation hides the row; leave it untouched without taking down
+                # the dispatcher or preventing other actors' work from progressing.
+                return
+            payload = json.loads(row['payload'])
+            if row['state'] == 'accepted_run':
+                row['state'] = payload.get('preparation_state', row['state'])
+            receipt = self.store.command_receipt(db, row['study_id'], 'run', row['command_id'])
+        if row['state'] in ('recorded', 'preparation_failed'):
+            return
+        if row['state'] in ('dispatching', 'uncertain'):
+            try:
+                matches = self.native.matches(payload['request'])
+                if len(matches) == 1:
+                    self._record(run_id, self.native.inspect(matches[0]))
+                    return
+            except (OSError, TimeoutError, RuntimeError):
+                pass
+            with self.store.connection(write=True) as db:
+                self._state(db, row['study_id'], row['command_id'], run_id, 'uncertain')
+            return
+        # Current membership is checked again before preparation or claim.
+        # Claimed/uncertain work above remains reconciliation-only.
+        try:
+            with self.store.connection() as db:
+                self.store.authorize(db, payload['actor'], row['study_id'], write=True)
+        except DomainError as error:
+            self._preparation_failure(row, error.code, status=error.status)
+            return
+        if row['state'] == 'prepared' and payload['bundle']['manifest'].get(
+            'schema_version'
+        ) not in ('2', '3', '4', '5', '6', '8', '10', '11'):
+            self._preparation_failure(row, 'unsupported_execution_version')
+            return
+        self.native.require_attestation()
+        if row['state'] != 'prepared':
+            try:
+                dependencies = None
+                if payload['frozen']['configuration']['schema_version'] in ('3', '4', '6') or payload[
+                    'frozen'
+                ]['model_snapshot']['schema_version'] in ('2', '3', '4'):
+                    validate_frozen_configuration(payload['frozen'])
+                # Every configuration that can carry result-linked inputs resolves them.
+                if payload['frozen']['configuration']['schema_version'] in ('2', '3', '4', '6'):
+                    dependencies = ResultBindings(self.store).dependencies(
+                        payload['actor'],
+                        row['study_id'],
+                        payload['frozen']['configuration'],
+                        self.native,
+                    )
+                prepared, files = self.prepare(
+                    payload['actor'], row['study_id'], row['command_id'], payload['frozen']
+                )
+                bundle = assemble_bundle(
+                    run_id,
+                    prepared,
+                    files,
+                    payload['frozen'],
+                    self.native.bundle_runtime(),
+                    dependencies,
+                )
+                if (
+                    payload.get('expected_runtime') is not None
+                    and bundle['manifest']['runtime'] != payload['expected_runtime']
+                ):
+                    raise ValueError('Sample runtime changed')
+            except DomainError as error:
+                if error.status >= 500:
+                    return  # Visible pending; no claim crossed.
+                self._preparation_failure(row, error.code, status=error.status)
+                return
+            except (ValueError, KeyError, TypeError) as error:
+                self._preparation_failure(
+                    row,
+                    'unsupported_execution_version'
+                    if str(error).startswith('Unsupported')
+                    else 'invalid_preparation',
+                )
+                return
+            request = dict(
+                run_id=run_id,
+                scope=row['study_id'],
+                command_id=row['command_id'],
+                payload_digest=receipt['payload_digest'],
+                bundle_digest=bundle['manifest']['bundle_digest'],
+            )
+            payload.update(
+                request=request,
+                bundle=dict(
+                    manifest=bundle['manifest'],
+                    files={p: base64.b64encode(b).decode() for p, b in bundle['files'].items()},
+                ),
+            )
+            with self.store.connection(write=True) as db:
+                db.execute(
+                    'UPDATE outbox SET payload=? WHERE run_id=?', (json.dumps(payload), run_id)
+                )
+                self._state(db, row['study_id'], row['command_id'], run_id, 'prepared')
+            self.fault('after_prepare')
+        if prepare_only:
+            return
+        request = payload['request']
+        bundle = dict(
+            manifest=payload['bundle']['manifest'],
+            files={
+                p: base64.b64decode(b, validate=True) for p, b in payload['bundle']['files'].items()
+            },
+        )
+        validate_retained_bundle(bundle, request, payload['frozen'])
+        self.fault('before_claim')
+        try:
+            source_records = {}
+            config = payload['frozen']['configuration']
+            if config['schema_version'] in ('2', '3', '4', '6'):
+                resolver = ResultBindings(self.store)
+                source_records = resolver.verify_configuration(
+                    payload['actor'], row['study_id'], config
+                )
+                # A prepared retry must verify the same native results again;
+                # it must never silently rebuild its immutable bundle.
+                current = resolver.dependencies(
+                    payload['actor'], row['study_id'], config, self.native
+                )
+                if canonical(current) != bundle['files']['result-dependencies.json']:
+                    raise DomainError('reference_conflict', 409)
+            with self.store.connection(write=True) as db:
+                self.store.authorize(db, payload['actor'], row['study_id'], write=True)
+                if source_records:
+                    History(self.store).recheck(
+                        db,
+                        payload['actor'],
+                        row['study_id'],
+                        [r[2] for r in source_records.values()],
+                    )
+                db.execute(
+                    'UPDATE outbox SET payload=? WHERE run_id=?', (json.dumps(payload), run_id)
+                )
+                self._state(db, row['study_id'], row['command_id'], run_id, 'dispatching')
+        except DomainError as error:
+            # The claim transaction rolled back. Persist a terminal failure
+            # so one revoked actor cannot poison the serialized queue.
+            self._preparation_failure(row, error.code, status=error.status)
+            return
+        self.fault('after_claim')
+        if deferred is not None:
+            deferred.append((row, payload, bundle))
+            return
+        try:
+            if 'execution_budget' in payload:
+                record = self.native.launch_budgeted(
+                    bundle, request, payload['execution_budget']['wall_seconds']
+                )
+            else:
+                record = self.native.launch(bundle, request)
+        except (OSError, TimeoutError, RuntimeError, ValueError):
+            with self.store.connection(write=True) as db:
+                self._state(db, row['study_id'], row['command_id'], run_id, 'uncertain')
+            return
+        self._record(run_id, record)
+
+    def _preparation_failure(self, row, code, *, status=422):
+        error = dict(
+            code=code, status=status, current_revision=None, fields=[], outcome='unchanged'
+        )
         with self.store.connection(write=True) as db:
-            self._state(db,row['study_id'],row['command_id'],row['run_id'],'preparation_failed')
-            db.execute("UPDATE receipts SET error=? WHERE scope=? AND category='run' AND command_id=?",
-                       (json.dumps(error),row['study_id'],row['command_id']))
+            self._state(db, row['study_id'], row['command_id'], row['run_id'], 'preparation_failed')
+            db.execute(
+                "UPDATE receipts SET error=? WHERE scope=? AND category='run' AND command_id=?",
+                (json.dumps(error), row['study_id'], row['command_id']),
+            )

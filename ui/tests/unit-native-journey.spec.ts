@@ -14,26 +14,80 @@ async function login(page:Page,f:any){
 // Composition: the selected step names its exact model version in one implementation line
 // and opens it in the canonical model view. A version selector exists only when the step links
 // several exact model versions; otherwise the single linked version is shown by its short id.
-async function expectStepModel(approach:any,approachVersion:any,stepIndex:number,unitText:string){
-  await approach.getByRole('button',{name:'Select step '+(stepIndex+1),exact:true}).click();
-  const content=approachVersion.version.content,step=content.steps[stepIndex];
-  const linked=[...new Set(step.implementation_refs.map((r:any)=>r.binding_id))];
+async function expectStepModel(
+  approach: any,
+  approachVersion: any,
+  stepIndex: number,
+  unitText: string,
+) {
+  const stepButton = approach.getByRole('button', {
+    name: 'Select step ' + (stepIndex + 1),
+    exact: true,
+  });
+  if ((await stepButton.getAttribute('aria-expanded')) !== 'true') await stepButton.click();
+  const content = approachVersion.version.content,
+    step = content.steps[stepIndex];
+  const linked = [...new Set(step.implementation_refs.map((r: any) => r.binding_id))];
   expect(linked).toContain(content.model_bindings[1].binding_id);
-  const selector=approach.getByLabel('Approach model version',{exact:true}),id8=content.model_bindings[1].model_revision_id.slice(0,8);
-  if(linked.length>1){await expect(selector).toHaveValue(content.model_bindings[1].binding_id);}
-  else{
+  const selector = approach.getByLabel('Approach model version', { exact: true }),
+    id8 = content.model_bindings[1].model_revision_id.slice(0, 8);
+  if (linked.length > 1) {
+    await expect(selector).toHaveValue(content.model_bindings[1].binding_id);
+  } else {
     expect(linked).toEqual([content.model_bindings[1].binding_id]);
     await expect(selector).toHaveCount(0);
   }
-  await expect(approach.getByRole('region',{name:'Selected method step',exact:true})).toContainText('Implemented in Model version '+id8);
-  await approach.getByRole('button',{name:'Open model version',exact:true}).click();
-  const open=approach.page().getByRole('dialog',{name:'Model version '+id8,exact:true});
-  await expect(open.getByRole('table',{name:'Quantities',exact:true})).toContainText(unitText);
-  await approach.page().keyboard.press('Escape');await expect(open).toBeHidden();
+  await expect(
+    approach.getByRole('region', { name: 'Selected method step', exact: true }),
+  ).toContainText('Implemented in Model version ' + id8);
+  await approach.getByRole('button', { name: 'Open model version', exact: true }).click();
+  const open = approach.page().getByRole('dialog', { name: 'Model version ' + id8, exact: true });
+  await expect(open.getByRole('table', { name: 'Quantities', exact: true })).toContainText(
+    unitText,
+  );
+  await approach.page().keyboard.press('Escape');
+  await expect(open).toBeHidden();
 }
 async function openRun(page:Page,f:any,row:any){
   await page.goto('/ui/#v=1&view=runs&study='+f.study_id+'&run='+row.run_id);
   await expect(page.getByRole('button',{name:'Full-precision values',exact:true})).toBeVisible();
+}
+
+async function retainedScientificAnswers(page: Page, f: any) {
+  const answers = f.scientific_answers;
+  if (!answers) return;
+  await page.goto(
+    '/ui/#v=1&view=approach&study=' + f.study_id +
+      '&approach=' + answers.approach_version_id,
+  );
+  const study = page.getByRole('region', {
+    name: 'Answer to the study question', exact: true,
+  });
+  await expect(study).toContainText(answers.study_answer.interpretation);
+  const comparison = page.getByRole('article', {
+    name: 'Direct and retained-result comparison', exact: true,
+  });
+  await comparison.locator('summary').first().click();
+  await expect(comparison).toContainText(answers.revised_case_answer.qualifications[1]);
+  await study.getByText('Answer basis and record details', { exact: true }).click();
+  await study.getByRole('button', {
+    name: 'View case answer version ' + answers.case_answer.answer_version_id.slice(0, 8),
+    exact: true,
+  }).click();
+  await expect(study).toContainText(answers.case_answer.interpretation);
+  await expect(study).not.toContainText(answers.revised_case_answer.qualifications[1]);
+  const basis = study.getByRole('button', {
+    name: 'Run ' + answers.case_answer.basis.run_ids[0].slice(0, 8), exact: true,
+  });
+  await expect(basis.first()).toBeVisible();
+  await page.screenshot({
+    path: join(root, 'evidence/native-persistent-scientific-answers.png'), fullPage: true,
+  });
+  await basis.first().click();
+  await expect(page.getByRole('button', {
+    name: 'Full-precision values', exact: true,
+  })).toBeVisible();
+  expect(page.url()).toContain('run=' + answers.case_answer.basis.run_ids[0]);
 }
 test('@units-producer browser author commit and configuration use the real private producer without execution',async({page})=>{
   test.setTimeout(90000);const f=await fixture(),calls:any[]=[],errors:string[]=[];
@@ -63,7 +117,7 @@ test('@units-producer browser author commit and configuration use the real priva
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Browser compound configuration');
   await page.getByLabel('Energy law · x value',{exact:true}).fill('2');
-  await page.getByLabel('Energy law · x provenance',{exact:true}).fill('Explicit browser input, no calculation requested');
+  await page.getByLabel('Energy law · x provenance',{exact:true}).fill('Explicit browser input, no analysis requested');
   await page.getByLabel('Energy law · x units',{exact:true}).selectOption('physical');
   await page.getByLabel('Energy law · x units spelling',{exact:true}).fill('MJ/kg');
   const preview=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/configurations/preview'));
@@ -71,9 +125,9 @@ test('@units-producer browser author commit and configuration use the real priva
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   const checked=await preview;expect(checked.status()).toBe(200);expect((await checked.json()).data.compatibility.compatible).toBe(true);
   const saved=await committed;expect(saved.status()).toBe(201);const retained=(await saved.json()).data;
-  expect(retained.model_snapshot.schema_version).toBe('3');
+  expect(retained.model_snapshot.schema_version).toBe('4');
   expect(retained.configuration.inputs[0].units).toBe('MJ/kg');expect(retained.configuration.inputs[0].value).toBe(2);
-  await expect(page.getByRole('button',{name:'Copy configuration to draft',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
   expect(calls.some(c=>c.path.endsWith('/unit-catalog')&&c.status===200)).toBe(true);
   for(const ending of ['/models','/preview','/edits','/commits','/configurations'])expect(calls.some(c=>c.method==='POST'&&c.path.endsWith(ending)&&[200,201].includes(c.status))).toBe(true);
   expect(calls.filter(c=>c.method==='POST'&&c.path.endsWith('/runs'))).toEqual([]);expect(errors).toEqual([]);
@@ -84,7 +138,8 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
   test.setTimeout(120000);const f=await fixture(),errors:string[]=[],calls:any[]=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))calls.push({method:r.method(),path:new URL(r.url()).pathname});});
-  expect(f.process_count).toBe(f.mixed?1:7);await login(page,f);
+  expect(f.process_count).toBe(f.mixed?1:f.records.length);await login(page,f);
+  await retainedScientificAnswers(page, f);
   for(const row of f.records){
     await openRun(page,f,row);
     const response=await page.request.get('/api/1/studies/'+f.study_id+'/runs/'+row.run_id);
@@ -117,7 +172,7 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     expect(seedResponse.ok()).toBe(true);const seed=(await seedResponse.json()).data;
     expect(seed.model_snapshot).toEqual(row.detail.history.model_snapshot);
     if(f.mixed){expect(seed.approach_closure).toEqual(f.mixed.seed.approach_closure);expect(seed.source_configuration).toEqual(row.configuration.configuration);}
-    expect(seed.schema_version).toBe(row.detail.history.history_schema_version==='4'?'4':'3');
+    expect(seed.schema_version).toBe({'8':'8','4':'4'}[row.detail.history.history_schema_version as string]??'3');
     await page.getByRole('button',{name:'Create modified run',exact:true}).click();
     await expect(page.getByLabel('Configuration name',{exact:true})).toBeVisible();
     await expect(page.locator('body')).not.toContainText('[object Object]');
@@ -126,7 +181,7 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     for(const variant of f.mixed.variants){
       const c=variant.configuration;
       await page.goto('/ui/#v=1&view=configurations&study='+f.study_id+'&configuration='+c.configuration.configuration_revision_id);
-      await expect(page.getByRole('button',{name:'Copy configuration to draft',exact:true})).toBeVisible();
+      await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
       const response=await page.request.get('/api/1/studies/'+f.study_id+'/configurations/'+c.configuration.configuration_revision_id);
       expect((await response.json()).data).toEqual(c);
       await page.getByRole('button',{name:'View modeling approach',exact:true}).click();
@@ -142,7 +197,7 @@ test('@units-native @units-mixed-retained actual seven native records retain exa
     await expect(exported).toContainText('Review the computation');
     await exported.getByText('Details',{exact:true}).click();
     await expect(exported).toContainText(f.records[0].run_id);
-    await expect(exported.getByRole('button',{name:'Review record',exact:true})).toBeVisible();
+    await expect(exported.getByRole('button',{name:'Check contents',exact:true})).toBeVisible();
     await page.screenshot({path:join(root,'evidence/mixed-export-existing-entry.png')});
     await page.keyboard.press('Escape');
   }
@@ -216,7 +271,7 @@ test('@units-mixed-producer browser saves the exact mixed modified configuration
   expect(retained.schema_version).toBe('5');expect(retained.model_snapshot).toEqual(f.records[0].configuration.model_snapshot);
   expect(retained.approach_closure).toEqual(f.records[0].configuration.approach_closure);
   expect(retained.configuration.inputs[0].units).toBe('N');expect(retained.configuration.inputs[0].value).toBe(3);
-  await expect(page.getByRole('button',{name:'Copy configuration to draft',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
   expect(calls.filter(c=>c.method==='POST'&&c.path.endsWith('/runs'))).toEqual([]);expect(errors).toEqual([]);
   await writeFile(join(root,'evidence/mixed-browser-authoring.json'),JSON.stringify({calls,retained},null,2));
 });
@@ -230,13 +285,13 @@ test('@units-mixed-inspection one real preview inspects retained mixed context w
   await page.getByRole('button',{name:'Export computational record',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Export computational record',exact:true});
   const requested=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/computational-record-previews'));
-  await dialog.getByRole('button',{name:'Review record',exact:true}).click();
+  await dialog.getByRole('button',{name:'Check contents',exact:true}).click();
   const response=await requested;expect(response.status()).toBe(202);
   const record=(await response.json()).data,body=response.request().postDataJSON();
   expect(body.selected_run_ids).toEqual([f.records[0].run_id]);
   await writeFile(join(root,'artifacts/mixed-preview-request.json'),JSON.stringify({request_id:record.request_id,body}));
-  await expect(dialog.getByRole('button',{name:'Create record export',exact:true})).toBeEnabled({timeout:90000});
-  await expect(dialog).toContainText('Inspection only. Runtime portability is unverified.');
+  await expect(dialog.getByRole('button',{name:'Create export',exact:true})).toBeEnabled({timeout:90000});
+  await expect(dialog).toContainText('For inspection. this archive does not guarantee that the calculation can run on another installation.');
   const included=dialog.getByRole('region',{name:'Included modeling approach',exact:true});
   await expect(included).toContainText('Saved approach versions');
   const returned=await page.request.get('/api/1/studies/'+f.study_id+'/computational-records/'+record.request_id);

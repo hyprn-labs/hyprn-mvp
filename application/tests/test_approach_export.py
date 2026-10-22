@@ -38,8 +38,7 @@ def export_env():
     case=deepcopy(source_case);config=case['frozen']['configuration'];model=case['frozen']['model_snapshot']
     config.update(configuration_id=uid(),configuration_revision_id=uid())
     v=sample(D['ApproachVersion1']);v['study_id']=sid;binding,_=link(v,model)
-    cs=sample(D['ApproachCase1']);cs['binding_id']=binding['binding_id'];v['content']['cases']=[cs]
-    config['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest='f'*64,case_id=cs['case_id'])
+    config['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest='f'*64)
     v['content']['basis_refs']=[dict(kind='run',run_id=basis['run_id'],reason='Investigate the retained failed method',relation='challenges')];signed(v)
     evidence={e['evidence_version_id']:e for e in config['evidence_snapshots']+c['evidence_snapshots']}
     closure=build_closure(v,resolution(models=[model,f['model_snapshot']],configurations=[c],run_contexts=[basis],evidence=list(evidence.values())),study_id=sid)
@@ -78,7 +77,6 @@ def test_typed_preview_manifest_and_basis_do_not_expand_native_ancestry(monkeypa
     def denied(*a,**k):pytest.fail('Export reached current scientific or execution authority')
     monkeypatch.setattr(NativeExecution,'launch',denied)
     monkeypatch.setattr('hyprn_mvp_app.modeling.Coordinator.read',denied)
-    monkeypatch.setattr('hyprn_mvp_app.approach.Approaches.read',denied)
     monkeypatch.setattr(Store,'evidence_version',denied)
     e,(p,q,raw)=ready();manifest=exports.inspect_record(raw)
     validate('ComputationalRecordManifest2',manifest)
@@ -126,7 +124,7 @@ def test_offline_resealed_tampering_rejected(change):
         elif change in ('pin','model'):
             suffix='/bundle/configuration.json' if change=='pin' else '/bundle/model.json'
             p=next(p for p in files if e['rid'] in p and p.endswith(suffix));value=json.loads(files[p])
-            if change=='pin':value['approach_binding']['case_id']=uid()
+            if change=='pin':value['approach_binding']['approach_version_id']=uid()
             else:value['source_files'][0]['bytes']='eA=='
             signed(value);files[p]=canonical(value)
         else:files['unlisted.json']=b'{}'

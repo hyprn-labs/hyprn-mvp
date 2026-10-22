@@ -1,10 +1,11 @@
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["flit_core==4.1.0"]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "hyprn-mvp-integration"
 version = "0.1.0"
+description = "HYPRN MVP execution integration: AiiDA calculation, launcher and restricted worker"
 requires-python = ">=3.12"
 dependencies = ["openmdao==3.45.1", "aiida-core==2.9.3"]
 

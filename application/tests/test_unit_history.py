@@ -48,7 +48,7 @@ def retained(tmp_path, catalog, *, linked=False, legacy=False, failed=False, mix
             f['schema_version']='5'
         closure=build_closure(v,resolution(models=models),study_id=sid)
         f['approach_closure']=closure
-        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'],case_id=None)
+        c['approach_binding']=dict(approach_id=v['approach_id'],approach_version_id=v['approach_version_id'],approach_digest=v['digest'],closure_digest=closure['digest'])
         repin(case)
     with store.connection(write=True) as db:
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(c['configuration_revision_id'],c['configuration_id'],sid,json.dumps(f)))
@@ -287,43 +287,31 @@ def test_mixed_history_seed_raw_portable_outage_exact(tmp_path,catalog,declarati
 
 
 def mixed_api_checks(wire,root):
+    """A seed from a run configured before criteria moved to the study brief still reads
+    exactly, but its earlier-format request is refused at preview and save: nothing is
+    written and the seed is unchanged."""
     report=[]
-    for choice in ('preserve','remove','stale_evidence','revoked','stale_source'):
+    for choice in ('preserve','remove'):
         directory=root/choice;directory.mkdir();e=mixed_api_app(directory,wire,root/'source.sqlite')
         c=e['client'];service=ModifiedRuns(e['store'])
         seed=service.seed(e['actor'],e['sid'],e['rid']);validate('ModifiedRunSeed4',seed)
-        request=seed['configuration'];request['context_source']['choice_confirmed']=True
+        request=deepcopy(seed['configuration']);request['context_source']['choice_confirmed']=True
         if choice=='remove':request['approach_selection']=None
-        url='/api/1/studies/'+e['sid']+'/configurations';preview=c.post(url+'/preview',json=request)
-        assert preview.status_code==200,preview.text
-        command=dict(command_id=uid(),configuration_id=None,expected_revision=None,
-            configuration=request,expected_preview_digest=preview.json()['data']['candidate_digest'])
         with e['store'].connection() as db:before=db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]
-        if choice=='stale_evidence':
-            with e['store'].connection(write=True) as db:
-                db.execute('DROP TRIGGER immutable_evidence_update')
-                db.execute("UPDATE evidence SET payload=json_set(payload,'$.title','Changed retained reference') WHERE evidence_version_id=?",(request['general_context_evidence_version_ids'][0],))
-        elif choice=='revoked':
-            with e['store'].connection(write=True) as db:db.execute('DELETE FROM memberships WHERE actor_id=?',(e['actor'],))
-        elif choice=='stale_source':
-            with e['store'].connection(write=True) as db:db.execute("UPDATE outbox SET state='uncertain' WHERE run_id=?",(e['rid'],))
+        url='/api/1/studies/'+e['sid']+'/configurations';preview=c.post(url+'/preview',json=request)
+        assert preview.status_code==422 and preview.json()['error']['code']=='unsupported_record_version',preview.text
+        command=dict(command_id=uid(),configuration_id=None,expected_revision=None,
+            configuration=request,expected_preview_digest='0'*64)
         saved=c.post(url,json=command)
-        if choice in ('preserve','remove'):
-            assert saved.status_code==201,saved.text
-            frozen=saved.json()['data'];validate('FrozenConfiguration5' if choice=='preserve' else 'FrozenConfiguration4',frozen)
-            assert frozen['model_snapshot']==seed['model_snapshot']
-            assert frozen['approach_closure']==(seed['approach_closure'] if choice=='preserve' else None)
-            e['model'].offline=True
-            assert c.post(url,json=command).json()['data']==frozen
-        else:
-            assert saved.status_code in (400,403,404,409,422),saved.text
-            with e['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==before
+        assert saved.status_code==422 and saved.json()['error']['code']=='unsupported_record_version',saved.text
+        with e['store'].connection() as db:assert db.execute('SELECT COUNT(*) FROM configurations').fetchone()[0]==before
+        assert service.seed(e['actor'],e['sid'],e['rid'])==seed
         report.append(choice)
     return report
 
 
 @pytest.mark.parametrize('declaration',['physical','unspecified'])
-def test_mixed_seed_api_preview_commit_replay_and_race_guards(tmp_path,catalog,declaration):
+def test_mixed_seed_reads_exactly_and_its_earlier_request_is_refused(tmp_path,catalog,declaration):
     import subprocess
     from pathlib import Path
     e=retained(tmp_path,catalog,legacy=True,mixed=declaration)

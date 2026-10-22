@@ -25,18 +25,34 @@ async function modelDetails(page: Page) {
   return details;
 }
 
+async function editComponent(page: Page) {
+  const dialog = page.getByRole('dialog', {name:'Edit component', exact:true});
+  if (!await dialog.isVisible()) await page.getByRole('button', {name:'Edit component', exact:true}).click();
+  return dialog;
+}
+async function editModelDetails(page: Page) {
+  await modelDetails(page);
+  await page.getByRole('button', {name:'Model actions', exact:true}).click();
+  await page.getByRole('button', {name:'Edit model', exact:true}).click();
+  return page.getByRole('dialog', {name:'Edit model', exact:true});
+}
+
 test('@ae-model component assumptions apply locally, preview exact uses and preserve independent instances', async ({page,request}) => {
   const library=await writer(request), note=await library.create('Model source report');
   const props=await openModel(page);
   const draftPath=`/api/1/studies/${props.sid}/models/${props.mid}`;
   const before=(await (await page.request.get(draftPath)).json()).data;
-  // Component and definition notes are neither shown nor authored in the UI.
-  // The stored annotation stays in the record unchanged.
+  // A component's annotation is its explanation and is shown as such; definition notes are
+  // not shown. The stored annotation stays in the record unchanged.
   expect(before.annotations.map((a:any)=>a.text)).toEqual(['Original component note.']);
   await expect(page.getByLabel('Component notes',{exact:true})).toHaveCount(0);
-  await expect(page.getByText('Original component note.',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Original component note.',{exact:true}).first()).toBeVisible();
   await expect(page.getByText('Definition note stays separate.',{exact:true})).toHaveCount(0);
+  await editComponent(page);
   await page.getByRole('button',{name:'Add assumption',exact:true}).click();
+  const editorFooter = page.getByRole('dialog', {name:'Edit assumption', exact:true}).locator('.dialog-footer');
+  await expect(editorFooter.getByRole('button')).toHaveText(['Cancel', 'Apply assumption']);
+  await expect(editorFooter.getByRole('button', {name:'Apply assumption', exact:true})).toHaveClass(/hf-btn--primary/);
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
   await expect(page.getByRole('alert')).toHaveText('Enter an assumption statement.');
   await expect(page.getByLabel('Statement',{exact:true})).toBeFocused();
@@ -59,7 +75,7 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   await expect(page.getByText('Unsaved local edits. Save the model draft to keep these changes.',{exact:true}).last()).toBeVisible();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(before);
   await shots(page,'model-component-local');
-  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Steady flow in component A');
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Supports · '+note.evidence_version_id);
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
@@ -70,20 +86,24 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   expect(saved.assumptions[0].statement).toContain('\nExplicit local condition.');
   expect(saved.assumptions[0].evidence_links).toEqual([{evidence_version_id:note.evidence_version_id,relation:'supports'}]);
   expect(saved.annotations).toEqual(before.annotations);
+  await editComponent(page);
   await page.getByRole('button',{name:'Edit assumption: '+saved.assumptions[0].statement,exact:true}).click();
   await page.getByLabel('Statement',{exact:true}).fill('Revised condition for A');
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toHaveCount(0);
   const preVersion=(await (await page.request.get(draftPath)).json()).data;
   expect(preVersion.assumptions[0].assumption_id).toBe(saved.assumptions[0].assumption_id);
   const nextNote=await library.revise(note,'Revised model source report');
+  await editComponent(page);
   await page.getByRole('button',{name:'Edit assumption: Revised condition for A',exact:true}).click();
   const editing=page.getByRole('dialog',{name:'Edit assumption',exact:true});
   const replacement=page.getByRole('dialog',{name:'Change evidence version',exact:true});
   const chooseVersion=async()=>{
-    await editing.getByRole('button',{name:'Change version',exact:true}).click();
+    // Attachment actions live with the evidence the assumption opens.
+    if(!await page.getByRole('button',{name:'Change version',exact:true}).count())await editing.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+    await page.getByRole('button',{name:'Change version',exact:true}).click();
     await expect(replacement.getByRole('button',{name:'Apply version change',exact:true})).toBeDisabled();
     await replacement.getByRole('button',{name:/^Choose Revised model source report/}).click();
     await expect(replacement.getByRole('region',{name:'Proposed evidence replacement'})).toContainText(note.evidence_version_id.slice(0,8)+' → Revised model source report · Version '+nextNote.evidence_version_id.slice(0,8));
@@ -92,35 +112,38 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   };
   await chooseVersion();
   const proposed=replacement.getByRole('region',{name:'Proposed evidence replacement'});
-  await proposed.getByRole('button',{name:'View evidence',exact:true}).click();
-  const proposedDetail=page.getByRole('dialog',{name:'Evidence detail',exact:true});
+  await proposed.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  const proposedDetail=page.getByRole('region', { name: 'Evidence details', exact: true });
   await expect(proposedDetail).toContainText(nextNote.content);
   await page.keyboard.press('Escape');
   await expect(proposedDetail).not.toBeVisible();
   await expect(replacement).toBeVisible();
-  await expect(proposed.getByRole('button',{name:'View evidence',exact:true})).toBeFocused();
+  await expect(proposed.getByRole('button',{name:'View evidence (1)',exact:true})).toBeFocused();
   await expect(replacement.getByRole('button',{name:/^Choose Revised model source report/})).toHaveAttribute('aria-pressed','true');
   await expect(proposed).toContainText('From evidence version '+note.evidence_version_id+' to evidence version '+nextNote.evidence_version_id+'.');
   await expect(editing.getByText('Discard unsaved assumption changes?',{exact:true})).toHaveCount(0);
   await shots(page,'model-evidence-version-change');
   await replacement.getByRole('button',{name:'Keep current version',exact:true}).click();
-  await expect(editing.getByRole('button',{name:'Change version',exact:true})).toBeFocused();
-  await expect(editing.getByRole('heading',{name:'Model source report',exact:true})).toBeVisible();
+  // Cancelling returns focus to the assumption's evidence, which still cites the original version.
+  await expect(editing.getByRole('button',{name:'View evidence (1)',exact:true})).toBeFocused();
+  await editing.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Model source report',exact:true})).toBeVisible();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(preVersion);
   await chooseVersion();
   await replacement.getByRole('button',{name:'Apply version change',exact:true}).click();
   await expect(replacement).toHaveCount(0);
   await expect(editing.getByLabel('Statement',{exact:true})).toBeFocused();
-  await expect(editing.getByRole('heading',{name:'Revised model source report',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Revised model source report',exact:true})).toBeVisible();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(preVersion);
   await editing.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Supports · '+note.evidence_version_id);
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Supports · '+nextNote.evidence_version_id);
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toHaveCount(0);
   const revised=(await (await page.request.get(draftPath)).json()).data;
   expect(revised.assumptions[0]).toEqual({...preVersion.assumptions[0],evidence_links:[{evidence_version_id:nextNote.evidence_version_id,relation:'supports'}]});
+  await editComponent(page);
   const remove=page.getByRole('button',{name:'Remove assumption: Revised condition for A',exact:true});
   await remove.click();
   const removal=page.getByRole('dialog',{name:'Remove assumption',exact:true});
@@ -139,23 +162,21 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   await removal.getByRole('button',{name:'Remove assumption',exact:true}).click();
   await expect(page.getByRole('button',{name:'Add assumption',exact:true})).toBeFocused();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(revised);
-  await page.getByRole('button',{name:'2 Component B',exact:true}).click();
-  const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
-  await expect(dirty).toBeVisible();
-  await dirty.getByRole('button',{name:'Keep editing',exact:true}).click();
-  await expect(page.getByRole('region',{name:'Component · Component A assumptions'}).getByText('No assumptions',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'2 Component B',exact:true}).click();
-  await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Cancel',exact:true}).click();
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(revised);
+  await page.getByRole('button',{name:'2 Component B',exact:true}).click();
   // Explicit graph selection changes the instance, never the shared definition's ownership.
-  await expect(page.getByRole('region',{name:'Component · Component B assumptions'}).getByText('No assumptions',{exact:true})).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Component · Component B assumptions' })
+      .getByText('No assumptions', { exact: true }),
+  ).toHaveCount(1);
   await expect(page.getByText('Revised condition for A',{exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
-  const modelDialog=await modelDetails(page);
+  const modelDialog=await editModelDetails(page);
   await modelDialog.getByRole('button',{name:'Add assumption',exact:true}).click();
   await page.getByLabel('Statement',{exact:true}).fill('Model boundary remains fixed');
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await modelDialog.getByRole('button',{name:'Save model draft',exact:true}).click();
+  await modelDialog.getByRole('button',{name:'Save draft',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Model boundary remains fixed');
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toHaveCount(0);
@@ -164,6 +185,8 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   expect(final.assumptions).toHaveLength(2);
   expect(final.assumptions.filter((a:any)=>a.owner.kind==='instance')).toEqual(revised.assumptions);
   expect(final.assumptions.find((a:any)=>a.owner.kind==='model').evidence_links).toEqual([]);
+  await expect(modelDialog).toBeHidden();
+  await page.getByRole('dialog',{name:'Model actions',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
   await page.getByRole('button',{name:'Save model version',exact:true}).click();
   await expect.poll(async()=> (await (await page.request.get(draftPath+'/revisions')).json()).data.length).toBe(2);
   expect((await (await page.request.get(draftPath+'/revisions/'+props.revision.model_revision_id)).json()).data).toEqual(props.revision);
@@ -171,7 +194,7 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   await page.getByLabel('Model version',{exact:true}).selectOption(revisions[0].model_revision_id);
   await expect(page.getByText('Revised condition for A',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Add assumption',exact:true})).toHaveCount(0);
-  await expect(page.getByText('Original component note.',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Original component note.',{exact:true}).first()).toBeVisible();
   await expect(page.getByText('Definition note stays separate.',{exact:true})).toHaveCount(0);
   await shots(page,'model-read-only');
   // The read-only version lists its model-wide assumptions in Details with nothing selected.
@@ -179,9 +202,10 @@ test('@ae-model component assumptions apply locally, preview exact uses and pres
   await expect(await modelDetails(page)).toContainText('Model boundary remains fixed');
   await shots(page,'model-read-only-wide');
   await page.getByLabel('Model version',{exact:true}).selectOption('draft');
+  await editComponent(page);
   await page.getByRole('button',{name:'Remove assumption: Revised condition for A',exact:true}).click();
   await page.getByRole('dialog',{name:'Remove assumption',exact:true}).getByRole('button',{name:'Remove assumption',exact:true}).click();
-  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toContainText('Revised condition for A');
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toHaveCount(0);
@@ -198,10 +222,11 @@ test('@ae-model component assumptions show statement and evidence rows with one 
   const props=await openModel(page);
   const draftPath=`/api/1/studies/${props.sid}/models/${props.mid}`;
   const before=(await (await page.request.get(draftPath)).json()).data;
+  await editComponent(page);
   const region=page.getByRole('region',{name:'Component · Component A assumptions',exact:true});
-  // Empty: the heading, one phrase and the action. The component name is not repeated under the heading.
+  // Empty authoring keeps its heading and action without filler or a repeated component name.
   await expect(region.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
-  await expect(region.getByText('No assumptions',{exact:true})).toBeVisible();
+  await expect(region.getByText('No assumptions', { exact: true })).toHaveCount(0);
   await expect(region.getByRole('button',{name:'Add assumption',exact:true})).toBeVisible();
   await expect(region.getByText('Component · Component A',{exact:true})).toHaveCount(0);
   await expect(region).not.toContainText('No assumptions recorded');
@@ -220,17 +245,16 @@ test('@ae-model component assumptions show statement and evidence rows with one 
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
   const item=region.getByRole('article').filter({hasText:'Inlet temperature is held at the design point'});
   await expect(item).toHaveCount(1);
-  await expect(item.getByText('Supports',{exact:true})).toBeVisible();
-  await expect(item.getByRole('heading',{name:source.title,exact:true})).toBeVisible();
-  await expect(item.locator('.hf-evidence-card--compact')).toHaveCount(1);
-  await expect(item.getByRole('button',{name:'View evidence',exact:true})).toBeVisible();
+  await expect(item.getByRole('button',{name:'View evidence (1)',exact:true})).toBeVisible();
+  // The relationship and source title are read in the evidence reader, not repeated inline.
+  await expectEvidence(page, item, source.title, 'Supports');
   await expect(region.getByText('No assumptions',{exact:true})).toHaveCount(0);
   await expect(region.getByText('Component · Component A',{exact:true})).toHaveCount(0);
   await s3Shots(page,'s3-component-assumptions-populated',region);
-  await item.getByRole('button',{name:'View evidence',exact:true}).click();
-  await expect(page.getByRole('dialog',{name:'Evidence detail',exact:true})).toContainText(source.content);
+  await item.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await expect(page.getByRole('region', { name: 'Evidence details', exact: true })).toContainText(source.content);
   await page.keyboard.press('Escape');
-  await expect(item.getByRole('button',{name:'View evidence',exact:true})).toBeFocused();
+  await expect(item.getByRole('button',{name:'View evidence (1)',exact:true})).toBeFocused();
   // Nothing was saved: the stored draft, including its notes, is unchanged.
   expect((await (await page.request.get(draftPath)).json()).data).toEqual(before);
 });
@@ -283,46 +307,77 @@ async function openEvidence(page: Page, title = 'Heat capacity report') {
   await page.getByRole('button', {name: 'Sign in', exact: true}).click();
   await page.getByRole('button', {name: 'New evidence', exact: true}).click();
   await page.getByLabel('Title', {exact: true}).fill(title);
-  await page.getByLabel('Evidence note', {exact: true}).fill('Reference observation; applicability remains unassessed.');
+  await page.getByRole('textbox',{name:'Evidence note',exact:true}).fill('Reference observation; applicability remains unassessed.');
   return props;
 }
 
-test('@ae-evidence titled evidence shows its pinned version and exact content', async ({page}) => {
+// Fixture authoring through public HTTP: only explicitly cited versions enter the library.
+async function pinLibraryEvidence(page: Page, request: APIRequestContext, title: string) {
+  await expect(page.getByRole('dialog',{name:/^(New evidence|Edit evidence)$/})).toBeHidden();
+  const api = await writer(request);
+  const rows = (await (await request.get(`/api/1/studies/${api.sid}/evidence?view=versions`)).json()).data;
+  const record = rows.find((row:any) => row.title === title);
+  expect(record).toBeTruthy();
+  const state = (await (await request.get(`/api/1/studies/${api.sid}/brief`)).json()).data;
+  const content = state.draft?.content ?? {schema_version:'1', question:'Evidence reading fixture', original_question:null, elaboration:null, scope:'', alternatives:[], criteria:[], assumptions:[], limits:[], open_questions:[]};
+  const saved = await request.post(`/api/1/studies/${api.sid}/brief/draft`, {headers:api.headers, data:{command_id:crypto.randomUUID(), expected_revision:state.draft?.revision ?? null, content:{...content, assumptions:[...content.assumptions, {assumption_id:crypto.randomUUID(), statement:'Claim supported by '+title, evidence_links:[{evidence_version_id:record.evidence_version_id, relation:'supports'}]}]}}});
+  expect(saved.status()).toBe(200);
+  const refresh = page.getByRole('button',{name:'Refresh evidence',exact:true});
+  await expect(refresh).toBeEnabled(); await refresh.click();
+  await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+  return record;
+}
+
+test('@ae-evidence titled evidence shows its pinned version and exact content', async ({page,request}) => {
   await openEvidence(page);
   await page.getByRole('button', {name: 'Create evidence', exact: true}).click();
-  await expect(page.getByRole('heading', {name: 'Heat capacity report', exact: true})).toBeVisible();
+  await pinLibraryEvidence(page, request, 'Heat capacity report');
   const title = page.getByRole('heading', {name: 'Heat capacity report', exact: true});
   await expect(title).toHaveCSS('font-size', '16px');
   await expect(title).toHaveCSS('font-weight', '600');
   await expect(title).toHaveCSS('line-height', '24px');
-  const metadata = page.locator('article').filter({has: title}).locator('.hf-evidence-metadata').first();
-  await expect(metadata).toHaveCSS('font-size', '12px');
-  await expect(metadata).toHaveCSS('line-height', '16px');
-  await expect(metadata).toHaveCSS('font-weight', '400');
-  await page.locator('article').filter({hasText: 'Heat capacity report'}).getByRole('button', {name: 'View evidence', exact: true}).click();
-  const detail = page.getByRole('dialog');
-  await expect(detail).toContainText('Heat capacity report');
-  await expect(detail).toContainText('Version');
+  const detail = page.getByRole('region', { name: 'Evidence library', exact: true });
+  await expect(detail.getByRole('button', {name:/View evidence/})).toHaveCount(0);
   await expect(detail).toContainText('Reference observation; applicability remains unassessed.');
+  const card = detail.locator('article').filter({has:title});
+  await card.getByRole('button',{name:'Evidence record details',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Evidence record',exact:true})).toContainText('Evidence version ID');
+  await page.keyboard.press('Escape');
   await page.screenshot({path: `${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/ae-evidence-title.png`});
 });
 
-test('@ae-evidence edit creates an immutable version and dirty Escape keeps text', async ({page}) => {
+test('@ae-evidence edit creates an immutable version and dirty Escape keeps text', async ({page,request}) => {
   const props = await openEvidence(page, 'Original report');
   await page.getByRole('button', {name: 'Create evidence', exact: true}).click();
+  const original = await pinLibraryEvidence(page, request, 'Original report');
   const card = page.locator('article').filter({has: page.getByText('Original report', {exact: true})});
   await card.getByRole('button', {name: 'Edit', exact: true}).click();
   await page.getByLabel('Title', {exact: true}).fill('Revised report');
   await page.keyboard.press('Escape');
   await expect(page.getByText('Discard unsaved evidence changes?', {exact: true})).toBeVisible();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    for (const width of [720, 390]) {
+      await page.setViewportSize({width, height:700});
+      const keep = page.getByRole('button', {name:'Keep editing', exact:true});
+      await keep.scrollIntoViewIfNeeded();
+      const left = (await keep.boundingBox())!;
+      const right = (await page.getByRole('button', {name:'Discard changes', exact:true}).boundingBox())!;
+      expect(right.x-left.x-left.width).toBeGreaterThanOrEqual(8);
+      expect(Math.abs(left.y-right.y)).toBeLessThanOrEqual(1);
+      expect(await page.getByRole('dialog', {name:'Edit evidence', exact:true})
+        .evaluate(dialog => dialog.scrollWidth-dialog.clientWidth)).toBeLessThanOrEqual(1);
+      await page.screenshot({path:`${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/evidence-discard-${theme}-${width}.png`});
+    }
+  }
   await page.getByRole('button', {name: 'Keep editing', exact: true}).click();
   await expect(page.getByLabel('Title', {exact: true})).toHaveValue('Revised report');
   await page.getByRole('button', {name: 'Save new version', exact: true}).click();
-  const revised = page.locator('article').filter({has: page.getByText('Revised report', {exact: true})});
-  await revised.getByRole('button', {name: 'View evidence', exact: true}).click();
-  await page.getByRole('button', {name: 'Versions', exact: true}).click();
-  await page.getByRole('button', {name: /^Inspect Original report/}).click();
-  await expect(page.getByRole('dialog').getByRole('heading', {name: 'Original report', exact: true})).toBeVisible();
+  // Existing claim still reads its original version; revision does not retarget it.
+  await expect(card).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Revised report',exact:true})).toHaveCount(0);
+  await pinLibraryEvidence(page, request, 'Revised report');
+  await expect(card).toBeVisible();
   const records = await (await page.request.get(`/api/1/studies/${props.sid}/evidence?view=versions`)).json();
   const versions = records.data.filter((r: {title?: string}) => ['Original report','Revised report'].includes(r.title ?? ''));
   expect(versions).toHaveLength(2);
@@ -330,51 +385,53 @@ test('@ae-evidence edit creates an immutable version and dirty Escape keeps text
 });
 
 test('@ae-evidence attachments open exact records directly with meaningful context and secondary identities', async ({page,request}) => {
-  const api=await writer(request);
-  const records=[await api.create('Direct calibration report'),await api.create('Direct observation report')];
-  await harness(page,true);
-  for(const [index,record] of records.entries()) {
-    if(index)await page.getByRole('button',{name:'Add evidence',exact:true}).click();
-    await page.getByLabel('Find evidence',{exact:true}).fill(record.title);
-    await page.getByRole('button',{name:new RegExp('^Choose '+record.title)}).click();
-    await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
+  const api = await writer(request);
+  const records = [
+    await api.create('Direct calibration report'),
+    await api.create('Direct observation report'),
+  ];
+  await harness(page, true);
+  for (const [index, record] of records.entries()) {
+    if (index) await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+    await page.getByLabel('Find evidence', { exact: true }).fill(record.title);
+    await page.getByRole('button', { name: new RegExp('^Choose ' + record.title) }).click();
+    await page.getByRole('button', { name: 'Attach evidence', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button',{name:'View evidence',exact:true})).toHaveCount(index+1);
-    await expect(page.getByRole('button',{name:/^Evidence \(/})).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `View evidence (${index + 1})`, exact: true })).toHaveCount(1);
   }
-  const reads:string[]=[];
-  page.on('request',request=>{if(request.url().includes('/evidence'))reads.push(request.url());});
-  for(const record of records) {
-    const action=page.locator('article').filter({has:page.getByRole('heading',{name:record.title,exact:true})}).getByRole('button',{name:'View evidence',exact:true});
-    await action.focus();await expect(action).toBeFocused();await page.keyboard.press('Enter');
-    const detail=page.getByRole('dialog',{name:'Evidence detail',exact:true});
-    await expect(page.getByRole('dialog')).toHaveCount(1);
-    await expect(detail).toContainText(record.content);
-    await expect(detail.getByText('Study evidence',{exact:true})).toBeVisible();
-    await expect(detail.getByRole('heading',{name:'Context',exact:true})).toHaveCount(0);
-    await expect(detail.getByText('scope version',{exact:true})).toHaveCount(0);
-    await expect(detail.getByText('kind',{exact:true})).toHaveCount(0);
-    await expect(detail.getByText(record.evidence_version_id,{exact:true})).toBeHidden();
-    await expect(detail.locator('script')).toHaveCount(0);
-    await expect(detail).toContainText('<script>inert reference</script>');
-    await shots(page,'direct-'+record.title.replaceAll(' ','-'));
-    await detail.getByRole('button',{name:'Record details',exact:true}).click();
-    const identities=page.getByRole('dialog',{name:'Evidence record',exact:true});
+  const reads: string[] = [];
+  page.on('request', request => { if (request.url().includes('/evidence')) reads.push(request.url()); });
+  const action = page.getByRole('button', { name: 'View evidence (2)', exact: true });
+  await action.focus();
+  await page.keyboard.press('Enter');
+  const detail = page.getByRole('region', { name: 'Evidence details', exact: true });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(detail.locator('article')).toHaveCount(2);
+  for (const record of records) {
+    const source = detail.locator('article').filter({ has: page.getByRole('heading', { name: record.title, exact: true }) });
+    await expect(source).toContainText(record.content);
+    await expect(source.locator('script')).toHaveCount(0);
+    await expect(source).toContainText('<script>inert reference</script>');
+    await source.getByRole('button', { name: 'Evidence record details', exact: true }).click();
+    const identities = page.getByRole('dialog', { name: 'Evidence record', exact: true });
     await expect(identities).toContainText(record.evidence_version_id);
     await expect(identities).toContainText(record.evidence_id);
     await expect(identities).toContainText(api.sid);
     await page.keyboard.press('Escape');
-    await expect(detail.getByRole('button',{name:'Record details',exact:true})).toBeFocused();
-    const downloaded=page.waitForEvent('download');
-    await detail.getByRole('button',{name:'Download evidence record',exact:true}).click();
-    expect(JSON.parse(await readFile((await (await downloaded).path())!,'utf8'))).toEqual(record);
+    await expect(source.getByRole('button', { name: 'Evidence record details', exact: true })).toBeFocused();
+    const downloaded = page.waitForEvent('download');
+    await source.getByRole('button', { name: 'Evidence record details', exact: true }).click();
+    await identities.getByRole('button', { name: 'Download evidence record', exact: true }).click();
+    expect(JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'))).toEqual(record);
     await page.keyboard.press('Escape');
-    await expect(action).toBeFocused();
   }
+  await shots(page, 'grouped-evidence');
+  await detail.getByRole('button', { name: 'Close Evidence', exact: true }).click();
+  await expect(action).toBeFocused();
   expect(reads).toEqual([]);
 });
 
-test('@ae-evidence uncertain create reconciles the original command once', async ({page}) => {
+test('@ae-evidence uncertain create reconciles the original command once', async ({page,request}) => {
   await openEvidence(page, 'Recovered heat capacity report');
   let writes = 0;
   await page.route('**/api/1/studies/*/evidence', async route => {
@@ -387,7 +444,7 @@ test('@ae-evidence uncertain create reconciles the original command once', async
   await page.getByRole('button', {name: 'Create evidence', exact: true}).click();
   await expect(page.getByRole('alert')).toContainText('The evidence may already be saved. Check the original command before trying again.');
   await page.getByRole('dialog').getByRole('button', {name: 'Check original command', exact: true}).click();
-  await expect(page.getByRole('heading', {name: 'Recovered heat capacity report', exact: true})).toBeVisible();
+  await pinLibraryEvidence(page, request, 'Recovered heat capacity report');
   expect(writes).toBe(1);
   await page.screenshot({path: `${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/ae-evidence-recovered.png`});
 });
@@ -397,12 +454,21 @@ async function shots(page: Page, name: string) {
     await page.screenshot({animations:'disabled',path: `${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/${name}-${theme}.png`});
   }
 }
+async function expectEvidence(page: Page, owner: Locator, title: string, relation?: string) {
+  await owner.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  const reader=page.getByRole('region',{name:'Evidence details',exact:true});
+  await expect(reader).toContainText(title);
+  if(relation)await expect(reader).toContainText(relation);
+  await expect(reader.getByRole('button',{name:/^View evidence/})).toHaveCount(0);
+  await reader.getByRole('button',{name:'Close Evidence',exact:true}).click();
+}
 // A configuration shows one line for its model's assumptions; the list opens from it.
 async function viewModelAssumptions(page: Page, scope: Locator) {
   await scope.getByRole('button',{name:'View model assumptions',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:/^Model version [0-9a-f]{8}$/});
+  const dialog=page.getByRole('dialog',{name:'Model assumptions',exact:true});
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('region',{name:'Model view',exact:true})).toBeVisible();
+  await dialog.getByRole('tab',{name:'Model explanation',exact:true}).click();
   return dialog;
 }
 // 1440 x 1000 light/dark and 200 percent (720 CSS px at device scale 2) light/dark, without horizontal overflow.
@@ -462,14 +528,14 @@ test('@ae-model concurrent add and revision survive clean version refresh and an
   const other=await browser.newContext({baseURL}), remote=await other.newPage();
   try {
     await openModel(remote);
-    const owner=await modelDetails(remote);
+    const owner=await editModelDetails(remote);
     await owner.getByRole('button',{name:'Edit assumption: Initial remote condition',exact:true}).click();
     await remote.getByLabel('Statement',{exact:true}).fill('Updated by the other authorized tab');
     await remote.getByRole('button',{name:'Apply assumption',exact:true}).click();
     await owner.getByRole('button',{name:'Add assumption',exact:true}).click();
     await remote.getByLabel('Statement',{exact:true}).fill('Added by the other authorized tab');
     await remote.getByRole('button',{name:'Apply assumption',exact:true}).click();
-    await owner.getByRole('button',{name:'Save model draft',exact:true}).click();
+    await owner.getByRole('button',{name:'Save draft',exact:true}).click();
     await remote.getByRole('dialog',{name:'Preview changes',exact:true}).getByRole('button',{name:'Apply changes',exact:true}).click();
     await expect(remote.getByRole('dialog',{name:'Preview changes',exact:true})).toHaveCount(0);
     const authoritative=(await (await request.get(path)).json()).data;
@@ -480,15 +546,16 @@ test('@ae-model concurrent add and revision survive clean version refresh and an
     const local=await modelDetails(page);
     await expect(local).toContainText('Updated by the other authorized tab');
     await expect(local).toContainText('Added by the other authorized tab');
-    await expect(local.getByRole('button',{name:'Save model draft',exact:true})).toBeDisabled();
+    await expect(local.getByRole('button',{name:'Add assumption',exact:true})).toHaveCount(0);
     await shots(page,'editor-clean-refreshed');
     await page.getByRole('button',{name:'1 Component A',exact:true}).click();
     // Component notes are no longer authored in the UI; the unrelated local save is a component assumption.
     await expect(page.getByLabel('Component notes',{exact:true})).toHaveCount(0);
+    await editComponent(page);
     await page.getByRole('button',{name:'Add assumption',exact:true}).click();
     await page.getByLabel('Statement',{exact:true}).fill('Benign local assumption after clean refresh');
     await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-    await page.getByRole('button',{name:'Save component',exact:true}).click();
+    await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
     const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});
     await expect(preview).toContainText('Benign local assumption after clean refresh');
     expect(commands).toHaveLength(1);
@@ -505,10 +572,11 @@ test('@ae-model concurrent add and revision survive clean version refresh and an
     await shots(page,'editor-clean-benign-saved');
     // A second local assumption beside a stored one on the same component previews one add only;
     // the stored assumption is unchanged and must not be sent as an update.
+    await editComponent(page);
     await page.getByRole('button',{name:'Add assumption',exact:true}).click();
     await page.getByLabel('Statement',{exact:true}).fill('Second local assumption beside a stored one');
     await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-    await page.getByRole('button',{name:'Save component',exact:true}).click();
+    await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
     await expect(preview).toContainText('Second local assumption beside a stored one');
     expect(commands).toHaveLength(2);
     expect(commands[1].edits.map((e:any)=>e.kind)).toEqual(['add_assumption']);
@@ -526,10 +594,11 @@ test('@ae-model in-flight clean refresh preserves dirty local owner and original
   let received!:()=>void; const started=new Promise<void>(resolve=>received=resolve);
   try {
     await openModel(remote);
+    await editComponent(remote);
     await remote.getByRole('button',{name:'Add assumption',exact:true}).click();
     await remote.getByLabel('Statement',{exact:true}).fill('Remote component condition stays');
     await remote.getByRole('button',{name:'Apply assumption',exact:true}).click();
-    await remote.getByRole('button',{name:'Save component',exact:true}).click();
+    await (await editComponent(remote)).getByRole('button',{name:'Save draft',exact:true}).click();
     await remote.getByRole('dialog',{name:'Preview changes',exact:true}).getByRole('button',{name:'Apply changes',exact:true}).click();
     await expect(remote.getByRole('dialog',{name:'Preview changes',exact:true})).toHaveCount(0);
     const authoritative=(await (await request.get(path)).json()).data;
@@ -543,17 +612,19 @@ test('@ae-model in-flight clean refresh preserves dirty local owner and original
     page.on('request',r=>{if(r.method()==='POST' && r.url().endsWith(path+'/preview'))commands.push(r.postDataJSON());});
     await page.getByRole('button',{name:'Save model version',exact:true}).click();await started;
     // Notes are not authored in the UI; an applied local component assumption is the dirty local owner.
+    await editComponent(page);
     await page.getByRole('button',{name:'Add assumption',exact:true}).click();
     await page.getByLabel('Statement',{exact:true}).fill('Local applied assumption survives refresh');
     await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
+    await editComponent(page);
     await page.getByRole('button',{name:'Add assumption',exact:true}).click();
     await page.getByLabel('Statement',{exact:true}).fill('Local open assumption survives refresh');
     release();
     await expect(page.getByText(/Model version [a-f0-9]+ saved\./)).toBeVisible();
     await expect(page.getByLabel('Statement',{exact:true})).toHaveValue('Local open assumption survives refresh');
     await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-    await expect(page.getByText('Local applied assumption survives refresh',{exact:true})).toBeVisible();
-    await page.getByRole('button',{name:'Save component',exact:true}).click();
+    await expect(page.getByText('Local applied assumption survives refresh',{exact:true}).filter({visible:true})).toBeVisible();
+    await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
     const preview=page.getByRole('dialog',{name:'Preview changes',exact:true});
     await expect(preview.getByRole('alert')).toContainText('changed');
     expect(commands[0].expected_revision).toBe(original.draft_revision);
@@ -562,10 +633,10 @@ test('@ae-model in-flight clean refresh preserves dirty local owner and original
     await expect(preview.getByRole('region',{name:'Current revision differences'})).toContainText('Remote component condition stays');
     await shots(page,'editor-refresh-stale-review');
     await preview.getByRole('button',{name:'Keep editing',exact:true}).click();
-    await expect(page.getByText('Local open assumption survives refresh',{exact:true})).toBeVisible();
-    await expect(page.getByText('Local applied assumption survives refresh',{exact:true})).toBeVisible();
+    await expect(page.getByText('Local open assumption survives refresh',{exact:true}).filter({visible:true})).toBeVisible();
+    await expect(page.getByText('Local applied assumption survives refresh',{exact:true}).filter({visible:true})).toBeVisible();
     expect((await (await request.get(path)).json()).data).toEqual(authoritative);
-    await page.getByRole('button',{name:'Save component',exact:true}).click();
+    await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
     await expect(preview.getByRole('alert')).toContainText('changed');
     expect(commands[1].expected_revision).toBe(original.draft_revision);
     await preview.getByRole('button',{name:'Review current revision',exact:true}).click();
@@ -581,7 +652,7 @@ test('@ae-model in-flight clean refresh preserves dirty local owner and original
     for(const statement of local)expect(final.assumptions.filter((a:any)=>a.statement===statement)).toHaveLength(1);
     expect(final.annotations).toEqual(original.annotations);
     expect(final.source_files).toEqual(original.source_files);
-    await expect(page.getByText('Local applied assumption survives refresh',{exact:true})).toBeVisible();
+    await expect(page.getByText('Local applied assumption survives refresh',{exact:true}).filter({visible:true})).toBeVisible();
     await expect(page.getByRole('button',{name:'Save component',exact:true})).toBeHidden();
     await shots(page,'editor-explicit-reconciliation');
     await writeFile(join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/editor-dirty-concurrency.json'),JSON.stringify({original,authoritative,commands,final},null,2));
@@ -592,7 +663,7 @@ test('@ae-evidence picker separates create/attach, requires authored relationshi
   await harness(page);
   await page.getByRole('button', {name:'Create new',exact:true}).click();
   await page.getByLabel('Title',{exact:true}).fill('Picker source');
-  await page.getByLabel('Evidence note',{exact:true}).fill('Full exact content\nSecond line');
+  await page.getByRole('textbox',{name:'Evidence note',exact:true}).fill('Full exact content\nSecond line');
   await page.getByLabel('Source references',{exact:true}).fill('<script>inert source</script>');
   await page.getByRole('button',{name:'Create evidence',exact:true}).click();
   await expect(page.getByRole('status')).toContainText('Evidence saved to the library.');
@@ -611,9 +682,11 @@ test('@ae-evidence picker separates create/attach, requires authored relationshi
   const evidenceReads: string[]=[];
   page.on('request',req=>{if(req.url().includes('/evidence'))evidenceReads.push(req.url());});
   await expect(page.getByRole('button',{name:/^Evidence \(/})).toHaveCount(0);
-  await page.getByRole('button',{name:'View evidence',exact:true}).click();
-  const detail=page.getByRole('dialog').last();
-  await expect(detail).toContainText(original.evidence_version_id.slice(0,8));
+  await page.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  const detail=page.getByRole('region',{name:'Evidence details',exact:true});
+  await detail.getByRole('button',{name:'Evidence record details',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Evidence record',exact:true})).toContainText(original.evidence_version_id);
+  await page.keyboard.press('Escape');
   await expect(detail).toContainText('Picker source');
   await expect(detail).not.toContainText('Newer picker source');
   await expect(detail.getByRole('button',{name:'Versions',exact:true})).toHaveCount(0);
@@ -626,7 +699,7 @@ test('@ae-evidence pending picker survives unmount, keeps original command and n
   await harness(page);
   await page.getByRole('button',{name:'Create new',exact:true}).click();
   await page.getByLabel('Title',{exact:true}).fill('Uncertain picker source');
-  await page.getByLabel('Evidence note',{exact:true}).fill('Draft belongs only to component A.');
+  await page.getByRole('textbox',{name:'Evidence note',exact:true}).fill('Draft belongs only to component A.');
   let writes=0;
   await page.route('**/api/1/studies/*/evidence',async route=>{
     if(route.request().method()!=='POST')return route.continue();
@@ -660,10 +733,11 @@ test('@ae-evidence stale head preserves edits and requires explicit reapplicatio
   await openEvidence(page,'unused');
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.getByRole('button',{name:'Discard changes',exact:true}).click();
+  await pinLibraryEvidence(page, request, 'Stale report');
   await page.locator('article').filter({has:page.getByRole('heading',{name:'Stale report',exact:true})}).getByRole('button',{name:'Edit',exact:true}).click();
   await page.getByLabel('Title',{exact:true}).fill('My preserved report');
-  await page.getByLabel('Evidence note',{exact:true}).fill('My precise preserved note');
-  const concurrent = await api.revise(original,'Concurrent report');
+  await page.getByRole('textbox',{name:'Evidence note',exact:true}).fill('My precise preserved note');
+  const concurrent = await (await writer(request)).revise(original,'Concurrent report');
   await page.getByRole('button',{name:'Save new version',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('A newer evidence version was saved.');
   await expect(page.getByLabel('Title',{exact:true})).toHaveValue('My preserved report');
@@ -672,7 +746,7 @@ test('@ae-evidence stale head preserves edits and requires explicit reapplicatio
   await shots(page,'stale-edit');
   await page.getByRole('button',{name:'Reapply edits to this version',exact:true}).click();
   await page.getByRole('button',{name:'Save new version',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'My preserved report',exact:true})).toBeVisible();
+  await pinLibraryEvidence(page, request, 'My preserved report');
   const rows=await (await request.get(`/api/1/studies/${api.sid}/evidence`)).json(), saved=rows.data.find((r:any)=>r.title==='My preserved report');
   expect(saved.parent_evidence_version_id).toBe(concurrent.evidence_version_id);
   expect(saved.content).toBe('My precise preserved note');
@@ -689,15 +763,15 @@ test('@ae-evidence exact older selection has no relation control for general att
   await harness(page,true);
   await expect(page.getByLabel('Relationship',{exact:true})).toHaveCount(0);
   await page.getByLabel('Find evidence',{exact:true}).fill('Version choice current');
-  await page.locator('article').filter({hasText:'Version choice current'}).getByRole('button',{name:'View evidence',exact:true}).click();
+  await page.locator('article').filter({hasText:'Version choice current'}).getByRole('button',{name:'View evidence (1)',exact:true}).click();
   await page.getByRole('button',{name:'Versions',exact:true}).click();
   await page.getByRole('button',{name:/^Inspect Version choice original/}).click();
   await page.getByRole('button',{name:'Choose this version',exact:true}).click();
-  await page.getByRole('button',{name:'Done',exact:true}).click();
-  await expect(page.getByRole('region',{name:'Selected evidence'})).toContainText(original.evidence_version_id.slice(0,8));
+  await page.getByRole('button',{name:'Close Evidence',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Selected evidence'})).toContainText(original.title);
   await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
-  await page.getByRole('button',{name:'View evidence',exact:true}).click();
-  await expect(page.getByRole('dialog')).toContainText('Version choice original');
+  await page.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Evidence details',exact:true})).toContainText('Version choice original');
 });
 
 test('@ae-evidence revoked current membership clears selected content and prevents attachment',async({page,request})=>{
@@ -708,7 +782,7 @@ test('@ae-evidence revoked current membership clears selected content and preven
   try {
     expect((await request.post('/fixture/membership',{data:{enabled:false}})).status()).toBe(200);
     await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
-    await expect(page.getByRole('alert')).toContainText('Access to this evidence is no longer available.');
+    await expect(page.getByRole('alert').filter({hasText: 'Access to this evidence is no longer available.'})).toHaveCount(1);
     await expect(page.getByRole('dialog').getByText(/Access to this evidence is no longer available\./)).toHaveCount(1);
     await expect(page.getByRole('heading',{name:'Private revoked note',exact:true})).toHaveCount(0);
     await expect(page.getByRole('button',{name:'Attach evidence',exact:true})).toHaveCount(0);
@@ -721,23 +795,19 @@ test('@ae-evidence current library and immutable version lists load bounded page
   const original=version;
   for(let i=1;i<=21;i++)version=await api.revise(version,'Paged family '+i);
   for(let i=0;i<22;i++)await api.create('Paged extra '+i);
-  await openEvidence(page,'unused pagination draft');
-  await page.getByRole('button',{name:'Cancel',exact:true}).click();
-  await page.getByRole('button',{name:'Discard changes',exact:true}).click();
-  await expect(page.locator('section[aria-label="Evidence library"] > .hf-panel article')).toHaveCount(20);
-  await page.getByRole('button',{name:'Load more',exact:true}).click();
-  await page.getByLabel('Filter evidence',{exact:true}).fill('Paged extra 21');
+  await harness(page,true);
+  await expect(page.getByRole('dialog').locator('article')).toHaveCount(20);
+  await page.getByRole('button',{name:'Load more evidence records',exact:true}).click();
+  await page.getByLabel('Find evidence',{exact:true}).fill('Paged extra 21');
   await expect(page.getByRole('heading',{name:'Paged extra 21',exact:true})).toBeVisible();
-  await page.getByLabel('Filter evidence',{exact:true}).fill('Paged family');
-  // The page also lists assumptions by owner; the filter applies to the sources library.
-  const library=page.getByRole('region',{name:'Evidence library',exact:true});
-  await expect(library.locator('article:visible')).toHaveCount(1);
-  await library.getByRole('button',{name:'View evidence',exact:true}).click();
+  await page.getByLabel('Find evidence',{exact:true}).fill('Paged family');
+  await page.getByRole('dialog').getByRole('button',{name:'View evidence (1)',exact:true}).click();
   await page.getByRole('button',{name:'Versions',exact:true}).click();
   await expect(page.getByRole('region',{name:'Evidence versions'}).getByRole('button',{name:/^Inspect /})).toHaveCount(20);
-  await page.getByRole('button',{name:'Load more versions',exact:true}).click();
+  await page.getByRole('button',{name:'Load more evidence versions',exact:true}).click();
   await page.getByRole('button',{name:/^Inspect Paged family 0 ·/}).click();
-  await expect(page.getByRole('dialog')).toContainText(original.evidence_version_id.slice(0,8));
+  await page.getByRole('region',{name:'Evidence details',exact:true}).getByRole('button',{name:'Evidence record details',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Evidence record',exact:true})).toContainText(original.evidence_version_id);
   await shots(page,'version-pages');
 });
 
@@ -762,39 +832,42 @@ test('@ae-configuration current copies retain explicit assumption and general us
   await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
   await shots(page,'configuration-current');
-  await page.locator('.configuration-context').getByRole('button',{name:'Edit context',exact:true}).click();
-  const context=page.getByRole('dialog',{name:'Edit context',exact:true});
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
+  const context=page.getByRole('dialog',{name:'Input tools and model binding',exact:true});
   await context.getByRole('button',{name:'Add evidence',exact:true}).click();
   await page.getByLabel('Find evidence',{exact:true}).fill(note.title);
   await chooseLoadedEvidence(page,'Configuration source report');
   await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
   await context.getByRole('button',{name:'Done',exact:true}).click();
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
   await expect(assumptions).toContainText('Constant operating condition');
   await shots(page,'configuration-saved');
   const props=await (await page.request.get('/fixture')).json();
   const all=(await (await page.request.get('/api/1/studies/'+props.sid+'/configurations')).json()).data;
   const original=all.find((v:any)=>v.configuration.name==='Exact configuration');
-  expect(original.configuration.schema_version).toBe('4');expect(original.configuration.approach_binding).toBeNull();expect(original.approach_closure).toBeNull();
+  // A new configuration is version 6: no criteria and no approach binding.
+  expect(original.configuration.schema_version).toBe('6');expect(original.configuration).not.toHaveProperty('criteria');
+  expect(original.configuration).not.toHaveProperty('approach_binding');expect(original).not.toHaveProperty('approach_closure');
   expect(original.configuration.general_context_evidence_version_ids).toEqual([note.evidence_version_id]);
   expect(original.configuration.assumptions[0].evidence_links).toEqual([{evidence_version_id:note.evidence_version_id,relation:'challenges'}]);
   expect(original.configuration.evidence_snapshots).toHaveLength(1);
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Independent copy');
-  await page.locator('.configuration-context').getByRole('button',{name:'Edit context',exact:true}).click();
-  await context.getByRole('button',{name:'Remove attachment',exact:true}).click();
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
+  await context.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await page.getByRole('button',{name:'Remove attachment',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Attached evidence',exact:true})).toHaveCount(0);
   await context.getByRole('button',{name:'Done',exact:true}).click();
-  await expect(assumptions).toContainText('Configuration source report');
-  await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Runs',exact:true}).click();
+  await expectEvidence(page, assumptions, 'Configuration source report', 'Challenges');
+  await page.getByRole('tab',{name:'Runs',exact:true}).click();
   const navigation=page.getByRole('dialog',{name:'Unsaved changes',exact:true});
   await expect(navigation).toBeVisible();
   await navigation.getByRole('button',{name:'Keep editing',exact:true}).click();
   await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Independent copy');
   await expect(assumptions).toContainText('Constant operating condition');
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
   const copies=(await (await page.request.get('/api/1/studies/'+props.sid+'/configurations')).json()).data;
   const copy=copies.find((v:any)=>v.configuration.name==='Independent copy');
   expect(copy.configuration.general_context_evidence_version_ids).toEqual([]);
@@ -804,6 +877,13 @@ test('@ae-configuration current copies retain explicit assumption and general us
   await shots(page,'configuration-copy');
 });
 
+const studyCriteria='Criteria are defined in the study brief and evaluated in analyses.';
+/** Attachment actions live with the evidence an assumption opens. */
+async function changeVersion(page: Page) {
+  const change=page.getByRole('button',{name:'Change version',exact:true});
+  if(!await change.count())await page.getByRole('dialog',{name:'Edit assumption',exact:true}).getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await change.click();
+}
 async function configurationCase(request: APIRequestContext, kind='current') {
   const response=await request.post('/fixture/configuration-case',{data:{kind}});
   expect(response.status()).toBe(200); return response.json();
@@ -822,21 +902,22 @@ async function chooseLoadedEvidence(page: Page,title: string,keyboard=false) {
   for(let pageNumber=0;pageNumber<20;pageNumber++){
     await expect(page.getByText('Loading evidence…',{exact:true})).toHaveCount(0);
     if(await choice.isVisible()){if(keyboard){await choice.focus();await page.keyboard.press('Enter');}else await choice.click();return;}
-    const more=page.getByRole('dialog').last().getByRole('button',{name:'Load more',exact:true});
+    const more=page.getByRole('dialog').last().getByRole('button',{name:'Load more evidence records',exact:true});
     await expect(more).toBeEnabled();await more.click();
   }
   throw Error('Evidence not found within bounded pages: '+title);
 }
 
 async function replaceAttachment(page: Page, region: ReturnType<Page['getByRole']>, title: string) {
-  await region.getByRole('button',{name:'Remove attachment',exact:true}).click();
+  await region.getByRole('button',{name:'View evidence (1)',exact:true}).click();
+  await page.getByRole('button',{name:'Remove attachment',exact:true}).click();
   await region.getByRole('button',{name:'Add evidence',exact:true}).click();
   await page.getByLabel('Find evidence',{exact:true}).fill(title);
   await chooseLoadedEvidence(page,title);
   await page.getByRole('button',{name:'Attach evidence',exact:true}).click();
 }
 
-test('@ae-configuration Seed2 keeps retained owners and titles; explicit replacement has a server-reviewed independent save',async({page,request})=>{
+test('@ae-configuration Seed2 keeps retained owners and titles; a seed that carries criteria is refused before any save',async({page,request})=>{
   const data=await configurationCase(request), library=await writer(request);
   const newer=await library.revise(data.evidence,'New calibration E2');
   const historyPath=`/api/1/studies/${data.sid}/runs/${data.rid}`;
@@ -872,27 +953,28 @@ test('@ae-configuration Seed2 keeps retained owners and titles; explicit replace
   expect(seed.schema_version).toBe('2');expect(seed.model_snapshot).toEqual(data.saved.model_snapshot);
   await expect(page.getByRole('radio',{name:/context/})).toHaveCount(0);
   const contextSection=page.locator('#configuration .configuration-context');
-  await expect(contextSection.getByRole('heading',{name:'Context',exact:true})).toBeVisible();
-  expect(await contextSection.evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('#configuration .configuration-inputs')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-  await contextSection.getByRole('button',{name:'Edit context',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Inputs and provenance',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
   await expect(page.getByLabel('Configuration notes',{exact:true})).toHaveCount(0);
   await page.getByLabel('Description',{exact:true}).fill('Independent operating question\n\nWith retained source context.');
-  await page.getByRole('dialog',{name:'Edit context',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
-  await expect(page.getByRole('article',{name:'Criterion 1',exact:true})).toContainText('linear');
+  await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+  // The editor authors no criteria: they belong to the study brief.
+  await expect(page.locator('#configuration .configuration-criterion')).toContainText('Criteria are defined in the study brief and evaluated in analyses.');
   const assumptions=page.getByRole('region',{name:'Configuration assumptions',exact:true});
-  await expect(assumptions).toContainText('Retained calibration E1');
-  await expect(page.locator('#configuration').getByText('Model assumptions: '+data.saved.model_snapshot.assumptions.length+' in Model version '+data.saved.model_snapshot.model_revision_id.slice(0,8),{exact:true})).toBeVisible();
+  await expectEvidence(page, assumptions, 'Retained calibration E1');
+  await expect(page.locator('#configuration').getByText('Model assumptions: '+data.saved.model_snapshot.assumptions.length+' in the model',{exact:true})).toBeVisible();
   await expect(page.locator('#configuration').getByText('Retained model condition',{exact:true})).toBeHidden();
   const seededModel=await viewModelAssumptions(page,page.locator('#configuration'));
-  await expect(seededModel.getByText('Retained model condition',{exact:true})).toBeVisible();
+  await expect(seededModel.getByText('Retained model condition',{exact:true}).filter({visible:true})).toBeVisible();
   // The link opens the model view; a component's own assumptions show when it is selected.
   const owned=data.saved.model_snapshot.assumptions.find((a:any)=>a.owner.kind==='instance').owner.instance_id;
-  await seededModel.getByRole('button',{name:'Inspect component '+data.saved.model_snapshot.instances.find((i:any)=>i.instance_id===owned).name,exact:true}).first().click();
-  await expect(seededModel.getByText('Retained component condition',{exact:true})).toBeVisible();
+  await seededModel.getByRole('tab',{name:'Diagram',exact:true}).click();
+  await seededModel.locator('[data-instance="'+owned+'"]').first().click();
+  await expect(seededModel.getByText('Retained component condition',{exact:true}).filter({visible:true})).toBeVisible();
   await seededModel.getByRole('button',{name:'Done',exact:true}).click();
   await expect(assumptions).not.toContainText('New calibration E2');
   await assumptions.getByRole('button',{name:'Edit assumption: Retained configuration condition',exact:true}).click();
-  await page.getByRole('button',{name:'Change version',exact:true}).click();
+  await changeVersion(page);
   await page.getByRole('button',{name:/^Choose New calibration E2/}).click();
   const replacement=page.getByRole('dialog',{name:'Change evidence version',exact:true});
   await expect(replacement.getByRole('button',{name:'Apply version change',exact:true})).toBeEnabled();
@@ -901,42 +983,26 @@ test('@ae-configuration Seed2 keeps retained owners and titles; explicit replace
   await shots(page,'configuration-version-replacement');
   await page.getByRole('button',{name:'Keep current version',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Edit assumption',exact:true})).toContainText('Retained calibration E1');
-  await page.getByRole('button',{name:'Change version',exact:true}).click();
+  await changeVersion(page);
   await page.getByRole('button',{name:/^Choose New calibration E2/}).click();
   await page.getByRole('button',{name:'Apply version change',exact:true}).click();
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await expect(assumptions).toContainText('Challenges');await expect(assumptions).toContainText('New calibration E2');
+  await expectEvidence(page, assumptions, 'New calibration E2', 'Challenges');
   const firstInput=page.locator('#configuration .configuration-inputs tbody tr').first();
   await replaceAttachment(page,firstInput,newer.title);
-  await page.locator('#configuration .configuration-criterion').getByRole('button',{name:'Edit',exact:true}).click();
-  await replaceAttachment(page,page.getByRole('dialog',{name:'Edit criteria',exact:true}),newer.title);
-  await page.getByRole('dialog',{name:'Edit criteria',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+  // The retained run's configuration carries criteria; saving its seed is refused before any
+  // preview or allocation, and the local edits stay in place.
   const before=await configurationCounts(request);
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  const review=page.getByRole('dialog',{name:'Review modified run',exact:true});
-  await expect(review).toContainText('Challenges · Retained calibration E1');
-  await expect(review).toContainText('Challenges · New calibration E2');
-  await expect(review.getByRole('row').filter({hasText:'Input evidence'})).toContainText('Retained calibration E1');
-  await expect(review.getByRole('row').filter({hasText:'Criterion evidence'})).toContainText('New calibration E2');
+  await expect(page.getByRole('alert').filter({hasText:'This run was configured before criteria moved to the study brief. Create a new configuration from its inputs instead.'})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'Review modified run',exact:true})).toHaveCount(0);
+  await expectEvidence(page, assumptions, 'New calibration E2', 'Challenges');
   expect(await configurationCounts(request)).toEqual(before);
-  await shots(page,'configuration-modified-review');
-  await review.getByRole('button',{name:'Save modified configuration',exact:true}).click();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
-  const copies=(await (await page.request.get(`/api/1/studies/${data.sid}/configurations`)).json()).data;
-  const copy=copies.find((c:any)=>c.configuration.derivation?.source_run_id===data.rid);
-  expect(copy.model_snapshot).toEqual(data.saved.model_snapshot);
-  expect(copy.configuration.context_snapshot.description).toBe('Independent operating question\n\nWith retained source context.');
-  expect(copy.configuration.context_snapshot.boundary).toBe(data.saved.configuration.context_snapshot.boundary);
-  expect(copy.configuration.context_snapshot.notes).toEqual(data.saved.configuration.context_snapshot.notes);
-  expect(copy.configuration.assumptions[0]).toEqual({...data.saved.configuration.assumptions[0],evidence_links:[{evidence_version_id:newer.evidence_version_id,relation:'challenges'}]});
-  expect(copy.configuration.inputs[0].provenance.evidence_version_ids).toEqual([newer.evidence_version_id]);
-  expect(copy.configuration.criteria[0].evidence_version_ids).toEqual([newer.evidence_version_id]);
-  expect(copy.configuration.general_context_evidence_version_ids).toEqual(data.saved.configuration.general_context_evidence_version_ids);
-  expect(copy.configuration.evidence_snapshots.map((e:any)=>e.evidence_version_id).sort()).toEqual([data.evidence.evidence_version_id,newer.evidence_version_id].sort());
+  await shots(page,'configuration-modified-refused');
   expect(await readOriginalHistory()).toEqual(original);
-  expect(copies.find((c:any)=>c.configuration.configuration_revision_id===data.saved.configuration.configuration_revision_id)).toEqual(data.saved);
-  await page.getByRole('region',{name:'Saved configuration',exact:true}).getByRole('button',{name:'View model assumptions',exact:true}).scrollIntoViewIfNeeded();
-  await shots(page,'configuration-modified-saved');
+  const all=(await (await page.request.get(`/api/1/studies/${data.sid}/configurations`)).json()).data;
+  expect(all.some((c:any)=>c.configuration.derivation?.source_run_id===data.rid)).toBe(false);
+  expect(all.find((c:any)=>c.configuration.configuration_revision_id===data.saved.configuration.configuration_revision_id)).toEqual(data.saved);
 });
 
 test('@ae-configuration configuration lists its own assumptions and links once to the model assumptions',async({page,request})=>{
@@ -949,32 +1015,36 @@ test('@ae-configuration configuration lists its own assumptions and links once t
   const own=saved.getByRole('region',{name:'Configuration assumptions',exact:true});
   await expect(own.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
   const item=own.getByRole('article').filter({hasText:'Retained configuration condition'});
-  await expect(item.getByText('Challenges',{exact:true})).toBeVisible();
-  await expect(item.getByRole('heading',{name:'Retained calibration E1',exact:true})).toBeVisible();
-  await expect(item.getByRole('button',{name:'View evidence',exact:true})).toBeVisible();
+  await expect(item.getByText('Conflicting evidence',{exact:true})).toBeVisible();
+  await expect(item.getByRole('heading',{name:'Retained calibration E1',exact:true})).toHaveCount(0);
+  await expect(item.getByRole('button',{name:'View evidence (1)',exact:true})).toBeVisible();
   await expect(own.getByText('Configuration',{exact:true}).filter({visible:true})).toHaveCount(0);
   // One line for the model's assumptions; they are not repeated in the configuration.
-  const line=saved.getByText('Model assumptions: '+count+' in Model version '+id8,{exact:true});
+  const line=saved.getByText('Model assumptions: '+count+' in the model',{exact:true});
   await expect(line).toBeVisible();
   await expect(saved.getByRole('heading',{name:'Model assumptions · read-only',exact:true})).toHaveCount(0);
   for(const statement of ['Retained model condition','Retained component condition'])await expect(saved.getByText(statement,{exact:true}).filter({visible:true})).toHaveCount(0);
   // Configuration notes stay in the record (Record details, exports) but are not shown to readers.
   expect(data.saved.configuration.context_snapshot.notes).toEqual(['Retained note with\nits own line break','Separate retained note']);
   await expect(saved.getByText('Separate retained note',{exact:true})).toHaveCount(0);
-  await saved.getByRole('button',{name:'Record details',exact:true}).click();
+  await saved.getByRole('button',{name:'Configuration record details',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Configuration record',exact:true})).toContainText('Separate retained note');
   await page.keyboard.press('Escape');
   await s3Shots(page,'s3-configuration-assumptions',own);
   const dialog=await viewModelAssumptions(page,saved);
-  // Nothing selected shows the model's own assumptions; a component shows its own.
-  const details=dialog.getByRole('region',{name:'Selection inspector',exact:true});
-  await expect(details.getByRole('region',{name:'Model assumptions',exact:true})).toContainText('Retained model condition');
-  await expect(details.getByText('Supports',{exact:true}).first()).toBeVisible();
-  await dialog.getByRole('button',{name:'Inspect component '+component,exact:true}).first().click();
+  // The model explanation shows the model's own assumptions; a selected component shows its own.
+  const modelOwned=dialog.getByRole('region',{name:'Model details',exact:true}).getByRole('region',{name:'Model assumptions',exact:true});
+  await expect(modelOwned).toContainText('Retained model condition');
+  await expectEvidence(page, modelOwned, 'Retained calibration E1', 'Supports');
+  const details=dialog.getByRole('region',{name:'Selection inspector',exact:true}).filter({visible:true});
+  await dialog.getByRole('tab',{name:'Diagram',exact:true}).click();
+  await dialog.locator('[data-instance="'+data.saved.model_snapshot.assumptions[1].owner.instance_id+'"]').first().click();
   await expect(details.getByRole('heading',{name:component,exact:true})).toBeVisible();
   await expect(details.getByRole('region',{name:'Component · '+component+' assumptions',exact:true})).toContainText('Retained component condition');
-  await expect(details.getByRole('heading',{name:'What it computes',exact:true})).toBeVisible();
-  await expect(details.getByRole('heading',{name:'Why',exact:true})).toBeVisible();
+  await expect(details.getByRole('heading', { name: 'Method context', exact: true })).toHaveCount(0);
+  await expect(details.getByRole('heading', { name: 'Why this method', exact: true })).toHaveCount(
+    0,
+  );
   await expect(dialog.getByRole('table',{name:'Ports'})).toHaveCount(0);
   await expect(dialog.getByRole('button',{name:'Add assumption',exact:true})).toHaveCount(0);
   await s3Shots(page,'s3-configuration-model-assumptions-dialog');
@@ -984,52 +1054,54 @@ test('@ae-configuration configuration lists its own assumptions and links once t
   await page.goto('/ui/#'+new URLSearchParams({v:'1',study:data.sid,view:'runs',run:data.rid}));
   await page.getByRole('tab',{name:'Configuration',exact:true}).click();
   const retained=page.getByRole('tabpanel',{name:'Configuration',exact:true});
-  await expect(retained.getByText('Model assumptions: '+count+' in Model version '+id8,{exact:true})).toBeVisible();
+  await expect(retained.getByText('Model assumptions: '+count+' in the model',{exact:true})).toBeVisible();
   await expect(retained.getByText('Retained model condition',{exact:true})).toBeHidden();
   await expect(retained.getByText('Separate retained note',{exact:true})).toHaveCount(0);
-  await page.getByRole('tab',{name:'Evidence',exact:true}).click();
-  await expect(page.getByRole('tabpanel',{name:'Evidence',exact:true}).getByRole('region',{name:'Model assumptions',exact:true})).toContainText('Retained model condition');
+  await page.getByRole('tab',{name:'Model',exact:true}).click();
+  await page.getByRole('tabpanel',{name:'Model',exact:true}).getByRole('tab',{name:'Model explanation',exact:true}).click();
+  await expect(page.getByRole('tabpanel',{name:'Model',exact:true}).getByRole('region',{name:'Model assumptions',exact:true}).filter({visible:true})).toContainText('Retained model condition');
 });
 
-for(const kind of ['legacy','legacy-residual'])test('@ae-configuration '+kind+' ordinary copy ownership and Seed1 remain explicit',async({page,request})=>{
+// Retained configurations that carry criteria stay readable; new configurations are version 6
+// on a Model4 revision, so neither a copy onto their earlier model format nor their Seed1 saves.
+for(const kind of ['legacy','legacy-residual'])test('@ae-configuration '+kind+' ordinary copy ownership stays explicit; copy and Seed1 are refused before any save',async({page,request})=>{
   const data=await configurationCase(request,kind);await writer(request);
+  const before=await configurationCounts(request);
   await openConfigurationLink(page,data);
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   if(kind==='legacy-residual'){
     await expect(page.getByRole('alert')).toContainText('older configuration has evidence without explicit attachment ownership');
     await shots(page,'configuration-legacy-refusal');
   }else{
     await page.getByLabel('Configuration name',{exact:true}).fill('Explicit legacy copy');
     await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-    await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
-    const saved=(await (await page.request.get(`/api/1/studies/${data.sid}/configurations`)).json()).data.find((c:any)=>c.configuration.name==='Explicit legacy copy');
-    expect(saved.configuration.schema_version).toBe('3');expect(saved.configuration.assumptions).toEqual([]);expect(saved.configuration.general_context_evidence_version_ids).toEqual([]);
-    expect(saved.configuration.inputs).toEqual(data.saved.configuration.inputs);expect(saved.configuration.evidence_snapshots.map((e:any)=>e.evidence_version_id)).toEqual([data.evidence.evidence_version_id]);
+    await expect(page.getByRole('alert').filter({hasText:'This model version uses an earlier format. Save a new version of the model to configure it.'})).toBeVisible();
+    await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Explicit legacy copy');
+    await page.getByRole('button',{name:'Discard configuration changes',exact:true}).click();
   }
   await page.goto('/ui/#'+new URLSearchParams({v:'1',study:data.sid,view:'runs',run:data.rid}));
   await page.getByRole('button',{name:'Create modified run',exact:true}).click();
   const seed=(await (await page.request.get(`/api/1/studies/${data.sid}/runs/${data.rid}/modified-run-seed`)).json()).data;
   expect(seed.schema_version).toBe('1');
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  await page.getByRole('dialog',{name:'Review modified run',exact:true}).getByRole('button',{name:'Save modified configuration',exact:true}).click();
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByRole('alert').filter({hasText:/earlier format|configured before criteria moved to the study brief/})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'Review modified run',exact:true})).toHaveCount(0);
+  expect(await configurationCounts(request)).toEqual(before);
   const all=(await (await page.request.get(`/api/1/studies/${data.sid}/configurations`)).json()).data;
-  const modified=all.find((c:any)=>c.configuration.derivation?.source_run_id===data.rid);
-  expect(modified.configuration.schema_version).toBe('2');expect(modified.configuration.evidence_snapshots).toEqual(data.saved.configuration.evidence_snapshots);
   expect(all.find((c:any)=>c.configuration.configuration_revision_id===data.saved.configuration.configuration_revision_id)).toEqual(data.saved);
 });
 
 for(const unresolved of [false,true])test('@ae-configuration ordinary rebind '+(unresolved?'blocks unresolved closure without allocation':'reviews exact assumption changes'),async({page,request})=>{
-  const data=await configurationCase(request,unresolved?'unresolved':'current'), library=await writer(request);
+  const data=await configurationCase(request,unresolved?'criteria-free-unresolved':'criteria-free'), library=await writer(request);
   if(!unresolved){
     const newer=await library.revise(data.evidence,'Rebound calibration E2');
     const draftPath=`/api/1/studies/${data.sid}/models/${data.mid}`;
     const draft=(await (await request.get(draftPath)).json()).data;
-    const response=await request.post(draftPath+'/edits',{headers:library.headers,data:{schema_version:'2',command_id:crypto.randomUUID(),expected_revision:draft.draft_revision,edits:[{kind:'update_assumption',assumption_id:draft.assumptions[0].assumption_id,statement:'Revised model condition',evidence_links:[{evidence_version_id:newer.evidence_version_id,relation:'context'}]}]}});
+    const response=await request.post(draftPath+'/edits',{headers:library.headers,data:{schema_version:'4',command_id:crypto.randomUUID(),expected_revision:draft.draft_revision,edits:[{kind:'update_assumption',assumption_id:draft.assumptions[0].assumption_id,statement:'Revised model condition',evidence_links:[{evidence_version_id:newer.evidence_version_id,relation:'context'}]}]}});
     expect(response.status()).toBe(200);
   }
   await openConfigurationLink(page,data);
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Preserved rebind draft');
   await page.getByRole('button',{name:'Save model version',exact:true}).click();
   const review=page.getByRole('dialog',{name:'Review model binding',exact:true});
@@ -1040,7 +1112,7 @@ for(const unresolved of [false,true])test('@ae-configuration ordinary rebind '+(
   await shots(page,unresolved?'configuration-rebind-unresolved':'configuration-rebind');
   await review.getByRole('button',{name:'Keep current binding',exact:true}).click();
   const kept=await viewModelAssumptions(page,page.locator('#configuration'));
-  await expect(kept.getByText('Retained model condition',{exact:true})).toBeVisible();
+  await expect(kept.getByText('Retained model condition',{exact:true}).filter({visible:true})).toBeVisible();
   await kept.getByRole('button',{name:'Done',exact:true}).click();
   await page.getByRole('button',{name:'Save model version',exact:true}).click();
   await review.getByRole('button',{name:'Use reviewed model version',exact:true}).click();
@@ -1052,7 +1124,7 @@ for(const unresolved of [false,true])test('@ae-configuration ordinary rebind '+(
     // A caller bypassing disabled UI still cannot allocate a configuration.
     const snapshot=(await (await request.get(`/api/1/studies/${data.sid}/models/${data.mid}/revisions`)).json()).data[0];
     const original=data.saved.configuration;
-    const candidate={schema_version:'3',study_id:data.sid,model_id:data.mid,model_revision_id:snapshot.model_revision_id,name:'Unresolved attempt',inputs:original.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:i.provenance})),criteria:original.criteria,numerical:original.numerical,context_source:{kind:'current_study',expected_study_revision:(await (await request.get(`/api/1/studies/${data.sid}`)).json()).data.revision},notes:[],assumptions:original.assumptions,general_context_evidence_version_ids:original.general_context_evidence_version_ids,derivation:null};
+    const candidate={schema_version:'6',study_id:data.sid,model_id:data.mid,model_revision_id:snapshot.model_revision_id,name:'Unresolved attempt',inputs:original.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:i.provenance})),numerical:original.numerical,context_source:{kind:'current_study',expected_study_revision:(await (await request.get(`/api/1/studies/${data.sid}`)).json()).data.revision},notes:[],assumptions:original.assumptions,general_context_evidence_version_ids:original.general_context_evidence_version_ids,derivation:null};
     for(const commit of [false,true]){
       const response=await request.post(`/api/1/studies/${data.sid}/configurations`+(commit?'':'/preview'),{headers:library.headers,data:commit?{command_id:crypto.randomUUID(),configuration_id:null,expected_revision:null,configuration:candidate,expected_preview_digest:'0'.repeat(64)}:candidate});
       expect(response.status()).toBe(422);expect((await response.json()).error.fields.some((f:any)=>f.code==='unresolved_evidence')).toBe(true);
@@ -1061,22 +1133,22 @@ for(const unresolved of [false,true])test('@ae-configuration ordinary rebind '+(
     await shots(page,'configuration-unresolved-preserved');
   }else{
     await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-    await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+    await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
     const rebound=await viewModelAssumptions(page,page.getByRole('region',{name:'Saved configuration',exact:true}));
-    await expect(rebound.getByText('Revised model condition',{exact:true})).toBeVisible();
+    await expect(rebound.getByText('Revised model condition',{exact:true}).filter({visible:true})).toBeVisible();
   }
   expect((await (await request.get(`/api/1/studies/${data.sid}/configurations/${data.saved.configuration.configuration_revision_id}`)).json()).data).toEqual(data.saved);
 });
 
-test('@ae-configuration outage stale context and revoked replacement preserve fields and clear evidence',async({page,request})=>{
-  const data=await configurationCase(request),library=await writer(request);
+test('@ae-configuration outage stale context and revoked replacement preserve copied fields and clear evidence',async({page,request})=>{
+  const data=await configurationCase(request,'criteria-free'),library=await writer(request);
   await library.revise(data.evidence,'Revocation target E2');
-  await openConfigurationLink(page,data,true);
-  await page.getByRole('button',{name:'Create modified run',exact:true}).click();
+  await openConfigurationLink(page,data);
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Preserved modified fields');
-  await page.getByRole('button',{name:'Edit context',exact:true}).click();
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
   await page.getByLabel('Description',{exact:true}).fill('Local context survives refresh');
-  await page.getByRole('dialog',{name:'Edit context',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+  await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
   await page.getByLabel('linear · x value',{exact:true}).fill('7');
   const before=await configurationCounts(request);
   await request.post('/fixture/configuration-control',{data:{offline:true}});
@@ -1094,19 +1166,20 @@ test('@ae-configuration outage stale context and revoked replacement preserve fi
   await shots(page,'configuration-outage-preserved');
   await request.post('/fixture/configuration-control',{data:{offline:false}});
   await request.post('/fixture/configuration-control',{data:{stale_study:true}});
+  // A stale study revision refuses the save without allocation and keeps every local field.
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  await expect(page.getByRole('alert')).toContainText('Study context changed. Your edits are preserved');
-  await expect(page.getByRole('button',{name:'Refresh study revision',exact:true})).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText('Your edits are preserved');
   await page.getByRole('alert').scrollIntoViewIfNeeded();
   await shots(page,'configuration-stale-preserved');
-  await page.getByRole('button',{name:'Refresh study revision',exact:true}).click();
-  await expect(page.locator('#configuration .configuration-context')).not.toContainText('Concurrent study context');
-  await expect(page.locator('#configuration .configuration-context')).toContainText('Local context survives refresh');
-  await expect(page.getByRole('radio',{name:/context/})).toHaveCount(0);
+  expect(await configurationCounts(request)).toEqual(before);
+  await page.getByRole('button',{name:'Input tools',exact:true}).click();
+  await expect(page.getByLabel('Description',{exact:true})).toHaveValue('Local context survives refresh');
+  await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
   await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue('Preserved modified fields');
+  await expect(page.getByLabel('linear · x value',{exact:true})).toHaveValue('7');
   const assumptions=page.getByRole('region',{name:'Configuration assumptions',exact:true});
   await assumptions.getByRole('button',{name:'Edit assumption: Retained configuration condition',exact:true}).click();
-  await page.getByRole('button',{name:'Change version',exact:true}).click();
+  await changeVersion(page);
   await page.getByRole('button',{name:/^Choose Revocation target E2/}).click();
   await request.post('/fixture/membership',{data:{enabled:false}});
   try{
@@ -1124,10 +1197,12 @@ test('@ae-configuration outage stale context and revoked replacement preserve fi
 });
 
 test('@ae-configuration same model owner switch rejects late evidence and resets local editor',async({page,request})=>{
-  const data=await configurationCase(request),library=await writer(request);
-  const candidate=(await (await request.get(`/api/1/studies/${data.sid}/runs/${data.rid}/modified-run-seed`)).json()).data.configuration;
-  candidate.name='Second same-model owner';candidate.derivation=null;candidate.context_source={kind:'current_study',expected_study_revision:(await (await request.get(`/api/1/studies/${data.sid}`)).json()).data.revision};
-  candidate.assumptions=[{assumption_id:crypto.randomUUID(),statement:'Independent second owner',evidence_links:[]}];
+  const data=await configurationCase(request,'criteria-free'),library=await writer(request),source=data.saved.configuration;
+  // A second configuration 6 of the same model version, written through the public API.
+  const candidate={schema_version:'6',study_id:data.sid,model_id:source.model_id,model_revision_id:source.model_revision_id,name:'Second same-model owner',
+    inputs:source.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:i.provenance})),numerical:source.numerical,
+    context_source:{kind:'current_study',expected_study_revision:(await (await request.get(`/api/1/studies/${data.sid}`)).json()).data.revision},
+    notes:[],derivation:null,assumptions:[{assumption_id:crypto.randomUUID(),statement:'Independent second owner',evidence_links:[]}],general_context_evidence_version_ids:[]};
   const preview=await request.post(`/api/1/studies/${data.sid}/configurations/preview`,{headers:library.headers,data:candidate});expect(preview.status()).toBe(200);
   const saved=await request.post(`/api/1/studies/${data.sid}/configurations`,{headers:library.headers,data:{command_id:crypto.randomUUID(),expected_revision:null,configuration_id:null,configuration:candidate,expected_preview_digest:(await preview.json()).data.candidate_digest}});expect(saved.status()).toBe(201);
   const second=(await saved.json()).data.configuration.configuration_revision_id;
@@ -1138,7 +1213,7 @@ test('@ae-configuration same model owner switch rejects late evidence and resets
   await page.getByRole('button',{name:'Edit assumption: Retained configuration condition',exact:true}).click();
   let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let requested!:()=>void;const observed=new Promise<void>(resolve=>requested=resolve);
   await page.route('**/evidence-families/*/versions?*',async route=>{const response=await route.fetch();requested();await held;await route.fulfill({response});});
-  await page.getByRole('button',{name:'Change version',exact:true}).click();await observed;
+  await page.getByRole('dialog',{name:'Edit assumption',exact:true}).getByRole('button',{name:'View evidence (1)',exact:true}).click();await page.getByRole('button',{name:'Change version',exact:true}).click();await observed;
   // The fixture invokes the production handle to exercise an imperative same-model
   // owner transition while the old owner's request remains queued.
   await page.evaluate(id=>(window as any).aeConfiguration.copy(id),second);
@@ -1166,7 +1241,7 @@ test('@ae-integration run evidence groups exact retained uses during model outag
     expect(before).toMatchObject({history_schema_version:'2',bundle:{schema_version:'4'},configuration:data.saved.configuration,model_snapshot:data.saved.model_snapshot,evidence:[data.evidence]});
     let liveReads=0;page.on('request',r=>{if(/evidence-families|assumption-evidence/.test(r.url()))liveReads++;});
     const heading=page.locator('.run-heading');
-    for(const name of ['Results','Model','Configuration','Evidence']) {
+    for(const name of ['Results','Model','Configuration']) {
       await page.getByRole('tab',{name,exact:true}).click();
       const recordAction=heading.getByRole('button',{name:'Record details',exact:true});
       await expect(recordAction).toBeVisible();await recordAction.click();
@@ -1183,10 +1258,10 @@ test('@ae-integration run evidence groups exact retained uses during model outag
     expect(await context.evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('#run-panel-2 .configuration-inputs')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     await expect(retained.locator('.hf-criterion-record')).toHaveCount(before.configuration.criteria.length);
     expect(await retained.locator('.hf-criterion-record').first().evaluate(el=>parseFloat(getComputedStyle(el).paddingLeft))).toBeGreaterThan(0);
-    await retained.getByRole('button',{name:'Record details',exact:true}).click();
+    await retained.getByRole('button',{name:'Configuration record details',exact:true}).click();
     await expect(page.getByRole('dialog',{name:'Configuration record',exact:true})).toContainText(before.configuration.configuration_revision_id);
     await page.keyboard.press('Escape');
-    await expect(retained.getByRole('button',{name:'Record details',exact:true})).toBeFocused();
+    await expect(retained.getByRole('button',{name:'Configuration record details',exact:true})).toBeFocused();
     await retained.locator('.configuration-criterion').scrollIntoViewIfNeeded();await shots(page,'run-coherence-criteria');
     await page.getByRole('tab',{name:'Evidence',exact:true}).click();
     const evidence=page.getByRole('tabpanel',{name:'Evidence',exact:true});
@@ -1207,11 +1282,12 @@ test('@ae-integration run evidence groups exact retained uses during model outag
     await evidence.getByRole('region',{name:'Model assumptions',exact:true}).scrollIntoViewIfNeeded();await shots(page,'run-evidence-model');
     await evidence.getByRole('region',{name:'Configuration assumptions',exact:true}).scrollIntoViewIfNeeded();await shots(page,'run-evidence-configuration');
     await evidence.getByRole('region',{name:'General context',exact:true}).scrollIntoViewIfNeeded();await shots(page,'run-evidence-context');
-    await evidence.getByRole('region',{name:'General context',exact:true}).getByRole('button',{name:'View evidence',exact:true}).click();
-    const detail=page.getByRole('dialog',{name:'Evidence detail',exact:true});
+    await evidence.getByRole('region',{name:'General context',exact:true}).getByRole('button',{name:'View evidence (1)',exact:true}).click();
+    const detail=page.getByRole('region', { name: 'Evidence details', exact: true });
     await expect(detail).toContainText(data.evidence.evidence_version_id.slice(0,8));
     await expect(detail.getByRole('button',{name:'Versions',exact:true})).toHaveCount(0);
-    const downloaded=page.waitForEvent('download');await detail.getByRole('button',{name:'Download evidence record',exact:true}).click();
+    await detail.getByRole('button',{name:'Evidence record details',exact:true}).click();
+    const downloaded=page.waitForEvent('download');await page.getByRole('dialog',{name:'Evidence record',exact:true}).getByRole('button',{name:'Download evidence record',exact:true}).click();
     expect(JSON.parse(await readFile((await (await downloaded).path())!,'utf8'))).toEqual(data.evidence);
     await shots(page,'run-evidence-detail');await page.keyboard.press('Escape');
     const files=evidence.getByRole('region',{name:'Run files',exact:true});
@@ -1232,100 +1308,249 @@ test('@ae-integration run evidence groups exact retained uses during model outag
 
 
 test('@ae-integration actual Package2 export import rejects corrupt files and requires explicit citation repair before configuration',async({page,request})=>{
-  const data=await configurationCase(request,'unresolved'), library=await writer(request);
-  const props=await openModel(page);
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const draftPath=`/api/1/studies/${data.sid}/models/${data.mid}`;
-  await expect.poll(async()=>(await (await request.get(draftPath+'/revisions')).json()).data.length).toBeGreaterThan(1);
-  const selected=(await (await request.get(draftPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Model version',{exact:true}).selectOption(selected.model_revision_id);
-  await page.getByRole('button',{name:'Model actions',exact:true}).click();
-  await page.getByRole('button',{name:'Export',exact:true}).click();
-  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download portable model record',exact:true}).click();
-  const raw=await readFile((await (await download).path())!,'utf8'),pkg=JSON.parse(raw);
+  const data = await configurationCase(request, 'unresolved'),
+    library = await writer(request);
+  const props = await openModel(page);
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const draftPath = `/api/1/studies/${data.sid}/models/${data.mid}`;
+  await expect
+    .poll(async () => (await (await request.get(draftPath + '/revisions')).json()).data.length)
+    .toBeGreaterThan(1);
+  const selected = (await (await request.get(draftPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Model version', { exact: true }).selectOption(selected.model_revision_id);
+  await page.getByRole('button', { name: 'Model actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Export model', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download portable model record', exact: true }).click();
+  const raw = await readFile((await (await download).path())!, 'utf8'),
+    pkg = JSON.parse(raw);
   expect(pkg.schema_version).toBe('2');
-  const original=pkg.revisions.find((r:any)=>r.model_revision_id===pkg.model_revision_id);
-  expect(original.assumptions[0].evidence_links).toHaveLength(1);expect(original.source_files.length).toBeGreaterThan(0);
-  await page.keyboard.press('Escape');await page.keyboard.press('Escape');
-  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Home',exact:true}).click();
-  await page.getByRole('button',{name:'New study',exact:true}).click();await page.getByLabel('New study name').fill('Isolated Package2 destination');
-  await page.getByRole('button',{name:'Create study',exact:true}).click();
-  await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Models',exact:true}).click();
-  const sid=new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
-  await page.getByRole('button',{name:'Import',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Import',exact:true});
-  let posts=0;page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/model-imports'))posts++;});
-  const canonical=(v:any):string=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
-  const sign=(v:any)=>{delete v.digest;v.digest=createHash('sha256').update(canonical(v)).digest('hex');};
-  const rejected=[];
-  for(const kind of ['pairing','revision-version','package-digest','revision-digest','source','size']){
-    const bad=structuredClone(pkg),root=bad.revisions.find((r:any)=>r.model_revision_id===bad.model_revision_id);
-    if(kind==='pairing')bad.schema_version='1';
-    if(kind==='revision-version')root.schema_version='99';
-    if(kind==='revision-digest')root.digest='0'.repeat(64);
-    if(kind==='source'){root.source_files[0].bytes=Buffer.from('corrupt source').toString('base64');sign(root);}
-    sign(bad);if(kind==='package-digest')bad.digest='0'.repeat(64);
-    const buffer=kind==='size'?Buffer.alloc(2*1024*1024,32):Buffer.from(JSON.stringify(bad));
-    await dialog.getByLabel('Portable model record file').setInputFiles({name:kind+'.json',mimeType:'application/json',buffer});
-    if(kind!=='size')await dialog.getByRole('button',{name:'Preview model import',exact:true}).click();
-    await expect(dialog.getByRole('alert')).toBeVisible();await expect(dialog.getByRole('button',{name:'Import model',exact:true})).toHaveCount(0);
-    rejected.push(kind);expect(posts).toBe(0);
+  const original = pkg.revisions.find((r: any) => r.model_revision_id === pkg.model_revision_id);
+  expect(original.assumptions[0].evidence_links).toHaveLength(1);
+  expect(original.source_files.length).toBeGreaterThan(0);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('button', { name: 'Home', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'New study', exact: true }).click();
+  await page.getByLabel('New study name').fill('Isolated Package2 destination');
+  await page.getByRole('button', { name: 'Create study', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Workspace sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
+  const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
+  await page.getByRole('button', { name: 'Import model', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import model', exact: true });
+  let posts = 0;
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().endsWith('/model-imports')) posts++;
+  });
+  const canonical = (v: any): string =>
+    v === null || typeof v !== 'object'
+      ? JSON.stringify(v)
+      : Array.isArray(v)
+        ? '[' + v.map(canonical).join(',') + ']'
+        : '{' +
+          Object.keys(v)
+            .sort()
+            .map((k) => JSON.stringify(k) + ':' + canonical(v[k]))
+            .join(',') +
+          '}';
+  const sign = (v: any) => {
+    delete v.digest;
+    v.digest = createHash('sha256').update(canonical(v)).digest('hex');
+  };
+  const rejected = [];
+  for (const kind of [
+    'pairing',
+    'revision-version',
+    'package-digest',
+    'revision-digest',
+    'source',
+    'size',
+  ]) {
+    const bad = structuredClone(pkg),
+      root = bad.revisions.find((r: any) => r.model_revision_id === bad.model_revision_id);
+    if (kind === 'pairing') bad.schema_version = '1';
+    if (kind === 'revision-version') root.schema_version = '99';
+    if (kind === 'revision-digest') root.digest = '0'.repeat(64);
+    if (kind === 'source') {
+      root.source_files[0].bytes = Buffer.from('corrupt source').toString('base64');
+      sign(root);
+    }
+    sign(bad);
+    if (kind === 'package-digest') bad.digest = '0'.repeat(64);
+    const buffer =
+      kind === 'size' ? Buffer.alloc(2 * 1024 * 1024, 32) : Buffer.from(JSON.stringify(bad));
+    await dialog
+      .getByLabel('Portable model record file')
+      .setInputFiles({ name: kind + '.json', mimeType: 'application/json', buffer });
+    if (kind !== 'size')
+      await dialog.getByRole('button', { name: 'Preview model import', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Import model', exact: true })).toHaveCount(0);
+    rejected.push(kind);
+    expect(posts).toBe(0);
   }
-  await shots(page,'package-rejected');
-  await dialog.getByLabel('Portable model record file').setInputFiles({name:'exact-package.json',mimeType:'application/json',buffer:Buffer.from(raw)});
-  await dialog.getByRole('button',{name:'Preview model import',exact:true}).click();
-  await expect(dialog.getByRole('region',{name:'Model import preview'})).toContainText('Ready to import');
-  await shots(page,'package-import-preview');
-  const importing=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/model-imports'));
-  await dialog.getByRole('button',{name:'Import model',exact:true}).click();
-  const importedResponse=await importing;expect(importedResponse.status()).toBe(200);
-  const imported=(await importedResponse.json()).data;
-  expect(imported.assumptions).toEqual(original.assumptions);expect(imported.source_files).toEqual(original.source_files);expect(posts).toBe(1);
-  const importedPath=`/api/1/studies/${sid}/models/${data.mid}`;
-  await expect(page.getByRole('button',{name:'Model actions',exact:true})).toBeVisible();
-  const assumptions=await modelDetails(page);
-  await expect(assumptions).toContainText('Evidence unavailable');await expect(assumptions).toContainText(original.assumptions[0].evidence_links[0].evidence_version_id);
-  await shots(page,'package-unresolved-assumption');
-  await page.getByLabel('Model version',{exact:true}).selectOption(selected.model_revision_id);
-  await page.getByRole('button',{name:'Create configuration',exact:true}).click();
-  await expect(page.getByRole('alert')).toContainText('This evidence reference could not be resolved.');
-  await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeDisabled();await shots(page,'package-blocked-configuration');
-  const before=await configurationCounts(request),saved=data.saved.configuration;
-  const candidate={schema_version:'3',study_id:sid,model_id:data.mid,model_revision_id:selected.model_revision_id,name:'Imported unresolved',inputs:saved.inputs.map((i:any)=>({kind:'literal',target:i.target,value:i.value,units:i.units,provenance:{...i.provenance,evidence_version_ids:[]}})),criteria:[],numerical:saved.numerical,context_source:{kind:'current_study',expected_study_revision:(await (await request.get('/api/1/studies/'+sid)).json()).data.revision},notes:[],assumptions:[],general_context_evidence_version_ids:[],derivation:null};
-  for(const commit of [false,true]){
-    const response=await request.post(`/api/1/studies/${sid}/configurations`+(commit?'':'/preview'),{headers:library.headers,data:commit?{command_id:crypto.randomUUID(),configuration_id:null,expected_revision:null,configuration:candidate,expected_preview_digest:'0'.repeat(64)}:candidate});
-    expect(response.status()).toBe(422);expect((await response.json()).error.fields.some((f:any)=>f.code==='unresolved_evidence')).toBe(true);
+  await shots(page, 'package-rejected');
+  await dialog
+    .getByLabel('Portable model record file')
+    .setInputFiles({
+      name: 'exact-package.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(raw),
+    });
+  await dialog.getByRole('button', { name: 'Preview model import', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Model import preview' })).toContainText(
+    'Ready to import',
+  );
+  await shots(page, 'package-import-preview');
+  const importing = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/model-imports'),
+  );
+  await dialog.getByRole('button', { name: 'Import model', exact: true }).click();
+  const importedResponse = await importing;
+  expect(importedResponse.status()).toBe(200);
+  const imported = (await importedResponse.json()).data;
+  expect(imported.assumptions).toEqual(original.assumptions);
+  expect(imported.source_files).toEqual(original.source_files);
+  expect(posts).toBe(1);
+  const importedPath = `/api/1/studies/${sid}/models/${data.mid}`;
+  await expect(page.getByRole('button', { name: 'Model actions', exact: true })).toBeVisible();
+  const assumptions = await modelDetails(page);
+  await expect(assumptions).toContainText('Evidence unavailable');
+  await expect(assumptions).toContainText(
+    original.assumptions[0].evidence_links[0].evidence_version_id,
+  );
+  await shots(page, 'package-unresolved-assumption');
+  await page.getByLabel('Model version', { exact: true }).selectOption(selected.model_revision_id);
+  await page.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'This evidence reference could not be resolved.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Save configuration', exact: true }),
+  ).toBeDisabled();
+  await shots(page, 'package-blocked-configuration');
+  const before = await configurationCounts(request),
+    saved = data.saved.configuration;
+  const candidate = {
+    schema_version: '3',
+    study_id: sid,
+    model_id: data.mid,
+    model_revision_id: selected.model_revision_id,
+    name: 'Imported unresolved',
+    inputs: saved.inputs.map((i: any) => ({
+      kind: 'literal',
+      target: i.target,
+      value: i.value,
+      units: i.units,
+      provenance: { ...i.provenance, evidence_version_ids: [] },
+    })),
+    criteria: [],
+    numerical: saved.numerical,
+    context_source: {
+      kind: 'current_study',
+      expected_study_revision: (await (await request.get('/api/1/studies/' + sid)).json()).data
+        .revision,
+    },
+    notes: [],
+    assumptions: [],
+    general_context_evidence_version_ids: [],
+    derivation: null,
+  };
+  for (const commit of [false, true]) {
+    const response = await request.post(
+      `/api/1/studies/${sid}/configurations` + (commit ? '' : '/preview'),
+      {
+        headers: library.headers,
+        data: commit
+          ? {
+              command_id: crypto.randomUUID(),
+              configuration_id: null,
+              expected_revision: null,
+              configuration: candidate,
+              expected_preview_digest: '0'.repeat(64),
+            }
+          : candidate,
+      },
+    );
+    expect(response.status()).toBe(422);
+    expect(
+      (await response.json()).error.fields.some((f: any) => f.code === 'unresolved_evidence'),
+    ).toBe(true);
   }
   expect(await configurationCounts(request)).toEqual(before);
   // Leave the unsaved configuration and repair the imported owner explicitly.
-  await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Models',exact:true}).click();
-  const dirty=page.getByRole('dialog',{name:'Unsaved changes',exact:true});if(await dirty.isVisible())await dirty.getByRole('button',{name:'Discard changes',exact:true}).click();
+  await page
+    .getByRole('navigation', { name: 'Workspace sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
+  const dirty = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
+  if (await dirty.isVisible())
+    await dirty.getByRole('button', { name: 'Discard changes', exact: true }).click();
   await modelDetails(page);
-  await assumptions.getByRole('button',{name:'Edit assumption: '+original.assumptions[0].statement,exact:true}).click();
-  await page.getByRole('dialog',{name:'Edit assumption',exact:true}).getByRole('button',{name:'Remove attachment',exact:true}).click();
-  await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await assumptions.getByRole('button',{name:'Save model draft',exact:true}).click();await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByRole('dialog',{name:'Preview changes',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const draft=(await (await request.get(importedPath)).json()).data;
-  expect(draft.assumptions[0].evidence_links).toEqual([]);expect(draft.source_files).toEqual(original.source_files);
-  await expect.poll(async()=>(await (await request.get(importedPath+'/revisions')).json()).data[0].model_revision_id).not.toBe(selected.model_revision_id);
-  let repaired=(await (await request.get(importedPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Model version',{exact:true}).selectOption(repaired.model_revision_id);
-  await page.getByRole('button',{name:'Create configuration',exact:true}).click();
-  await page.getByRole('button',{name:'Save model version',exact:true}).click();
-  const binding=page.getByRole('dialog',{name:'Review model binding',exact:true});await expect(binding.getByRole('region',{name:'Model assumption changes',exact:true}).first()).toContainText('Evidence unavailable');
-  await binding.getByRole('button',{name:'Use reviewed model version',exact:true}).click();
-  repaired=(await (await request.get(importedPath+'/revisions')).json()).data[0];
-  await page.getByLabel('Configuration name',{exact:true}).fill('Explicitly repaired import');
-  for(const input of await page.locator('input[data-input-key]').all())await input.fill('2');
-  for(const provenance of await page.getByRole('textbox',{name:/ provenance$/}).all())await provenance.fill('Explicit input after repair');
-  await page.getByRole('button',{name:'Save configuration',exact:true}).click();await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
-  await shots(page,'package-repaired-saved');
-  const configs=await request.get(`/api/1/studies/${sid}/configurations`);expect(configs.status()).toBe(200);
-  const rows=(await configs.json()).data;expect(rows).toHaveLength(1);expect(rows[0].model_snapshot.model_revision_id).toBe(repaired.model_revision_id);expect(rows[0].model_snapshot.assumptions[0].evidence_links).toEqual([]);
-  const retained=await request.get(importedPath+'/revisions/'+selected.model_revision_id);expect(retained.status()).toBe(200);expect((await retained.json()).data).toEqual(original);
-  await writeFile(join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!,'evidence/package-roundtrip.json'),JSON.stringify({exported:pkg,imported,rejected,repaired:rows[0],sourceUnchanged:true,posts},null,2));
+  await assumptions
+    .getByRole('button', {
+      name: 'Edit assumption: ' + original.assumptions[0].statement,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Edit assumption', exact: true })
+    .getByRole('button', { name: 'Remove attachment', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Apply assumption', exact: true }).click();
+  await assumptions.getByRole('button', { name: 'Save model draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Preview changes', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const draft = (await (await request.get(importedPath)).json()).data;
+  expect(draft.assumptions[0].evidence_links).toEqual([]);
+  expect(draft.source_files).toEqual(original.source_files);
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(importedPath + '/revisions')).json()).data[0].model_revision_id,
+    )
+    .not.toBe(selected.model_revision_id);
+  let repaired = (await (await request.get(importedPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Model version', { exact: true }).selectOption(repaired.model_revision_id);
+  await page.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  await page.getByRole('button', { name: 'Save model version', exact: true }).click();
+  const binding = page.getByRole('dialog', { name: 'Review model binding', exact: true });
+  await expect(
+    binding.getByRole('region', { name: 'Model assumption changes', exact: true }).first(),
+  ).toContainText('Evidence unavailable');
+  await binding.getByRole('button', { name: 'Use reviewed model version', exact: true }).click();
+  repaired = (await (await request.get(importedPath + '/revisions')).json()).data[0];
+  await page.getByLabel('Configuration name', { exact: true }).fill('Explicitly repaired import');
+  for (const input of await page.locator('input[data-input-key]').all()) await input.fill('2');
+  for (const provenance of await page.getByRole('textbox', { name: / provenance$/ }).all())
+    await provenance.fill('Explicit input after repair');
+  await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
+  await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
+  await shots(page, 'package-repaired-saved');
+  const configs = await request.get(`/api/1/studies/${sid}/configurations`);
+  expect(configs.status()).toBe(200);
+  const rows = (await configs.json()).data;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].model_snapshot.model_revision_id).toBe(repaired.model_revision_id);
+  expect(rows[0].model_snapshot.assumptions[0].evidence_links).toEqual([]);
+  const retained = await request.get(importedPath + '/revisions/' + selected.model_revision_id);
+  expect(retained.status()).toBe(200);
+  expect((await retained.json()).data).toEqual(original);
+  await writeFile(
+    join(process.env.HYPRN_MVP_TEST_SCOPE_ROOT!, 'evidence/package-roundtrip.json'),
+    JSON.stringify(
+      { exported: pkg, imported, rejected, repaired: rows[0], sourceUnchanged: true, posts },
+      null,
+      2,
+    ),
+  );
 });
 
 test('@ae-integration genuine browser 200 percent assumption and evidence keyboard recovery',async({baseURL,request})=>{
@@ -1339,7 +1564,7 @@ test('@ae-integration genuine browser 200 percent assumption and evidence keyboa
   const bounds:any[]=[];
   try {
     const page=context.pages()[0]??await context.newPage();await openConfigurationLink(page,data);
-    await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+    await page.getByRole('button',{name:'Create new version',exact:true}).click();
     const cdp=await context.newCDPSession(page),info=await cdp.send('Browser.getWindowForTarget');
     await cdp.send('Browser.setWindowBounds',{windowId:info.windowId,bounds:{width:1440,height:1087}});
     const dimensions=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
@@ -1382,19 +1607,19 @@ test('@ae-integration genuine browser 200 percent assumption and evidence keyboa
     await activate(editor.getByRole('button',{name:'Add evidence',exact:true}));
     const picker=page.getByRole('dialog',{name:'Add evidence to Configuration assumption',exact:true});
     await page.getByLabel('Find evidence',{exact:true}).fill(data.evidence.title);
-    await chooseLoadedEvidence(page,data.evidence.title+' · Version '+data.evidence.evidence_version_id.slice(0,8),true);
+    await chooseLoadedEvidence(page,data.evidence.title,true);
     await page.getByLabel('Relationship',{exact:true}).selectOption('context');
     await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.emulateMedia({reducedMotion:'reduce'});
     await page.getByRole('button',{name:'Attach evidence',exact:true}).focus();await page.getByRole('button',{name:'Attach evidence',exact:true}).scrollIntoViewIfNeeded();
     await capture('ae-picker-200-dark');
     await activate(page.getByRole('button',{name:'Attach evidence',exact:true}));await expect(picker).toHaveCount(0);
     await expect(editor.getByRole('button',{name:'Add evidence',exact:true})).toBeFocused();
-    await activate(editor.getByRole('button',{name:'View evidence',exact:true}));
-    const detail=page.getByRole('dialog',{name:'Evidence detail',exact:true});await expect(detail).toContainText(data.evidence.content);
+    await activate(editor.getByRole('button',{name:'View evidence (1)',exact:true}));
+    const detail=page.getByRole('region', { name: 'Evidence details', exact: true });await expect(detail).toContainText(data.evidence.content);
     await tabCycle(detail,'nested evidence detail',8);
     await capture('ae-detail-200-dark');await page.keyboard.press('Escape');
     await writeFile(join(root,'evidence/ae-nested-escape.json'),JSON.stringify(await page.evaluate(()=>({active:document.activeElement?.outerHTML,dialogs:Array.from(document.querySelectorAll('dialog')).filter(d=>d.open).map(d=>({label:d.getAttribute('aria-label'),labelledby:d.getAttribute('aria-labelledby'),text:d.textContent?.slice(0,600)}))})),null,2));
-    await expect(editor.getByRole('button',{name:'View evidence',exact:true})).toBeFocused();
+    await expect(editor.getByRole('button',{name:'View evidence (1)',exact:true})).toBeFocused();
     await expect(editor.getByText('Discard unsaved assumption changes?',{exact:true})).toHaveCount(0);
     const library=await writer(request),newer=await library.revise(data.evidence,'Calibration selected at native 200 percent');
     await activate(editor.getByRole('button',{name:'Change version',exact:true}));
@@ -1407,12 +1632,12 @@ test('@ae-integration genuine browser 200 percent assumption and evidence keyboa
     await expect(replacement.getByRole('button',{name:'Apply version change',exact:true})).toBeEnabled();
     await tabCycle(replacement,'version selector with proposal',12);
     await capture('ae-version-200-dark');
-    await activate(proposal.getByRole('button',{name:'View evidence',exact:true}));
-    const proposedDetail=page.getByRole('dialog',{name:'Evidence detail',exact:true});await expect(proposedDetail).toContainText(newer.content);
+    await activate(proposal.getByRole('button',{name:'View evidence (1)',exact:true}));
+    const proposedDetail=page.getByRole('region', { name: 'Evidence details', exact: true });await expect(proposedDetail).toContainText(newer.content);
     await tabCycle(proposedDetail,'version nested detail',8);
     await capture('ae-version-detail-200-dark');await page.keyboard.press('Escape');
     await expect(proposedDetail).not.toBeVisible();await expect(replacement).toBeVisible();
-    await expect(proposal.getByRole('button',{name:'View evidence',exact:true})).toBeFocused();
+    await expect(proposal.getByRole('button',{name:'View evidence (1)',exact:true})).toBeFocused();
     await expect(replacement.getByRole('button',{name:new RegExp('^Choose '+newer.title)})).toHaveAttribute('aria-pressed','true');
     await expect(proposal).toContainText('From evidence version '+data.evidence.evidence_version_id+' to evidence version '+newer.evidence_version_id+'.');
     await capture('ae-version-preserved-200-dark');
@@ -1420,7 +1645,7 @@ test('@ae-integration genuine browser 200 percent assumption and evidence keyboa
     await expect(statement).toBeFocused();await expect(editor).toContainText(newer.title);
     await activate(editor.getByRole('button',{name:'Apply assumption',exact:true}));
     await expect(assumptions.getByRole('button',{name:'Add assumption',exact:true})).toBeFocused();
-    await activate(page.getByRole('button',{name:'Save configuration',exact:true}));await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+    await activate(page.getByRole('button',{name:'Save configuration',exact:true}));await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
     await assumptions.scrollIntoViewIfNeeded();await capture('ae-configuration-200-dark');
     await page.evaluate(()=>document.documentElement.dataset.theme='light');await capture('ae-configuration-200-light');
     await writeFile(join(root,'evidence/ae-zoom.json'),JSON.stringify({factor:await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tabId),viewport:page.viewportSize(),bounds},null,2));
@@ -1430,7 +1655,7 @@ test('@ae-integration genuine browser 200 percent assumption and evidence keyboa
 for(const saved of [true,false])test('@ae-integration uncertain configuration '+(saved?'returns original receipt':'retries identical original payload')+' without duplicate allocation',async({page,request})=>{
   const data=await configurationCase(request),library=await writer(request),before=await configurationCounts(request);
   await openConfigurationLink(page,data);
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill(saved?'Recovered acknowledged configuration':'Retried original configuration');
   const path=`/api/1/studies/${data.sid}/configurations`,bodies:any[]=[];
   await page.route('**'+path,async route=>{
@@ -1449,7 +1674,7 @@ for(const saved of [true,false])test('@ae-integration uncertain configuration '+
     await expect(page.getByRole('button',{name:'Retry original configuration command',exact:true})).toBeVisible();
     await page.getByRole('button',{name:'Retry original configuration command',exact:true}).click();
   }
-  await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+  await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
   expect(bodies).toHaveLength(saved?1:2);if(!saved)expect(bodies[1]).toEqual(bodies[0]);
   const after=await configurationCounts(request);expect(after.configurations).toBe(before.configurations+1);expect(after.configuration_families).toBe(before.configuration_families+1);expect(after.outbox).toBe(before.outbox);
   const altered=structuredClone(bodies[0]);altered.configuration.name='Changed replay must fail';
@@ -1500,9 +1725,9 @@ test('@ae-integration uncertain model assumption keeps modal draft and recovers 
   expect((await (await request.get(path)).json()).data).toEqual(draft);
 });
 
-test('@ae-configuration genuine 200 percent context numbered criteria and retained run actions',async({baseURL,request})=>{
+test('@ae-configuration genuine 200 percent context, criteria in the study brief and retained run actions',async({baseURL,request})=>{
   test.setTimeout(120000);
-  const data=await configurationCase(request),root=process.env.HYPRN_MVP_TEST_SCOPE_ROOT!;
+  const data=await configurationCase(request,'criteria-free'),root=process.env.HYPRN_MVP_TEST_SCOPE_ROOT!;
   const extension=join(root,'artifacts/coherence-zoom-extension');await mkdir(extension);
   await writeFile(join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'Configuration coherence zoom',version:'1.0',permissions:['tabs'],background:{service_worker:'worker.js'}}));
   await writeFile(join(extension,'worker.js'),'chrome.runtime.onInstalled.addListener(()=>{});');
@@ -1511,7 +1736,7 @@ test('@ae-configuration genuine 200 percent context numbered criteria and retain
   const bounds:any[]=[];
   try {
     const page=context.pages()[0]??await context.newPage();await openConfigurationLink(page,data);
-    await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+    await page.getByRole('button',{name:'Create new version',exact:true}).click();
     const cdp=await context.newCDPSession(page),info=await cdp.send('Browser.getWindowForTarget');
     await cdp.send('Browser.setWindowBounds',{windowId:info.windowId,bounds:{width:1440,height:1087}});
     const dimensions=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
@@ -1535,65 +1760,49 @@ test('@ae-configuration genuine 200 percent context numbered criteria and retain
     }
     await page.bringToFront();
     const contextSection=page.locator('#configuration .configuration-context');
-    await activate(contextSection.getByRole('button',{name:'Edit context',exact:true}));
+    await activate(page.getByRole('button',{name:'Input tools',exact:true}));
     await page.getByLabel('Description',{exact:true}).fill('Temporary context to discard');
-    await page.getByRole('dialog',{name:'Edit context',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
-    await expect(contextSection.getByRole('button',{name:'Edit context',exact:true})).toBeFocused();
+    await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Input tools',exact:true})).toBeFocused();
     await page.getByRole('button',{name:'Discard configuration changes',exact:true}).click();
-    await expect(contextSection).toContainText(data.saved.configuration.context_snapshot.description);
-    await expect(contextSection).not.toContainText('Temporary context to discard');
+    await activate(page.getByRole('button',{name:'Input tools',exact:true}));
+    await expect(page.getByLabel('Description',{exact:true})).toHaveValue(data.saved.configuration.context_snapshot.description);
+    await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
     await expect(page.getByLabel('Configuration name',{exact:true})).toHaveValue(data.saved.configuration.name);
-    await activate(contextSection.getByRole('button',{name:'Edit context',exact:true}));
+    await activate(page.getByRole('button',{name:'Input tools',exact:true}));
     await page.getByLabel('Description',{exact:true}).fill('Independent description at native zoom');
     await capture('coherence-context-200-light');
-    await page.getByRole('dialog',{name:'Edit context',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
-    await expect(contextSection.getByRole('button',{name:'Edit context',exact:true})).toBeFocused();
-    await activate(page.locator('#configuration .configuration-criterion').getByRole('button',{name:'Edit',exact:true}));
-    await page.getByLabel('Criterion 1 operator',{exact:true}).selectOption('eq');
-    await page.getByLabel('Criterion 1 threshold',{exact:true}).fill('3.123456');
-    await page.getByLabel('Criterion 1 absolute tolerance',{exact:true}).fill('0.000123456');
-    await page.getByLabel('Criterion 1 relative tolerance',{exact:true}).fill('0.01');
-    await page.getByRole('button',{name:'Add another criterion',exact:true}).click();
-    const choices=page.getByLabel('Criterion 2 output',{exact:true});
-    await choices.selectOption(await choices.locator('option').nth(1).getAttribute('value') || '');
-    await page.getByLabel('Criterion 2 threshold',{exact:true}).fill('7');
-    // A new criterion starts Not specified; declare its units explicitly.
-    await page.getByLabel('Criterion 2 units',{exact:true}).selectOption('dimensionless');
-    await page.getByRole('dialog',{name:'Edit criteria',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
-    await expect(page.locator('#configuration .configuration-criterion').getByRole('button',{name:'Edit',exact:true})).toBeFocused();
-    const criterion=page.getByRole('article',{name:'Criterion 1',exact:true});
-    await expect(criterion).toContainText('equal to');
-    await expect(page.getByRole('article',{name:'Criterion 2',exact:true})).toContainText('7');
+    await page.getByRole('dialog',{name:'Input tools and model binding',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Input tools',exact:true})).toBeFocused();
+    // Criteria belong to the study brief; the configuration offers no criterion editor.
+    const criteria=page.locator('#configuration .configuration-criterion');
+    await expect(criteria).toContainText(studyCriteria);await expect(criteria.getByRole('button')).toHaveCount(0);
     for(const theme of ['light','dark']){
       await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
-      await criterion.scrollIntoViewIfNeeded();await capture('coherence-criteria-200-'+theme);
-      const exact=criterion.getByRole('button',{name:'Full-precision values',exact:true});
-      await activate(exact);
-      const dialog=page.getByRole('dialog',{name:'Full-precision values for criterion 1',exact:true});
-      await expect(dialog).toContainText('3.123456');await expect(dialog).toContainText('0.000123456');
-      await capture('coherence-exact-values-200-'+theme);await page.keyboard.press('Escape');await expect(exact).toBeFocused();
+      await criteria.scrollIntoViewIfNeeded();await capture('coherence-criteria-200-'+theme);
     }
-    await criterion.getByRole('button',{name:'View evidence',exact:true}).click();
-    await expect(page.getByRole('dialog',{name:'Evidence detail',exact:true})).toContainText('Exact retained calibration observation');
+    const inputEvidence=page.locator('#configuration .configuration-inputs tbody tr').first().getByRole('button',{name:'View evidence (1)',exact:true});
+    await activate(inputEvidence);
+    await expect(page.getByRole('region', { name: 'Evidence details', exact: true })).toContainText('Exact retained calibration observation');
     await page.keyboard.press('Escape');
-    await page.getByLabel('Configuration name',{exact:true}).fill('Numbered requirements');
+    await page.getByLabel('Configuration name',{exact:true}).fill('Copied at native zoom');
     await activate(page.getByRole('button',{name:'Save configuration',exact:true}));
-    await expect(page.getByText('Saved · read-only',{exact:true})).toBeVisible();
+    await expect(page.getByText('Read-only',{exact:true})).toBeVisible();
     const saved=page.getByRole('region',{name:'Saved configuration',exact:true});
-    await expect(saved.locator('.configuration-context')).toContainText('Independent description at native zoom');
-    await expect(saved.getByRole('article',{name:'Criterion 1',exact:true})).not.toContainText('Not evaluated');
-    await expect(saved.getByRole('article',{name:'Criterion 2',exact:true})).toBeVisible();
-    expect(await saved.locator('.configuration-context').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('.recorded-configuration .configuration-inputs')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-    await activate(saved.getByRole('button',{name:'Record details',exact:true}));
-    await expect(page.getByRole('dialog',{name:'Configuration record',exact:true})).toContainText('3.123456');
-    await page.keyboard.press('Escape');await saved.locator('.configuration-context').scrollIntoViewIfNeeded();
+
+    await expect(saved.locator('.configuration-criterion')).toContainText(studyCriteria);
+    await expect(saved.getByRole('article',{name:'Criterion 1',exact:true})).toHaveCount(0);
+
+    await activate(saved.getByRole('button',{name:'Configuration record details',exact:true}));
+    await expect(page.getByRole('dialog',{name:'Configuration record',exact:true})).toContainText('Independent description at native zoom');
+    await page.keyboard.press('Escape');await saved.getByRole('heading').first().scrollIntoViewIfNeeded();
     await capture('coherence-saved-200-dark');
     await page.keyboard.press('Escape');
     await request.post('/fixture/configuration-control',{data:{offline:true}});
     await page.goto('/ui/#'+new URLSearchParams({v:'1',study:data.sid,view:'runs',run:data.rid}));
-    for(const name of ['Results','Model','Configuration','Evidence']) {
+    for(const name of ['Results','Model','Configuration']) {
       await activate(page.getByRole('tab',{name,exact:true}));
-      const action=page.locator('.run-heading').getByRole('button',{name:'Record details',exact:true});
+      const action=page.locator('.run-heading').getByRole('button',{name:'Run record details',exact:true});
       await activate(action);await expect(page.getByRole('dialog',{name:'Run record',exact:true})).toContainText(data.rid);
       await page.keyboard.press('Escape');await expect(action).toBeFocused();
       for(const theme of ['light','dark']) {
@@ -1603,16 +1812,18 @@ test('@ae-configuration genuine 200 percent context numbered criteria and retain
     }
     await activate(page.getByRole('tab',{name:'Configuration',exact:true}));
     const retained=page.getByRole('tabpanel',{name:'Configuration',exact:true});
-    const compact=retained.locator('.hf-criterion__evidence .hf-evidence-card--compact');
-    await expect(compact).toHaveCount(1);
-    const evidenceAction=compact.getByRole('button',{name:'View evidence',exact:true});
-    await activate(evidenceAction);await expect(page.getByRole('dialog',{name:'Evidence detail',exact:true})).toContainText(data.evidence.content);
+    // The retained configuration 6 carries no criteria of its own.
+    const compact=retained.locator('.configuration-criterion');
+    await expect(compact).toContainText(studyCriteria);
+    await expect(retained.getByRole('article',{name:'Criterion 1',exact:true})).toHaveCount(0);
+    const evidenceAction=retained.locator('.configuration-inputs tbody tr').first().getByRole('button',{name:'View evidence (1)',exact:true});
+    await activate(evidenceAction);await expect(page.getByRole('region', { name: 'Evidence details', exact: true })).toContainText(data.evidence.content);
     await page.keyboard.press('Escape');await expect(evidenceAction).toBeFocused();
     for(const theme of ['light','dark']) {
       await page.evaluate(value=>document.documentElement.dataset.theme=value,theme);
       await compact.scrollIntoViewIfNeeded();await capture('coherence-run-criteria-200-'+theme);
     }
-    await activate(retained.getByRole('button',{name:'Record details',exact:true}));
+    await activate(retained.getByRole('button',{name:'Configuration record details',exact:true}));
     await expect(page.getByRole('dialog',{name:'Configuration record',exact:true})).toContainText(data.saved.configuration.configuration_revision_id);
     await page.keyboard.press('Escape');
     await request.post('/fixture/configuration-control',{data:{offline:false}});
@@ -1633,10 +1844,11 @@ test('@ae-model projected preview revision never replaces the original apply rev
     await route.fulfill({response,json:body});
   });
   await page.route('**/models/*/edits',async route=>{applied=route.request().postDataJSON();await route.continue();});
+  await editComponent(page);
   await page.getByRole('button',{name:'Add assumption',exact:true}).click();
   await page.getByLabel('Statement',{exact:true}).fill('Preview projection must not change the saved draft.');
   await page.getByRole('button',{name:'Apply assumption',exact:true}).click();
-  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await (await editComponent(page)).getByRole('button',{name:'Save draft',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'Preview changes'})).toBeVisible();
   expect((await(await page.request.get(path)).json()).data).toEqual(before);
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
@@ -1651,13 +1863,13 @@ test('@ae-model projected preview revision never replaces the original apply rev
 const leaveByHash = (page: Page) => page.evaluate(() => { location.hash = ''; });
 test('@ae-evidence workspace guard keeps a refused evidence draft and saves a valid one before leaving', async ({page}) => {
   const props = await openEvidence(page, 'Guarded report');
-  const dirty = page.getByRole('dialog', {name: 'Unsaved changes', exact: true}), note = page.getByLabel('Evidence note', {exact: true});
+  const dirty = page.getByRole('dialog', {name: 'Unsaved changes', exact: true}), note = page.getByRole('textbox',{name:'Evidence note',exact:true});
   await note.fill('');
   const exact = page.url(); await leaveByHash(page); await expect(dirty).toBeVisible();
   await expect(dirty.getByRole('button', {name: 'Keep editing', exact: true})).toBeFocused();
   await dirty.getByRole('button', {name: 'Save changes', exact: true}).click();
   await expect(dirty).toBeHidden(); await expect(page).toHaveURL(exact); await expect(note).toBeFocused();
-  await expect(page.getByText('Enter an evidence note.', {exact: true})).toBeVisible();
+  await expect(page.getByText('Enter an explanation or note.', {exact: true})).toBeVisible();
   await expect(page.getByLabel('Title', {exact: true})).toHaveValue('Guarded report');
   await note.fill('Saved through the workspace guard.');
   await leaveByHash(page); await dirty.getByRole('button', {name: 'Save changes', exact: true}).click();
@@ -1690,126 +1902,61 @@ async function openEvidencePage(page: Page, sid: string) {
 }
 const refused=(code:string,message:string)=>({status:code==='forbidden'?403:code==='backend_unavailable'?503:code==='resource_not_found'?404:500,json:{error:{code,message,fields:[],outcome:'unchanged'}}});
 
-test('@ae-configuration Evidence page lists current assumptions by owner with sources, partial and denied states',async({page,request})=>{
-  const data=await configurationCase(request,'grouped'),sid=data.sid,mid=data.mid,config=data.saved.configuration,snapshot=data.saved.model_snapshot;
-  const component=snapshot.instances.find((i:any)=>i.instance_id===snapshot.assumptions[1].owner.instance_id).name;
-  const writes=watchWrites(page);
-  // Bounded concurrency: owner reads are held briefly and counted while in flight.
-  let active=0,peak=0;
-  const owned=/\/api\/1\/studies\/[^/]+\/(approach(\/versions\/[^/?]+)?|models(\/[^/?]+)?|configurations|models\/[^/]+\/assumption-evidence)$/;
-  await page.route('**/api/1/studies/**',async route=>{
-    if(route.request().method()!=='GET'||!owned.test(new URL(route.request().url()).pathname)){await route.fallback();return;}
-    active++;peak=Math.max(peak,active);
-    try{await new Promise(resolve=>setTimeout(resolve,150));let response;try{response=await route.fetch();}catch{await route.abort('failed');return;}await route.fulfill({response});}finally{active--;}
-  });
-  await openEvidencePage(page,sid);
-  const index=page.getByRole('region',{name:'Assumptions by owner',exact:true}),library=page.getByRole('region',{name:'Evidence library',exact:true});
-  await expect(index.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
-  await expect(index.getByRole('region',{name:'Modeling approach assumptions',exact:true})).toContainText('No saved modeling approach version.');
-  // Each owner is its own group (repeated statements are never merged across owners).
-  const model=index.getByRole('region',{name:'Model · Retained fixture model assumptions',exact:true}).last();
-  await expect(model.getByRole('heading',{name:'Model · Retained fixture model (draft)',exact:true})).toBeVisible();
-  for(const assumption of snapshot.assumptions)await expect(model).toContainText(assumption.statement);
-  await expect(model.getByText('Whole model',{exact:true})).toHaveCount(snapshot.assumptions.filter((a:any)=>a.owner.kind==='model').length);
-  await expect(model.getByText('Component · '+component,{exact:true}).first()).toBeVisible();
-  await expect(model.getByText('Supports',{exact:true}).first()).toBeVisible();
-  await expect(model.getByRole('heading',{name:data.evidence.title,exact:true}).first()).toBeVisible();
-  const configuration=index.getByRole('region',{name:'Configuration · '+config.name+' assumptions',exact:true}).last();
-  await expect(configuration).toContainText('Retained configuration condition');await expect(configuration.getByText('Challenges',{exact:true})).toBeVisible();
-  await expect(configuration).toContainText('Version '+config.configuration_revision_id.slice(0,8));
-  // Read-only here: assumptions are added and edited at their owner.
-  await expect(index.getByRole('button',{name:/^(Add assumption|Edit|Remove assumption)/})).toHaveCount(0);
-  await expect(library.getByRole('heading',{name:'Sources',exact:true})).toBeVisible();
-  await expect(page.getByText('Sources and observations used in this study.',{exact:true})).toBeVisible();
-  expect(await index.evaluate(element=>!!(element.compareDocumentPosition(document.querySelector('section[aria-label="Evidence library"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-  expect(peak).toBeGreaterThan(0);expect(peak).toBeLessThanOrEqual(2);
-  await expect(index.getByText('Loading assumptions…')).toHaveCount(0);
-  await s3Shots(page,'s7-evidence-page-populated',model);
-  // Open goes to the owner through guarded navigation.
-  await configuration.getByRole('button',{name:'Open configuration '+config.name,exact:true}).click();
-  await expect(page.getByRole('region',{name:'Saved configuration',exact:true})).toContainText('Retained configuration condition');
-  // Partial: one owner read and one owner list fail. Unknown is never reported as "No assumptions".
-  await page.route(`**/api/1/studies/${sid}/models/${mid}`,route=>route.request().method()==='GET'?route.fulfill(refused('backend_unavailable','Declared modeling outage')):route.fallback());
-  await page.route(`**/api/1/studies/${sid}/configurations`,route=>route.fulfill(refused('invalid_request','Declared list failure')));
-  await showView(page,sid,'evidence');
-  const partial=index.getByRole('status').filter({hasText:'Partial'});
-  await expect(partial).toContainText('groups loaded.');await expect(partial).toContainText('Configurations could not be listed: Declared list failure');
-  await expect(partial).toContainText('Groups that could not be loaded are left out; they are not shown as having no assumptions.');
-  const failed=index.getByRole('region',{name:'Model '+mid.slice(0,8)+' assumptions',exact:true});
-  await expect(failed).toContainText('Not loaded');await expect(failed).toContainText('Assumptions could not be loaded. Modeling is unavailable.');await expect(failed).not.toContainText('No assumptions');
-  await expect(index.getByRole('region',{name:'Configuration · '+config.name+' assumptions',exact:true})).toHaveCount(0);
-  await expect(index).not.toContainText('Retained configuration condition');
-  await expect(index.getByText('Loading assumptions…')).toHaveCount(0);await s3Shots(page,'s7-evidence-page-partial',index);
-  await page.unroute(`**/api/1/studies/${sid}/models/${mid}`);await page.unroute(`**/api/1/studies/${sid}/configurations`);
-  await partial.getByRole('button',{name:'Retry loading assumptions',exact:true}).click();
-  await expect(index.getByRole('region',{name:'Configuration · '+config.name+' assumptions',exact:true}).last()).toContainText('Retained configuration condition');
-  await expect(index.getByRole('region',{name:'Model '+mid.slice(0,8)+' assumptions',exact:true})).toHaveCount(0);
-  // Confirmed denial on an owner read clears the index and the sources in place; nothing is written.
-  await showView(page,sid,'overview');await expect(page.getByRole('button',{name:'View modeling approach',exact:true})).toBeVisible();
-  await page.route(`**/api/1/studies/${sid}/approach`,route=>route.fulfill(refused('forbidden','Refused')));
-  await showView(page,sid,'evidence');
-  await expect(index.getByRole('alert')).toContainText(deniedText);
-  await expect(index.getByRole('region',{name:/ assumptions$/})).toHaveCount(0);await expect(index).not.toContainText('Retained model condition');
-  await expect(library.getByRole('alert')).toContainText(deniedText);await expect(library.locator('article')).toHaveCount(0);
-  await expect(page.getByText('Loading study/model…')).toHaveCount(0);await s3Shots(page,'s7-evidence-page-denied',index);
-  await page.unroute(`**/api/1/studies/${sid}/approach`);
-  expect(writes).toEqual([]);
+test('@ae-evidence referenced library preserves exact membership with partial reads and confirmed denial', async ({page,request}) => {
+  const api = await writer(request), original = await api.create('Cited original source');
+  await api.revise(original, 'Uncited successor source');
+  await openEvidencePage(page,api.sid);
+  const library=page.getByRole('region',{name:'Evidence library',exact:true});
+  await expect(page.getByRole('button',{name:'Refresh evidence',exact:true})).toBeEnabled();
+  await expect(library.getByRole('heading',{name:'Cited original source',exact:true})).toHaveCount(0);
+  await pinLibraryEvidence(page,request,'Cited original source');
+  await expect(library.getByRole('heading',{name:'Uncited successor source',exact:true})).toHaveCount(0);
+  await expect(library.getByRole('button',{name:/View evidence/})).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Assumptions by owner',exact:true})).toHaveCount(0);
+  await library.locator('article').filter({has:page.getByRole('heading',{name:'Cited original source',exact:true})}).getByRole('button',{name:'Evidence record details',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Evidence record',exact:true})).toContainText(original.evidence_version_id);
+  await page.keyboard.press('Escape');
+  await page.route(`**/api/1/studies/${api.sid}/models`,route=>route.fulfill(refused('backend_unavailable','Declared modeling outage')));
+  await page.getByRole('button',{name:'Refresh evidence',exact:true}).click();
+  await expect(library.getByRole('alert')).toContainText('may be incomplete');
+  await expect(library.getByRole('heading',{name:'Cited original source',exact:true})).toBeVisible();
+  await page.unroute(`**/api/1/studies/${api.sid}/models`);
+  await library.getByRole('button',{name:'Retry loading evidence',exact:true}).click();
+  await expect(library.getByRole('alert')).toHaveCount(0);
+  try {
+    expect((await request.post('/fixture/membership',{data:{enabled:false}})).status()).toBe(200);
+    await expect(page.getByRole('button',{name:'Refresh evidence',exact:true})).toBeEnabled();
+    await page.getByRole('button',{name:'Refresh evidence',exact:true}).click();
+    await expect(library.getByRole('heading',{name:'Cited original source',exact:true})).toHaveCount(0);
+    await expect(library.getByRole('alert')).toContainText(deniedText);
+  } finally { expect((await request.post('/fixture/membership',{data:{enabled:true}})).status()).toBe(200); }
 });
 
-test('@ae-configuration run Evidence tab lists the retained assumptions by owner and opens their owners',async({page,request})=>{
-  const data=await configurationCase(request,'grouped'),library=await writer(request),snapshot=data.saved.model_snapshot,config=data.saved.configuration;
-  await library.revise(data.evidence,'Current head must never replace E1');
-  let liveReads=0;page.on('request',r=>{if(/evidence-families|assumption-evidence|\/approach(\/|$)/.test(new URL(r.url()).pathname))liveReads++;});
-  await openConfigurationLink(page,data,true);
-  await page.getByRole('tab',{name:'Evidence',exact:true}).click();
-  const evidence=page.getByRole('tabpanel',{name:'Evidence',exact:true}),index=evidence.getByRole('region',{name:'Assumptions by owner',exact:true});
-  await expect(index.getByRole('heading',{name:'Assumptions',exact:true})).toBeVisible();
-  const model=index.getByRole('region',{name:'Model assumptions',exact:true});
-  await expect(model.getByRole('heading',{name:'Model version '+snapshot.model_revision_id.slice(0,8),exact:true})).toBeVisible();
-  for(const assumption of snapshot.assumptions)await expect(model).toContainText(assumption.statement);
-  await expect(model.getByText('Whole model',{exact:true})).toHaveCount(snapshot.assumptions.filter((a:any)=>a.owner.kind==='model').length);
-  await expect(model.getByText(/^Component · /)).toHaveCount(snapshot.assumptions.filter((a:any)=>a.owner.kind==='instance').length);
-  const configuration=index.getByRole('region',{name:'Configuration assumptions',exact:true});
-  await expect(configuration.getByRole('heading',{name:'Configuration · '+config.name,exact:true})).toBeVisible();
-  await expect(configuration).toContainText('Retained configuration condition');await expect(configuration.getByText('Challenges',{exact:true})).toBeVisible();
-  // Configuration3 records no approach link: no approach owner is invented and nothing current is read.
-  await expect(index.getByRole('region',{name:'Modeling approach assumptions',exact:true})).toHaveCount(0);
-  await expect(evidence).not.toContainText('Current head must never replace E1');
-  expect(await index.evaluate(element=>!!(element.compareDocumentPosition(document.querySelector('#run-panel-3 section[aria-label="Input provenance"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-  await s3Shots(page,'s7-run-evidence',index);
-  await model.getByRole('button',{name:'Open model version',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Model',exact:true})).toHaveAttribute('aria-selected','true');
-  await page.getByRole('tab',{name:'Evidence',exact:true}).click();
-  await configuration.getByRole('button',{name:'Open configuration',exact:true}).click();
-  await expect(page.getByRole('tab',{name:'Configuration',exact:true})).toHaveAttribute('aria-selected','true');
-  // Presentation overlay of this run's response only: the retained configuration is relabelled as a
-  // Configuration4 pinned to a retained approach version in the run's own closure. The index shows
-  // that exact version's assumptions; the current approach is never read.
-  const version=crypto.randomUUID();
-  await page.route(`**/api/1/studies/${data.sid}/runs/${data.rid}`,async route=>{
-    const response=await route.fetch(),value=await response.json(),history=value.data.history;
-    history.configuration.schema_version='4';history.configuration.approach_binding={approach_id:crypto.randomUUID(),approach_version_id:version,approach_digest:'a'.repeat(64),closure_digest:'b'.repeat(64),case_id:null};
-    const content={schema_version:'2',question:'Retained approach question',scope:'',limitations:'',open_questions:'',model_bindings:[],steps:[],cases:[],basis_refs:[],original_question:null,elaboration:null,limit_items:[],
-      assumptions:[{assumption_id:crypto.randomUUID(),statement:'Retained approach condition',role:'overall_method',evidence_links:[{evidence_version_id:data.evidence.evidence_version_id,relation:'supports',locator:'Table 2'}]}]};
-    history.approach_closure={schema_version:'3',root_approach_version_id:version,root_approach_digest:'a'.repeat(64),approach_versions:[{schema_version:'2',approach_id:history.configuration.approach_binding.approach_id,approach_version_id:version,study_id:data.sid,version_number:3,predecessor_version_id:null,content,created_by:'owner',created_at:'2026-10-12T00:00:00Z',digest:'a'.repeat(64)}],models:[],configurations:[],run_contexts:[],evidence:[data.evidence],digest:'b'.repeat(64)};
-    await route.fulfill({response,json:value});
+test('@ae-evidence library reads each missing frozen owner once instead of every sampled run', async ({page,request}) => {
+  const api = await writer(request), source = await api.create('Frozen owner source');
+  const rows = Array.from({length:200},(_,n)=>({run_id:'sample-'+n,configuration_revision_id:'retained'}));
+  rows.push({run_id:'missing-1',configuration_revision_id:'missing'},{run_id:'missing-2',configuration_revision_id:'missing'});
+  const reads:string[]=[];
+  await page.route(`**/api/1/studies/${api.sid}/configurations`,route=>route.fulfill({json:{schema_version:'1',data:[{configuration:{configuration_revision_id:'retained',general_context_evidence_version_ids:[source.evidence_version_id]}}]}}));
+  await page.route(`**/api/1/studies/${api.sid}/runs`,route=>route.fulfill({json:{schema_version:'1',data:rows}}));
+  await page.route(`**/api/1/studies/${api.sid}/runs/*`,route=>{
+    reads.push(new URL(route.request().url()).pathname.split('/').pop()!);
+    return route.fulfill({json:{schema_version:'1',data:{history:{configuration:{evidence_version_ids:[source.evidence_version_id]}}}}});
   });
-  await showView(page,data.sid,'configurations');await expect(page.getByRole('tab',{name:'Evidence',exact:true})).toHaveCount(0);
-  await showView(page,data.sid,'runs',{run:data.rid});await page.getByRole('tab',{name:'Evidence',exact:true}).click();
-  const approach=index.getByRole('region',{name:'Modeling approach assumptions',exact:true});
-  await expect(approach.getByRole('heading',{name:'Modeling approach · Version 3',exact:true})).toBeVisible();
-  await expect(approach).toContainText('Retained approach condition');await expect(approach).toContainText('Overall method assumption');await expect(approach).toContainText('Table 2');
-  await expect(approach.getByRole('button',{name:'Open modeling approach version 3',exact:true})).toBeVisible();
-  await approach.scrollIntoViewIfNeeded();await s3Shots(page,'s7-run-evidence-approach',index);
-  expect(liveReads).toBe(0);
-  await page.unroute(`**/api/1/studies/${data.sid}/runs/${data.rid}`);
+  await openEvidencePage(page,api.sid);
+  const library=page.getByRole('region',{name:'Evidence library',exact:true});
+  await expect(library.getByRole('heading',{name:'Frozen owner source',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Refresh evidence',exact:true})).toBeEnabled();
+  expect(reads).toEqual(['missing-1']);
 });
 
 test('@ae-configuration run artifact and modified-run seed reads clear the run on a confirmed denial and retry a transient probe',async({page,request})=>{
   const data=await configurationCase(request,'grouped'),sid=data.sid,writes=watchWrites(page);
   const heading=page.locator('.run-heading').getByRole('heading',{name:data.saved.configuration.name,exact:true});
   const preview=async()=>{
-    await page.getByRole('tab',{name:'Evidence',exact:true}).click();
+    await page.getByRole('tab',{name:'Results',exact:true}).click();
+    const disclosure=page.locator('details.run-files');
+    if (!(await disclosure.getAttribute('open')!==null)) await disclosure.locator('summary').click();
     const files=page.getByRole('region',{name:'Run files',exact:true});
     await files.getByRole('combobox',{name:'File group',exact:true}).selectOption('');await files.getByLabel('Find a file',{exact:true}).fill('configuration.json');
     await files.getByRole('row').filter({has:page.getByRole('rowheader',{name:'configuration.json',exact:true})}).getByRole('button',{name:'Preview',exact:true}).click();
@@ -1858,10 +2005,334 @@ test('@ae-configuration export status read clears on a confirmed denial',async({
   await openConfigurationLink(page,data,true);
   await page.getByRole('button',{name:'Export computational record',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Export computational record',exact:true});
-  await dialog.getByRole('button',{name:'Review record',exact:true}).click();
+  await dialog.getByRole('button',{name:'Check contents',exact:true}).click();
   await expect.poll(()=>statusReads).toBe(1);
   await expect(page.getByText(deniedText,{exact:true}).first()).toBeVisible();
   await expect(dialog).toHaveCount(0);await expect(page.locator('.run-heading').getByRole('heading',{name:data.saved.configuration.name,exact:true})).toHaveCount(0);
   await page.waitForTimeout(2500);expect(statusReads).toBe(1);
   expect(writes).toEqual([`POST /api/1/studies/${sid}/computational-record-previews`]);
+});
+
+test('@ae-evidence source excerpt and explanation remain separate through save, revise and exact history', async ({page,request}) => {
+  const props = await openEvidence(page, 'Thermal reference source');
+  await page.getByRole('checkbox', {name: 'Include source excerpt', exact: true}).check();
+  await page.getByRole('textbox',{name:'Source excerpt',exact:true}).fill('The reference temperature is 293.15 K.');
+  await page.getByLabel('Source reference', {exact: true}).fill('Thermal reference report');
+  await page.getByRole('textbox',{name:'Explanation',exact:true}).fill('This supports the reference condition, not the operating temperature.');
+  await page.getByRole('button', {name: 'Create evidence', exact: true}).click();
+  await expect(page.getByRole('alert')).toContainText('page or location');
+  await page.getByLabel('Page or location', {exact: true}).fill('p. 7, Table 2');
+  await page.getByRole('button', {name: 'Create evidence', exact: true}).click();
+  const card = page.locator('article').filter({has: page.getByRole('heading', {name: 'Thermal reference source', exact: true})});
+  await pinLibraryEvidence(page, request, 'Thermal reference source');
+  await expect(card.getByRole('button',{name:/View evidence/})).toHaveCount(0);
+  await expect(card.getByRole('region',{name:'Source',exact:true})).toContainText('Thermal reference report');
+  await page.getByRole('button',{name:'Overview',exact:true}).click();
+  const brief = page.getByRole('region',{name:'Study brief',exact:true});
+  await brief.getByLabel('Study brief version',{exact:true}).selectOption('draft');
+  const claim = brief.locator('article').filter({hasText:'Claim supported by Thermal reference source'});
+  const trigger = claim.getByRole('button',{name:'View evidence (1)',exact:true});
+  await expect(trigger).toHaveClass(/hf-open-link/); await trigger.click();
+  const panel = page.getByRole('region', {name: 'Evidence details', exact: true});
+  await expect(panel.getByRole('region', {name: 'Source excerpt', exact: true})).toContainText('p. 7, Table 2');
+  await expect(panel.locator('blockquote')).toHaveText('The reference temperature is 293.15 K.');
+  await expect(panel.getByRole('region', {name: 'Explanation', exact: true})).toContainText('This supports the reference condition');
+  await expect(panel.locator('blockquote')).not.toContainText('operating temperature');
+  await expect(panel.getByRole('button', {name: 'Download evidence record', exact: true})).not.toBeVisible();
+  for (const width of [1440, 720]) {
+    await page.setViewportSize({width, height: 1000});
+    await expect.poll(async () => {
+      const box = await panel.boundingBox();
+      return box?.height ?? 0;
+    }).toBeGreaterThan(900);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width === 720) {
+      const canvas = page.locator('.hf-workspace__canvas');
+      expect(await canvas.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+      const canvasBox = await canvas.boundingBox(), panelBox = await panel.boundingBox();
+      expect(panelBox!.y).toBeGreaterThanOrEqual(canvasBox!.y + canvasBox!.height);
+    }
+    await expect(panel.getByRole('button', {name: 'Close Evidence', exact: true})).toBeVisible();
+  }
+  await page.setViewportSize({width: 1440, height: 1000});
+  const launcher = page.getByRole('button', {name: 'Open assistant', exact: true});
+  await launcher.click();
+  const assistant = page.getByRole('region', {name: 'Assistant', exact: true});
+  await expect(launcher).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  const dock = (await assistant.boundingBox())!, details = (await panel.boundingBox())!;
+  expect(details.x + details.width).toBeLessThanOrEqual(dock.x);
+  expect(dock.height).toBeGreaterThan(900);
+  const separator = page.getByRole('separator', {name: 'Resize assistant', exact: true});
+  await separator.press('ArrowLeft');
+  expect((await assistant.boundingBox())!.width).toBeGreaterThan(dock.width);
+  await separator.press('End');
+  expect((await page.locator('.hf-workspace__canvas').boundingBox())!.width).toBeGreaterThanOrEqual(300);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await separator.dblclick();
+  expect((await assistant.boundingBox())!.width).toBeCloseTo(dock.width, 0);
+  await assistant.getByRole('button', {name: 'Expand to full width', exact: true}).click();
+  await expect(panel).not.toBeVisible();
+  await expect(page.locator('.hf-workspace__canvas')).not.toBeVisible();
+  await assistant.getByRole('button', {name: 'Exit full screen', exact: true}).click();
+  await expect(panel.locator('blockquote')).toHaveText('The reference temperature is 293.15 K.');
+  await assistant.getByRole('button', {name: 'Hide assistant', exact: true}).click();
+  await expect(panel).toBeVisible();
+  await expect(launcher).toBeFocused();
+  await page.screenshot({path: `${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/structured-evidence.png`});
+  await panel.getByRole('button', {name: 'Close Evidence', exact: true}).click();
+  await showView(page,props.sid,'evidence');
+  await card.getByRole('button', {name: 'Edit', exact: true}).click();
+  await expect(page.getByRole('textbox',{name:'Source excerpt',exact:true})).toHaveValue('The reference temperature is 293.15 K.');
+  await expect(page.getByLabel('Page or location', {exact: true})).toHaveValue('p. 7, Table 2');
+  await page.getByRole('textbox',{name:'Explanation',exact:true}).fill('A revised interpretation.');
+  await page.getByRole('button', {name: 'Save new version', exact: true}).click();
+  await expect(page.getByRole('dialog', {name: 'Edit evidence', exact: true})).not.toBeVisible();
+  const records = (await (await page.request.get(`/api/1/studies/${props.sid}/evidence?view=versions`)).json()).data.filter((r:any) => r.title === 'Thermal reference source');
+  expect(records).toHaveLength(2);
+  const original = JSON.parse(records[1].content.split('\n').slice(1).join('\n'));
+  expect(original.explanation).toBe('This supports the reference condition, not the operating temperature.');
+  expect(JSON.parse(records[0].content.split('\n').slice(1).join('\n')).excerpt).toBe(original.excerpt);
+});
+
+test('@ae-model explanation drafts save once per exact model version', async ({
+  page,
+  request,
+}) => {
+  const library = await writer(request),
+    note = await library.create('Explanation basis report');
+  const props = await openModel(page);
+  const base = `/api/1/studies/${props.sid}/models/${props.mid}`;
+  const read = async (path: string) => (await (await page.request.get(base + path)).json()).data;
+  await page.getByRole('tab', { name: 'Model explanation', exact: true }).click();
+  const explanation = page.getByRole('region', {
+    name: 'Application model explanation',
+    exact: true,
+  });
+  await expect(explanation).toContainText('No model explanation yet.');
+  await expect(page.getByRole('heading',{name:'Model explanation',exact:true})).toHaveCount(1);
+  await expect(page.getByRole('heading',{name:'Explanation',exact:true})).toHaveCount(0);
+  await expect(explanation).toContainText('New draft');
+  await expect(explanation.getByRole('combobox')).toHaveCount(0);
+  await expect(explanation.getByRole('region',{name:'Explanation evidence',exact:true})).toHaveCount(0);
+  await expect(
+    explanation.getByRole('button', { name: 'Save explanation version', exact: true }),
+  ).toHaveCount(0);
+  await explanation.getByRole('button', { name: 'Edit explanation', exact: true }).click();
+  await explanation
+    .getByLabel('Description', { exact: true })
+    .fill('Output y of one repeated scaling.');
+  await explanation
+    .getByLabel('Basis and reasoning', { exact: true })
+    .fill('Identity relation of the source report.');
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  const unsaved = page.getByRole('dialog', { name: 'Unsaved changes', exact: true });
+  await expect(unsaved).toBeVisible();
+  await unsaved.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await shots(page, 'model-explanation-keep-editing');
+  await expect(explanation.getByLabel('Description', { exact: true })).toHaveValue(
+    'Output y of one repeated scaling.',
+  );
+  await explanation
+    .getByLabel('Component explanation · Component A', { exact: true })
+    .fill('Copies x to y.');
+  await explanation.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  await page.getByLabel('Find evidence', { exact: true }).fill('Explanation basis report');
+  await page.getByRole('button', { name: /^Choose Explanation basis report/ }).click();
+  await page.getByLabel('Relationship', { exact: true }).selectOption('supports');
+  await page.getByRole('button', { name: 'Attach evidence', exact: true }).click();
+  await expect(explanation).toContainText('Explanation basis report');
+  await shots(page, 'model-explanation-editor');
+  await expect(explanation).toContainText('Unsaved changes');
+  await expect(explanation).toContainText('numerical checks belong in Analysis details');
+  await explanation.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(
+    explanation.getByRole('button', { name: 'Edit explanation', exact: true }),
+  ).toBeFocused();
+  const draft = (await read('/explanation')).draft;
+  expect(draft.content).toMatchObject({
+    represents: 'Output y of one repeated scaling.',
+    calculation_logic: '',
+    components: [
+      {
+        kind: 'instance',
+        instance_id: props.instances[1].instance_id,
+        explanation: 'Copies x to y.',
+      },
+    ],
+    evidence_links: [{ evidence_version_id: note.evidence_version_id, relation: 'supports' }],
+  });
+  // A blank component explanation is left out, never saved as an empty claim.
+  expect(draft.content.components).toHaveLength(1);
+  await expect(
+    explanation.getByRole('region', { name: 'Calculation logic', exact: true }),
+  ).toHaveCount(0);
+  // Saving pins the one chosen saved model version, once.
+  const latest = props.revision.model_revision_id;
+  await explanation.getByRole('button', {name:'Edit explanation',exact:true}).click();
+  await explanation.getByLabel('Basis and reasoning',{exact:true}).fill('Identity relation of the source report. Domain restricted to finite real scalars.');
+  await explanation.getByRole('button', {name:'Save for model version',exact:true}).click();
+  const publish=page.getByRole('dialog',{name:'Save explanation version',exact:true});
+  await expect(publish.getByRole('button',{name:'Save explanation version',exact:true})).toBeDisabled();
+  await publish.getByLabel('Model version to explain',{exact:true}).selectOption(latest);
+  // If the draft is saved but publication fails, retry uses the acknowledged draft token.
+  await page.route('**/models/*/explanation/versions', route => route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'backend_unavailable',message:'Temporary publication outage',fields:[]}})}), {times:1});
+  await publish.getByRole('button',{name:'Save explanation version',exact:true}).click();
+  await expect(publish.getByRole('alert')).toContainText('not saved');
+  const acknowledged=(await read('/explanation')).draft;
+  expect(acknowledged.content.basis).toContain('Domain restricted to finite real scalars.');
+  expect((await read(`/revisions/${latest}/explanation`)).explanation).toBeNull();
+  await publish.getByRole('button',{name:'Save explanation version',exact:true}).click();
+  await expect(publish).toBeHidden();
+  await expect(explanation).toContainText('Saved draft');
+  await expect(explanation.getByRole('combobox')).toHaveCount(0);
+  const saved = (await read(`/revisions/${latest}/explanation`)).explanation;
+  expect(saved.model_revision_id).toBe(latest);
+  expect(saved.content).toEqual(acknowledged.content);
+  await library.revise(note,'Later report must not substitute the attached source');
+  // A later draft never changes the saved explanation.
+  await explanation.getByRole('button', { name: 'Edit explanation', exact: true }).click();
+  await explanation
+    .getByLabel('Description', { exact: true })
+    .fill('Changed after saving.');
+  await explanation.getByRole('button',{name:'Save for model version',exact:true}).click();
+  await publish.getByLabel('Model version to explain',{exact:true}).selectOption(latest);
+  await expect(publish).toContainText('already has an explanation');
+  await expect(publish.getByRole('button',{name:'Save explanation version',exact:true})).toBeDisabled();
+  await publish.getByRole('button',{name:'Done',exact:true}).click();
+  await explanation.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(
+    explanation.getByRole('region', { name: 'Description', exact: true }),
+  ).toContainText('Changed after saving.');
+  expect((await read(`/revisions/${latest}/explanation`)).explanation).toEqual(saved);
+  // The saved model version shows its own explanation, read-only.
+  await page.getByLabel('Model version', { exact: true }).selectOption(latest);
+  await page.getByRole('tab', { name: 'Model explanation', exact: true }).click();
+  await expect(explanation).toContainText('Read-only');
+  await expect(
+    explanation.getByRole('region', { name: 'Description', exact: true }),
+  ).toContainText('Output y of one repeated scaling.');
+  await expect(
+    explanation.getByRole('region', { name: 'Component explanations', exact: true }),
+  ).toContainText('Component A: Copies x to y.');
+  await expect(
+    explanation.getByRole('region', { name: 'Calculation logic', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    explanation.getByRole('button', { name: 'Edit explanation', exact: true }),
+  ).toHaveCount(0);
+  await expectEvidence(page, explanation, 'Explanation basis report', 'Supports');
+  await expect(page.getByText('Later report must not substitute the attached source',{exact:true})).toHaveCount(0);
+  await explanation.getByRole('button',{name:'Model explanation record details',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Model explanation record',exact:true})).toContainText(saved.explanation_version_id);
+  await expect(page.getByRole('dialog',{name:'Model explanation record',exact:true})).toContainText(latest);
+  await page.getByRole('dialog',{name:'Model explanation record',exact:true}).getByRole('button',{name:'Done',exact:true}).click();
+  for (const width of [1440,720,390]) {
+    await page.setViewportSize({width,height:1000});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await shots(page, 'model-explanation-saved-'+width);
+  }
+});
+
+test('@ae-model editing layouts keep controls and completion actions inside narrow light and dark dialogs', async ({page}) => {
+  await openModel(page);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    for (const width of [1440, 720, 390]) {
+      await page.setViewportSize({width, height: 700});
+      await page.getByRole('button', {name:'＋ Component', exact:true}).click();
+      const add = page.getByRole('dialog', {name:'Add component', exact:true});
+      await expect(add.locator('.dialog-footer').getByRole('button')).toHaveText(['Done', 'Add component']);
+      const gaps = await add.evaluate(dialog => {
+        const body = dialog.querySelector('.dialog-body')!;
+        const field = body.querySelector('label')!;
+        return { top:field.getBoundingClientRect().top-body.getBoundingClientRect().top,
+          padding:parseFloat(getComputedStyle(body).paddingTop), overflow:dialog.scrollWidth-dialog.clientWidth };
+      });
+      expect(gaps.top).toBeCloseTo(gaps.padding, 0);
+      expect(gaps.overflow).toBeLessThanOrEqual(1);
+      await page.screenshot({path:`${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/component-editor-${theme}-${width}.png`});
+      await add.getByRole('button', {name:'Done', exact:true}).click();
+      await page.getByRole('tab', {name:'Quantities', exact:true}).click();
+      await page.getByRole('button', {name:'Edit quantity', exact:true}).first().click();
+      const quantity = page.getByRole('dialog', {name:'Edit quantity', exact:true});
+      const layout = await quantity.evaluate(dialog => {
+        const grid = dialog.querySelector('.hf-quantity-fields')!;
+        const labels = grid.querySelectorAll(':scope > label');
+        const first = labels[0].getBoundingClientRect(), second = labels[1].getBoundingClientRect();
+        return {columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          right:second.right, gridRight:grid.getBoundingClientRect().right,
+          firstBottom:first.bottom, secondTop:second.top,
+          overflow:dialog.scrollWidth-dialog.clientWidth};
+      });
+      expect(layout.columns).toBe(width === 390 ? 1 : 2);
+      expect(layout.right).toBeCloseTo(layout.gridRight, 0);
+      expect(layout.overflow).toBeLessThanOrEqual(1);
+      if (width === 390) expect(layout.secondTop-layout.firstBottom).toBeGreaterThanOrEqual(8);
+      await quantity.getByRole('button', {name:'Done', exact:true}).scrollIntoViewIfNeeded();
+      const buttons = quantity.locator('.dialog-footer').getByRole('button');
+      await expect(buttons).toHaveText(['Done', 'Preview quantity changes']);
+      const bounds = await buttons.evaluateAll(elements => elements.map(element => {
+        const box=element.getBoundingClientRect(); return {left:box.left, right:box.right, top:box.top, bottom:box.bottom};
+      }));
+      expect(bounds[0].right).toBeLessThanOrEqual(bounds[1].left);
+      expect(Math.abs(bounds[0].bottom-bounds[1].bottom)).toBeLessThanOrEqual(1);
+      await page.screenshot({path:`${process.env.HYPRN_MVP_TEST_SCOPE_ROOT}/evidence/quantity-editor-${theme}-${width}.png`});
+      await quantity.getByRole('button', {name:'Done', exact:true}).click();
+    }
+  }
+});
+
+test('@ae-model description assumptions and limits share one editor and saved versions retain their exact content', async ({page,request}) => {
+  const props = await openModel(page);
+  const base = `/api/1/studies/${props.sid}/models/${props.mid}`;
+  const editor = await editComponent(page);
+  await expect(editor.locator('.dialog-body > fieldset > section')).toHaveCount(3);
+  await editor.getByLabel('Component description', {exact:true}).fill('Converts input x into output y.');
+  await editor.getByLabel('Component limits', {exact:true}).fill('Finite real scalars only.');
+  await editor.getByRole('button', {name:'Add assumption', exact:true}).click();
+  await page.getByLabel('Statement', {exact:true}).fill('The coefficient remains constant.');
+  await page.getByRole('button', {name:'Apply assumption', exact:true}).click();
+  const footer = editor.locator(':scope > .dialog-footer');
+  await expect(footer.getByRole('button')).toHaveText(['Cancel', 'Save draft']);
+  for (const theme of ['light','dark']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await page.setViewportSize({width:390, height:760});
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await shots(page, `component-documentation-${theme}`);
+  }
+  await footer.getByRole('button', {name:'Save draft', exact:true}).click();
+  await page.getByRole('dialog',{name:'Preview changes',exact:true}).getByRole('button',{name:'Apply changes',exact:true}).click();
+  await expect(editor).toBeHidden();
+  const state = (await (await page.request.get(base+'/explanation')).json()).data;
+  expect(state.draft.content.schema_version).toBe('2');
+  expect(state.draft.content.component_details).toEqual([{
+    instance_id: props.instances[1].instance_id,
+    description: 'Converts input x into output y.', limits: 'Finite real scalars only.',
+  }]);
+  expect((await (await page.request.get(base)).json()).data.assumptions.some((item:any) => item.statement === 'The coefficient remains constant.')).toBe(true);
+  await editComponent(page);
+  await editor.getByLabel('Component limits', {exact:true}).fill('Unsaved replacement.');
+  await editor.getByRole('button', {name:'Cancel', exact:true}).click();
+  await editComponent(page);
+  await expect(editor.getByLabel('Component limits', {exact:true})).toHaveValue('Finite real scalars only.');
+  await editor.getByRole('button', {name:'Cancel', exact:true}).click();
+  await page.setViewportSize({width:1440,height:900});
+  const beforeVersions = (await (await page.request.get(base+'/revisions')).json()).data;
+  await page.getByRole('button',{name:'Save model version',exact:true}).click();
+  await expect.poll(async () => (await (await page.request.get(base+'/revisions')).json()).data.length).toBe(beforeVersions.length+1);
+  const versions = (await (await page.request.get(base+'/revisions')).json()).data;
+  const version = versions.find((v:any) => !beforeVersions.some((old:any) => old.model_revision_id === v.model_revision_id)).model_revision_id;
+  await page.getByRole('tab',{name:'Model explanation',exact:true}).click();
+  await page.getByRole('button',{name:'Edit explanation',exact:true}).click();
+  await page.getByRole('button',{name:'Save for model version',exact:true}).click();
+  const publish=page.getByRole('dialog',{name:'Save explanation version',exact:true});
+  await publish.getByLabel('Model version to explain',{exact:true}).selectOption(version);
+  await publish.getByRole('button',{name:'Save explanation version',exact:true}).click();
+  await expect(publish).toBeHidden();
+  await page.getByLabel('Model version',{exact:true}).selectOption(version);
+  await page.getByRole('tab',{name:'Diagram',exact:true}).click();
+  await page.getByRole('button',{name:'1 Component A',exact:true}).click();
+  await expect(page.getByText('Finite real scalars only.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Edit component',exact:true})).toHaveCount(0);
 });

@@ -190,7 +190,7 @@ def record(model,request,units):
         criteria=[],applicability=dict(state='unassessed',evidence_refs=[]),artifacts=[])
 
 
-@pytest.mark.parametrize('unit',['','J/kg','kg/m**3','m**2'])
+@pytest.mark.parametrize('unit', ['', *sorted(worker.PHYSICAL_UNITS)])
 def test_units_worker_result_exact_resolved_units(catalog,unit):
     case=case6(catalog);m=case['frozen']['model_snapshot']
     for d in m['definitions']:
@@ -407,16 +407,31 @@ def test_polish_worker_model2_root_with_model4_ancestor(catalog,tmp_path,monkeyp
     b,r=assemble(mixed_polish_case(catalog));read(b,r,tmp_path,monkeypatch)
 
 
-@pytest.mark.parametrize('typed',[False,True])
-def test_polish_worker_catalog_policy_follows_exact_target_declaration(catalog,typed,tmp_path,monkeypatch):
+@pytest.mark.parametrize('typed', [False, True])
+def test_polish_worker_catalog_policy_follows_exact_target_declaration(
+    catalog, typed, tmp_path, monkeypatch
+):
     from test_unit_execution_admission import case8
-    case=case8(catalog,approach_version=None,mixed=not typed);dependencies=linked_result(case,2)
-    c=case['frozen']['configuration'];item=c['inputs'][0];binding=item['result_binding']
-    binding['original_units']=item['units']
-    binding['conversion'].update(source_units=item['units'],destination_units=item['units'],factor=1,destination_value=2,
-        catalog_digest=worker.UNIT_CATALOG_DIGEST if typed else digest(catalog))
-    dependencies['mappings'][0].update(original_units=item['units'],conversion=deepcopy(binding['conversion']))
-    repin(case);b,r=assemble(case,dependencies);read(b,r,tmp_path,monkeypatch)
+
+    case = case8(catalog, approach_version=None, mixed=not typed)
+    dependencies = linked_result(case, 2)
+    c = case['frozen']['configuration']
+    item = c['inputs'][0]
+    binding = item['result_binding']
+    binding['original_units'] = item['units']
+    binding['conversion'].update(
+        source_units=item['units'],
+        destination_units=item['units'],
+        factor=1,
+        destination_value=2,
+        catalog_digest=catalog['catalog_digest'] if typed else digest(catalog),
+    )
+    dependencies['mappings'][0].update(
+        original_units=item['units'], conversion=deepcopy(binding['conversion'])
+    )
+    repin(case)
+    b, r = assemble(case, dependencies)
+    read(b, r, tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize('field', ['original_question', 'elaboration'])

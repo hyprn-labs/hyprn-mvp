@@ -67,12 +67,22 @@ def test_capability_catalog_and_scoped_jwt(service):
     c=service
     cap=c.call('GET','/capabilities')['data']
     assert '1.3' in cap['contract_versions'] and '3' in cap['schema_versions']
-    assert cap['execution_versions']['bundle_versions']==['2','3','4','5','6','8']
+    assert cap['execution_versions']['bundle_versions']==['10','11']
     assert any(x['id']=='unit_declarations' and x['version']=='1' and x['supported'] for x in cap['capabilities'])
     cat=c.call('GET','/unit-catalog')['data'];validate('UnitCatalog1',cat)
-    assert len(cat['supported_units'])==28 and len(json.dumps(cat).encode())<16384
+    assert len(cat['supported_units'])==48 and len(json.dumps(cat).encode())<16384
     for kwargs,code in [({'expired':True},401),({'key':b'wrong'},401),({'permissions':[]},403),({'wrong_hash':True},401)]:
         c.call('GET','/unit-catalog',status=code,**kwargs)
+
+def test_display_name_is_not_a_native_python_package(service):
+    c = service
+    name = 'Steady heat-budget screen (12 kW cooling)'
+    body = dict(command_id=uid(), expected_revision=None, study_id=c.study,
+                name=name, template='empty', schema_version='3')
+    created = c.call('POST', '/models', body, status=201)['data']
+    assert created['name'] == name
+    assert c.call('POST', '/models', body, status=201)['data'] == created
+    assert c.call('GET', '/models/' + created['model_id'])['data']['name'] == name
 
 
 def test_incomplete_commit_restart_and_preparation_gate(service):
@@ -109,7 +119,7 @@ def test_preview_apply_atomic_replay_and_closed_units(service):
         assert c.call('GET',path)['data']==m
     attempt=[dict(kind='rename_model',name='rollback'),dict(kind='remove_instance',instance_id=uid())]
     edit(c,m,attempt,status=409);assert c.call('GET',path)['data']==m
-    assert prepare(c,commit(c,m))['data']['schema_version']=='2'
+    assert prepare(c,commit(c,m))['data']['schema_version']=='3'
 
 
 def test_exact_active_version_closure_and_retained_unused(service):
@@ -122,7 +132,7 @@ def test_exact_active_version_closure_and_retained_unused(service):
     m=edit(c,m,moves[:1])['data'];prepare(c,commit(c,m),status=422)
     m=edit(c,m,moves[1:])['data'];pin=commit(c,m)
     assert next(d for d in pin['definitions'] if d['definition_version_id']==v)==old
-    assert prepare(c,pin)['data']['schema_version']=='2'
+    assert prepare(c,pin)['data']['schema_version']=='3'
 
 
 def test_legacy_edit_mixed_versions_and_exact_source(service):
@@ -242,7 +252,8 @@ def test_physical_static_preparation_and_configuration_unit_diagnostics(service)
         assert not result['compatible']
         issue=next(x for x in result['diagnostics'] if x['code']==code)
         assert issue['path']=='inputs/0/units' and issue['element_ref']==cfg['inputs'][0]['target']['port_id']
-    artifact=prepare(c,m)['data'];validate('PreparedModelArtifact2',artifact)
+    artifact = prepare(c, m)['data']
+    validate('PreparedModelArtifact3', artifact)
     binding=next(f for f in artifact['files'] if f['path']=='generated/bindings.json')
     blob=c.call('GET','/preparations/'+artifact['preparation_id']+'/files/'+binding['file_id'])['data']
     bindings=json.loads(base64.b64decode(blob['bytes']))

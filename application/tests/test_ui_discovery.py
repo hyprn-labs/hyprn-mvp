@@ -34,21 +34,17 @@ def scoped_evidence_root(name):
 
 @pytest.fixture(scope='module')
 def private_http():
-    """Reuse the private task's audited overlay recipe; never contact the live service."""
+    """Reuse the audited adapter recipe of the deployment; never contact the live service."""
     evidence = scoped_evidence_root('public-discovery')
     evidence.mkdir(parents=True, exist_ok=True)
     loader = importlib.util.spec_from_file_location('private_discovery', ROOT / 'modeling/tests/test_ui_discovery.py')
     helper = importlib.util.module_from_spec(loader); loader.loader.exec_module(helper)
     stage = Path(tempfile.mkdtemp(prefix='adapter-', dir=evidence))
-    target = stage / helper.SERVICE; target.parent.mkdir(parents=True)
-    patch = (ROOT / 'upstream/whatsopt-patches/040-modeling-contract.patch').read_text()
-    section = patch.split('+++ b/' + helper.SERVICE + '\n', 1)[1].split('\n--- ', 1)[0]
-    target.write_text('\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')) + '\n')
-    for name in ['050-native-generation.patch', '060-ui-discovery.patch']:
-        result = subprocess.run(['patch', '--batch', '-p1'], input=helper.service_patch(ROOT / 'upstream/whatsopt-patches' / name),
-                                cwd=stage, text=True, capture_output=True, timeout=10)
-        (stage / (name + '.log')).write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    # The current audited adapter chain (every patch through configurations without criteria),
+    # replayed by the same recipe that builds the deployment: an earlier adapter cannot save
+    # Model4 versions or resolve configurations 6, the only configurations clients may author.
+    import modeling_runtime
+    target = modeling_runtime.stage_modeling_contract(stage)
     schema = stage / 'modeling.schema.json'; schema.write_bytes((ROOT / 'contracts/schemas/model.schema.json').read_bytes())
     image = json.loads((ROOT / 'deployment/pins.json').read_text())['modeling_producer']['image']
     script = helper.BOOT + """

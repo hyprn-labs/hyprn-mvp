@@ -1,0 +1,77 @@
+/* Compact input label/readout, with prepared points below the native range. */
+.hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-entry {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-entry label {
+  grid-row: auto;
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-value-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  max-width: calc(var(--space-12) * 3);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-value-box input {
+  width: 9ch;
+  min-height: var(--control-compact);
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--type-small-size);
+  appearance: textfield;
+}
+.hf-quantity-slider.hf-quantity-slider--compact
+  .hf-quantity-value-box
+  input::-webkit-inner-spin-button,
+.hf-quantity-slider.hf-quantity-slider--compact
+  .hf-quantity-value-box
+  input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-unit {
+  grid-column: auto;
+  max-width: 14ch;
+  font-size: var(--type-label-size);
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-discrete-track {
+  margin-top: var(--space-2);
+  padding-bottom: var(--space-1);
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-slider-stops {
+  top: auto;
+  bottom: 0;
+  transform: none;
+  height: var(--space-1);
+}
+.hf-quantity-slider.hf-quantity-slider--compact .hf-slider-stops span {
+  flex-basis: calc(var(--space-1) / 2);
+  height: calc(var(--space-1) / 2);
+}
+.hf-quantity-range-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--type-label-size);
+  overflow-wrap: anywhere;
+}
+.hf-quantity-range-labels > :last-child {
+  text-align: right;
+}
+
+@media (pointer: coarse) {
+  .hf-quantity-slider.hf-quantity-slider--compact .hf-quantity-value-box input {
+    min-height: var(--control-floor);
+  }
+}

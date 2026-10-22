@@ -137,7 +137,9 @@ def test_dispatcher_publishes_on_idle_and_stops_without_launch(tmp_path,monkeypa
     store=Store(tmp_path/'dispatcher.sqlite');native=Native();states=[];ticks=[0]
     monkeypatch.setenv('HYPRN_MVP_APP_STORE',str(store.path)); key=tmp_path/'key';key.write_bytes(b'synthetic-key')
     monkeypatch.setenv('HYPRN_MVP_MODEL_KEY_FILE',str(key));monkeypatch.setenv('HYPRN_MVP_MODEL_URL','http://unused')
-    monkeypatch.setattr(dispatcher,'NativeBridge',lambda:native);monkeypatch.setattr(dispatcher,'ModelingClient',lambda *a:None)
+    native.concurrent = False
+    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda **kwargs: native)
+    monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
     monkeypatch.setattr(dispatcher,'ObservationPublisher',lambda s,n:ObservationPublisher(s,n,monotonic=lambda:ticks[0]))
     def idle(*args):
         states.append(store.execution_observation());ticks[0]+=10
@@ -225,7 +227,9 @@ def dispatcher_for(monkeypatch, tmp_path, store, service, native, argv=('dispatc
     from hyprn_mvp_app import dispatcher
     monkeypatch.setenv('HYPRN_MVP_APP_STORE', str(store.path)); key = tmp_path/'key'; key.write_bytes(b'synthetic-key')
     monkeypatch.setenv('HYPRN_MVP_MODEL_KEY_FILE', str(key)); monkeypatch.setenv('HYPRN_MVP_MODEL_URL', 'http://unused')
-    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda: native); monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
+    native.concurrent = False
+    monkeypatch.setattr(dispatcher, 'NativeBridge', lambda **kwargs: native)
+    monkeypatch.setattr(dispatcher, 'ModelingClient', lambda *a: None)
     monkeypatch.setattr(dispatcher, 'Submissions', lambda *a: service)
     monkeypatch.setattr('sys.argv', list(argv))
     return dispatcher
@@ -326,10 +330,15 @@ def test_run_history_projection_holds_no_store_lock(submission, short_busy, monk
     accepted(submission); service.submit(actor, sid, dict(command_id=uid(), configuration_revision_id=second))
     expected = history.History(store).list(actor, sid)
     assert [r['configuration_revision_id'] for r in expected] == [revision, second]
-    entered, proceed = threading.Event(), threading.Event(); original = history.case_projection
-    def slow(raw, study, revision_id):
-        entered.set(); assert proceed.wait(10); return original(raw, study, revision_id)
-    monkeypatch.setattr(history, 'case_projection', slow)
+    entered, proceed = threading.Event(), threading.Event()
+    original = history.configuration_name_projection
+
+    def slow(raw, study, revision_id, **options):
+        entered.set()
+        assert proceed.wait(10)
+        return original(raw, study, revision_id, **options)
+
+    monkeypatch.setattr(history, 'configuration_name_projection', slow)
     listed = []; worker = threading.Thread(target=lambda: listed.append(history.History(store).list(actor, sid)))
     worker.start()
     try:
@@ -385,12 +394,15 @@ def test_only_sqlite_busy_is_transient_never_sqlite_locked():
     assert not transient_lock_error(sqlite3.OperationalError('no such table: outbox'))
 
 class ScriptedService:
-    """Submissions double: each dispatch takes the next scripted outcome (an exception or None)."""
+    """Submissions double: each dispatch, single or batched, takes the next scripted outcome
+    (an exception or None)."""
     def __init__(self, outcomes): self.outcomes = list(outcomes); self.calls = 0
     def dispatch(self, run, prepare_only=False):
         self.calls += 1
         outcome = self.outcomes.pop(0) if self.outcomes else None
         if outcome is not None: raise outcome
+    def dispatch_batch(self, runs):
+        self.dispatch(runs)
 
 def test_sqlite_locked_exits_without_backoff(submission, monkeypatch, tmp_path):
     from test_submission import accepted
@@ -442,3 +454,45 @@ def test_exit_cause_is_not_masked_by_a_failing_unavailable_publication(submissio
     with pytest.raises(RuntimeError, match='original exit cause'):
         dispatcher.main()
     assert 'unavailable observation not published' in capsys.readouterr().err
+
+@pytest.mark.parametrize('attested', [True, False])
+def test_export_dispatch_loop_uses_its_published_state_without_actor_read(
+        submission, monkeypatch, tmp_path, attested):
+    from test_submission import accepted
+    _, store, actor, sid, revision, native = submission
+    accepted(submission)
+    service = ScriptedService([])
+    dispatcher = dispatcher_for(monkeypatch, tmp_path, store, service, native,
+                                ('dispatcher', '--with-exports'))
+    monkeypatch.setattr(native, 'require_attestation', lambda: attested)
+    monkeypatch.setattr(native, 'bundle_runtime', runtime_fixture)
+    # Hosted row policies hide observations outside a user scope. The owner must
+    # use its own publication, not impersonate a user or widen database access.
+    monkeypatch.setattr(Store, 'execution_observation', lambda self: None)
+    monkeypatch.setattr(dispatcher, 'export_once', lambda *a, **kw: None)
+    monkeypatch.setattr(dispatcher.select, 'select', lambda *a: ([1], [], []))
+    dispatcher.main()
+    assert service.calls == int(attested)
+
+
+def test_dispatch_readiness_expires_and_failed_publication_clears_it(api, monkeypatch):
+    from hyprn_mvp_app import readiness
+    clock = [1000.]
+    monkeypatch.setattr(readiness, 'wall_time', lambda: clock[0])
+    publisher = readiness.ObservationPublisher(api[1], Native(), monotonic=lambda: clock[0])
+    assert not publisher.ready()
+    publisher.refresh()
+    assert publisher.ready()
+    clock[0] = 1030.
+    assert not publisher.ready()
+    publisher.refresh()
+    assert publisher.ready()
+    clock[0] = 1029.
+    assert not publisher.ready()
+    clock[0] = 1040.
+    def unavailable(*args):
+        raise sqlite3.OperationalError('publication failed')
+    monkeypatch.setattr(api[1], 'publish_execution_observation', unavailable)
+    with pytest.raises(sqlite3.OperationalError):
+        publisher.refresh()
+    assert not publisher.ready()

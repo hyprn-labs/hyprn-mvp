@@ -206,5 +206,92 @@ class DesignSystemGuard(unittest.TestCase):
         self.assertIn('src/dom.ts:3:inline-style:style=', ts.stdout)
 
 
+class ComponentOwnership(unittest.TestCase):
+    def test_record_details_has_one_shared_trigger_recipe(self):
+        from check_component_ownership import record_trigger_violations, css_violations
+        for trigger in ('<ActionDialog label="Run record details">',
+                        '<ActionDialog title="Method record">',
+                        '<summary>Prediction record details</summary>'):
+            self.assertTrue(record_trigger_violations(trigger))
+        self.assertFalse(record_trigger_violations('<RecordDetails kind="Run">'))
+        self.assertTrue(css_violations('.screen .hf-record-metadata {margin:0}'))
+        self.assertTrue(css_violations('.page-heading {align-items:center}'))
+        self.assertTrue(css_violations('.case-list-row {padding:0}'))
+
+    def test_screen_cannot_resize_shared_controls_or_assertions(self):
+        from check_component_ownership import css_violations
+        for selector in ('.dialog .hf-btn', '.row > button', '.row > summary', '.row > select'):
+            self.assertTrue(css_violations(selector + '{font-size:var(--type-small-size)}'))
+            self.assertTrue(css_violations(selector + '{min-height:var(--control-desk)}'))
+        self.assertTrue(css_violations('.hf-assertion {margin:0}'))
+        self.assertTrue(css_violations('.card .hf-panel__body {padding:var(--space-6)}'))
+        self.assertTrue(css_violations('.results td {padding-block:var(--space-1)}'))
+        self.assertFalse(css_violations('.results td {text-align:right}'))
+        self.assertFalse(css_violations('.toolbar {display:flex;gap:var(--space-2)}'))
+        self.assertFalse(css_violations('.toolbar>.hf-btn {margin-left:auto}'))
+
+    def test_page_and_section_widths_come_only_from_content_column(self):
+        from check_component_ownership import css_violations
+        for declaration in ('max-width:var(--home-max)', 'width:var(--form-max)',
+                            'max-width: var(--login-max)', 'width:min(var(--page-max),100%)',
+                            'max-width:var(--dialog-max)'):
+            with self.subTest(declaration=declaration):
+                self.assertTrue(css_violations('[aria-label="Study brief"]{' + declaration + '}'))
+        self.assertFalse(css_violations('.home-page{margin:var(--page-gutter) auto}'))
+        # A ContentColumn child takes block margins only: an inline auto margin shrinks it.
+        children = frozenset({'home-page', 'login'})
+        for body in ('margin:var(--page-gutter) auto', 'margin:0 var(--space-3)',
+                     'margin-inline:auto', 'margin-left:var(--space-2)'):
+            with self.subTest(body=body):
+                self.assertTrue(css_violations('.home-page{' + body + '}', children))
+        self.assertFalse(css_violations('.home-page{margin-block:var(--page-gutter)}', children))
+        self.assertFalse(css_violations('.home-page h1{margin:0 auto}', children))
+        self.assertFalse(css_violations('.homepage{margin:0 auto}', children))
+        # A wide table may scroll inside its own box at a token width.
+        self.assertFalse(css_violations('.variables-scroll table{min-width:var(--home-max)}'))
+
+    def test_workspace_recipes_have_no_screen_override_escape(self):
+        from check_component_ownership import css_violations
+        for family in ("workspace", "navigation", "resource-card", "settings", "source-reader", "disclosure",
+                       "context-panel", "details-dock", "details-layer", "claim", "claim-button",
+                       "flow", "option-list", "collection-toolbar", "collection-filters",
+                       "collection-status"):
+            for suffix in ("", "__body", "--selected"):
+                with self.subTest(family=family, suffix=suffix):
+                    selector = ".screen .hf-" + family + suffix
+                    self.assertTrue(css_violations(selector + "{padding:var(--space-6)}"))
+                    self.assertTrue(css_violations(selector + "{border-radius:var(--radius-xs)}"))
+        self.assertFalse(css_violations(".profile-placement {margin:var(--space-6) auto}"))
+        for selector in (".inspector-section", ".inspector .section-header", ".detail-tabs",
+                         ".canvas-toolbar", ".canvas-search"):
+            self.assertTrue(css_violations(selector + "{padding:var(--space-4)}"))
+        self.assertFalse(css_violations(".model-region:not(.inspector-collapsed) {grid-row:2}"))
+        self.assertFalse(css_violations(".connected-inspector {grid-row:2;max-height:80vh}"))
+        self.assertFalse(css_violations(".case-grid {display:grid;gap:var(--space-4)}"))
+
+    def test_raw_controls_and_class_aliases_are_rejected(self):
+        from check_component_ownership import check
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'src').mkdir()
+            (root / 'src/Screen.tsx').write_text('<button>Save</button>')
+            self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<a href="/reader">Read</a>')
+            self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<Button variant="link">Read</Button>')
+            self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<OpenLink href="/reader">Read</OpenLink>')
+            self.assertFalse(check(root))
+            (root / 'src/Screen.tsx').write_text('<Button className="primary">Save</Button>')
+            self.assertTrue(check(root))
+            for trigger in ('<ActionDialog title="Evidence detail" label="View evidence">',
+                            '<Button>View evidence (2)</Button>',
+                            '<blockquote>Source excerpt</blockquote>'):
+                (root / 'src/Screen.tsx').write_text(trigger)
+                self.assertTrue(check(root))
+            (root / 'src/Screen.tsx').write_text('<Button variant="primary">Save</Button>')
+            self.assertFalse(check(root))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -4,14 +4,16 @@ The design system is the interface language of HYPRN MVP, a workspace where engi
 
 Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.md) before any UI work, then [Naming](Naming.md), [Coherence](Coherence.md) and the per-component notes in `components/`. The colour, type, spacing, radius, shadow and size values live in [`tokens.json`](tokens.json).
 
+[Contour](Contour.md) is the current visual authority for typography, curvature, surfaces and shell composition; it supersedes conflicting legacy visual descriptions in Layouts and component notes. Scientific meaning, entity ownership and interaction contracts remain binding.
+
 ## Principles
 
-1. **Grey is normal; colour asks for attention.** Following high-performance HMI practice (ISA-101), the resting interface is steel grey and ink. Colour appears only to mean something: `accent` for what you can act on, `alarm` / `warning` / `advisory` for what needs attention, `ok` for a recorded success, `trace` for provenance, `ai` for assistant-originated content. Never colour a block to make it look nicer.
+1. **Grey is normal; colour asks for attention.** Following high-performance HMI practice (ISA-101), the resting interface is neutral grey and charcoal ink. Colour appears only to mean something: `accent` for what you can act on, `alarm` / `warning` / `advisory` for what needs attention, `ok` for a recorded success, `trace` for provenance, `ai` for assistant-originated content. Never colour a block to make it look nicer.
 2. **One meaning per hue, everywhere.** A hue never changes job between screens. `trace` never marks a button; `accent` never marks a status; `ai` never appears on content a person typed or a run computed.
 3. **Every state is redundant.** Status is shape + word + colour, never colour alone (alarm diamond, warning triangle, advisory square, ok circle, inert hollow circle). It has to survive colour-blindness, glare on a plant-floor screen and greyscale printing.
 4. **Numbers are first-class.** Values are set in `readout` (the system monospace, tabular figures), units sit beside them in `ink-muted`, and missing values are words ("unassigned", "not computed"), never blanks or zeros.
 5. **History is visibly frozen.** Whenever a past run or version is open, the `record` bar spans the workspace. Nothing else in the product uses that inverse band.
-6. **Scientific meaning first.** Screens lead with human-readable context, quantities, claims and sources. Exact identities, hashes and serialized records are secondary, in Record details (see [Coherence](Coherence.md)).
+6. **Scientific meaning first.** Screens lead with human-readable context, quantities, claims and sources. Exact identities, hashes and serialized records are secondary, in the shared [RecordDetails](components/RecordDetails.md) control immediately below each owning title.
 
 ## Content fundamentals
 
@@ -25,19 +27,19 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 ## Visual foundations
 
-**Colour.** Build every screen on `canvas` with `surface` panels and `line` hairlines. Text is `ink` (values, titles), `ink-2` (body) or `ink-muted` (metadata and units). Use `accent` only for interaction: the single primary button per view, links, the active tab and selection (`accent-soft` fill + `accent` border). Status colours follow alarm priority: `alarm` (priority 1: failed, violated, invalid), `warning` (priority 2: not converged, partial, stale, needs review), `advisory` (priority 3: unassigned, not evaluated), then `ok` for recorded success and `inert` for not applicable. Never show a live "normal" state in green. A banner uses the `*-soft` ground with the matching text token. Text on a filled `accent`, `ai` or `alarm` button uses `on-accent`, `on-ai` or `on-alarm`, never literal white. Two themes exist: Day (light) and Control room (dark); every screen works in both.
+**Colour — Charcoal (approved Option B).** Interaction uses charcoal on light surfaces and light neutral ink on dark surfaces. Blue is reserved for visible keyboard focus, separate from selection. Content links use an underlined label and visible opening arrow; quiet commands are not underlined; primary and secondary controls retain their button boundaries. Build every screen on `canvas` with `surface` panels and `line` hairlines. Text is `ink` (values, titles), `ink-2` (body) or `ink-muted` (metadata and units). Use `accent` only for interaction: the single primary button per view, links, the active tab and selection (`accent-soft` fill + `accent` border). Status colours follow alarm priority: `alarm` (priority 1: failed, violated, invalid), `warning` (priority 2: not converged, partial, stale, needs review), `advisory` (priority 3: unassigned, not evaluated), then `ok` for recorded success and `inert` for not applicable. Never show a live "normal" state in green. A banner uses the `*-soft` ground with the matching text token. Text on a filled `accent`, `ai` or `alarm` button uses `on-accent`, `on-ai` or `on-alarm`, never literal white. Two themes exist: Light and Dark; every screen works in both.
 
-**Type.** The interface uses the operating system's fonts only: the system sans stack (`--font-sans`) for interface text (`title`, `heading`, `subheading`, `body`, `body-strong`, `small`, `label`), the system monospace stack (`--font-mono`) for every number, unit, identifier and line of code (`readout-lg`, `readout`, `code`), and `--font-condensed` (currently the same system sans stack) for dense tables (`table`, `table-head`). No font is downloaded from any host. Use one `title` per page. `label` and `table-head` are uppercase with tracking and are the only uppercase text; names and quantity symbols are never uppercased by table styles.
+**Type.** Audited self-hosted Manrope (200–800) with system fallback supplies interface text and dense table labels. System monospace with tabular figures remains mandatory for quantities, units, identifiers and source. See [Contour](Contour.md). One title per page; uppercase only for label and table-head roles.
 
-**Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-4`; workbench panels sit `space-3` apart; sections separate by `space-6`. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. The XDSM view uses a `space-12` matrix pitch.
+**Space and density.** 4px base: `space-1` to `space-12`. Panels pad `space-6` (`space-4` at narrow widths); collection cards sit `space-4` apart; sections separate by `space-6`. Reading text uses the prose type role (14/24) across the available reading width; controls and numerical tables retain their own density. Pages use the `page-gutter` (28px) on desktop and narrower gutters on small screens. Controls are `control-desk` (36px) by default and switch to `control-floor` (48px) on touch or shared displays. Tables use `row` (36px) or `row-dense` (28px) for variable and sample tables. Button sizes are complete recipes in [Button](components/Button.md); their height grows for wrapped labels. The XDSM view uses a `space-12` matrix pitch.
 
-**Shape.** Corners are machined: `radius-xs` for tags and data cells, `radius-sm` for controls and graph nodes, `radius-md` for panels, dialogs and the record bar. `radius-full` is only for progress tracks and circular marks. Borders define objects; panels have no shadow. `shadow-float` is only for menus, popovers and the toast.
+**Shape.** Contour uses radius-xs for chips, radius-sm for proportional controls, radius-md for working panels and radius-shell for the central canvas. Shared shadows distinguish floating and raised surfaces; sunken wells remain shadowless. Status shapes remain unchanged.
 
-**Surfaces.** Two layers only: `canvas`, then `surface`. Anything deeper is a `surface-sunken` well (read-only values, code, table headers) or a hairline, never a third raised layer.
+**Surfaces.** Neutral shell-ground frames the canvas; raised panels use surface-raised and shadow-panel. Sunken values/code wells use surface-sunken without elevation. Static texture and restrained neutral gradients belong only to shell chrome, never over scientific text or data.
 
-**Focus and states.** Every focusable element shows a 2px `focus` outline offset 2px; elements that clip outlines use `focus-ring`. Hover darkens `accent` to `accent-hover`; disabled is 45% opacity with the reason stated nearby. Selected = `accent-soft` fill + 2px `accent` edge.
+**Focus and states.** Every focusable element shows a 2px `focus` outline offset 2px; elements that clip outlines use `focus-ring`. The inverse record bar uses `focus-on-record`, a contrasting blue in both themes. Hover changes `accent` to `accent-hover`; disabled is 45% opacity with the reason stated nearby. Selected = `accent-soft` fill + 2px `accent` edge.
 
-**Assistant content.** Proposals sit in an `InferenceBlock`: a dashed `ai` border, an `ai-soft` header, the word "Proposal" and its status. The assistant's mark is a solid `ai` square with an iris glyph. There are no gradients anywhere in the system.
+**Assistant content.** Proposals sit in an `InferenceBlock`: a dashed `ai` border, an `ai-soft` header, the word "Proposal" and its status. The assistant's mark is a solid `ai` square with an iris glyph. Neutral shell-chrome gradients follow Contour; assistant and scientific semantic colours retain their dedicated meanings.
 
 **Motion.** Only for state change: 120ms ease-out for hover and selection, 200ms for panels opening. The running indicator is the only loop. Respect `prefers-reduced-motion`.
 
@@ -47,11 +49,17 @@ Read this file, [Layouts](Layouts.md) and [Scientific states](Scientific-states.
 
 Icons are small inline SVGs drawn independently for HYPRN MVP on a 24-unit grid (`ActionIcon`: close, back, add, import, export, chevrons, search) and passed to components as React nodes. No icon font or icon library is loaded. Icons always sit beside a word, except icon buttons, which carry an `aria-label`. Status marks are drawn shapes from the `StatusTag` component, not icons. The components' built-in glyphs (lock, return arrow, document, iris mark, basis glyphs) are inline SVGs too.
 
-There is no logo file. The wordmark is the text "HYPRN MVP" at the `heading` size, weight 700, in `ink`, at the left of the app bar.
+The supplied HYPRN package is preserved with provenance in `ui/src/design/assets/brand`. `BrandLogo` uses the supplied vector mark geometry and original wordmark alpha mask, with transparent ground and theme-aware `brand-ink` / `brand-signal`. Expanded navigation and sign-in use one horizontal lockup; collapsed navigation uses the mark alone. No duplicate text name or light plate. Original artwork remains available for exports; live colors come from tokens. See [BrandLogo](components/BrandLogo.md).
+
+**Source syntax.** `syntax-keyword` is neutral ink with body-strong weight; `syntax-string` and `syntax-number` use secondary ink. Comments use muted ink. Syntax is neither a warning, successful result nor interactive element. All source readers/editors share these roles.
+
+**Export palette.** Standalone SVG/PNG/HTML diagrams retain their existing fixed print palette in the single export renderer (`ui/src/exports.ts`). It provides a stable white-ground document independent of application theme. This change does not recolour old or new exported diagrams. Any future export palette revision must be centralized and separately verified.
 
 ## Implementation
 
-The implementation is the typed React port in `ui/src/design`: `components.tsx` (AttributionChip, Panel, Tabs, Button, Field, DataTable, ModelNode, StatusTag, Ledger, Readout, SourceChip, InferenceBlock, RecordBar), `primitives.tsx` (ActionIcon, CriterionRecord, TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress), `graph.tsx` (GraphCanvas), `source.tsx` (SourceSurface), `numbers.ts` (`formatNumber`), `foundry.css` and the generated `tokens.css`. `ui/src/main.tsx` imports `tokens.css`, then `foundry.css`, then the screen styles once. Compose screens only from these exports; never introduce a colour, size or radius that is not a token.
+**Quantity direction.** `quantity-input` teal and `quantity-output` rose identify input and output direction. Connected quantities combine both in a split inlet/outlet mark and retain Input/Output and relationship words. Text stays neutral; accent selection and blue focus remain separate. These roles never indicate scientific status, success, provenance or inference; explorer result-basis colours and export colours are unchanged.
+
+The complete export, consumer, recipe and state inventory is maintained in [Contour](Contour.md). Workspace composites live in workspace.tsx; reading compositions in compositions.tsx; numerical presentation in exploration.tsx. The implementation is the typed React port in `ui/src/design`: `components.tsx` (AttributionChip, Panel, Tabs, Button, Field, DataTable, ModelNode, StatusTag, Ledger, Readout, SourceChip, InferenceBlock, RecordBar), `primitives.tsx` (ActionIcon, CriterionRecord, TextInput, TextArea, Select, Checkbox, Disclosure, DialogFrame, SectionHeader, ActionDialog, DetailTabs, FilePicker, Progress), `graph.tsx` (GraphCanvas), `source.tsx` (SourceSurface), `numbers.ts` (`formatNumber`), `foundry.css` and the generated `tokens.css`. `ui/src/main.tsx` imports `tokens.css`, then `foundry.css`, then the screen styles once. Compose screens only from these exports; never introduce a colour, size or radius that is not a token.
 
 Implementation rules:
 
@@ -64,6 +72,8 @@ Implementation rules:
 ## Tokens and checks
 
 `tokens.json` is the single source of the token values. `python3 ui/design_tokens.py` generates `ui/src/design/tokens.css` from it; never hand-edit `tokens.css`, and `python3 ui/design_tokens.py --check` fails when it is stale.
+
+[Consistency](Consistency.md) records the shared ownership inventory and acceptance criteria. [Assertions](components/Assertion.md) defines scientific statement/evidence rhythm. `check_component_ownership.py` rejects raw controls, old class aliases and screen-level overrides of button recipes or assertion/evidence/logo internals, without a baseline.
 
 `python3 ui/check_design_system.py` keeps screen code on the tokens. It scans `ui/src/**/*.{ts,tsx,css}` except `ui/src/design/**` for colour literals (hex, `rgb()`/`hsl()` and, in CSS, the white/black keywords), CSS px literals, inline styles (`style=`, `setAttribute('style')`, `cssText`) and font declarations (`font-family`, `font` shorthand, `fontFamily`), and must report no new violations.
 

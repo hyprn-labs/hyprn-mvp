@@ -34,12 +34,21 @@ async function component(page: Page) {
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
   await expect(page.getByText('Component added',{exact:true})).toBeVisible();
 }
-async function ports(page: Page) { await page.getByRole('button',{name:'Edit ports',exact:true}).click();return page.getByRole('dialog',{name:'Edit ports',exact:true}); }
+async function ports(page: Page) {
+  await page.getByRole('button',{name:'Component actions',exact:true}).first().click();
+  await page.getByRole('button',{name:'Manage quantities',exact:true}).click();
+  return page.getByRole('dialog',{name:'Manage quantities',exact:true});
+}
+/** A quantity definition saves the model in the current format (Model4), which new
+ * configurations require. */
+async function defineQuantity(edit: ReturnType<Page['getByRole']>) {
+  await edit.getByLabel('Quantity 1 definition',{exact:true}).fill('Specific energy supplied to the law');
+}
 async function closePorts(page: Page) { await page.keyboard.press('Escape'); }
 async function save(page: Page) {
   await page.getByRole('button',{name:'Save component',exact:true}).click();
   await page.getByRole('button',{name:'Apply changes',exact:true}).click();
-  await expect(page.getByText('Draft · saved',{exact:true})).toBeVisible();
+  await expect(page.getByText('Component saved',{exact:true})).toBeVisible();
 }
 const ids=(page:Page)=> {const hash=new URLSearchParams(new URL(page.url()).hash.slice(1));return {sid:hash.get('study')!,mid:hash.get('model')!};};
 async function snapshot(page:Page) {const {sid,mid}=ids(page);return (await (await page.request.get('/api/1/studies/'+sid+'/models/'+mid)).json()).data;}
@@ -48,8 +57,8 @@ const activePorts=(m:any)=>m.definitions.find((d:any)=>d.definition_version_id==
 
 async function configuration(page: Page,outputUnits = 'J/kg',beforeConfiguration?:()=>Promise<void>) {
   await component(page); const edit=await ports(page);
-  for(const n of [1,2]) {await edit.getByLabel(`Port ${n} units`,{exact:true}).selectOption('physical');await edit.getByLabel(`Port ${n} units spelling`,{exact:true}).fill(n===2 ? outputUnits : 'J/kg');}
-  await closePorts(page);await save(page);await beforeConfiguration?.();
+  for(const n of [1,2]) {await edit.getByLabel(`Quantity ${n} units`,{exact:true}).selectOption('physical');await edit.getByLabel(`Quantity ${n} units spelling`,{exact:true}).fill(n===2 ? outputUnits : 'J/kg');}
+  await defineQuantity(edit);await closePorts(page);await save(page);await beforeConfiguration?.();
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Unit configuration');
   await page.getByLabel('Energy law · x value',{exact:true}).fill('2');
@@ -59,29 +68,25 @@ async function physical(page: Page,label:string,value:string) {
   await page.getByLabel(label,{exact:true}).selectOption('physical');
   await page.getByLabel(label+' spelling',{exact:true}).fill(value);
 }
-test('@units-configuration explicit input and criterion intents use the public catalog and Request4',async({page})=>{
+test('@units-configuration explicit input units use the public catalog; configuration 6 carries no criteria',async({page})=>{
   await configuration(page);
   await expect(page.getByLabel('Energy law · x units',{exact:true})).toHaveValue('unspecified');
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'Choose Dimensionless or physical units'})).toBeVisible();
   await physical(page,'Energy law · x units','MJ/kg');
-  await page.getByRole('button',{name:'Edit',exact:true}).last().click();
-  const dialog=page.getByRole('dialog',{name:'Edit criteria',exact:true});
-  await dialog.getByRole('button',{name:'Add criterion',exact:true}).click();
-  await dialog.getByLabel('Criterion 1 output',{exact:true}).selectOption({label:'Energy law · y'});
-  await dialog.getByLabel('Criterion 1 threshold',{exact:true}).fill('3000000');
-  await expect(dialog.getByLabel('Criterion 1 units',{exact:true})).toHaveValue('unspecified');
-  await physical(page,'Criterion 1 units','J/kg');await page.keyboard.press('Escape');
+  // Criteria belong to the study brief; the configuration editor authors none.
+  await expect(page.locator('.configuration-criterion')).toHaveCount(0);
+  await expect(page.locator('.configuration-criterion').getByRole('button')).toHaveCount(0);
   const request=page.waitForRequest(r=>r.method()==='POST' && /configurations\/preview$/.test(new URL(r.url()).pathname));
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  const body=(await request).postDataJSON();expect(body.schema_version).toBe('4');
+  const body=(await request).postDataJSON();expect(body.schema_version).toBe('6');
   expect(body.inputs[0].units).toBe('MJ/kg');expect(body.inputs[0].value).toBe(2);
-  expect(body.criteria[0].units).toBe('J/kg');
-  await expect(page.getByRole('button',{name:'Copy configuration to draft',exact:true})).toBeVisible();
+  expect(body).not.toHaveProperty('criteria');expect(body).not.toHaveProperty('approach_selection');
+  await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
 });
 
 test('@units-configuration invalid spelling, incompatible proof and catalog outage keep local edits',async({page})=>{
-  await configuration(page);await physical(page,'Energy law · x units','USD');
+  await configuration(page);const {sid,mid}=ids(page);await physical(page,'Energy law · x units','USD');
   await expect(page.getByRole('alert').filter({hasText:'This unit spelling is not supported'})).toBeVisible();
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toHaveValue('USD');
@@ -90,9 +95,9 @@ test('@units-configuration invalid spelling, incompatible proof and catalog outa
   await expect(page.getByRole('alert').filter({hasText:'incompatible'}).first()).toBeVisible();
   await page.getByLabel('Energy law · x units spelling',{exact:true}).fill('MJ/kg');
   await page.getByRole('button',{name:'Discard configuration changes',exact:true}).click();
-  await page.getByRole('button',{name:'← All configurations',exact:true}).click();
-  await page.getByRole('button',{name:'Models',exact:true}).click();
-  await page.getByRole('button',{name:'Open model Compound quantities',exact:true}).click();
+  await page.getByRole('button',{name:'Return to all configurations',exact:true}).click();
+  await page.evaluate(({sid,mid})=>{location.hash=new URLSearchParams({v:'1',study:sid,model:mid,view:'model'}).toString();},{sid,mid});
+  await expect(page.getByRole('heading',{name:'Compound quantities',exact:true})).toBeVisible();
   await page.route('**/unit-catalog',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'backend_unavailable',message:'Unavailable',fields:[],outcome:'unchanged'}})}));
   await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Retained during outage');
@@ -111,32 +116,44 @@ test('@units-configuration incomplete immutable version identifies and opens exa
   await expect(page.getByRole('alert').filter({hasText:'units are not specified'})).toBeVisible();
   await page.getByText('Units incomplete',{exact:true}).click();await page.getByRole('button',{name:'View quantity',exact:true}).first().click();
   await expect(page.getByLabel('Model version',{exact:true})).toHaveValue(version!);
-  // View quantity opens the exact read-only version with the quantity's component selected; the
-  // canonical model view shows units in the quantities table, where its rows read Not specified.
+  // View quantity opens the exact read-only version with that quantity selected; the component's
+  // quantities table shows its units, where every incomplete row reads Not specified.
   await expect(page.locator('.selection-inspector')).toContainText('Energy law');
-  const selected=page.getByRole('region',{name:'Quantities table',exact:true}).locator('tr[aria-selected="true"]');
-  await expect(selected).toHaveCount(2);
-  for(const symbol of ['x','y']){const row=selected.filter({has:page.locator('th code',{hasText:new RegExp('^'+symbol+'$')})});
-    await expect(row).toHaveCount(1);await expect(row.locator('td.unit')).toHaveText('Not specified');}
+  await page.getByRole('tab',{name:'Quantities',exact:true}).click();
+  const table=page.getByRole('table',{name:'Quantities',exact:true});
+  const row=(symbol:string)=>table.locator('tr[data-variable]').filter({has:page.locator('th code',{hasText:new RegExp('^'+symbol+'$')})});
+  await expect(table.locator('tr[aria-selected="true"]')).toHaveCount(1);
+  await expect(row('x')).toHaveAttribute('aria-selected','true');
+  for(const symbol of ['x','y']){await expect(row(symbol)).toHaveCount(1);await expect(row(symbol).locator('td.unit')).toHaveText('Not specified');}
   await expect(page.getByRole('button',{name:'Save component',exact:true})).toHaveCount(0);
 });
 
 test('@units-configuration explicit dimensionless retains historical empty strings on copied configurations',async({page})=>{
   await component(page);const edit=await ports(page);
-  for(const n of [1,2])await edit.getByLabel(`Port ${n} units`,{exact:true}).selectOption('dimensionless');
-  await closePorts(page);await save(page);await page.getByRole('button',{name:'Create configuration',exact:true}).click();
+  for(const n of [1,2])await edit.getByLabel(`Quantity ${n} units`,{exact:true}).selectOption('dimensionless');
+  await defineQuantity(edit);await closePorts(page);await save(page);await page.getByRole('button',{name:'Create configuration',exact:true}).click();
   await page.getByLabel('Configuration name',{exact:true}).fill('Dimensionless configuration');
   await page.getByLabel('Energy law · x value',{exact:true}).fill('0');await page.getByLabel('Energy law · x provenance',{exact:true}).fill('Explicit zero');
   await page.getByLabel('Energy law · x units',{exact:true}).selectOption('dimensionless');
   const response=page.waitForResponse(r=>r.request().method()==='POST' && /configurations$/.test(new URL(r.url()).pathname));
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
   const frozen=(await (await response).json()).data;expect(frozen.configuration.inputs[0].units).toBe('');expect(frozen.configuration.inputs[0].value).toBe(0);
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await expect(page.getByLabel('Energy law · x value',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await expect(page.getByLabel('Energy law · x units',{exact:true})).toHaveValue('dimensionless');
   await expect(page.getByLabel('Energy law · x value',{exact:true})).toHaveValue('0');
+  await page.getByLabel('Energy law · x value',{exact:true}).fill('2');
+  const revisedResponse=page.waitForResponse(r=>r.request().method()==='POST' && /configurations$/.test(new URL(r.url()).pathname));
+  await page.getByRole('button',{name:'Save configuration',exact:true}).click();
+  const revised=(await (await revisedResponse).json()).data;
+  expect(revised.configuration.configuration_revision_id).not.toBe(frozen.configuration.configuration_revision_id);
+  expect(revised.configuration.inputs[0].value).toBe(2);
+  const original=await page.request.get(`/api/1/studies/${frozen.configuration.study_id}/configurations/${frozen.configuration.configuration_revision_id}`);
+  expect((await original.json()).data).toEqual(frozen);
 });
 
-test('@units-configuration source units, conversion proof and Seed4 retain exact saved strings',async({page})=>{
+test('@units-configuration source units, conversion proof and the modified-run seed retain exact saved strings',async({page})=>{
   await configuration(page,'MJ/kg');await physical(page,'Energy law · x units','MJ/kg');
   const saved=page.waitForResponse(r=>r.request().method()==='POST' && /configurations$/.test(new URL(r.url()).pathname));
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
@@ -144,7 +161,7 @@ test('@units-configuration source units, conversion proof and Seed4 retain exact
   const sid=frozen.configuration.study_id;
   const retained=await page.request.post('/fixture/retain',{data:{study_id:sid,configuration_revision_id:frozen.configuration.configuration_revision_id}});
   expect(retained.ok()).toBe(true);const rid=(await retained.json()).run_id;
-  await page.getByRole('button',{name:'Copy configuration to draft',exact:true}).click();
+  await page.getByRole('button',{name:'Create new version',exact:true}).click();
   await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toHaveValue('MJ/kg');
   await page.getByRole('button',{name:'Use a run result',exact:true}).click();
   const picker=page.getByRole('dialog',{name:'Use a run result for Energy law · x',exact:true});
@@ -162,10 +179,10 @@ test('@units-configuration source units, conversion proof and Seed4 retain exact
   await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toHaveValue('MJ/kg');
   const request=page.waitForRequest(r=>r.method()==='POST' && /configurations\/preview$/.test(new URL(r.url()).pathname));
   await page.getByRole('button',{name:'Save configuration',exact:true}).click();
-  const candidate=(await request).postDataJSON();expect(candidate.schema_version).toBe('4');expect(candidate.inputs[0].units).toBe('MJ/kg');
+  const candidate=(await request).postDataJSON();expect(candidate.schema_version).toBe('6');expect(candidate.inputs[0].units).toBe('MJ/kg');expect(candidate).not.toHaveProperty('criteria');
   await expect(page.getByRole('dialog',{name:'Review modified run',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Save modified configuration',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Copy configuration to draft',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Create new version',exact:true})).toBeVisible();
 });
 
 test('@units-configuration light dark narrow and actual 200 percent zoom preserve keyboard controls',async({baseURL})=>{
@@ -197,19 +214,18 @@ test('@units-configuration light dark narrow and actual 200 percent zoom preserv
       const shot=await cdp.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});await writeFile(join(root,'evidence/'+name+'.png'),Buffer.from(shot.data,'base64'));
     }
     await resize(1440,1000);
-    async function criterion() {await page.getByRole('button',{name:'Edit',exact:true}).last().click();const dialog=page.getByRole('dialog',{name:'Edit criteria',exact:true});if(await dialog.getByRole('button',{name:'Add criterion',exact:true}).count()){await dialog.getByRole('button',{name:'Add criterion',exact:true}).click();await dialog.getByLabel('Criterion 1 output',{exact:true}).selectOption({label:'Energy law · y'});await dialog.getByLabel('Criterion 1 threshold',{exact:true}).fill('3');await physical(page,'Criterion 1 units','J/kg');}return dialog;}
     for(const theme of ['light','dark']) {
       await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);await page.getByLabel('Energy law · x units spelling',{exact:true}).scrollIntoViewIfNeeded();await capture('units-configuration-'+theme);
-      await criterion();await capture('units-criteria-'+theme);await page.keyboard.press('Escape');
     }
-    await resize(600,900);await page.getByLabel('Energy law · x units spelling',{exact:true}).scrollIntoViewIfNeeded();await capture('units-configuration-narrow');await criterion();await capture('units-criteria-narrow');await page.keyboard.press('Escape');await resize(1440,1000);
+    await resize(600,900);await page.getByLabel('Energy law · x units spelling',{exact:true}).scrollIntoViewIfNeeded();await capture('units-configuration-narrow');await resize(1440,1000);
     const tab=await worker.evaluate(async(url)=>{const tabs=await(globalThis as any).chrome.tabs.query({});return tabs.find((t:any)=>t.url.startsWith(url)).id;},baseURL!);
     await worker.evaluate(id=>(globalThis as any).chrome.tabs.setZoom(id,2),tab);
     expect(await worker.evaluate(id=>(globalThis as any).chrome.tabs.getZoom(id),tab)).toBe(2);expect(page.viewportSize()).toBeNull();await expect.poll(()=>page.evaluate(()=>innerWidth)).toBe(720);
     for(const theme of ['light','dark']) {
       await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
       const intent=page.getByLabel('Energy law · x units',{exact:true});await intent.focus();await page.keyboard.press('Tab');await expect(page.getByLabel('Energy law · x units spelling',{exact:true})).toBeFocused();await capture('units-configuration-200-'+theme);
-      const dialog=await criterion();const spelling=dialog.getByLabel('Criterion 1 units spelling',{exact:true});await spelling.fill('USD');await dialog.getByRole('alert').scrollIntoViewIfNeeded();await capture('units-criteria-error-200-'+theme);await spelling.fill('J/kg');await capture('units-criteria-200-'+theme);await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Edit',exact:true}).last()).toBeFocused();
+      // An unsupported spelling stays readable and keyboard-correctable at 200 percent.
+      const spelling=page.getByLabel('Energy law · x units spelling',{exact:true});await spelling.fill('USD');const unsupported=page.getByRole('alert').filter({hasText:'This unit spelling is not supported'});await unsupported.scrollIntoViewIfNeeded();await expect(unsupported).toBeVisible();await capture('units-configuration-error-200-'+theme);await spelling.fill('MJ/kg');await expect(unsupported).toHaveCount(0);await expect(spelling).toBeFocused();
       await page.getByRole('button',{name:'Save configuration',exact:true}).focus();await expect(page.getByRole('button',{name:'Save configuration',exact:true})).toBeFocused();
     }
     await writeFile(join(root,'evidence/units-native-zoom.json'),JSON.stringify({zoom:2,viewport:null,geometry},null,2));
@@ -222,6 +238,6 @@ test('@units-configuration current catalog revocation clears protected configura
   await configuration(page,'J/kg',async()=>{await page.route('**/unit-catalog',async route=>{arrived=true;await pending;await route.continue();},{times:1});});
   await expect.poll(()=>arrived).toBe(true);const sid=ids(page).sid;
   expect((await page.request.post('/fixture/revoke',{data:{study_id:sid}})).ok()).toBe(true);release();
-  await expect(page.getByRole('heading',{name:'Sign in to HYPRN MVP',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
   await expect(page.getByLabel('Configuration name',{exact:true})).toHaveCount(0);
 });

@@ -1,4 +1,5 @@
 """History API reads immutable recorded evidence, never live modeling or execution."""
+from legacy_study_support import seed_legacy_context
 import base64
 import copy
 import json
@@ -81,8 +82,14 @@ def test_recorded_history_survives_restart_offline_and_copy_without_run(submissi
         assert c.get(url+'/'+run['run_id']+'/artifacts/'+artifact['artifact_id']).content==native.bundle['files'][artifact['name']]
     copied=copy.deepcopy(history['configuration']);copied['inputs'][0]['value']=999
     current=c.get(f'/api/1/studies/{sid}').json()['data']
-    edited=c.patch(f'/api/1/studies/{sid}',json=dict(command_id=uid(),expected_revision=current['revision'],description='Changed current context'))
-    assert edited.status_code==200
+    seed_legacy_context(
+        store,
+        actor,
+        sid,
+        uid(),
+        current['revision'],
+        dict(description='Changed historical context'),
+    )
     note=c.post(f'/api/1/studies/{sid}/evidence',json=dict(command_id=uid(),scope=None,kind='note',content='New evidence',source_refs=[]))
     assert note.status_code==201
     restarted=TestClient(create_app(Store(store.path),Auth(store,ORIGIN),Offline()),base_url=ORIGIN)
@@ -277,10 +284,133 @@ def test_run_list_name_uses_exact_revision_not_family_head_offline(submission):
     from pathlib import Path
     # Validated against the whole public contract so its internal references resolve.
     spec=json.loads((Path(__file__).resolve().parents[2]/'contracts/hyprn-mvp.openapi.yaml').read_text())
-    validator=Draft202012Validator({**spec,'$ref':'#/components/schemas/RunHistoryItem'})
+    validator=Draft202012Validator({**spec,'$ref':'#/components/schemas/RunHistoryItem2'})
     validator.validate(listed)
     old=dict(listed);old.pop('configuration_name');validator.validate(old)
     missing=dict(listed,configuration_name=None);validator.validate(missing)
     assert native.launches==0
     with store.connection(write=True) as db:db.execute('DELETE FROM memberships WHERE study_id=? AND actor_id=?',(sid,actor))
     assert c.get(f'/api/1/studies/{sid}/runs').status_code in (403,404)
+
+
+def test_public_historical_view_preserves_source_identity_and_exact_nested_records():
+    from hyprn_mvp_app.contracts import canonical, digest, public_record_view
+    from test_native_parser import record
+    _, _, result = record()
+    context = dict(schema_version='1', results=result)
+    context['digest'] = digest(context)
+    source = dict(closure=dict(run_contexts=[context], digest='a'*64), result=result)
+    before = canonical(source)
+    projected = public_record_view(source)
+    assert canonical(source) == before
+    assert projected['closure']['run_contexts'][0]['digest'] == context['digest']
+    for old, view in [(source, projected), (context, projected['closure']['run_contexts'][0]),
+                      (result, projected['result'])]:
+        assert view['record_view']['source_sha256'] == digest(old)
+        assert view['record_view']['view_sha256'] == digest(
+            {k: v for k, v in view.items() if k != 'record_view'}
+        )
+    assert (
+        not {'convergence', 'optimization', 'completeness', 'applicability'}
+        & projected['result'].keys()
+    )
+    current = {
+        k: v
+        for k, v in result.items()
+        if k not in {'convergence', 'optimization', 'completeness', 'applicability'}
+    }
+    current['schema_version'] = '2'
+    assert public_record_view(current) == current
+
+
+def test_current_bundle_missing_results_keeps_current_history_contract(submission):
+    from hyprn_mvp_app.store import digest
+    from hyprn_mvp_app.contracts import validate
+    service, store, actor, sid, _, native = submission
+    prepare = service.prepare
+
+    def current_prepare(*args):
+        prepared, files = prepare(*args)
+        prepared = copy.deepcopy(prepared)
+        prepared.update(schema_version='3', result_protocol_version='2')
+        prepared['prepared_digest'] = digest(
+            {k: v for k, v in prepared.items() if k != 'prepared_digest'}
+        )
+        return prepared, files
+
+    service.prepare = current_prepare
+    run = recording(submission)
+    public, actor = client(store, actor)
+    response = public.get(f'/api/1/studies/{sid}/runs/{run["run_id"]}')
+    assert response.status_code == 200, response.text
+    history = response.json()['data']['history']
+    assert history['history_schema_version'] == '7'
+    assert history['bundle']['schema_version'] == '10'
+    assert history['bundle']['input_schema_version'] == '2'
+    assert history['results'] is None
+    assert history['errors'] == [dict(code='missing_results', partial=True)]
+    validate('RunHistory7', history)
+
+
+def test_history_page_projects_only_selected_rows_and_preserves_cursor_scope(submission, monkeypatch):
+    from hyprn_mvp_app.history import History
+    service, store, actor, sid, revision, native = submission
+    first = accepted(submission)
+    # A second independent command shares exactly the same saved configuration.
+    second = service.submit(actor, sid, dict(command_id=uid(), configuration_revision_id=revision))
+    c, actor = client(store, actor)
+    calls = []
+    original = History._contexts
+    def bounded(db, study_id, rows):
+        calls.append(len(rows))
+        return original(db, study_id, rows)
+    monkeypatch.setattr(History, '_contexts', staticmethod(bounded))
+    path = f'/api/1/studies/{sid}/runs'
+    one = c.get(path, params={'limit': 1})
+    assert one.status_code == 200, one.text
+    assert len(one.json()['data']) == 1
+    assert calls == [1]  # Neither the next page nor lookahead is projected.
+    cursor = one.json()['next_cursor']
+    two = c.get(path, params={'limit': 1, 'cursor': cursor})
+    assert two.status_code == 200, two.text
+    assert [x['run_id'] for x in one.json()['data'] + two.json()['data']] == [first['run_id'], second['run_id']]
+    assert two.json()['next_cursor'] is None
+    assert c.get(path, params={'limit': 1, 'model_revision_id': uid()}).json()['data'] == []
+    assert c.get(path, params={'cursor': cursor, 'model_revision_id': uid()}).status_code == 404
+    assert c.get(path.replace(sid, uid()), params={'limit': 1}).status_code == 404
+    assert c.get(path, params={'limit': 0}).status_code == 400
+
+
+def test_configuration_summaries_and_full_pages_are_bounded_and_exact(submission, monkeypatch):
+    from hyprn_mvp_app.configuration import Configurations
+    from hyprn_mvp_app.contracts import digest
+    from test_public_contract import check
+    service, store, actor, sid, revision, native = submission
+    with store.connection(write=True) as db:
+        first = json.loads(db.execute('SELECT payload FROM configurations WHERE configuration_revision_id=?', (revision,)).fetchone()['payload'])
+        second = copy.deepcopy(first)
+        c = second['configuration']
+        c['configuration_revision_id'] = uid()
+        c['digest'] = digest({k:v for k,v in c.items() if k != 'digest'})
+        db.execute('INSERT INTO configurations VALUES(?,?,?,?)', (c['configuration_revision_id'],c['configuration_id'],sid,json.dumps(second)))
+    client_api, actor = client(store, actor)
+    original = Configurations.read
+    def forbid_all(self, who, study, revision=None):
+        assert revision is not None, 'unbounded full-record list'
+        return original(self, who, study, revision)
+    monkeypatch.setattr(Configurations, 'read', forbid_all)
+    path = f'/api/1/studies/{sid}/configurations'
+    one = client_api.get(path, params={'limit':1}); check(one)
+    assert one.status_code == 200 and one.json()['data'] == [first]
+    two = client_api.get(path, params={'limit':1,'cursor':one.json()['next_cursor']}); check(two)
+    assert two.json()['data'] == [second]
+    summaries = f'/api/1/studies/{sid}/configuration-summaries'
+    page = client_api.get(summaries, params={'limit':1,'model_revision_id':c['model_revision_id']}); check(page)
+    assert page.status_code == 200, page.text
+    summary = page.json()['data'][0]
+    assert summary['configuration_revision_id'] == revision
+    assert summary['input_count'] == len(first['configuration']['inputs'])
+    assert 'model_snapshot' not in summary and 'inputs' not in summary
+    assert client_api.get(summaries, params={'model_revision_id':uid()}).json()['data'] == []
+    assert client_api.get(summaries, params={'cursor':page.json()['next_cursor'],'model_revision_id':uid()}).status_code == 404
+    assert client_api.get(summaries.replace(sid,uid())).status_code == 404

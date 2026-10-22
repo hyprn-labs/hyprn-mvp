@@ -2,6 +2,8 @@
 
 Status: current specification. It states what HYPRN MVP is, what it must guarantee, who owns what and the rules every contract follows. Wire detail lives in `contracts/` (JSON Schema 2020-12 and the generated OpenAPI 3.1 document `contracts/hyprn-mvp.openapi.yaml`); if this text and a schema disagree on a field, the schema governs and this text is corrected. Decisions here change only through an ADR in `docs/adr/`.
 
+> **Domain change (2026-10-18).** ADR-0007 retires the modeling approach in favour of a versioned study brief and application-owned model explanations; ADR-0008 defines one study answer that versions its conclusion and answer exploration together; ADR-0009 makes calculations (versioned sets of configurations with their runs) a primitive and adds reference configurations. Sections below that describe approach records are corrected as the migration batches land; until then the ADRs govern.
+
 Companion specifications, which must respect the rules below:
 
 - agents: `docs/specs/agents.md`, with the tool detail in `docs/agents/tooling-spec.md` and the working rules in `docs/agents/playbook.md`;
@@ -16,7 +18,7 @@ Requirements covered: HUM-01 to HUM-06, HUM-09, VER-01 to VER-04, RUN-01 to RUN-
 
 ## 1. Product purpose
 
-HYPRN MVP is an engineering feasibility workspace. An engineer states a question, collects evidence, explains a modeling approach, builds an executable model from Python components, runs it on explicit cases, inspects recorded results with the exact basis they were computed on, and reaches a conclusion whose scientific basis is visible. An agent can perform the same operations for the engineer, within an explicit delegation, with every change attributed to the agent acting for that engineer.
+HYPRN MVP is an engineering feasibility workspace. An engineer states a question in a study brief, collects evidence, builds an executable model from Python components with its explanation, runs calculations of explicit configurations, inspects recorded results with the exact basis they were computed on, and reaches a study answer whose scientific basis is visible. An agent can perform the same operations for the engineer, within an explicit delegation, with every change attributed to the agent acting for that engineer.
 
 Core value: an engineer can build and understand a model, run it with explicit inputs, inspect the evidence behind its results and refine it, without needing an agent or a custom-built modeling platform.
 
@@ -35,7 +37,7 @@ Product invariants. Every component, client, agent tool and refactoring preserve
 | Exact pins | Configurations pin exact model versions; model versions recursively pin definition versions and exact source bytes; runs freeze configuration, model snapshot, context, evidence, generated program, dependencies and runtime identities. Display names, collections or tags never pin history. |
 | No hidden defaults | No hidden physical defaults, implicit conversions, broadcasting, randomness or cross-case state. Unsupported settings are rejected, never ignored or approximated. Internal unavailable sentinels are never physical defaults. |
 | Unavailable is not zero | An output is available only if its producer completed normally, actually assigned it, and the value is finite; otherwise its value is `null` with a reason. Upstream outputs are kept when a downstream component fails. |
-| Separate outcome facets | Execution, convergence, optimization termination, feasibility, completeness, applicability and criterion outcome are recorded and inspectable separately. "Recorded" is not success; a non-zero exit is not success; a met criterion is not validity; non-convergence makes criteria unresolved. The run headline shows Execution and Criteria; other facets stay one step away. |
+| Separate outcome facets | Current explicit scalar results record execution, per-output value/availability/reason and criterion outcome. They omit aggregate convergence, optimization, completeness and applicability. Exact historical records retain their fields; public views omit them with explicit source/view identities. Future computed facets remain separate: "recorded" is not success, and a met criterion is not validity. |
 | Immutable history | Saved versions never change. Historical reads use retained records only and never substitute the current model, configuration or evidence. |
 | One authoritative outcome | An operation produces one authoritative outcome that every client can subsequently reference, inspect and act upon, without reconstructing or repeating the operation (section 3.1, ADR-0004). |
 | Units | Conversion happens once, in OpenMDAO inside the worker. The API admits only linear conversions listed in an engine-generated catalog; affine conversions are rejected. Each port declares physical (one supported spelling), dimensionless or unspecified units. Unspecified units may be saved, but commit, preparation and execution require resolved units for every port in the selected executable closure. |
@@ -160,8 +162,7 @@ Advertised as policy through capabilities: JSON body 2 MiB; source file 256 KiB;
 - Agents use only a curated, provider-neutral tool registry that calls the HYPRN MVP API in-process with a short-lived delegated session (same middleware, schemas, receipts, errors as the UI). No raw API passthrough, no store, modeling, AiiDA or executor access, no shell, file or web tools. `study_id` is never a tool argument.
 - Write policy (ADR-0003, `docs/adr/0003-agent-write-rights-revised.md`): agents write directly within the delegating human's current authority and the role ceiling, including creating studies (the delegating human becomes Owner) and recording scientific reviews (labelled agent-recorded). Every agent write is attributed ("{agent} for {user}") and journaled, and overwrites need the agent's last-read revision. Draft (mutable working) material, such as draft content or a working annotation, may be changed or deleted under revision checks; a saved, versioned or read-only record is never deleted by an agent. Human-only on every surface: deleting saved records (collections included), archiving and restoring studies and documents, and access management (memberships, invitations, delegations, tool tokens, roles). No tool offers these effects and the agent route allowlist refuses them. Provider or client approvals never widen what an agent can do. Run submissions stay bounded by the run limits, budgets and kill switches, and a submission whose configuration is not ready to run is refused with its reasons, no run created.
 - Agent tools are clients of the API under unified operations and explicit ownership (section 3.1): each names the API operations it calls, their owners and the stored outcomes they produce; no tool manages authoritative state, duplicates business orchestration or re-executes an operation to reproduce a result.
-- Cloud: OpenAI or Claude managed agent; default adapter is the provider custom-tool bridge (HYPRN MVP executes tool calls over an outbound connection; the provider holds no HYPRN MVP credential); remote MCP is the fallback with a short-lived delegation token.
-- Local: MCP is the only sanctioned path from a desktop coding agent. Study work happens in a study folder outside the source repository; the per-study token lives in the OS credential store (the macOS Keychain on macOS), 8 hours by default, revocable. The coding agent is a user of HYPRN MVP, not its developer.
+- Local and cloud: the embedded Assistant uses the provider custom-tool bridge. HYPRN executes tool calls over an outbound connection; the provider holds no HYPRN credential. External MCP/ChatGPT transports, tool tokens and their operator commands are retired.
 
 Detail: `docs/specs/agents.md` and `docs/agents/tooling-spec.md`.
 
@@ -176,7 +177,7 @@ WhatsOpt is GNU AGPL v3; HYPRN MVP runs a patched copy as its private modeling s
 ```text
 Organization ─ User ─owns─ Workspace ─ Study (active or archived)
 Study ─ question, context, boundary, Assumptions, Evidence versions
-      ─ Modeling approach (draft → versions): method steps, cases, links to exact versions
+      ─ Modeling approach (draft → versions): method steps, links to exact versions
       ─ Model (draft → versions) ─ instances ─pin─ definition versions ─ ports; connections
       ─ Configuration versions ─pin─ a model version; inputs, criteria, numerical settings, frozen context and evidence
       ─ Run ─freezes─ execution bundle; results and outcome facets
@@ -202,17 +203,16 @@ One term, one concept, one owner and lifecycle. No term implies a capability, ap
 | Term | Definition | Avoid |
 |---|---|---|
 | Study | The engineering question and shared context organizing models, configurations, evidence and runs. Archived, never deleted. | |
-| Modeling approach | Study-owned explanation of method, choices, assumptions, evidence, intended cases and links to exact versions. Explains and references; never an executable or editable graph. | approach graph, workflow, pipeline |
+| Modeling approach | Study-owned explanation of method, choices, assumptions, evidence, conditions to investigate and links to exact versions. Explains and references; never an executable or editable graph. | approach graph, workflow, pipeline |
 | Method step | A scientific contribution within an approach; not a scheduler task. | |
-| Case | A situation the approach examines, with its question and rationale; may link to the configuration that specifies it. | configuration, run |
 | Model | A composition of component instances and connections expressing a calculation; a model version is one immutable composition and source. | |
 | Component definition / instance | Reusable transformation with ports and source (versioned) / one use of a definition version in a model. | |
 | Quantity | An input or output with meaning and units at a port; distinct from its value in a configuration or run. | |
 | Connection | Directed transfer from a producer output to a consumer input. | |
-| Assumption | A scoped condition or approximation a choice or case depends on: text with attached evidence. One concept; free-form notes are not separate (a `notes` wire field may persist). Recording it does not establish that it holds. | note |
-| Rationale | Explanation for a choice of method, model or case. | |
+| Assumption | A scoped condition or approximation a choice or calculation depends on: text with attached evidence. One concept; free-form notes are not separate (a `notes` wire field may persist). Recording it does not establish that it holds. | note |
+| Rationale | Explanation for a choice of method, model or configuration. | |
 | Evidence | Retained source, observation or note supporting, challenging or contextualizing a statement; a version identifies exact content. | |
-| Configuration | A specified case: exact model version, explicit inputs, numerical choices, criteria, frozen context. Immutable once saved. | case, setup, scenario |
+| Configuration | Explicit calculation inputs: exact model version, explicit inputs, numerical choices, criteria, frozen context. Immutable once saved. | case, setup, scenario |
 | Criterion | Explicit requirement a computed output is evaluated against; not an optimizer constraint or applicability condition. | |
 | Criterion evaluation | Deterministic comparison of a recorded output with a criterion: met, not met or unresolved. Not validity, applicability or feasibility. | assessment, check result |
 | Run | One execution of a configuration with retained inputs, outputs and outcome facets; not the command receipt. "Recorded" means stored. | job, calculation, case |
@@ -226,7 +226,7 @@ One term, one concept, one owner and lifecycle. No term implies a capability, ap
 | Execution bundle | Frozen, self-contained input of one run: exact copies, generated program, provenance, integrity data. | execution package, package, job |
 | Computational record export | Downloadable archive of retained runs with what they used, for inspection; not a model record or backup. | package, backup |
 | XDSM view | Diagram of a model version's components and data flow; structure only, not executable. | XDSM model |
-| Method package / Package release | Reusable scientific procedure with applicability, evidence, assets, cases, checks and review requirements / its immutable version. The only "package". Later scope. | |
+| Method package / Package release | Reusable scientific procedure with applicability, evidence, assets, configurations, checks and review requirements / its immutable version. The only "package". Later scope. | |
 | Organization / Workspace | Tenant boundary / user-owned place for studies (no organization-owned workspaces). | organization workspace |
 | Owner / Reviewer / Admin | Owns a workspace and edits its work / invited to inspect and review (role does not prove expertise) / manages membership, with no implicit content access. | author |
 | Development run / Pilot run | Disposable runs before the declared pilot retention boundary / retained runs after it. | |
@@ -242,7 +242,7 @@ Persisted names stay; nothing is renamed or migrated for terminology.
 | `applicability: {state: "unassessed"}` | Applicability not evaluated |
 | `ModelPackageN`, `package` field, `model_package_manifest` | Portable model record |
 | `ExecutionBundleN`, `bundle`, `bundle_digest` | Execution bundle |
-| `approach_*`; `case_id`, `case_name` | Modeling approach references; Case |
+| `approach_*` | Modeling approach references |
 | `model_revision_id`, `configuration_revision_id` | Version |
 | `revision`, `expected_revision`, `draft_revision` | Revision |
 | run `state: "recorded"` | Stored (not success) |
@@ -296,17 +296,19 @@ RFC 8785 canonical JSON over finite I-JSON values; arrays keep order unless a sc
 
 No distributed transaction or cross-store lock. Each cross-store operation has one server-side owner (section 3.1, ADR-0004), never a client. The owner persists intent locally, invokes the remote store with the same command ID, adopts its authoritative receipt, and reconciles before any retry. Legitimate remote results are never deleted to simulate rollback.
 
-| State | Meaning | Next step |
-|---|---|---|
-| absent | No receipt in this store | Same ID and payload may be sent (store-local only) |
-| rejected / committed | Rejection, or effect with receipt, recorded atomically | Exact replay returns the original outcome |
-| pending_remote | Intent stored; remote command sent or uncertain | Query the same remote command; adopt one proven result |
-| accepted_run | Run and outbox durable | One serialized dispatcher may claim |
-| dispatching | AiiDA boundary may be crossed | Reconcile only |
-| recorded | One matching native process associated | Return the run and lifecycle projection |
-| uncertain | No proof of no-effect or unique process | Investigate; never redispatch |
+| State | Meaning | Next step | Recovery |
+|---|---|---|---|
+| absent | No receipt in this store | Same ID and payload may be sent (store-local only) | `resend_same_command`; for a run `wait` with `retry_after_s` (a run is never resent) |
+| rejected / committed | Rejection, or effect with receipt, recorded atomically | Exact replay returns the original outcome | `refused` / `adopt` |
+| pending_remote | Intent stored; remote command sent or uncertain | Query the same remote command; adopt one proven result | `resend_same_command` for a model command (the owner re-queries the modeling service with the same command ID before any remote resend); `wait` with `retry_after_s` for any other category |
+| accepted_run | Run and outbox durable | One serialized dispatcher may claim | `adopt` (also `prepared` and `preparation_failed`) |
+| dispatching | AiiDA boundary may be crossed | Reconcile only | `adopt` |
+| recorded | One matching native process associated | Return the run and lifecycle projection | `adopt` |
+| uncertain | No proof of no-effect or unique process | Investigate; never redispatch | `uncertain` |
 
 Unknown is not absent. AiiDA lifecycle (created, waiting, running, finished, excepted, killed, unknown, plus exit data) is projected separately.
+
+**Recovery.** The owner decides how a client recovers after a lost reply: every receipt read carries one `recovery` value, held once in `store` (`receipt_recovery`, `RECEIPT_RETRY_AFTER_S` = 2 s), and every client (the UI, the agent journal, the command line) follows it and keeps no table of its own. `adopt`: the result is the outcome (for a run, the run; its lifecycle is read from the run, never from the receipt); `refused`: the stored rejection is the outcome, and a resend replays it; `wait`: read again after `retry_after_s`; `resend_same_command`: send the same command ID and body again, and the mutation route re-checks authorization and exact idempotency; `uncertain`: never resend, investigate through the record's read. A run is never resent: after its own bounded waits a client reports the outcome as uncertain. A missing receipt in a scope the reader may see is `resource_not_found` 404 whose error object carries `recovery` (and `retry_after_s`); a reader who may not see the scope gets the same 404 without them.
 
 ### 6.7 Modeling Backend Contract
 
@@ -317,7 +319,7 @@ Independently authored, versioned HTTP contract at `/modeling/1` with the same i
 - The prepared artifact holds the model snapshot, source and generated files, generator identity (pinned upstream commit and archive hash, generator, template and adapter digests), dependency requirements, licence notices, entrypoint and `executable_content_digest`. Identical pinned inputs yield identical executable bytes; IDs, paths, clocks and URLs are excluded.
 - The application assembles the bundle after allocating the run identity: verifies every prepared hash, size, path and binding, adds its configuration, context and evidence bytes, the verified runtime, image, policy, full lock bytes and licences. Any mismatch or unresolved dependency rejects; current dependencies are never silently chosen. AiiDA retains artifact and bundle before launch.
 - Program protocol `hyprn_mvp.openmdao.program/1`: a fixed `build_model` factory returns the generated Group; bindings list exactly the free inputs and declared outputs with private paths; a line mapping ties generated lines to the original source bytes through a closed set of transforms. The worker sets explicit inputs, runs OpenMDAO and observes availability; it never translates symbols or builds components.
-- `results.json` separates execution, convergence, optimization termination and feasibility, completeness, per-output value and availability, criterion outcomes, applicability and hashed artifacts.
+- Current `results.json` format2 records execution, per-output value and availability, criterion outcomes and hashed artifacts. Format1 remains an exact historical reader with its original aggregate fields. Prepared artifact3 and bundle10 explicitly pin result protocol2; no historical schema is reinterpreted.
 
 ### 6.9 Configurations
 
@@ -330,6 +332,33 @@ Commit gets a pure compatibility result for the exact candidate, then allocates 
 ### 6.10 Historical reads and exports
 
 Historical reads use application authorization and retained application and AiiDA records only, and work with the modeling service offline or replaced. Re-execution also needs the recorded runtime. Computational record exports carry the full ancestor closure of selected runs within a bounded size and expose only curated diagnostics.
+
+### Sampled analysis versions and estimates
+
+A analysis version's design is hand-picked or sampled (ADR-0009). Only a sampling operation (`calculation_designs`, receipt category `calculation_sample`) writes a sampled design. Acceptance is inert: it checks reference configurations (version 6, one model version), input ranges in each reference input's saved units, steps and co-variation groups, and needs a current ready execution observation. The dispatcher then obtains the seeded Latin hypercube from the attested computation environment as a retained design artifact, freezes each new point as a configuration version copied from its reference (stable command identities, so a repeated step returns the same versions) and saves the analysis version in one transaction with the operation's completion. Points of the latest sampled version that still fit are retained with their configuration versions and partitions. Clients may carry a sampled design unchanged into a new version; adding or removing points by hand makes a hand-picked version. A run request for members submits ordinary runs (one derived command identity per member) and never creates a version.
+
+An estimate (`calculation_estimates`, receipt category `calculation_estimate`) is fitted to exactly one sampled version: each point contributes the latest recorded run of its configuration version, pinned by run id and results digest, or is unavailable. The fit is the bounded native build described below; outputs carry the same assessment, and an estimate is never a calculated result.
+
+### Assessed answer surrogates
+
+Original sampling, surrogate construction and prediction are separate operations. An immutable exploration design maps each valid category tuple to exact model/configuration revisions and complete input vectors. The sampling owner retains original runs and their training/validation partitions. An explicitly calculated selected point may enrich the retained training partition; an existing validation point is never silently reassigned. Refinement spends only its declared additional original-evaluation budget. A ready version remains addressable while a later sample or construction operation runs, and cancellation or failure cannot publish a partial ready version.
+
+The surrogate owner reads retained original records, checks their model/source, configuration, numerical and original-runtime identities, and submits a data-only construction request through the existing execution bridge. OpenMDAO 3.45.1 `MetaModelUnStructuredComp`, `ResponseSurface` and `KrigingSurrogate` own fitting and prediction. Inputs are explicitly normalized. The first reserved check compares eligible methods; the remaining checks independently assess the selected method against each output's `absolute + relative * abs(reference)` target, including zero references. Counts, RMSE, maximum observed error, method comparisons and reasons are retained. These metamodel checks do not establish physical applicability, feasibility, or a universal error bound. Scientific assessment remains a separate owner and evidence requirement.
+
+Every group records the original-sample runtime separately from the surrogate-computation runtime. A new computation runtime does not rewrite the runtime of historical original runs. The trusted executor may select a separately attested numerical runtime root through the existing location guards; public callers cannot supply one, and original launches remain bound to their original execution root. An authorized public artifact reader returns canonical JSON bytes, length and SHA-256. The trusted adapter addresses OpenMDAO's lack of a common serialization API by copying a closed, version-pinned set of finite numeric state fields with fixed shape checks; it never loads pickle, executable code, arbitrary classes, paths or callbacks. Public OpenMDAO `predict` performs every prediction. A changed OpenMDAO version requires a new qualified adapter and execution attestation.
+
+Kriging fitting compares three deterministic candidates: OpenMDAO's default SLSQP
+start, and SLSQP and L-BFGS-B with initial kernel theta 0.01. This avoids a flat
+likelihood at the default short correlation length in many-input designs. The
+version-pinned `_minimize` injection changes only the initial vector; OpenMDAO
+owns the likelihood, optimization, trained state and predictions. The reserved
+selection point chooses the best candidate within the method; its comparison
+entry reports that candidate. The remaining independent checks alone determine
+publication. Fitting never changes error targets or the sampled-coverage gate.
+
+Prediction accepts an existing version, full mapped vector and optional batched active-axis curve. It neither trains nor launches candidate code. The execution bridge owns one bounded private stdio query lane alongside its single original-execution lane; there is no new network listener or scheduler. Explicit Settings preparation warms at most eight immutable groups in one restricted child, bounded to 4,096 requests and 900 seconds. When a prediction finds the process cold, expired or unavailable, the application reloads the exact saved group artifact and retries prediction once, without fitting or original evaluations. Explicit Settings preparation remains optional. Artifact hash, identity, runtime and current authorization are checked before renewal; renewed requests cannot publish after supersession. Permissions and exact group identities are checked for every request; caches are owned by the local execution bridge, never supplied by a client. Pending interaction requests coalesce by actor and study, have a 40-second total deadline allowing bounded cold loading (warm prediction execution retains its two-second limit) and cannot publish a stale selection token.
+
+Prediction eligibility includes declared bounds, stepped/covary mapping, the convex support of actual training vectors, and per-output completeness and observed target outcomes. A failed or missing original output makes that output ineligible throughout its group; no curve fills the failed gap. At the exact same full vector, retained original results take precedence, including an unavailable original result. Numeric estimates are never relabeled as original calculations.
 
 ## 7. Module ownership and the acyclic import rule
 
@@ -357,7 +386,80 @@ worker → results only (standard library otherwise)
 | `execution` | Static preparation, submissions (receipt, outbox, dispatch) | Own bundle checks |
 | `computational_export` | Export requests and archive publication | Use native imports or current models |
 | `readiness`, `dispatcher`, `auth`, `ui`, `api` | Observations, executor bridge, local auth, static assets, HTTP surface | — |
-| `agent_tools`, `agent_runtime`, `agent_surface` (planned) | Registry and API client; sessions, delegations, journal and agent activity; MCP server and provider bridge | Reach scientific modules (tools see only `contracts` and the injected API client) |
+| `agent_tools`, `agent_runtime`, `assistant` | Registry and API client; sessions, delegations, journal and agent activity; embedded provider bridge | Reach scientific modules (tools see only `contracts`, the pure `evidence_content` codec and the injected API client) |
+
+`assistant` owns only bounded, ephemeral request and result-delivery state for a read-only
+bridge into the existing runtime. It owns no operation journal, provider connection or restart recovery.
+
+The diagram summarizes the layers; the table below is complete. Every direct import between application modules, function-local imports included, is one of its edges, the table is acyclic, and the boundary test holds the same table and fails on any import outside it (`application/tests/test_module_boundaries.py`, `LAYERS`). The route package (`routes`, the per-owner routers) and each agent package are one row each; `edge` holds the helpers the routers share; `hyprn_mvp_app` is the package root. Six edges the diagram does not draw are part of it: `modeling → store`; `store → readiness` (function-local: `store` calls the observation owner's two pure validators, `runtime_identity` and `valid_observation_time`, inside the trusted observation write and read, and `readiness` reaches only `contracts`, so the edge cannot close a cycle); `configuration → {modeling, readiness, scientific_configuration}`; `execution → readiness`; `modified_runs → readiness`; `dispatcher → computational_export`. A new edge is added here and in the test together.
+
+Scientific study answers are application-owned immutable records in `answers`.
+Each targets an exact saved approach version. Explicit basis IDs directly cite same-study
+configurations, runs and evidence. One current head per approach is only a listing convenience: revisions
+never change earlier answers, and execution/criteria never infer an answer. The owner registers its
+tables through the Store connection and saves answer, head and command receipt in one authorized
+transaction. These records do not enter modeling or execution bundles.
+
+The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replaces `answers` when the modeling approach is removed. A study has one answer draft and immutable, numbered versions; the latest version is the only head. A version pins one saved brief version, maps each alternative to analysis versions, and holds the alternatives × criteria table, justifications, interpretation, the explicitly stated outcome, decisive uncertainties, the next analysis and the answer exploration's basis. Every citation is checked against the same study through its owner (`brief`, `calculations`, `calculation_estimates`, the evidence witness); the exploration basis accepts only a finished estimate assessment of its exact analysis version, without treating unavailable outputs as valid estimates; a table cell stores its cited run's criterion evaluation as `calculations` reports it at save time, and nothing in the table or the outcome is inferred.
+
+**Allowed imports**
+
+| Module | May import directly |
+|---|---|
+| `hyprn_mvp_app` (package root) | — |
+| `contracts` | — |
+| `locations` | — |
+| `database` | — |
+| `migrations` | `database` |
+| `hosted_lifecycle` | `database`, `migrations` |
+| `hosted_runtime` | `assistant`, `database`, `hosted_lifecycle`, `store` |
+| `listing` | `contracts` |
+| `units` | `contracts` |
+| `scientific_configuration` | `contracts` |
+| `approach_closure` | `contracts`, `units` |
+| `execution_bundle` | `approach_closure`, `contracts`, `scientific_configuration`, `units` |
+| `readiness` | `contracts`, `database` |
+| `evidence_content` | `contracts` |
+| `identity` | `contracts` |
+| `store` | `contracts`, `database`, `migrations`, `locations`, `readiness`, `evidence_content`, `identity` |
+| `history` | `contracts`, `listing`, `execution_bundle`, `units`, `readiness` |
+| `result_bindings` | `contracts`, `execution_bundle`, `history`, `units` |
+| `modified_runs` | `contracts`, `history`, `readiness` |
+| `modeling` | `contracts`, `store`, `units` |
+| `brief` | `contracts` |
+| `explanations` | `contracts` |
+| `criterion_evaluation` | — |
+| `calculations` | `brief`, `contracts`, `criterion_evaluation`, `execution_bundle`, `history`, `units` |
+| `study_answer` | `calculation_preparation`, `brief`, `calculation_estimates`, `calculations`, `contracts`, `criterion_evaluation`, `history` |
+| `analysis_execution` | `calculations`, `calculation_estimates`, `contracts`, `history` |
+| `calculation_designs` | `calculations`, `contracts`, `quantity_projection`, `sampling_coordinates`, `readiness` |
+| `calculation_estimates` | `calculation_designs`, `calculations`, `contracts`, `quantity_projection`, `history` |
+| `quantity_projection` | `execution_bundle`, `units` |
+| `sampling_coordinates` | `quantity_projection` |
+| `calculation_preparation` | `calculation_estimates`, `calculation_exploration`, `calculations`, `contracts`, `quantity_projection` |
+| `calculation_exploration` | `calculation_estimates`, `calculations`, `contracts`, `history`, `quantity_projection` |
+| `configuration` | `contracts`, `listing`, `execution_bundle`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `scientific_configuration`, `store`, `units` |
+| `execution` | `contracts`, `execution_bundle`, `history`, `readiness`, `result_bindings`, `scientific_configuration` |
+| `computational_export` | `approach_closure`, `contracts`, `execution_bundle`, `history`, `locations`, `modified_runs`, `result_bindings` |
+| `dispatcher` | `agent_runtime`, `analysis_execution`, `calculation_designs`, `calculation_estimates`, `calculation_exploration`, `computational_export`, `configuration`, `contracts`, `database`, `execution`, `execution_bundle`, `hosted_runtime`, `modeling`, `readiness`, `store` |
+| `auth` | `contracts`, `store` |
+| `external_identity` | `auth`, `contracts` |
+| `ui` | — |
+| `edge` | `contracts` |
+| `routes` (package) | `database`, `identity`, `assistant`, `analysis_execution`, `calculation_preparation`, `auth`, `brief`, `calculation_designs`, `calculation_estimates`, `calculation_exploration`, `calculations`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store`, `study_answer` |
+| `agent_tools` (package) | `contracts`, `evidence_content` |
+| `agent_policy` | `agent_tools`, `contracts` |
+| `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `database`, `edge`, `store`, `identity` |
+| `agent_surface` (package, planned) | `agent_runtime` |
+| `assistant` (package) | `agent_runtime`, `agent_tools`, `contracts`, `identity` |
+| `api` | `assistant`, `agent_tools`, `agent_policy`, `agent_runtime`, `auth`, `brief`, `calculations`, `computational_export`, `configuration`, `contracts`, `database`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `result_bindings`, `routes`, `store`, `study_answer`, `ui` |
+
+The `assistant` package also owns the durable study conversation projection and
+its provider delivery intents. It uses the store's injected connection, never
+scientific-owner tables. Claude owns reasoning and context; the existing delegated
+runtime owns every tool effect. The API composes this owner with a persistent
+ASGI lifespan. Conversation transport routes are human-only. See
+`docs/agents/embedded-assistant.md` for configuration, recovery and budget semantics.
 
 Rules: each shared capability, and each operation that needs a durable, observable outcome (section 3.1), has one owner with a narrow public interface; no cross-module private access (remaining framework or same-module cases are allowlisted); move pure functions to their owner instead of creating service objects; `store` remains the transaction owner (no repository-per-table, plugin framework or universal resolver); integration never imports persistence or orchestration for helpers. A boundary test pins directions, attested-source coverage and forbidden imports; checks are added only against a concrete regression. In the UI, presentation consumes typed record projections instead of branching on wire versions; the study shell handles navigation and composition while domain controllers own their workflow state behind one editor-guard interface (dirty, save, discard) and one session and access-loss seam.
 
@@ -367,20 +469,46 @@ Package names: `hyprn_mvp_app` (application), `hyprn_mvp_integration` (execution
 
 | Store | Sole writer | Content |
 |---|---|---|
-| Application | Application | Studies, memberships, archive state, evidence, approaches, configurations, receipts, run associations, outbox, exports, agent records |
+| Application | Application | Studies, memberships, archive state, evidence, approaches, study briefs, model explanations, study answers, calculations and reference marks, configurations, receipts, run associations, outbox, exports, agent records |
 | Modeling | Modeling service | Models, definitions, versions, identity maps, modeling receipts |
 | AiiDA profile and repository | Execution integration | Processes, bundles, results, artifacts; document bytes |
 
 The local edition uses SQLite in rollback-journal mode (no WAL: host-side readers cross the container VM boundary and rollback is harder); reads stay short so dispatch is not starved. A multi-tenant cloud targets PostgreSQL for the application store, adding row-level policies on top of application authorization. Ordinary start never creates stores; initialization runs only on a blank data root or this installation's own partial-setup marker; a missing or changed store identity is a visible error. Development run data is discardable and never migrated; authoring records are never deleted for convenience.
 
+PostgreSQL maintains a generated SHA-256 fingerprint of each outbox payload's exact
+UTF-8 bytes. Retained-run rechecks compare that fingerprint, association fields and
+command receipt after full initial validation; they reauthorize every read. The
+database recomputes the fingerprint whenever payload bytes change and rejects
+caller-supplied fingerprints. This avoids repeatedly fetching and hashing retained
+artifacts without making an application cache authoritative. Schema changes remain
+explicit migration operations while writers are stopped.
+
+Hosted answer, analysis and run-detail reads retain a disposable, study-scoped projection after full
+retained-run admission. Each entry is bounded to 1 MiB and contains the checked
+history, public run detail and their exact source/receipt witness, with a separate cache-byte checksum.
+The reader identity covers application Python sources, contract schemas, locked
+dependencies and validator/Python versions. A different reader or damaged cache
+rebuilds from the original archive; a changed source witness fails closed.
+Every hit reauthorizes and checks current database-owned fingerprints and receipts.
+Exports and execution still use the original artifacts. Preparing the answer warms
+these projections before publication; process restarts do not transfer archives
+again. The cache is neither a scientific record nor an authorization source.
+
+Hosted database transports are reused exclusively within bounded pools separated
+by request, authentication and background roles (8, 2 and 2 connections). Every
+transaction still sets its verified actor locally and retains existing write
+serialization. Session state is discarded before reuse; dead idle connections are
+replaced before starting work. Failed transactions and ambiguous commits are never
+replayed. Pool exhaustion has a bounded wait and explicit unavailable response.
+
 Before the pilot-retention boundary (the point from which an installation holds data that must outlive a release), the store rule is: every store records its schema version; opening a store never creates it and never alters its schema; a recorded version that differs from the release's makes start refuse, with a message that names the reset command and says the stored data is not migrated; a fresh start is an explicit, confirmed reset (`./hyprn-mvp setup --reset-data`, confirmed interactively or with an explicit `--yes` in non-interactive mode) that discards the installation's stores and initializes new ones, and never runs automatically; no migration code exists. From that boundary on, retention, backup and migration rules apply in full and replace this rule.
 
 ## 9. Editions and repositories
 
-- `hyprn-mvp`: the product monolith. Shared core (application, UI, integration, contracts, modeling patches, design system, deployment managers) plus `editions/local/` (CLI, prerequisite checks, path policy, OS credential-store and clipboard adapters, study-folder kit, local MCP relay, smoke test). `editions/cloud/` appears only with real cloud adapter code.
+- `hyprn-mvp`: the product monolith. Shared core (application, UI, integration, contracts, modeling patches, design system, deployment managers) plus `editions/local/` (CLI, prerequisite checks, path policy, local installation lifecycle and smoke test). `editions/cloud/` appears only with real cloud adapter code.
 - The edition is chosen by the installation configuration's `edition` field, never by branches, forks or build flags. Editions hold adapters and packaging only; scientific, API and security behavior is identical.
 - `hyprn-platform`: Terraform, staging and production, cloud identities, governance; no product code. Its cloud platform specification lives in that repository (`docs/specs/cloud-platform.md`).
-- The product name is HYPRN MVP; technical identifiers use `hyprn-mvp` (the `./hyprn-mvp` command, the `HYPRN_MVP_` prefix, labels, images, the MCP server name). No durable name encodes a phase, architecture style or person.
+- The product name is HYPRN MVP; technical identifiers use `hyprn-mvp` (the `./hyprn-mvp` command, the `HYPRN_MVP_` prefix, labels, images). No durable name encodes a phase, architecture style or person.
 - Local first: clone, `./hyprn-mvp setup`, `./hyprn-mvp start`. Setup snapshots the committed checkout into an installed release, builds and re-attests when execution sources change; start never rebuilds. Supported on macOS and Linux, Windows through WSL2. The cloud edition follows.
 - ADRs (MADR) live in each governed repository's `docs/adr/`.
 
@@ -396,7 +524,7 @@ Before the pilot-retention boundary (the point from which an installation holds 
 | Uncertainty with OpenTURNS | Later |
 | Source documents on AiiDA (store, versions, collections, read, annotate, cite, extract) | Planned; only native storage of originals is implemented; advertised unavailable (`docs/specs/documents.md`) |
 | Authored documents (Tiptap); live co-editing (Yjs) | Later; co-editing only for multi-user cloud |
-| Agent slices: local MCP read-only, local authoring (ADR-0003 write policy), cloud managed agent | `docs/specs/agents.md`; first slice is agent principal and attribution |
+| Embedded Assistant: delegated reads and authoring (ADR-0003 write policy), provider bridge | `docs/specs/agents.md`; first slice is agent principal and attribution |
 | Workspaces, organizations, invitations, Keycloak sign-in; permission store | Cloud multi-tenant; permission store deferred until inheritance needs it (`docs/specs/workspaces-identity-onboarding.md`) |
 | Method packages, package releases, scientific review records | Later |
 | Workbench shell (React Flow and XDSMjs canvas, dockview layout, assistant panel) | Proposed, not decided (`docs/specs/ui-target.md`) |
@@ -409,8 +537,161 @@ Before the pilot-retention boundary (the point from which an installation holds 
 2. **Licence of generated model code.** Templates carry no generated-code exception. Default: treat generated files as inside the AGPL scope and record template licences per artifact until counsel decides; a replacement backend uses permissive templates.
 3. **Open interchange format.** The intended direction is XDSM or similar, but XDSM carries no executable source. Default: the portable model record stays the exact exchange; XDSM is an export-only view.
 4. **Field pointer on configuration-commit `reference_conflict`.** Default: add one as an additive error detail.
-5. **Light run-status read.** Full run reads can be slow. Default: a new light projection (state, facets, timing); the full record is unchanged.
+5. **Light run-status read.** Full run reads can be slow. Delivered: `GET /api/1/studies/{study_id}/run-status?run_id=…` (1 to 20 distinct runs of the study, answered in request order, all or none) returns `RunStatus1` per run from the stored run state, owned by `history`: state, configuration name, the stored lifecycle projection (`process_state`, `exit_status`), the outcome facets and criterion outcomes as the retained results hold them (null with reason `not_recorded` until recorded), and `times`. `submitted_at` is the acceptance time the application records (`run_associations.accepted_at`; null with `not_recorded` for runs accepted before it was recorded). Open: `started_at` and `finished_at` are held by AiiDA and are null with reason `not_projected` until the attested execution integration projects them (a re-attesting change); liveness and queue position stay open. The full run record is unchanged.
 6. **Study roles vs workspace roles.** Today: owner, writer, reader per study; target: Owner, Reviewer, Admin per workspace. Default: owner → Owner, reader → Reviewer; writer stays a local-edition role until workspaces land.
 7. **Cloud application database.** Default: PostgreSQL with row-level policies when multi-organization operation starts; SQLite stays local.
 8. **Pilot retention boundary.** Default: declared before inviting pilot users; later runs follow full retention, backup and migration rules.
 9. **First optimization family.** Default: gradient-constrained on OpenMDAO's native drivers, after coupled solves and derivatives.
+
+Answer exploration reads an exact analysis version through `calculation_exploration`.
+With an estimate it projects only the runs pinned by that assessment, verifying their results
+digests; without an estimate it reads recorded member runs. Predictions validate the full free
+input vector, retain unvaried assignments and explicit linked mappings, and vary only the chosen
+plot axis. Exact retained points take precedence over estimates, including missing original
+outputs. Disposable `calculation_prediction` receipts are bounded by actor, study and estimate;
+they neither create analysis versions nor dispatch samples. An expired warm worker reloads
+only the identity- and hash-checked assessed artifact through the existing native bridge.
+
+## Retired authoring owners (ADR-0007–0010)
+
+The active application no longer registers approach, old answer, exploration-design,
+exploration-request, sampling or surrogate routes. A new store creates no approach or old
+scientific-answer tables. Study brief, Model explanation, Analyses and Study answer are
+their replacement owners. The agent catalogue and owner-session thin tools expose those
+owners. Development data is reset with a recovery copy; no silent record migration occurs.
+Frozen historical schema definitions remain inert contract data in
+`contracts/retired-exploration-definitions.json`. They grant no public authoring route or
+execution capability. Retained execution-family validation stays fail-closed while those
+frozen formats remain in the attested contract; schema retention is not an active primitive.
+
+
+### Study editing retirement (owner decision, 2026-10-19)
+
+Study creation and lifecycle remain store-owned. Scientific framing is edited only in the
+versioned study brief. There is no study PATCH route, store metadata editing operation,
+`edit_study` local helper or `update_study_context` agent tool. Existing study metadata,
+configuration context copies, receipts and attribution stay readable without rewriting them.
+Historical-context construction exists only in isolated test fixtures, outside the application.
+
+
+### Joint exploration publication
+
+Boundary-supported Latin hypercube sampling (`boundary_latin_hypercube`) adds every joint
+corner to training, then seeded interior points, with separate held-out validation points. Analysis
+format 2 and sample-operation format 2 preserve this method without rewriting format 1.
+The bounded sampler refuses a domain whose corner count leaves no interior training budget;
+it never silently reduces dimensions or ranges. Retained validation points cannot become training.
+
+`calculation_preparation` reads exact immutable estimate artifacts and reports full geometric
+support separately from output accuracy. Saving an answer version with an exploration basis
+requires every displayed output in every group to pass its independent validation, full joint
+corner support, and available original outputs. Drafts and historical answers remain readable.
+An answer without interactive exploration may leave its basis unassigned. Coverage is not a
+universal error bound or physical validation; all original thresholds and scientific limits
+remain in force.
+
+Slider predictions evaluate the saved OpenMDAO surrogate in the restricted environment. No
+sampling, fitting or original model run occurs during interaction. Exact corner support allows
+the worker to skip repeated convex-membership solves only when the entire box is proven covered.
+The application caches admitted projections by exact stored bytes and rechecks authorization
+and retained-run integrity on every read; changed bytes invalidate the projection.
+
+
+### Experiments and concise answers
+
+Experiments is the domain area containing calculations, configurations and runs, scoped by
+model and model version. It has no independent mutable store or identity: the existing owners
+and exact pins remain authoritative. Analysis is still a specific versioned set of
+configurations, not the name of the enclosing area.
+
+New study answers use content format 2. Interpretation contains the scientific synthesis and
+necessary qualifications; uncertainties and next analysis remain separate. Open deliverables
+is not a current authoring field. Historical format 1 stays byte-identical and read-only;
+editing carries its observations and qualifications into Interpretation and unfinished work
+into Next analysis. A comparison row cites one run, and multiple rows may cite different runs
+of the same alternative and criterion. Output name and evaluation are filled from that cited
+run and its calculation binding, never trusted from client text.
+
+Current run detail and list projections expose ExecutionSummary1: actual lifecycle status and
+measured wall duration (null if unavailable). PublicRunDetail2 removes execution_diagnostic;
+original artifact bytes and immutable computational exports are preserved. The light list
+reads stored execution/process facts, not inferred success from storage state.
+
+
+### Analysis identity and answer coherence (ADR-0012)
+
+Experiments is a navigation area for a selected model version. Analyses reference
+configurations and runs without owning their global lists. Complementary investigations
+are separate analyses; a version revises the same investigation. Answer publication
+checks all mappings, comparisons, justifications and exploration pins and rejects
+multiple versions of one analysis or one model. Drafts remain editable and historical
+answers remain unchanged. Canonical `/analyses` and `/analysis-*` API routes use the
+same handlers and receipts as compatibility `/calculations` and `/calculation-*` routes.
+The immutable serialized identities and schema definitions retain their legacy names.
+
+
+### Numerical validation vocabulary (2026-10-19)
+
+A point's role (`training` or `validation`) is independent of its numerical basis: both
+roles are evaluated by model runs. Analysis format 3 records these role names and
+`validation_count`; estimate format 2 does likewise. Earlier formats remain immutable
+and readable. Sampling requests with the new field produce the successor format.
+Only the adapter to the existing attested sampling/fitting protocol uses its historical
+check vocabulary. It preserves vectors, disjoint partitions, tolerances and artifact hashes.
+The first reserved validation point chooses a method; only the remaining held-out points
+contribute independent validation metrics. Numerical validation does not establish
+physical validity. The results reader pages members and automatically retrieves all runs
+of visible members through the authorized member filter, without dispatching computation.
+
+
+### Saved analysis execution plan
+
+`analysis_execution` composes the existing calculations, history and estimate owners.
+Content 4 saves optional estimation intent and explicit tolerances with the input design.
+One deterministic execution receipt per version is admitted through the public execution
+endpoint. Launch pins the latest existing member runs once; subsequent runs cannot replace
+those pins. Missing runs are accepted through Submissions with stable per-member command ids.
+A crash after acceptance recovers the same run. Uncertain runs require reconciliation;
+failed/preparation-failed runs fail the analysis without implicit retries. A new version
+is needed to change settings. The existing dispatcher advances this receipt; no second
+scheduler, native evaluator, store, or browser orchestration is introduced.
+
+After all pinned runs finish, the existing Estimates owner fits from those exact pins and
+saved error limits. Completion requires all requested outputs in all groups to pass their
+independent assessments, not merely the estimate's partial `ready` state. Results and
+failed assessment details remain readable. Numerical validation is not physical validity.
+Historical versions/estimates and all execution artifacts retain their original bytes.
+
+### Model and component documentation, explanation format 2
+
+The application-owned model explanation has a successor format 2. In addition to
+its earlier fields, `limits` records model applicability and exclusions, and
+`component_details` contains distinct instance IDs with `description` and `limits`.
+These are authored text, not executable constraints or numerical settings.
+Model/component assumptions remain structured, evidence-bearing model records.
+The explanation read/draft/version API admits formats 1 and 2 without rewriting
+saved bytes. A format-2 draft refuses a format-1 replacement, preventing an older
+client from silently dropping documentation. Saved explanation versions still pin
+one exact model version and validate component ownership. They never change.
+
+Local component documentation takes precedence over retained component annotations;
+new authoring uses `component_details`. The existing `components[]` explains roles
+in the assembly, not a second local description. The UI's Edit model/component
+combines these fields and scoped assumptions in one dialog. Model edits and the
+application explanation draft retain separate compare-and-set receipts. If model
+edits succeed and documentation fails, the dialog reports the partial save and
+keeps the unsaved documentation. It never claims a distributed atomic write.
+Saving a documentation draft does not publish it: save its explanation version
+against the exact model version using the existing explanation publication action.
+
+### Human display identity
+
+`identity` owns the self profile and human-name resolution on the application store transaction. An optional non-unique display alias never changes account credentials, actor identity or authority. GET/PUT `/profile` are human-only and self-only; updates compare the profile revision. New attribution entries and human conversation turns capture the effective name once. Legacy entries use the immutable account-name fallback; later alias edits do not rename authorship. Assistant role and delegated actor remain separate.
+
+The hosted run-list/status reader uses a database-generated JSON projection containing
+only preparation state, native status, result facets and the launcher timing artifact.
+It updates atomically with the original payload and cannot be assigned by a client.
+Lists therefore do not repeatedly parse embedded model/archive bytes. The projection
+is a lifecycle view, never proof of scientific validity; full diagnostic and artifact
+reads retain the original bytes. Retained-run projection ownership, including the
+prepared-runtime comparison, stays in History; submission orchestration delegates reads.

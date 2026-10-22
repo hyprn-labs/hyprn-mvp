@@ -362,3 +362,48 @@ def test_polish_retained_manifest_tamper(catalog,change):
     else:b['files']['approach/closure.json']+=b' '
     reseal(b,r)
     with pytest.raises(ValueError):retained_bundle(inputs(b,r)['frozen_bundle'].base.repository,r)
+
+
+@pytest.mark.parametrize('size', [70000, 1048577])
+def test_numerical_pipe_preserves_complete_large_json_and_refuses_overflow(
+    tmp_path, monkeypatch, size
+):
+    """Real pipe/select capture; only the synthetic process and Docker boundary are doubled."""
+    import subprocess
+    payload = dict(
+        schema_version='3', operation='build', identity='a' * 64,
+        payload=dict(
+            bounds=[[0, 1]], tolerances=[[0.1, 0]],
+            training=[dict(x=[x], y=[x]) for x in [0, 0.5, 1]],
+            checks=[dict(x=[x], y=[x]) for x in [0.25, 0.75]],
+        ),
+    )
+    directory = tmp_path / 'input'
+    directory.mkdir()
+    (tmp_path / 'evidence').mkdir()
+    raw = canonical(payload)
+    (directory / 'exploration.json').write_bytes(raw)
+    original_popen = subprocess.Popen
+    monkeypatch.setattr(launcher, 'runtime_root', lambda value=None: tmp_path)
+    monkeypatch.setattr(launcher, 'require_attestation', lambda **kwargs: {})
+    monkeypatch.setattr(launcher, 'identity', lambda **kwargs: dict(worker_image='synthetic-pipe'))
+    monkeypatch.setattr(launcher, 'command', lambda args: '{}')
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        subprocess, 'Popen',
+        lambda args, **kwargs: original_popen(
+            [sys.executable, '-c',
+             'import json;print(json.dumps({"value":"x"*' + str(size) + '}))'],
+            **kwargs,
+        ),
+    )
+    result = launcher.isolated(
+        directory, root=tmp_path, exploration_digest=raw_hash(raw), wall=10
+    )
+    if size < 1048576:
+        assert result['reason'] == 'exited' and result['exit_code'] == 0
+        assert json.loads(result['output']) == dict(value='x' * size)
+    else:
+        assert result['reason'] == 'output_limit'
+        assert len(result['output'].encode()) <= 1048576
+    assert launcher.POLICY['output_bytes'] == 65536
