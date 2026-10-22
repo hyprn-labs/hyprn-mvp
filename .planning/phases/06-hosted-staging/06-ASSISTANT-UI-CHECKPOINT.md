@@ -17,10 +17,12 @@ The software-notices product link and standalone served file are removed. Requir
 licence copies remain embedded in delivered JavaScript and native artifacts. No
 backend notice record or endpoint existed to delete. No new dependency was added.
 
-The inspected coolant answer deliberately fixed specific heat at 4.2 while varying
-load and flow. Its brief also requests 3.8 in the adverse scenario. Thus the missing
-slider reflects incomplete exploration coverage, not a failed numerical control.
-The answer already disclosed that exclusion. Existing immutable scientific records
+The inspected coolant answer fixed specific heat at 4.2 while varying load and
+flow because the earlier launch instruction explicitly requested that restriction,
+with 3.8 handled in a separate comparison. The Assistant followed that instruction;
+this was an orchestration scope choice, not a failed numerical control or an
+Assistant mistake. The brief covers both scenarios and the answer disclosed the
+exploration exclusion. Existing immutable scientific records
 are preserved. The generic engineering playbook and /hyprn now require matching
 scenario-changing independent inputs to exploration dimensions or explicit groups.
 
@@ -54,6 +56,32 @@ missing file, unchanged old runtime identity/journal and no recovery archive. Th
 continuation preserves the failure evidence, installs only the exact pinned missing
 file and resumes the original recovery. No database initialization is repeated.
 
-Live browser verification and ongoing activation are pending at this checkpoint.
+Live Chrome verification passed: login, Start/Switch forms hiding history/composer,
+question retained in the brief, Off/On switch and one admitted autonomous turn.
+The shared prose renders existing Markdown tables/lists without changing messages.
+The brief editor shows 12 px after fieldset legends and 16 px internal gaps. The
+home canvas reaches the dock height. Existing joint slider changes returned
+11.717 K and -1.994 kW estimates; its 27 runs, 26 configurations, three analysis
+versions and one answer version were unchanged. No existing model rerun occurred.
+
+Containment, startup and all 19 network probes passed. Named-user access is promoted
+to ongoing staging. No database migration, initialization or secret reissue occurred.
+The new autonomous verification study completed its two comparison runs and is
+sampling. Its saved settings were read in Chrome: load 12–15 kW, mass flow
+0.25–0.30 kg/s, specific heat 3.8–4.2 kJ/(kg*K), rise limit fixed at 10 K;
+32 training and 12 validation-pool points. Both temperature outputs have pre-set
+0.05 K plus 1% relative limits. Its final answer is not yet verified. Do not claim that its full study or
+three-input surrogate has passed before its retained results establish that.
+
+The publication hook rejected inherited integration-history terms. A clean staging
+publication commit `48ef69a903580ae419afe4c03fa19a8c390b436d`, parented on remote main,
+contains the exact reviewed integration tree `ac7860c7`. The hook passed and remote
+`staging` was verified. Local integration history remains intact. The delta from
+runtime `415a5555` is four documentation files only; unrelated edits were excluded.
+Final evidence documentation may follow this publication without changing runtime.
+
+Screenshot: `/private/tmp/hyprn-staging-assistant-ui/assistant-start-study.png`.
+Deployment and browser evidence are in that packet's `application-evidence/`.
+
 Full release qualification, second-user acceptance and automatic deployment from
 GitHub remain separate obligations. Unrelated working-tree changes are preserved.

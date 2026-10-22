@@ -18,17 +18,20 @@
   human acceptance remains separate. Unrelated edits preserved.
   [Checkpoint](phases/03-agent-tools-for-coding-agents/navigation-affordances/CHECKPOINT.md).
 
-- **Hosted staging working (2026-10-22):** Runtime `f7a33f5a`, release `fd63aa0d`,
-  schema 8, desired sequence 14. Root-address JSON error fixed; Chrome login, saved
-  study, real joint estimates, exact calculated point and live Assistant tools pass.
-  Ongoing named-user access promoted; 27 runs remain unchanged. Warm answer 0.119 s;
-  real warmed joint predictions 0.353–0.371 s. Fresh prepared process 5.353 s misses
-  the 5 s target; changed-reader preparation 27.077 s remains. Worker containment and
-  19 network probes pass. No new migration, credentials or scientific runs. Platform
-  `73cfc06` fixes deployment token refresh (13 tests); runtime pin unchanged. Next:
-  cold-start/renewal CPU profiling, automatic staging deploys, recovery qualification
-  and second-user acceptance. Full release qualification is not claimed.
-  [Current checkpoint](phases/06-hosted-staging/06-PERFORMANCE-CHECKPOINT.md).
+- **Hosted staging Assistant/UI update (2026-10-22):** runtime `415a5555`, release
+  `10a81dac`, schema 8, desired sequence 15, ongoing named-user staging access.
+  Shared message formatting, isolated Home forms, question + opt-in autonomous
+  creation, brief spacing and canvas height deployed. UI 28, agent tools 321,
+  containment and 19 network probes pass. Chrome creation and joint predictions
+  verified; existing study remains at 27 runs. Earlier fixed specific heat was
+  explicitly requested in the launch instruction, not an Assistant error. New
+  autonomous study has two completed comparison runs and joint sampling underway
+  across load, flow and specific heat (all three saved ranges verified);
+  its final answer is not yet verified. Remote `staging` published through the
+  existing hook; no automatic deploy workflow is claimed. Next: complete that
+  independent study check, cold-start profiling, automatic deployment, recovery
+  qualification and second-user acceptance. Full release qualification remains open.
+  [Current checkpoint](phases/06-hosted-staging/06-ASSISTANT-UI-CHECKPOINT.md).
 
 - **Model/analysis skill coherence (2026-10-20):** `b7faa44` aligns installed /hyprn
   with live model readers and both analysis creation paths. Component-local reasoning,
