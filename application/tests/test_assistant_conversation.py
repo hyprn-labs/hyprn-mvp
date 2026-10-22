@@ -53,9 +53,9 @@ class Provider:
         return {'id': 'session_test'}
 
     async def session_account(self, session_id):
-        return dict(status='idle', spent_cents=self.cost)
+        return dict(status='idle', spent_cents=self.cost, cap_cents=self.caps[-1])
 
-    async def ensure_allowance(self, session_id, cents):
+    async def ensure_allowance(self, session_id, cents, *, continuing=False):
         self.caps.append(cents)
 
     async def ensure_tools(self, session_id, definitions):
@@ -455,7 +455,7 @@ def test_existing_study_can_draw_all_remaining_shared_allowance(system):
         provider.cost = 120  # Above the retired per-study limit of 100.
         owner.send(actor, sid, uid(), 'Second turn.')
         await drained(owner)
-        assert provider.caps == [200, 200, 200]
+        assert provider.caps == [100, 100, 200]
         assert len(provider.sent) == 2
         await owner.close()
 
@@ -481,31 +481,102 @@ def test_unknown_usage_never_grants_remaining_allowance(system):
     asyncio.run(exercise())
 
 
-def test_parallel_study_turns_do_not_spend_the_same_allowance(system):
-    _, owner, provider, store, actor, sid = system
+def test_parallel_studies_start_before_either_turn_finishes(system):
+    app, owner, provider, store, actor, sid = system
     other = store.create_study(actor, uid(), 'Another study')['study_id']
 
     async def exercise():
-        entered, release = asyncio.Event(), asyncio.Event()
-        original_send = provider.send
-        async def hold_first(session, event):
-            if not entered.is_set():
-                entered.set()
-                await release.wait()
-                provider.cost = 30
-            return await original_send(session, event)
-        provider.send = hold_first
-        owner.send(actor, sid, uid(), 'First turn.')
-        await entered.wait()
-        owner.send(actor, other, uid(), 'Second turn.')
-        await asyncio.sleep(0)
-        assert len(provider.created) == 1
-        release.set()
-        await drained(owner)
-        assert provider.caps == [200, 200, 170, 170]
-        assert owner.read(actor, other)['state'] == 'idle'
-        await owner.close()
+        started = []
+        release = asyncio.Event()
+        caps = {}
+        async def create(settings, correlation):
+            session = 'session_' + str(len(caps))
+            caps[session] = settings.session_cents
+            return {'id': session}
+        async def account(session):
+            return dict(status='running', spent_cents=0, cap_cents=caps[session])
+        async def ensure(session, cents, **kwargs):
+            caps[session] = cents
+        async def send(session, event):
+            started.append(session)
+            await release.wait()
+            return await provider.__class__.send(provider, session, event)
+        provider.create_session, provider.session_account = create, account
+        provider.ensure_allowance, provider.send = ensure, send
+        client = await client_for(app)
+        for study in (sid, other):
+            reply = await client.post('/api/1/studies/' + study + '/assistant/messages',
+                                      json={'command_id': uid(), 'text': 'Read this study.'})
+            assert reply.status_code == 202 and reply.json()['data']['state'] == 'queued'
+        try:
+            for _ in range(100):
+                if len(started) == 2:
+                    break
+                await asyncio.sleep(.01)
+            assert len(started) == 2, 'One study must not wait for the other turn to finish'
+            assert sum(caps.values()) <= owner.settings.total_cents
+            assert all(owner.read(actor, study)['state'] == 'starting' for study in (sid, other))
+        finally:
+            release.set()
+            await drained(owner)
+            await client.aclose()
+            await owner.close()
+    asyncio.run(exercise())
 
+
+def test_cancel_queued_message_is_immediate_and_never_delivered(system):
+    _, owner, provider, store, actor, sid = system
+    async def exercise():
+        async with owner._allowance_admission:
+            owner.send(actor, sid, uid(), 'Cancel before admission.')
+            await asyncio.sleep(0)
+            assert owner.read(actor, sid)['state'] == 'queued'
+            assert owner.stop(actor, sid)['state'] == 'idle'
+            assert not provider.sent and not provider.created
+        await drained(owner)
+        assert not provider.sent and not provider.created
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_queue_time_does_not_consume_the_execution_deadline(system):
+    _, owner, provider, store, actor, sid = system
+    async def exercise():
+        command = uid()
+        records.accept(store, actor, sid, command, 'Old queued request.', owner.settings)
+        with store.connection(write=True) as db:
+            db.execute('UPDATE assistant_turns SET created_at=1 WHERE turn_id=?', (command,))
+        owner.wake(sid)
+        await drained(owner)
+        assert owner.read(actor, sid)['state'] == 'idle'
+        assert provider.sent
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_reservations_renew_without_a_lifetime_study_cap(system):
+    from hyprn_mvp_app.assistant import allowance
+    _, owner, provider, store, actor, sid = system
+    async def exercise():
+        owner.settings = replace(owner.settings, total_cents=1000)
+        records.accept(store, actor, sid, uid(), 'Long task.', owner.settings)
+        current, turn = owner._load(sid)
+        initial = await allowance.prepare(store, provider, owner.settings, current, turn)
+        assert initial.session_cents == 100
+        with store.connection(write=True) as db:
+            records.update(db, sid, provider_id='session_test', provision='accepted')
+        provider.caps.append(100)
+        provider.cost = 90
+        current, turn = owner._load(sid)
+        renewed = await allowance.prepare(store, provider, owner.settings, current, turn,
+                                         renewing=True)
+        assert renewed.session_cents == 191
+        assert provider.sent == []
+        provider.caps.append(renewed.session_cents)
+        provider.cost = 185
+        renewed = await allowance.prepare(store, provider, owner.settings, current, turn,
+                                         renewing=True)
+        assert renewed.session_cents == 286
     asyncio.run(exercise())
 
 
@@ -616,4 +687,70 @@ def test_tool_bookkeeping_does_not_block_http(system, monkeypatch, boundary):
         await client.aclose()
         await owner.close()
 
+    asyncio.run(exercise())
+
+
+
+def test_reserved_capacity_queues_without_repeating_messages_and_stop_releases_queue(system):
+    _, owner, provider, store, actor, sid = system
+    other = store.create_study(actor, uid(), 'Reserved study')['study_id']
+    owner.settings = replace(owner.settings, total_cents=100)
+    async def exercise():
+        records.accept(store, actor, other, uid(), 'Existing active turn.', owner.settings)
+        with store.connection(write=True) as db:
+            records.update(db, other, provider_id='session_reserved', provision='accepted',
+                           state='running')
+        provider.caps.append(100)
+        owner.send(actor, sid, uid(), 'Waiting for capacity.')
+        await asyncio.sleep(.05)
+        assert owner.read(actor, sid)['state'] == 'queued'
+        assert not provider.sent and not provider.created
+        assert owner.stop(actor, sid)['state'] == 'idle'
+        await drained(owner)
+        assert not provider.sent and not provider.created
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_provider_overshoot_is_charged_before_admitting_another_study(system):
+    _, owner, provider, store, actor, sid = system
+    other = store.create_study(actor, uid(), 'Spent study')['study_id']
+    async def exercise():
+        records.accept(store, actor, other, uid(), 'Completed turn.', owner.settings)
+        with store.connection(write=True) as db:
+            records.update(db, other, provider_id='session_spent', provision='accepted',
+                           state='idle', active_turn=None)
+        provider.caps.append(100)
+        provider.cost = 205
+        owner.send(actor, sid, uid(), 'No remaining allowance.')
+        await drained(owner)
+        assert owner.read(actor, sid)['error'] == 'shared_allowance_exhausted'
+        assert not provider.sent and not provider.created
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_same_admitted_turn_renews_after_provider_pause_without_replaying_tools(system):
+    _, owner, provider, store, actor, sid = system
+    owner.settings = replace(owner.settings, total_cents=500)
+    async def exercise():
+        original_ensure = provider.ensure_allowance
+        async def result(session, event_id, content, is_error=False):
+            provider.results.append(json.loads(content))
+            provider.event('user.custom_tool_result', custom_tool_use_id=event_id)
+            provider.cost = 101
+            provider.event('session.status_idle', stop_reason={'type': 'budget_reached'})
+        async def ensure(session, cents, *, continuing=False):
+            await original_ensure(session, cents, continuing=continuing)
+            if continuing:
+                provider.event('session.status_running')
+                provider.event('agent.message', content=[{'type': 'text', 'text': 'Continued.'}])
+                provider.event('session.status_idle', stop_reason={'type': 'end_turn'})
+        provider.tool_result, provider.ensure_allowance = result, ensure
+        owner.send(actor, sid, uid(), 'Complete this task.')
+        await drained(owner)
+        assert owner.read(actor, sid)['state'] == 'idle'
+        assert len(provider.sent) == len(provider.results) == 1
+        assert provider.caps == [100, 100, 202]
+        await owner.close()
     asyncio.run(exercise())

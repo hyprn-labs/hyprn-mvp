@@ -1,4 +1,4 @@
-"""Read-only administrative spending snapshots; no per-study reservations.
+"""Read-only administrative spending snapshots; never an admission decision.
 
 A cached list-cost read is never an invoice or an admission decision.
 Cache only for this process; an unavailable provider after restart yields unknown spend.
@@ -20,7 +20,7 @@ class Budget:
     async def read(self, provider, settings, study=None):
         rows = [dict(r) for r in self.store.assistant_accounts()]
         current = next((r for r in rows if r['study_id'] == study), None)
-        reserved = 0  # Legacy response field; headroom is no longer reserved per study.
+        reserved = 0  # Populated only from known observational usage below.
         async with self._lock:
             now = time.time()
             semaphore = asyncio.Semaphore(4)
@@ -45,6 +45,8 @@ class Budget:
         # creation may have reached the provider even if its acknowledgement was lost.
         snapshots = [costs.get(r['provider_id']) for r in rows]
         known = all(item is not None for item in snapshots)
+        reserved = sum(max(0, r['reserved_cents'] - costs[r['provider_id']][0])
+                       for r in rows if r.get('active_turn') and r['provider_id'] in costs)
         prior = settings.prior_cents if settings else 0
         spent = prior + sum(item[0] for item in snapshots) if known else None
         checked = min((item[1] for item in snapshots if item), default=None)
@@ -55,7 +57,7 @@ class Budget:
         return dict(
             configured=bool(settings), currency='USD', limit_cents=limit,
             reserved_cents=reserved, prior_cents=prior,
-            unallocated_cents=max(0, limit - spent)
+            unallocated_cents=max(0, limit - spent - reserved)
             if limit is not None and spent is not None else None,
             spent_cents=spent if settings else None,
             remaining_cents=max(0, limit - spent)

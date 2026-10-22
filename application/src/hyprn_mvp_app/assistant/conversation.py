@@ -40,7 +40,7 @@ class Conversations:
         self._tasks = {}
         self._closing = False
         self.budget = Budget(store)
-        self._allowance_turn = asyncio.Lock()
+        self._allowance_admission = asyncio.Lock()
 
     def available(self):
         if not self.settings or not control.agent_enabled(self.runtime.environ):
@@ -77,7 +77,7 @@ class Conversations:
 
     def _continue(self, study):
         current, turn = self._load(study)
-        if turn and current['state'] in ('running', 'stopping'):
+        if turn and current['state'] in ('queued', 'starting', 'running', 'waiting', 'stopping'):
             self.wake(study)
 
     async def start(self):
@@ -117,7 +117,12 @@ class Conversations:
                     'UPDATE assistant_turns SET stopped=1 WHERE turn_id=?',
                     (current['active_turn'],),
                 )
-                records.update(db, study, state='stopping')
+                turn = records.turn(db, current['active_turn'])
+                if (current['state'] == 'queued' and turn['delivery'] == 'new'
+                        and not turn['runtime_session'] and current['provision'] != 'intended'):
+                    records.update(db, study, state='idle', active_turn=None, error=None)
+                else:
+                    records.update(db, study, state='stopping')
         if current and current['active_turn']:
             self.wake(study)
         return self.read(actor, study)
@@ -300,9 +305,14 @@ class Conversations:
                 identity(event['session_thread_id'])
             if not await asyncio.to_thread(self._intend_tool, study, turn, event_id):
                 return
+            if event.get('name') == 'wait_for_runs':
+                self._update(study, state='waiting')
             outcome = await self.runtime.call_tool(
                 turn['runtime_session'], event_id, event.get('name'), event.get('input')
             )
+            _, latest = self._load(study)
+            if latest and not latest['stopped']:
+                self._update(study, state='running')
             content = canonical(
                 dict(
                     ok=outcome.ok,
@@ -328,12 +338,64 @@ class Conversations:
         await asyncio.to_thread(self._accept_tool_result, study, event_id)
 
     async def _pump(self, study):
-        # Waiting studies retain their accepted message. No provider spend or tools begin
-        # until the previous turn ends and fresh shared-accounting reads succeed.
-        async with self._allowance_turn:
-            with self.store.background_actor('assistant', study) as admitted:
-                if admitted:
-                    await self._funded_pump(study)
+        with self.store.background_actor('assistant', study) as admitted:
+            if admitted:
+                await self._funded_pump(study)
+
+    async def _admit(self, study):
+        while True:
+            async with self._allowance_admission:
+                current, turn = self._load(study)
+                if not turn or turn['stopped']:
+                    return None
+                self._authorize(turn)
+                try:
+                    settings = await allowance.prepare(
+                        self.store, self.provider, self.settings, current, turn,
+                        renewing=turn['delivery'] != 'new')
+                except ProviderError as error:
+                    if error.code != 'shared_allowance_busy':
+                        raise
+                    self._update(study, state='queued', error=None)
+                else:
+                    # Stop can be admitted during provider accounting reads.
+                    _, latest = self._load(study)
+                    if not latest or latest['stopped']:
+                        return None
+                    self._update(study, state='starting', error=None)
+                    provider_id = await self._session(current, settings)
+                    _, latest = self._load(study)
+                    if not latest or latest['stopped']:
+                        return provider_id
+                    await self.provider.ensure_allowance(
+                        provider_id, settings.session_cents,
+                        continuing=turn['delivery'] != 'new')
+                    return provider_id
+            await asyncio.sleep(1)
+
+    def _started_at(self, study, turn):
+        event_id = 'turn_started_' + turn['turn_id']
+        with self.store.connection(write=True) as db:
+            found = next((e for e in records.events(db, study) if e['id'] == event_id), None)
+            if found:
+                return found['_received_at']
+            started = time.time() if turn['delivery'] == 'new' else turn['created_at']
+            records.save_event(db, study, dict(id=event_id, type='hyprn.turn_started',
+                                              _received_at=started))
+            return started
+
+    async def _renew(self, study, turn, provider_id):
+        async with self._allowance_admission:
+            current, latest = self._load(study)
+            if not latest or latest['stopped']:
+                return
+            self._authorize(latest)
+            settings = await allowance.prepare(
+                self.store, self.provider, self.settings, current, latest, renewing=True)
+            _, latest = self._load(study)
+            if latest and not latest['stopped']:
+                await self.provider.ensure_allowance(
+                    provider_id, settings.session_cents, continuing=True)
 
     async def _funded_pump(self, study):
         provider_id = None
@@ -350,28 +412,42 @@ class Conversations:
                     raise ProviderError('session_delivery_unknown', uncertain=True)
                 self._update(study, state='idle', active_turn=None)
                 return
+            provider_id = await self._admit(study)
+            current, turn = self._load(study)
+            if not turn:
+                return
+            if turn['stopped']:
+                if provider_id:
+                    await self._stop_remote(study, turn, provider_id)
+                else:
+                    self._update(study, state='idle', active_turn=None)
+                return
+            started_at = self._started_at(study, turn)
             if not turn['runtime_session']:
                 self._open_runtime(turn)
-            settings = self.settings
             if turn['delivery'] == 'new':
-                settings = await allowance.prepare(
-                    self.store, self.provider, self.settings, current, turn)
-            provider_id = await self._session(current, settings)
-            _, turn = self._load(study)
-            if not turn['stopped'] and turn['delivery'] == 'new':
-                await self.provider.ensure_allowance(provider_id, settings.session_cents)
                 await self.provider.ensure_tools(provider_id, self.runtime.registry.definitions(
                     SURFACE, LOCAL_STAGE, ROLE_EFFECTS['writer']))
+            _, turn = self._load(study)
             if not turn['stopped']:
                 await self._deliver(study, turn, provider_id)
+                self._update(study, state='running', error=None)
+            renewed_at = time.monotonic()
             while True:
                 _, turn = self._load(study)
                 if turn['stopped']:
                     await self._stop_remote(study, turn, provider_id)
                     return
                 self._authorize(turn)
-                if time.time() - turn['created_at'] > MAX_TURN_SECONDS:
+                if time.time() - started_at > MAX_TURN_SECONDS:
                     raise ProviderError('turn_time_limit')
+                if time.monotonic() - renewed_at >= 15:
+                    try:
+                        await self._renew(study, turn, provider_id)
+                    except ProviderError as error:
+                        if error.code != 'shared_allowance_busy':
+                            raise
+                    renewed_at = time.monotonic()
                 history = await self._history(study, provider_id, turn)
                 self._authorize(turn)
                 start = next(
@@ -382,10 +458,19 @@ class Conversations:
                     if event.get('type') == 'agent.custom_tool_use' and not turn['stopped']:
                         await self._tool(study, turn, provider_id, event, history)
                 idle = next(
-                    (e for e in reversed(relevant) if e.get('type') == 'session.status_idle'), None
+                    (e for e in reversed(relevant)
+                     if e.get('type') in ('session.status_idle', 'session.status_running')), None
                 )
-                if idle and idle.get('stop_reason', {}).get('type') != 'requires_action':
+                if (idle and idle['type'] == 'session.status_idle'
+                        and idle.get('stop_reason', {}).get('type') != 'requires_action'):
                     reason = idle.get('stop_reason', {}).get('type')
+                    if reason == 'budget_reached':
+                        # Renew only this admitted turn. Never resend its message/tools.
+                        self._update(study, state='queued')
+                        await self._admit(study)
+                        self._update(study, state='running')
+                        await asyncio.sleep(1)
+                        continue
                     self.runtime.sessions.end(turn['runtime_session'])
                     self._update(
                         study,

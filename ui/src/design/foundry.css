@@ -1582,3 +1582,7 @@ fieldset:is(.hf-form-stack,.form-stack) > legend { font-weight:var(--type-body-s
 .hf-toggle[aria-checked="true"] { color:var(--ok); background:var(--ok-soft); border-color:var(--ok); }
 .hf-toggle:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 .hf-toggle:disabled { cursor:default; opacity:0.45; }
+
+.hf-assistant-activity { display:grid; justify-items:start; gap:var(--space-2); padding:var(--space-3) var(--space-4); background:var(--surface-sunken); border:1px solid var(--line); border-radius:var(--radius-md); }
+.hf-assistant-activity p { margin:0; color:var(--ink-2); font-size:var(--type-small-size); line-height:var(--type-prose-line); }
+.hf-assistant-activity[data-state="blocked"] { border-color:var(--warning); }

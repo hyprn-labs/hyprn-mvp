@@ -370,7 +370,7 @@ for path,methods in spec["paths"].items():
                 'Only aggregate installation amounts and the authorized study are returned.'
             )
         elif path.startswith('/studies/{study_id}/assistant'):
-            schema = ref('AssistantConversationRead1')
+            schema = ref('AssistantConversationRead2')
             status = '200' if method == 'get' else '202'
             for parameter in op['parameters']:
                 if parameter['in'] == 'path':

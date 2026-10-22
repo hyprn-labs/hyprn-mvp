@@ -211,20 +211,32 @@ Provider semantics verified against the official [multiagent guide](https://plat
 
 ## Shared spending allowance
 
-One installation allowance covers all study conversations and their child agents. Before
-starting a new human turn, read every known provider session's current usage and status,
-including earlier usage explicitly configured outside these records. Give the selected
-session a provider ceiling of its own cumulative usage plus the remaining shared allowance.
-There is no per-study allocation or cap. The legacy SESSION_CENTS setting is ignored.
+One installation allowance covers all study conversations and their child agents.
+The single application owner serializes accounting and provider-cap updates, not whole
+turns. Studies run concurrently. Each admitted turn receives up to 100 cents of renewable
+headroom, with renewal below 25 cents. This is an operational reservation, not a lifetime
+study limit: a study may renew repeatedly from the remaining shared allowance. The legacy
+SESSION_CENTS setting remains ignored. No user-configured per-study cap is introduced.
 
-Only one study turn draws this headroom at a time; other accepted messages wait without
-provider execution. Child reasoning within that turn may still run in parallel. Recover
-already delivered turns before queued new turns after restart. Unknown usage or session
-creation fails closed. Never clear usage, replay uncertain messages or automatically resume
-a budget-paused provider turn while updating its ceiling. Stop remains the explicit recovery
-path for an interrupted conversation. Provider in-flight work can finish after its ceiling.
+Before admission or renewal, read all provider usage and ceilings afresh. Charge prior
+usage, rounded-up reported costs, and every other active session's remaining ceiling.
+Count uncertain active work as reserved; unresolved creation or unavailable usage fails
+closed. Release unused headroom only after the turn ends and provider idleness is confirmed.
+Provider updates preserve a budget and reconcile uncertain responses without repeating
+mutations. Only the same already-admitted turn may automatically resume at its renewable
+ceiling; no message or scientific tool is resubmitted. Actual provider overshoot is charged
+before admitting more work. The provider still permits in-flight requests to finish past
+a ceiling, including one per subagent thread; the shared limit bounds admission, not an
+exact invoice maximum. See the official session budgets reference above.
+
+The public conversation projection version 2 reports Queued before dispatch, Starting
+during session setup, Working after delivery, Waiting for calculations during the existing
+wait tool, Stopping until acknowledgement, and Needs attention for refused/uncertain work.
+Queue time before dispatch does not consume the turn's execution deadline. A queued,
+never-dispatched request can be cancelled immediately without contacting the provider.
+The original request and attribution remain in history. No schema migration is needed.
 
 The app does not display spending. Existing authenticated budget-read endpoints remain for
-administration, with cached reported costs and unknown/stale values preserved. Their legacy
-reservation field is zero; available headroom is shared. Admission always uses fresh reads,
-not these cached snapshots. Credential material and provider identifiers remain server-side.
+administration; cached usage is never used for admission. Credential material and provider
+identifiers remain server-side. Study brief readers suppress an original question identical
+to the displayed question while preserving the authored provenance record.

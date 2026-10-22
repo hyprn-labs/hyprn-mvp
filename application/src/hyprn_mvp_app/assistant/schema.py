@@ -1,5 +1,7 @@
 """Closed public conversation shapes; raw provider records never cross this boundary."""
 
+from copy import deepcopy
+
 from jsonschema import Draft202012Validator
 
 from ..contracts import DomainError
@@ -54,6 +56,11 @@ DEFINITIONS = {
         }
     ),
 }
+
+
+DEFINITIONS['AssistantConversationRead2'] = deepcopy(DEFINITIONS['AssistantConversationRead1'])
+DEFINITIONS['AssistantConversationRead2']['properties']['state'] = {
+    'enum': ['idle', 'queued', 'starting', 'running', 'waiting', 'stopping', 'blocked', 'unavailable']}
 
 
 money = {'type': 'integer', 'minimum': 0, 'maximum': 10**12}

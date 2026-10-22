@@ -248,3 +248,37 @@ def test_budget_update_cannot_resume_an_old_budget_paused_turn(key_file):
 
     asyncio.run(exercise())
     assert requests == ['GET']
+
+
+@pytest.mark.parametrize('status', ['running', 'idle'])
+def test_same_turn_can_renew_and_resume_its_reserved_allowance(key_file, status):
+    cap = {'type': 'limit', 'max_list_cost': {'amount': '100', 'currency': 'USD'}}
+    writes = []
+    def handler(request):
+        nonlocal cap
+        if request.method == 'POST':
+            writes.append(json.loads(request.content))
+            cap = writes[-1]['budget']
+        return httpx.Response(200, json={'status': status, 'budget': cap,
+            'stop_reason': {'type': 'budget_reached'},
+            'usage': {'list_cost': {'amount': '101', 'currency': 'USD'}}})
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        account = await client.session_account('session_test')
+        assert account == dict(status=status, cap_cents=100, spent_cents=101)
+        await client.ensure_allowance('session_test', 202, continuing=True)
+        assert len(writes) == 1
+        await client.close()
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('budget', [None, {}, {'max_list_cost': {'amount': '0', 'currency': 'USD'}}])
+def test_missing_or_unbounded_provider_ceiling_cannot_release_shared_money(key_file, budget):
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(lambda request:
+            httpx.Response(200, json={'status': 'running', 'budget': budget,
+                'usage': {'list_cost': {'amount': '1', 'currency': 'USD'}}})))
+        with pytest.raises(ProviderError, match='shared_allowance_unknown'):
+            await client.session_account('session_test')
+        await client.close()
+    asyncio.run(exercise())

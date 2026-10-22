@@ -127,7 +127,7 @@ def accept(store, actor, study, command, text, settings):
             (command, study, actor, text, None, 'new', None, 0, time.time(), display_name(db, actor)),
         )
         db.execute(
-            "UPDATE assistant_conversations SET active_turn=?,state='running',error=NULL "
+            "UPDATE assistant_conversations SET active_turn=?,state='queued',error=NULL "
             'WHERE study_id=?',
             (command, study),
         )

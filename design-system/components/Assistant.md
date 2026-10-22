@@ -13,7 +13,12 @@ composition and repeated keydown events never send. An uncertain delivery keeps 
 A confirmed rejection (`outcome: unchanged`) keeps the text editable, shows the server's
 specific diagnostic and returns to Send. A confirmed allowance refusal must not be labelled uncertain delivery or claim a message was sent.
 
-Show actual application state: Working, Stopping, or a concise actionable error.
+Use `AssistantActivity` for actual application stages: Queued, Starting, Working,
+Waiting for calculations, Stopping, and Needs attention. Each is a compact sunken
+card with a shared noninteractive status mark, clear label and one explanatory line.
+Queued never implies provider work has started. Do not invent progress percentages
+or completion times. Only a pending calculation-wait tool reports Waiting for calculations.
+Blocked stages carry the actionable diagnostic inside the same card.
 Do not infer that a scientific run succeeded because an assistant turn finished.
 Unavailable configuration leaves the composer disabled. Access loss clears
 protected content using the common API read fence. Do not fabricate a reply,

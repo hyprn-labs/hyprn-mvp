@@ -138,3 +138,5 @@ export { ToggleField, AssistantComposer, ConversationLog, ConversationMessage } 
 
 export { OpenLink } from './navigation';
 export type { OpenLinkProps } from './navigation';
+
+export { AssistantActivity } from './assistant';

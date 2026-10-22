@@ -233,20 +233,25 @@ class Claude:
                 or not re.fullmatch(r'[0-9]{1,12}', cost['amount'])
                 or result.get('status') not in ('idle', 'running', 'rescheduling', 'terminated')):
             raise ProviderError('invalid_provider_record')
-        return dict(spent_cents=int(cost['amount']), status=result['status'])
+        budget = (result.get('budget') or {}).get('max_list_cost', {})
+        if (budget.get('currency') != 'USD' or not isinstance(budget.get('amount'), str)
+                or not re.fullmatch(r'[1-9][0-9]{0,11}', budget['amount'])):
+            raise ProviderError('shared_allowance_unknown')
+        return dict(spent_cents=int(cost['amount']), status=result['status'],
+                    cap_cents=int(budget['amount']))
 
-    async def ensure_allowance(self, session_id, cents):
+    async def ensure_allowance(self, session_id, cents, *, continuing=False):
         """Reconcile a durable absolute cap before a new message; never remove the budget."""
         path = '/v1/sessions/' + identity(session_id)
         expected = {'type': 'limit', 'max_list_cost': {'amount': str(cents), 'currency': 'USD'}}
         current = await self.request('GET', path)
         if current.get('budget') == expected:
             return
-        if current.get('status') != 'idle':
+        if not continuing and current.get('status') != 'idle':
             raise ProviderError('provider_session_busy')
         # A budget update can resume a paused turn. Such a turn requires explicit recovery,
         # not a new user message borrowing a different delegation.
-        if (current.get('stop_reason') or {}).get('type') == 'budget_reached':
+        if not continuing and (current.get('stop_reason') or {}).get('type') == 'budget_reached':
             raise ProviderError('provider_budget_reached')
         try:
             await self.request('POST', path, body={'budget': expected})

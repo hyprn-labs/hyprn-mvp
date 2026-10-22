@@ -1,9 +1,10 @@
 import { AssistantHomeMenu } from './AssistantHomeMenu';
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantConversationRead1, HyprnMvpApi } from './api';
+import type { AssistantConversationRead2, HyprnMvpApi } from './api';
 import { ApiError } from './api';
 import {
   ActionGroup,
+  AssistantActivity,
   AssistantComposer,
   AssistantPane,
   Button,
@@ -51,7 +52,7 @@ export function StudyAssistant({
   onToggleExpanded: () => void;
   onClose: () => void;
 }) {
-  const [conversation, setConversation] = useState<AssistantConversationRead1 | null>(null);
+  const [conversation, setConversation] = useState<AssistantConversationRead2 | null>(null);
   const [homeMode, setHomeMode] = useState<'chat' | 'create' | 'switch'>('chat');
   const choosingStudy = home && homeMode !== 'chat';
   const [draft, setDraft] = useState('');
@@ -168,7 +169,11 @@ export function StudyAssistant({
   }
 
   const unavailable = !studyId || conversation?.state === 'unavailable';
-  const working = conversation?.state === 'running' || conversation?.state === 'stopping';
+  const activity =
+    conversation && !['idle', 'unavailable'].includes(conversation.state)
+      ? (conversation.state as
+          'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked')
+      : null;
   return (
     <AssistantPane
       state="connected"
@@ -249,14 +254,16 @@ export function StudyAssistant({
               authorDisplayName={message.author_display_name}
             />
           ))}
-          {working && (
-            <p role="status">{conversation.state === 'stopping' ? 'Stopping…' : 'Working…'}</p>
-          )}
-          {conversation?.error && (
-            <p role="alert">
-              {diagnostics[conversation.error] ??
-                'The assistant paused. Your conversation is saved; server review is needed.'}
-            </p>
+          {activity && (
+            <AssistantActivity
+              state={activity}
+              detail={
+                conversation?.error
+                  ? (diagnostics[conversation.error] ??
+                    'An operation needs review. Your conversation is saved.')
+                  : undefined
+              }
+            />
           )}
           {error && <p role="alert">{error}</p>}
         </ConversationLog>

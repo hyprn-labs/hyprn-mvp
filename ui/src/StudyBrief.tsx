@@ -106,7 +106,13 @@ function BriefReader({
           <p className="context-copy">{content.question || 'No study question yet'}</p>
         </ReadingSection>
         <ActionGroup align="end">
-          <ActionDialog purpose="reader" label="See details" title="Study brief details" width="workspace" size="sm">
+          <ActionDialog
+            purpose="reader"
+            label="See details"
+            title="Study brief details"
+            width="workspace"
+            size="sm"
+          >
             <BriefReader api={api} studyId={studyId} content={content} />
           </ActionDialog>
         </ActionGroup>
@@ -117,11 +123,13 @@ function BriefReader({
       <ReadingSection aria-label="Study question">
         <h3>Study question</h3>
         <p className="context-copy">{content.question || 'No study question yet'}</p>
-        {content.original_question && (
-          <p className="context-line">
-            Original wording (supplied, unverified): {content.original_question.text}
-          </p>
-        )}
+        {content.original_question &&
+          content.original_question.text.trim().replace(/\s+/g, ' ') !==
+            content.question.trim().replace(/\s+/g, ' ') && (
+            <p className="context-line">
+              Original wording (supplied, unverified): {content.original_question.text}
+            </p>
+          )}
         {content.elaboration && (
           <p className="context-line">
             Elaboration (supplied, unverified): {content.elaboration.text}

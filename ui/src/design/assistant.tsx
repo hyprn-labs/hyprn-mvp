@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { StatusTag } from './components';
 import { ConversationProse } from './conversationProse';
 
 /** Study conversations share readable prose, author labels and token-based separation. */
@@ -65,5 +66,36 @@ export function ToggleField({
         {checked ? 'On' : 'Off'}
       </button>
     </div>
+  );
+}
+
+/** Backend lifecycle only: no fabricated percentages, timers or scientific outcomes. */
+export function AssistantActivity({
+  state,
+  detail,
+}: {
+  state: 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked';
+  detail?: string;
+}) {
+  const stages = {
+    queued: ['Queued', 'Your message is saved. Waiting for available Assistant capacity.'],
+    starting: ['Starting', 'Connecting this study’s session.'],
+    running: ['Working', 'The Assistant is processing your request.'],
+    waiting: ['Waiting for calculations', 'Submitted calculations are still running.'],
+    stopping: ['Stopping', 'Waiting for the Assistant to confirm the stop.'],
+    blocked: ['Needs attention', 'Your conversation is saved.'],
+  } as const;
+  const [label, explanation] = stages[state];
+  return (
+    <section
+      className="hf-assistant-activity"
+      role={state === 'blocked' ? 'alert' : 'status'}
+      aria-live="polite"
+      aria-atomic="true"
+      data-state={state}
+    >
+      <StatusTag tone={state === 'blocked' ? 'warning' : 'inert'}>{label}</StatusTag>
+      <p>{detail ?? explanation}</p>
+    </section>
   );
 }

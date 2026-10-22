@@ -102,6 +102,7 @@ async function harness(page: Page) {
     profileFailure: false,
     profileLostResponse: false,
     messages: [] as Array<Record<string, unknown>>,
+    assistantStage: 'idle',
     assistantFailure: 'budget' as 'budget' | 'unknown' | 'none',
     assistantSends: [] as Array<{command_id: string; text: string}>,
   };
@@ -154,7 +155,8 @@ async function harness(page: Page) {
     }
     if (/^\/studies\/[^/]+\/assistant$/.test(path) && method === 'GET')
       return ok({
-        state: 'idle', error: null, can_send: true, can_stop: false,
+        state: state.assistantStage, error: null,
+        can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
         messages: state.messages, has_earlier_messages: false,
       });
     // The model editor negotiates its edit format: this service accepts model format 4 edits.
@@ -1752,6 +1754,31 @@ test('Manual study start saves the question without sending an Assistant message
   await panel.getByRole('button', { name: 'Create study', exact: true }).click();
   await expect(panel.getByRole('textbox', { name: 'Message assistant' })).toBeVisible();
   expect(state.brief.content.question).toBe('Which assumptions need to be established?');
+  expect(state.brief.content.original_question.text).toBe(state.brief.content.question);
+  await expect(page.getByRole('region', { name: 'Study brief', exact: true })
+    .getByText(/Original wording/)).toHaveCount(0);
   expect(state.assistantSends).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+
+test('Assistant progress cards reflect the backend stages in light and narrow layouts', async ({ page }) => {
+  const state = await harness(page);
+  state.assistantStage = 'queued';
+  await login(page);
+  await openStudy(page);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+  await expect(panel.getByRole('status')).toContainText('Queued');
+  await expect(panel.getByRole('status')).not.toContainText('Working');
+  for (const [stage, label] of [['starting', 'Starting'], ['running', 'Working'],
+    ['waiting', 'Waiting for calculations'], ['stopping', 'Stopping']]) {
+    state.assistantStage = stage;
+    await expect(panel.getByRole('status')).toContainText(label);
+  }
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+  await page.setViewportSize({ width: 720, height: 900 });
+  await expect(panel.getByRole('status')).toBeVisible();
+  expect(await panel.getByRole('status').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(state.unknown).toEqual([]);
 });
