@@ -16,7 +16,7 @@ Initial checks: Assistant 145 then 152 passed as additional edge cases were adde
 contracts 127 passed; UI navigation 29 passed; design/token and UI contract checks
 passed. Initial test command could not access the default dependency cache; rerun
 used the existing explicit pinned cache and isolated fixtures. No application test
-failure at this stage. Final integrated evidence and deployment remain pending.
+failure at this stage. Integrated evidence and deployment are recorded below.
 
 Scientific execution, tool authorization, saved records, sampling and surrogate
 checks are unchanged. Provider thresholds still permit the documented in-flight
@@ -39,4 +39,25 @@ that original wording remains in the saved data but is absent from the draft dis
 The exact AMD64 app image and native bundle for `280dae3d` are built and verified.
 All recorded worker inputs match the prior release. Read-only staging observation
 found the coolant turn ended naturally and the hypersonic turn now delivering real
-tool calls. Do not stop it for deployment; release activation waits for idle queues.
+tool calls. Initial wait-only preference was superseded by explicit owner approval
+to Stop the Assistant through the app and deploy. The public Stop control was used;
+all seven background categories were idle before admission closed and service stop.
+
+Deployment (2026-10-22): remote staging `8fd348a9`; runtime `280dae3d`;
+release `3a693c455c91b29cb84214307e3b42aa03242eb5f88aab6870f2b65a7d8f2bc0`,
+configuration `8f3fbbfd936c7adb6074868ac8fe9e01218ed83c0c1448baf80a4c2f953745ff`,
+desired sequence 16. Exact-image publication, staged files, clean stop, unchanged
+store handoff, containment, startup and 19 network probes passed. No initialization,
+migration, secret reissue or direct record manipulation. Post-start queues all idle.
+Authenticated Chrome opened the preserved hypersonic study and its saved brief,
+verified the question is not duplicated in details, and loaded the retained
+conversation with an idle composer. No continuation message was sent. Evidence:
+private deployment packet application-evidence and staging-after.png.
+
+Concurrency and budget-renewal behavior are covered by the 153 Assistant tests;
+this deployment did not start additional paid live conversations to repeat them.
+Human acceptance and scientific assessment of the unfinished hypersonic study
+remain separate. The user can send a new continuation message to resume it.
+
+Normal named-user staging access promotion completed after Chrome verification;
+no temporary access deadline remains. All deployment phases exited successfully.

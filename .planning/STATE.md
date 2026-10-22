@@ -1,5 +1,18 @@
 # Project State
 
+- **Concurrent Assistant deployment (2026-10-22):** runtime `280dae3d`, published
+  staging `8fd348a9`, release `3a693c45`, desired sequence 16. Studies can progress
+  concurrently under renewable shared reservations; public progress distinguishes
+  queued, starting, working, waiting and stopping. Duplicate original wording is
+  hidden without deleting provenance. Assistant 153, contracts 127, navigation 29,
+  design/build, containment and 19 live network checks passed. Chrome login, saved
+  hypersonic brief and idle conversation verified. The owner authorized normal UI
+  Stop before deployment; saved work remains, and a new message resumes the study.
+  No direct staging record repair. Next: user continuation/acceptance; live multi-study
+  concurrency evaluation, full release qualification and automatic deployments remain
+  separate from this delivered update.
+  [Checkpoint](phases/06-hosted-staging/assistant-concurrency/CHECKPOINT.md).
+
 - **Display aliases (2026-10-20):** `7a66f44` adds self-service Display alias in
   Settings, backed by one profile API/identity owner. Sign-in names and actor IDs
   stay unchanged. New attribution and chat messages capture the human name;
