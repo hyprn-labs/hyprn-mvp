@@ -1,5 +1,16 @@
 # Project State
 
+- **Assistant user budget deployed (2026-10-22):** product `0fe32eba`, staging
+  source `b62fd35a`, release `2e6d90ab`, sequence 17, schema 9. USD 20 cumulative
+  per user; no session cap, renewal or reset. Safe Resume and shared composer
+  spacing deployed. Assistant 151, PostgreSQL 39, contracts 127, navigation 29,
+  containment/startup and 19 live network checks passed. Coherent backup retained;
+  ongoing named-user staging access active. Chrome login, public per-user allowance,
+  uncapped provider session and real Assistant tool exchanges verified. Hypersonic
+  study resumed through public chat and is executing its existing samples; final
+  answer/validation remain pending under that Assistant. No direct data repair.
+  [Checkpoint](phases/06-hosted-staging/assistant-user-budget/CHECKPOINT.md).
+
 - **Concurrent Assistant deployment (2026-10-22):** runtime `280dae3d`, published
   staging `8fd348a9`, release `3a693c45`, desired sequence 16. Studies can progress
   concurrently under renewable shared reservations; public progress distinguishes
