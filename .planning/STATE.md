@@ -1,13 +1,22 @@
 # Project State
 
-- **Audit remediation in progress (2026-10-22), not deployed:** durable analysis
-  admission, operational execution state, incremental chat and pinned native skill
-  provisioning are committed with focused evidence. Monetary quantities are being
-  integrated through catalogue-derived units and exact saved price bases; the
-  modeling/native acceptance revealed contract/version dispatch gaps under repair.
-  Parent owns remaining scientific publication, reviewer/source evidence, UI,
-  integrated qualification and staging deployment. No staging scientific data is
-  changed directly. Current scope/ownership:
+- **Audit remediation deployment in progress (2026-10-22):** durable analysis,
+  operational state, incremental chat, pinned skill/reviewers and catalogue-derived
+  monetary units are integrated. Real units/native export14/14, installed AMD64
+  app1/1 and native3/3 passed. Candidate7cbe3e has the tested d2072a3f tree;
+  release99844b1c, platform492eeb2d. Retained-data migration refused atomically;
+  owner then explicitly authorized empty PostgreSQL and resetting spending for
+  this staging restart. The tested atomic reset (48 PostgreSQL checks) completed,
+  backup retained; sequence19 classifies retired provider sessions for startup
+  without carrying their spending to fresh user accounts. Host qualification is
+  complete. Startup and19 network probes passed; bounded staging access is open.
+  Public Chrome login and study creation passed. Provider session readback
+  exposed an optional-null mismatch; shared normalization now passes 194 Assistant
+  and 27 provisioning checks. Next: deploy this correction, resume
+  Assistant/execution/exploration,
+  performance measurements and staging push. Subsequent budgets remain cumulative
+  USD20/user. Retained migration and full release qualification are not claimed.
+  Current scope/ownership:
   [coverage](phases/06-hosted-staging/audit-remediation/COVERAGE.md).
 
 - **Assistant user budget deployed (2026-10-22):** product `0fe32eba`, staging

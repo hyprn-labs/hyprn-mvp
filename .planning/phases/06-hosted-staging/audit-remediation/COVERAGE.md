@@ -26,6 +26,12 @@ The study is an evaluation fixture, never a special branch in product code.
   model calculations for exchange or inflation. Catalogue changes require new
   versioned contracts, regenerated engine-derived conversion data and native
   execution verification; existing saved records retain their original meaning.
+- D-07: the owner subsequently authorized an empty staging application database
+  and explicitly approved resetting spending for this one restart. This supersedes
+  D-02's retention requirement for current staging application data only. Preserve
+  the completed backup and failed operation evidence; subsequent budgets remain
+  cumulative USD20/user. Retained-data migration is off this delivery's critical
+  path. See `06-CLEAN-RESTART-CHECKPOINT.md`.
 
 ## Coverage and ownership
 
@@ -34,7 +40,7 @@ The study is an evaluation fixture, never a special branch in product code.
 | F01 durable analysis launch | A1 | committed; local acceptance passed; live pending |
 | F02 reasoning-turn/run-limit independence | A1/A3, C1 | committed; integrated/live pending |
 | F03 truthful readiness/transient diagnosis | A2 | committed; 67 runtime checks passed |
-| F04 coherent real tool guidance | C3 | committed; updated native catalogue integration pending |
+| F04 coherent real tool guidance | C3 | committed; catalogue integration and native export journey passed |
 | F05 requested deliverables/completion | parent | implemented; 31 answer checks passed with monetary/public receipt guards |
 | F06 idle background backoff | A2 | committed; bounded idle polling verified locally |
 | F07 small operational state/indexed discovery | B1/B2 | committed; local SQL/read tests passed; cloud measurement pending |
@@ -42,7 +48,7 @@ The study is an evaluation fixture, never a special branch in product code.
 | F09 phase timings/original timeout cause | B3 + platform | committed; local checks passed; deployed timings pending |
 | F10 native polling/bounded batches | native/A3 | committed; preserves faster 0.1s default; not a measured speedup |
 | F11 retained source inspection | C2/C3 + parent | committed receipt owner, 185 bridge checks passed; public/tool integration:329 agent checks passed; live fetch pending |
-| F12 scientific fidelity/money/sensitivity/claim strength | parent + C3 + catalogue | implemented; final native monetary journey and integration pending |
+| F12 scientific fidelity/money/sensitivity/claim strength | parent + C3 + catalogue | implemented; native monetary/export journey 14/14 passed; live scientific assessment pending |
 | F13 design capacity/refinement | A1 + C3 | committed; actual finite-analysis and guidance checks passed |
 | F14 pinned native skill/single source | C2/C3 | committed; successor ledger committed;191 bridge/47 PostgreSQL checks passed; live attachment pending |
 | F15 bounded reviewers/context/effort evaluation | C2 + parent | reviewer enforcement committed; live medium/high evaluation pending |
@@ -55,6 +61,31 @@ parent reserves 0011+. Existing unrelated planning/design edits remain untouched
 Scoped tests share CPU and Docker; parent serializes contested fixture runs.
 Plans use sequential task checkpoints and fresh executors, with shared integrated
 acceptance where unchanged evidence covers multiple tasks.
+
+## Delivery checkpoint — 2026-10-22
+
+Candidate `7cbe3e4670583ec73635eb7d74dfb949776a176f` has the same tree as tested
+`d2072a3f`. Catalogue2 is the single currency/scale/denominator authority; price
+year and economic basis are separately pinned. Final units-native:14/14, including
+real restricted execution and portable interpretation closure. Installed AMD64
+application:1/1; installed native:3/3 with unchanged artifact bytes and the scoped
+fixture correction recorded in `06-INSTALLED-NATIVE-FIXTURE-CHECKPOINT.md`.
+
+The approved sequence18 deployment is in progress: consistent database/files
+backup completed; schema9→13 migration refused before qualification. The journal's
+`qualifying` label precedes migration and is not evidence of migration completion.
+The exact migration receipt is `database_operation_refused`; access stays closed.
+Google operator authentication was refreshed. Following the owner's explicit
+clean-start decision, the atomic reset passed48 PostgreSQL checks and its live
+application completed. No uncertain migration was retried. Sequence19 continuity
+classifies all10 retired provider sessions without charging fresh user accounts.
+Host qualification, startup,19 network probes and bounded activation passed.
+Chrome is awaiting a fresh owner email sign-in.
+Release `99844b1c66da96e005899af2fcf290de09515b0057528bd6da7f13c2361fb0c6`;
+platform `492eeb2d6388aae8266bb5a3cfb8ee970b1a0993`. Live
+Assistant/exploration, representative performance remeasurement and application staging push
+remain pending. No direct staging scientific-record repair. Full release
+qualification and human acceptance are not established by these focused checks.
 
 ## Observable acceptance
 

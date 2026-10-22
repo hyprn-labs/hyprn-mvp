@@ -70,6 +70,27 @@ def owned_volume(name, run):
     return str(mount)
 
 
+def platform_cli(target):
+    """The fixture must request emulation explicitly on a different-architecture host."""
+    if target != 'linux/amd64':
+        raise ValueError('Reviewed Linux amd64 fixture target required')
+    return ('#!/bin/sh\nexport DOCKER_DEFAULT_PLATFORM=linux/amd64\n'
+            'exec /usr/local/libexec/docker "$@"\n')
+
+
+def owned_workers(owner):
+    """Read candidate IDs, then match exact ownership before any cleanup mutation."""
+    # The live fence intentionally refuses installation-owner labels in commands.
+    # Query only the label key; inspect and compare its exact random value locally.
+    ids = docker('ps', '-aq', '--filter', 'label=org.hyprn-mvp.owner').split()
+    result = []
+    for identifier in ids:
+        record = json.loads(docker('inspect', identifier))[0]
+        if record['Config']['Labels'].get('org.hyprn-mvp.owner') == owner:
+            result.append(identifier)
+    return result
+
+
 def rehearse(scope, value):
     fixture.guarded(scope, lambda _: None)
     bundle, build = inputs(value)
@@ -106,6 +127,9 @@ def rehearse(scope, value):
         if executable.is_symlink() or not executable.is_file():
             raise ValueError('Reviewed CLI must be a regular executable')
         executable.chmod(0o755)
+        cli_shim = fixture.scoped_path(scope, 'artifacts/docker-platform')
+        cli_shim.write_text(platform_cli(build['target']))
+        cli_shim.chmod(0o755)
         common = ['run', '--rm', '--pull=never', '--platform=linux/amd64', '--network=none',
                   '--read-only', '--security-opt=no-new-privileges',
                   '--pids-limit=128', '--label', LABEL + '=' + run]
@@ -136,7 +160,8 @@ def rehearse(scope, value):
                    '--mount', 'type=bind,source=' + state + '/passwd,target=/etc/passwd,readonly',
                    '--mount', 'type=bind,source=' + state + '/group,target=/etc/group,readonly',
                    '--mount', 'type=bind,source=' + str(socket) + ',target=/engine.sock,readonly',
-                   '--mount', 'type=bind,source=' + str(executable) + ',target=/usr/local/bin/docker,readonly',
+                   '--mount', 'type=bind,source=' + str(executable) + ',target=/usr/local/libexec/docker,readonly',
+                   '--mount', 'type=bind,source=' + str(cli_shim) + ',target=/usr/local/bin/docker,readonly',
                    '--mount', 'type=bind,source=' + str(controller) + ',target=/fixture.py,readonly',
                    '--user=0:0', '--entrypoint=' + python,
                    OWNER_INDEX, '-I', '-B', '/fixture.py', prefix, state, installation]
@@ -163,12 +188,14 @@ def rehearse(scope, value):
             raise ValueError('Installed native observation differs')
         observation = dict(observed, bundle_sha256=value['sha256'],
                            owner_host_image=OWNER_IMAGE,
-                           docker_cli_sha256=hashlib.sha256(executable.read_bytes()).hexdigest())
+                           docker_cli_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
+                           docker_platform_shim_sha256=hashlib.sha256(cli_shim.read_bytes()).hexdigest(),
+                           fixture_target=build['target'])
         (evidence / 'installed-native.json').write_text(json.dumps(observation, sort_keys=True))
         return observation
     finally:
         # Workers have the cloud owner's exact random identity, not a broad prefix.
-        ids = docker('ps', '-aq', '--filter', 'label=org.hyprn-mvp.owner=' + worker_owner).split()
+        ids = owned_workers(worker_owner)
         for identifier in ids:
             record = json.loads(docker('inspect', identifier))[0]
             if record['Config']['Labels'].get('org.hyprn-mvp.owner') != worker_owner:

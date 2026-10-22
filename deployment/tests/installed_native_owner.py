@@ -92,7 +92,6 @@ def main():
     os.chown(config, 10003, 10003)
     environment = {'PATH':'/usr/local/bin:/usr/bin:/bin','HOME':str(home),
                    'USER':'hyprn-execution','LOGNAME':'hyprn-execution',
-                   'DOCKER_DEFAULT_PLATFORM':build['target'],
                    'HYPRN_MVP_CLOUD_EXECUTION_CONFIG':str(config)}
     # Exercise the actual released privileged wrapper as well as the native
     # owner. Its receipt validation and user/socket handoff are part of startup.

@@ -28,6 +28,7 @@ from hyprn_mvp_app.assistant.claude import (
     agent_definition,
     credential,
     identity,
+    readback_tools,
 )
 from hyprn_mvp_app.contracts import digest
 from hyprn_mvp_app.locations import location_refusal
@@ -286,28 +287,6 @@ def validate_plan(value):
 
 def checked_plan(path):
     return validate_plan(read_json(path))
-
-
-def readback_tools(tools):
-    """Only the observed optional web-fetch null default is equivalent to omission.
-
-    Do not drop arbitrary unknown/null properties: tool additions and actual URL-source
-    restrictions must still differ from the exact reviewed definition.
-    """
-    value = copy.deepcopy(tools)
-    if not isinstance(value, list):
-        return value
-    for tool in value:
-        if not isinstance(tool, dict) or tool.get('type') != 'agent_toolset_20260401':
-            continue
-        configs = tool.get('configs')
-        if not isinstance(configs, list):
-            continue
-        for config in configs:
-            if (isinstance(config, dict) and config.get('type') == 'web_fetch'
-                    and config.get('name') == 'web_fetch' and config.get('url_sources') is None):
-                config.pop('url_sources', None)
-    return value
 
 
 def matches(record, desired, kind):

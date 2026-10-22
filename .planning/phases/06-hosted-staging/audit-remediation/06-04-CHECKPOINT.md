@@ -254,3 +254,48 @@ image. AMD64 target builds and release assembly remain parent-owned. The622s
 dedicated-scratch test duration and earlier383s default-temp duration are test
 environment observations, not product performance measurements. Cleanup journal
 confirms `keep=false`, scope released and no supervisor failure.
+
+## Final integrated native acceptance — passed
+
+Committed browser migration and preceding evidence: `d2072a3f`. The exact same
+native command/environment as the bounded dedicated-scratch retry above passed
+**14/14 tests**,489.46s runner /486.98s pytest. Storage:
+`e6b43b2f-7e1d-4da6-aa2d-65d89403fd56`; scope:
+`c955d659-f934-43b1-8395-ac5034ab6f8c`. Three existing warnings remain (two unknown
+schema markers and Plumpy event-loop deprecation), plus the expected isolated
+AiiDA configuration-folder notice.
+
+The real producer browser passed1/1 in16.24s. Retained/offline browser checks
+passed2/2 in22.29s, including exact public values, scientific units, immutable
+answers and modified seeds, keyboard inspection, both themes, narrow layout and
+actual200% zoom. `native-browser-proof.json` records `passed=true`,
+`processes_before=7`, `processes_after=7`, and `modeling_offline=true`. All seven
+restricted calculations, monetary basis rejection cases, offline/restart reads,
+three earlier archives and the Manifest3 monetary export/native inspection
+passed. The supervisor exited0 with `keep=false`, the unique scope released,
+and no cleanup failure. The lane/source freeze was released to parent-owned
+AMD64 release builds only after this confirmation.
+
+External retained evidence bundle:
+`hyprn-monetary-native-d2072a3f-c955d659` (absolute host path supplied to parent).
+It contains the exact runtime/source/dependency pins and verified worker assets,
+attestation/model-overlay identities, complete monetary/native archives,
+monetary result and explanation records, both browser reports, browser proof and
+zoom geometry, and cleanup journal. This explicit external retention preserves
+the full archive despite the runner's bounded evidence collection; no cleanup
+behavior was changed. Final monetary archive size7,338,061 bytes, SHA-256:
+`b60d0d25930ce44156a10e50d9f08bd3467afe4869efec691f9f03748d57bc25`.
+Run `30361b99-d975-49ae-8d68-1b6f382738c3` pins model
+`de98caf2-c016-4478-a750-363ef059e6fa`, explanation
+`9d6dd08a-cde0-491b-85c9-b9c82a430236`, explanation digest
+`4836767230fea956b7d2003ab84315e844437662a637084894a42dfdd4fc43f5`, and
+interpretation closure digest
+`43e4ad7f01ec5cf7382d6b94fa588bb1283b7edf15f2ed8b842c84757a753343`.
+
+Runtime images match the preceding attested ARM64 run: worker `92dde98d…` and
+engine `d6814311…`, with exact input reuse checked by the existing builder.
+The489s duration is native-test timing, not product performance evidence.
+Automated local acceptance is complete for this monetary journey; AMD64 staging
+builds, integrated release qualification, deployment and human acceptance remain
+distinct parent-owned obligations. This final checkpoint update changes no
+tested source.

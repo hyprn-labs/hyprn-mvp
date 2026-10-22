@@ -440,3 +440,52 @@ def test_provider_session_identity_and_costs_are_scoped_and_cannot_be_rewritten(
     assert len(accounts_rows) == 1
     assert accounts_rows[0]['provider_id'] == 'session_private_test'
     assert accounts_rows[0]['actor_id'] == actor
+
+
+def test_explicit_staging_reset_is_atomic_and_preserves_roles(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from hyprn_mvp_app import migrations
+
+    path = Path(__file__).resolve().parents[2] / 'deployment' / 'clear_application_store.py'
+    spec = importlib.util.spec_from_file_location('staging_clear', path)
+    reset = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reset)
+    prior = tuple(p for p in migrations.MIGRATIONS if p.name < '0010_')
+    with postgres_fixture(initialize_schema=False) as fixture:
+        with monkeypatch.context() as old:
+            old.setattr(migrations, 'MIGRATIONS', prior)
+            migrations.initialize(fixture['migration'], empty_only=True,
+                                  identity=dict(installation_id='reset-test', store_id='store-test'))
+        previous = [(p.stem, migrations.expected(p)) for p in prior]
+        arguments = dict(installation_id='reset-test', store_id='store-test',
+                         previous=previous, migrations=migrations.MIGRATIONS)
+        with pytest.raises(ValueError, match='store_identity_changed'):
+            reset.clear_and_initialize(fixture['migration'], **{**arguments, 'store_id': 'other'})
+
+        class InvalidMigration:
+            stem = 'invalid'
+
+            def read_text(self):
+                return 'SELECT missing_reset_fixture_column'
+
+        with pytest.raises(Exception, match='missing_reset_fixture_column'):
+            reset.clear_and_initialize(fixture['migration'],
+                                       **{**arguments, 'migrations': [InvalidMigration()]})
+        raw = fixture['admin'].connect()
+        try:
+            cur = raw.cursor()
+            cur.execute('SELECT version,checksum FROM hyprn_schema_versions ORDER BY version')
+            assert [tuple(row) for row in cur.fetchall()] == previous
+            cur.execute('SELECT rolname,rolsuper,rolbypassrls FROM pg_roles ORDER BY rolname')
+            roles = cur.fetchall()
+            raw.commit()
+            assert reset.clear_and_initialize(fixture['migration'], **arguments) == dict(
+                initialized=True, application_schema=len(migrations.MIGRATIONS),
+                studies=0, user_spending_reset=True)
+            cur.execute('SELECT rolname,rolsuper,rolbypassrls FROM pg_roles ORDER BY rolname')
+            assert cur.fetchall() == roles
+            cur.execute('SELECT count(*) FROM studies')
+            assert tuple(cur.fetchone()) == (0,)
+        finally:
+            raw.close()

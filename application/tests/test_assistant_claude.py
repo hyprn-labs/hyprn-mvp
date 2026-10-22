@@ -309,3 +309,34 @@ def test_thread_identity_is_authenticated_and_bound_to_the_requested_session(key
                 await client.thread_agent('session_test', 'thread_test')
         await client.close()
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('extra', [None, {'unexpected_permission': None},
+                                   {'url_sources': {'type': 'all'}}])
+def test_session_accepts_only_the_observed_optional_fetch_null(key_file, extra):
+    from hyprn_mvp_app.assistant.claude import research_tools
+    tools = research_tools()
+    tools[0]['configs'][2]['url_sources'] = None
+    if extra:
+        tools[0]['configs'][2].update(extra)
+    writes = []
+    state = {'status': 'idle', 'agent': {'tools': tools}}
+
+    def handler(request):
+        if request.method != 'GET':
+            writes.append(request.method)
+        return httpx.Response(200, json=state)
+
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        try:
+            if extra:
+                with pytest.raises(ProviderError, match='provider_definition_drift'):
+                    await client.ensure_tools('session_test', [])
+            else:
+                await client.ensure_tools('session_test', [])
+            assert not writes
+            assert 'url_sources' in tools[0]['configs'][2]
+        finally:
+            await client.close()
+    asyncio.run(exercise())

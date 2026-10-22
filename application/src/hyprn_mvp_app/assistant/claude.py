@@ -6,6 +6,7 @@ The endpoint is fixed: a configured credential cannot be redirected to another h
 """
 
 from dataclasses import dataclass, field
+import copy
 import json
 import os
 from pathlib import Path
@@ -127,6 +128,28 @@ def research_tools():
              'permission_policy': {'type': 'always_allow'}},
         ],
     }]
+
+
+def readback_tools(tools):
+    """Only the observed optional web-fetch null default is equivalent to omission.
+
+    Do not drop arbitrary unknown/null properties: tool additions and actual URL-source
+    restrictions must still differ from the exact reviewed definition.
+    """
+    value = copy.deepcopy(tools)
+    if not isinstance(value, list):
+        return value
+    for tool in value:
+        if not isinstance(tool, dict) or tool.get('type') != 'agent_toolset_20260401':
+            continue
+        configs = tool.get('configs')
+        if not isinstance(configs, list):
+            continue
+        for config in configs:
+            if (isinstance(config, dict) and config.get('type') == 'web_fetch'
+                    and config.get('name') == 'web_fetch' and config.get('url_sources') is None):
+                config.pop('url_sources', None)
+    return value
 
 
 def agent_definition(model, definitions, system, *, skills=(), reviewers=(), research=False):
@@ -296,10 +319,10 @@ class Claude:
         # Preserve only the reviewed built-in research toolset during catalogue refresh.
         builtins = [item for item in current.get('agent', {}).get('tools', [])
                     if item.get('type') != 'custom']
-        if builtins and builtins != research_tools():
+        if builtins and readback_tools(builtins) != research_tools():
             raise ProviderError('provider_definition_drift')
         expected = custom_tools(definitions) + builtins
-        if current.get('agent', {}).get('tools') == expected:
+        if readback_tools(current.get('agent', {}).get('tools')) == readback_tools(expected):
             return
         if current.get('status') != 'idle':
             raise ProviderError('provider_session_busy')
@@ -310,7 +333,7 @@ class Claude:
                 raise
             # Reconcile a full-replacement setting; never repeat an uncertain mutation.
             observed = await self.request('GET', path)
-            if observed.get('agent', {}).get('tools') != expected:
+            if readback_tools(observed.get('agent', {}).get('tools')) != readback_tools(expected):
                 raise
 
     async def find_session(self, conversation_id):
