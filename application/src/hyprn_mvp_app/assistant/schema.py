@@ -86,6 +86,18 @@ DEFINITIONS['AssistantBudgetRead1'] = obj({
 })
 
 
+DEFINITIONS['AssistantResumeRequest1'] = obj({})
+DEFINITIONS['AssistantConversationRead3'] = deepcopy(DEFINITIONS['AssistantConversationRead2'])
+DEFINITIONS['AssistantConversationRead3']['properties']['can_resume'] = {'type': 'boolean'}
+DEFINITIONS['AssistantConversationRead3']['required'].append('can_resume')
+DEFINITIONS['AssistantBudgetRead2'] = obj({
+    'configured': {'type': 'boolean'}, 'currency': {'const': 'USD'},
+    'limit_cents': money, 'spent_cents': nullable(money), 'remaining_cents': nullable(money),
+    'checked_at': nullable({'type': 'number'}), 'scope': {'const': 'user'},
+    'period': {'const': 'cumulative'}, 'resets_at': {'type': 'null'},
+})
+
+
 def validate(name, value):
     errors = list(Draft202012Validator(DEFINITIONS[name]).iter_errors(value))
     if errors:

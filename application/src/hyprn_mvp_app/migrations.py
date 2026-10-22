@@ -9,7 +9,7 @@ MIGRATIONS = tuple(Path(__file__).with_name('migrations') / name for name in
                    ('0001_core.sql', '0002_domains.sql', '0003_external_identity.sql',
                     '0004_hosted_lifecycle.sql', '0005_session_lock.sql',
                     '0006_retained_fingerprint.sql', '0007_retained_read_cache.sql',
-                    '0008_run_listing_projection.sql'))
+                    '0008_run_listing_projection.sql', '0009_assistant_user_accounts.sql'))
 
 
 def expected(migration=None):

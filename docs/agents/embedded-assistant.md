@@ -8,7 +8,7 @@ their human actor and tool effects retain the delegated Assistant attribution.
 Claude owns reasoning and context. HYPRN forwards complete custom tool requests
 to the same registry and runtime used by coding agents. The managed agent has
 no built-in execution tools, MCP servers or provider workflows. Scoped managed
-subagents use the same authorized HYPRN tools and parent budget. Scientific
+subagents use the same authorized HYPRN tools and cumulative user allowance. Scientific
 execution still happens only in HYPRN's attested worker.
 
 ## Installation
@@ -25,7 +25,7 @@ Configuration is explicit through the application environment:
 | `AGENT_ID`, `AGENT_VERSION` | Exact provisioned custom-tool agent version |
 | `ENVIRONMENT_ID` | Restricted managed environment |
 | `DEFINITIONS_SHA256` | Digest of the offered Claude writer tool definitions |
-| `TOTAL_CENTS` | Shared provider allowance in USD cents; a study may draw all remaining headroom |
+| `TOTAL_CENTS` | Legacy installation approval retained for deployment continuity; not an active spending cap |
 | `PRIOR_CENTS` | Previously incurred USD list cost outside this installation (default 0) |
 | `APPROVED_MINOR`, `APPROVED_CURRENCY` | Optional paired original approval amount in cents and three-letter currency |
 | `CONVERSION_DATE` | Optional date of the explicitly configured approval conversion |
@@ -113,10 +113,17 @@ policy. The private binding object contains identifiers, never credential materi
 Supply the runtime `KEY_FILE` separately through the approved secret-file delivery.
 
 Setup does not create a session, submit a message, provision a new allowance or change
-spending. Hosted runtime configuration must retain the explicitly approved shared
-allowance and its reviewed USD conversion, current prior usage and durable conversation
-usage. Never use deployment as a fresh budget or allocate per-study caps. These existing
-settings and stores remain the application/platform owners' responsibility.
+spending. Each user has one cumulative USD 20 allowance across their study
+conversations and subagents, without automatic resets. The first human who starts
+a conversation is its billing owner; archiving or membership changes do not transfer
+or erase its cost. Admission and active turns read provider list cost for all of that
+user’s sessions, including earlier sessions. No session cap is created or renewed.
+Existing caps are removed on admission after checking the user’s remaining allowance.
+Active work checks spending between provider polls and tool dispatches and stops at
+the user limit. In-flight requests and delayed usage reporting can overshoot; this is
+accepted, not a provider-enforced hard ceiling. Unknown usage refuses further work.
+Legacy installation-only prior cost has no user attribution and remains an operator
+continuity record, not a silently reset study balance. Deployments preserve all usage.
 
 The official CLI provides declarative `ant apply`, but it is not a locked dependency
 of this repository. This narrowly scoped command uses the official resource payloads
@@ -140,7 +147,7 @@ would close the conversation delivery task at the end of every HTTP request.
 ## Delivery and access
 
 The public routes are study-scoped `GET assistant`, `POST assistant/messages`
-and `POST assistant/stop`. They are human-only; an agent cannot invoke another
+and `POST assistant/stop` / `POST assistant/resume`. They are human-only; an agent cannot invoke another
 assistant or grant itself a turn.
 
 Each message has a client-generated command ID. Repeating that ID with the same
@@ -149,7 +156,11 @@ occupies the study. A remote creation or message with an uncertain outcome is
 looked up by correlation; it is never submitted again blindly. Stored custom-tool
 results are delivered using their original provider tool-use identity. A tool
 whose local effect was interrupted before its response was retained needs review,
-not speculative replay.
+not speculative replay. Resume renews the human delegation for the same accepted
+turn, reuses retained tool results and can repeat only an interrupted read. An
+uncertain write remains blocked. Restart leaves blocked conversations for explicit
+human continuation. Safe diagnostic logs retain exception type and code location,
+without transcript, credentials or raw exception messages.
 
 Stop fences new local tool admission before requesting provider interruption.
 It does not cancel a scientific run that was already admitted; that run retains
@@ -157,9 +168,9 @@ its own lifecycle. Access loss stops further tool dispatch and conversation
 delivery. Scientific records remain governed by their ordinary owners and exact
 version rules.
 
-Shared allowance admission is described below. Stop, Trash and restart never erase
-incurred usage or bypass uncertain session creation. Provider budgets stop new model
-requests, but already in-flight requests can exceed their threshold. A confirmed billing
+User allowance admission is described below. Stop, Trash and restart never erase
+incurred usage or bypass uncertain session creation. HYPRN stops work when observed
+user cost reaches USD 20; in-flight requests can exceed that threshold. A confirmed billing
 failure is shown as a provider-credit problem and permits a new explicit human request
 after funding; the failed request is never replayed automatically.
 
@@ -202,41 +213,23 @@ Shell, unrestricted network, advisor and dynamic workflow execution remain disab
 Existing idle provider sessions receive the current custom-tool list in place before
 a new human turn. Provider multiagent settings are immutable per session: older
 sessions retain their original delegation capability; new studies receive the enabled
-subagent configuration. Never reset a session to upgrade it. Budget changes follow shared allowance admission.
+subagent configuration. Never reset a session to upgrade it. Budget removal follows cumulative user admission.
 
 Provider semantics verified against the official [multiagent guide](https://platform.claude.com/docs/en/managed-agents/multiagent-orchestration),
 [session threads](https://platform.claude.com/docs/en/managed-agents/session-threads) and
 [session operations](https://platform.claude.com/docs/en/managed-agents/session-operations).
 
 
-## Shared spending allowance
+## Cumulative user allowance
 
-One installation allowance covers all study conversations and their child agents.
-The single application owner serializes accounting and provider-cap updates, not whole
-turns. Studies run concurrently. Each admitted turn receives up to 100 cents of renewable
-headroom, with renewal below 25 cents. This is an operational reservation, not a lifetime
-study limit: a study may renew repeatedly from the remaining shared allowance. The legacy
-SESSION_CENTS setting remains ignored. No user-configured per-study cap is introduced.
+The application checks actual provider cost across all conversations owned by the
+user, including child agents and previous studies. The fixed limit is USD 20, with
+no reset and no per-session cap or renewal. See the ownership and overshoot rules
+above. One user's cost never reduces another user's allowance. Concurrent studies
+are admitted independently against current aggregate cost; they share the same
+stop threshold, rather than reserving separate portions of the allowance.
 
-Before admission or renewal, read all provider usage and ceilings afresh. Charge prior
-usage, rounded-up reported costs, and every other active session's remaining ceiling.
-Count uncertain active work as reserved; unresolved creation or unavailable usage fails
-closed. Release unused headroom only after the turn ends and provider idleness is confirmed.
-Provider updates preserve a budget and reconcile uncertain responses without repeating
-mutations. Only the same already-admitted turn may automatically resume at its renewable
-ceiling; no message or scientific tool is resubmitted. Actual provider overshoot is charged
-before admitting more work. The provider still permits in-flight requests to finish past
-a ceiling, including one per subagent thread; the shared limit bounds admission, not an
-exact invoice maximum. See the official session budgets reference above.
-
-The public conversation projection version 2 reports Queued before dispatch, Starting
-during session setup, Working after delivery, Waiting for calculations during the existing
-wait tool, Stopping until acknowledgement, and Needs attention for refused/uncertain work.
-Queue time before dispatch does not consume the turn's execution deadline. A queued,
-never-dispatched request can be cancelled immediately without contacting the provider.
-The original request and attribution remain in history. No schema migration is needed.
-
-The app does not display spending. Existing authenticated budget-read endpoints remain for
-administration; cached usage is never used for admission. Credential material and provider
-identifiers remain server-side. Study brief readers suppress an original question identical
-to the displayed question while preserving the authored provenance record.
+The authenticated budget read reports only the requesting user's cumulative total,
+remaining amount and check time. Unknown usage is null, never a cached successful
+zero. Existing legacy configuration remains for deployment continuity, not as a
+second runtime limit. The app keeps spending out of the study conversation.

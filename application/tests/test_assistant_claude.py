@@ -70,7 +70,7 @@ def test_agent_has_only_registered_custom_tools():
     assert 'mcp_servers' not in value and 'skills' not in value
 
 
-def test_session_creation_pins_agent_and_always_sends_cent_budget(key_file):
+def test_session_creation_pins_agent_without_a_session_budget(key_file):
     requests = []
 
     def handler(request):
@@ -86,7 +86,7 @@ def test_session_creation_pins_agent_and_always_sends_cent_budget(key_file):
 
     asyncio.run(exercise())
     body = json.loads(requests[0].content)
-    assert body['budget']['max_list_cost'] == {'amount': '100', 'currency': 'USD'}
+    assert 'budget' not in body
     assert body['agent'] == {'type': 'agent', 'id': 'agent_test', 'version': 3}
     assert body['metadata'] == {'hyprn_conversation_id': 'conversation-test'}
     assert requests[0].headers['anthropic-beta'] == 'managed-agents-2026-04-01'
@@ -209,7 +209,7 @@ def test_spending_uses_only_valid_usd_cent_snapshots(key_file, cost):
     asyncio.run(exercise())
 
 
-def test_budget_update_reconciles_unknown_delivery_without_repeating_mutation(key_file):
+def test_removing_legacy_cap_reconciles_unknown_delivery_without_repeating_mutation(key_file):
     cap = {'type': 'limit', 'max_list_cost': {'amount': '500', 'currency': 'USD'}}
     writes = []
 
@@ -223,62 +223,21 @@ def test_budget_update_reconciles_unknown_delivery_without_repeating_mutation(ke
 
     async def exercise():
         client = Claude(key_file, transport=httpx.MockTransport(handler))
-        await client.ensure_allowance('session_test', 10000)
-        await client.ensure_allowance('session_test', 10000)
+        await client.remove_session_cap('session_test')
+        await client.remove_session_cap('session_test')
         await client.close()
 
     asyncio.run(exercise())
-    assert len(writes) == 1 and writes[0]['budget']['max_list_cost']['amount'] == '10000'
+    assert writes == [{'budget': None}]
 
 
-def test_budget_update_cannot_resume_an_old_budget_paused_turn(key_file):
-    requests = []
 
-    def handler(request):
-        requests.append(request.method)
-        return httpx.Response(200, json={
-            'status': 'idle', 'stop_reason': {'type': 'budget_reached'},
-            'budget': {'type': 'limit', 'max_list_cost': {'amount': '500', 'currency': 'USD'}}})
-
-    async def exercise():
-        client = Claude(key_file, transport=httpx.MockTransport(handler))
-        with pytest.raises(ProviderError, match='provider_budget_reached'):
-            await client.ensure_allowance('session_test', 10000)
-        await client.close()
-
-    asyncio.run(exercise())
-    assert requests == ['GET']
-
-
-@pytest.mark.parametrize('status', ['running', 'idle'])
-def test_same_turn_can_renew_and_resume_its_reserved_allowance(key_file, status):
-    cap = {'type': 'limit', 'max_list_cost': {'amount': '100', 'currency': 'USD'}}
-    writes = []
-    def handler(request):
-        nonlocal cap
-        if request.method == 'POST':
-            writes.append(json.loads(request.content))
-            cap = writes[-1]['budget']
-        return httpx.Response(200, json={'status': status, 'budget': cap,
-            'stop_reason': {'type': 'budget_reached'},
-            'usage': {'list_cost': {'amount': '101', 'currency': 'USD'}}})
-    async def exercise():
-        client = Claude(key_file, transport=httpx.MockTransport(handler))
-        account = await client.session_account('session_test')
-        assert account == dict(status=status, cap_cents=100, spent_cents=101)
-        await client.ensure_allowance('session_test', 202, continuing=True)
-        assert len(writes) == 1
-        await client.close()
-    asyncio.run(exercise())
-
-
-@pytest.mark.parametrize('budget', [None, {}, {'max_list_cost': {'amount': '0', 'currency': 'USD'}}])
-def test_missing_or_unbounded_provider_ceiling_cannot_release_shared_money(key_file, budget):
+@pytest.mark.parametrize('usage', [None, {}, {'list_cost': None}])
+def test_missing_usage_is_actionable_not_an_internal_attribute_error(key_file, usage):
     async def exercise():
         client = Claude(key_file, transport=httpx.MockTransport(lambda request:
-            httpx.Response(200, json={'status': 'running', 'budget': budget,
-                'usage': {'list_cost': {'amount': '1', 'currency': 'USD'}}})))
-        with pytest.raises(ProviderError, match='shared_allowance_unknown'):
+            httpx.Response(200, json={'status':'running','budget':None,'usage':usage})))
+        with pytest.raises(ProviderError,match='invalid_provider_record'):
             await client.session_account('session_test')
         await client.close()
     asyncio.run(exercise())

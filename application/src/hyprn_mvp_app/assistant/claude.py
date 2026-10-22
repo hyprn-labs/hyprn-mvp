@@ -207,10 +207,6 @@ class Claude:
                 'environment_id': settings.environment_id,
                 'title': 'HYPRN study',
                 'metadata': {'hyprn_conversation_id': conversation_id},
-                'budget': {
-                    'type': 'limit',
-                    'max_list_cost': {'amount': str(settings.session_cents), 'currency': 'USD'},
-                },
             },
         )
 
@@ -227,39 +223,28 @@ class Claude:
 
     async def session_account(self, session_id):
         result = await self.request('GET', '/v1/sessions/' + identity(session_id))
-        cost = result.get('usage', {}).get('list_cost')
+        usage = result.get('usage')
+        cost = usage.get('list_cost') if isinstance(usage, dict) else None
         if (not isinstance(cost, dict) or cost.get('currency') != 'USD'
                 or not isinstance(cost.get('amount'), str)
                 or not re.fullmatch(r'[0-9]{1,12}', cost['amount'])
                 or result.get('status') not in ('idle', 'running', 'rescheduling', 'terminated')):
             raise ProviderError('invalid_provider_record')
-        budget = (result.get('budget') or {}).get('max_list_cost', {})
-        if (budget.get('currency') != 'USD' or not isinstance(budget.get('amount'), str)
-                or not re.fullmatch(r'[1-9][0-9]{0,11}', budget['amount'])):
-            raise ProviderError('shared_allowance_unknown')
-        return dict(spent_cents=int(cost['amount']), status=result['status'],
-                    cap_cents=int(budget['amount']))
+        return dict(spent_cents=int(cost['amount']), status=result['status'])
 
-    async def ensure_allowance(self, session_id, cents, *, continuing=False):
-        """Reconcile a durable absolute cap before a new message; never remove the budget."""
+    async def remove_session_cap(self, session_id):
+        """Remove a legacy cap once; reconcile uncertain delivery without resending."""
         path = '/v1/sessions/' + identity(session_id)
-        expected = {'type': 'limit', 'max_list_cost': {'amount': str(cents), 'currency': 'USD'}}
         current = await self.request('GET', path)
-        if current.get('budget') == expected:
+        if current.get('budget') is None:
             return
-        if not continuing and current.get('status') != 'idle':
-            raise ProviderError('provider_session_busy')
-        # A budget update can resume a paused turn. Such a turn requires explicit recovery,
-        # not a new user message borrowing a different delegation.
-        if not continuing and (current.get('stop_reason') or {}).get('type') == 'budget_reached':
-            raise ProviderError('provider_budget_reached')
         try:
-            await self.request('POST', path, body={'budget': expected})
+            await self.request('POST', path, body={'budget': None})
         except ProviderError as error:
             if not error.uncertain:
                 raise
             observed = await self.request('GET', path)
-            if observed.get('budget') != expected:
+            if observed.get('budget') is not None:
                 raise
 
     async def ensure_tools(self, session_id, definitions):

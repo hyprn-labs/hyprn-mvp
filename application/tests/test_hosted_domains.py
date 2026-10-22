@@ -792,3 +792,29 @@ def test_run_listing_projection_is_database_maintained_from_exact_payload(hosted
         assert json.loads(changed['summary'])['status']['process_state'] == 'excepted'
         with pytest.raises(Exception), store.connection(write=True) as db:
             db.execute("UPDATE outbox SET read_summary='{}'::jsonb WHERE run_id=?", (rid,))
+
+
+def test_user_spending_crosses_studies_without_crossing_accounts_on_postgres(hosted):
+    import asyncio
+    from hyprn_mvp_app.assistant import allowance, records
+    from hyprn_mvp_app.assistant.claude import ProviderError
+    _, store, accounts = hosted
+    subjects = [a['actor'] for a in accounts]
+    sids = [study(store, subjects[i]) for i in (0, 0, 1)]
+    for index, sid in enumerate(sids):
+        actor = subjects[0 if index < 2 else 1]
+        with actor_scope(actor):
+            records.accept(store, actor, sid, uid(), 'Synthetic accounting record.', None)
+            with store.connection(write=True) as db:
+                records.update(db, sid, provider_id='cost_'+str(index), provision='accepted')
+    class Costs:
+        async def session_account(self, session):
+            return {'spent_cents': {'cost_0':1900,'cost_1':150,'cost_2':30}.get(session,0),
+                    'status':'idle'}
+        async def find_session(self, correlation):
+            return None
+    async def exercise():
+        with pytest.raises(ProviderError, match='user_allowance_exhausted'):
+            await allowance.check(store, Costs(), subjects[0])
+        assert (await allowance.check(store, Costs(), subjects[1]))[0] == 30
+    asyncio.run(exercise())

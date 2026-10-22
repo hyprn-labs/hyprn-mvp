@@ -359,25 +359,25 @@ for path,methods in spec["paths"].items():
                         'only archived studies. At most once.'
                     )
         elif path in ('/assistant/budget', '/studies/{study_id}/assistant/budget'):
-            schema = ref('AssistantBudgetRead1')
+            schema = ref('AssistantBudgetRead2')
             status = '200'
             for parameter in op['parameters']:
                 if parameter['in'] == 'path':
                     parameter['schema'] = uuid
             op['description'] = (
-                'Human-only budget visibility. USD list-cost snapshots refresh at most once '
-                'per minute; unknown usage is null, not zero. Reservations are not spending. '
-                'Only aggregate installation amounts and the authorized study are returned.'
+                'Human-only cumulative user spending across all owned study conversations. '
+                'No session ceiling or automatic reset. Unknown usage is null, not zero.'
             )
         elif path.startswith('/studies/{study_id}/assistant'):
-            schema = ref('AssistantConversationRead2')
+            schema = ref('AssistantConversationRead3')
             status = '200' if method == 'get' else '202'
             for parameter in op['parameters']:
                 if parameter['in'] == 'path':
                     parameter['schema'] = uuid
             if method == 'post':
                 request_name = (
-                    'AssistantStopRequest1' if path.endswith('/stop')
+                    'AssistantResumeRequest1' if path.endswith('/resume')
+                    else 'AssistantStopRequest1' if path.endswith('/stop')
                     else 'AssistantMessageRequest1'
                 )
                 op['requestBody']['content']['application/json']['schema'] = ref(request_name)

@@ -81,8 +81,8 @@ async def reconcile(store, provider, settings, plan, continuity, expected_identi
         if session_id in carried and account['spent_cents'] != carried[session_id]:
             raise ProviderError('shared_allowance_unknown')
         spent += account['spent_cents']
-    if spent >= settings.total_cents:
-        raise ProviderError('shared_allowance_exhausted')
+    # Legacy installation totals remain reconciliation evidence. Admission now
+    # uses cumulative per-user study usage; startup does not impose a global cap.
     return {'reconciled_at': int(time.time()), 'spent_cents': spent, 'sessions': len(visible)}
 
 

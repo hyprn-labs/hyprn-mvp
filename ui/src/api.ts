@@ -1,5 +1,9 @@
 import type { AnalysisExecution1 } from './contract';
-import type { AssistantBudgetRead1, AssistantConversationRead2, AssistantMessageRequest1 } from './contract';
+import type {
+  AssistantBudgetRead2,
+  AssistantConversationRead3,
+  AssistantMessageRequest1,
+} from './contract';
 import type { ConfigurationSummary1 } from './contract';
 import type {
   ConfigurationCommit6,
@@ -268,21 +272,37 @@ async function attributionPages(
 }
 export class HyprnMvpApi {
   assistantBudget = async (sid?: string, signal?: AbortSignal) =>
-    (await this.request<AssistantBudgetRead1>(
-      sid ? `/studies/${sid}/assistant/budget` : '/assistant/budget', undefined, 'GET', signal,
-    )).data;
+    (
+      await this.request<AssistantBudgetRead2>(
+        sid ? `/studies/${sid}/assistant/budget` : '/assistant/budget',
+        undefined,
+        'GET',
+        signal,
+      )
+    ).data;
   assistant = async (sid: string, signal?: AbortSignal) =>
-    (await this.request<AssistantConversationRead2>(
-      `/studies/${sid}/assistant`, undefined, 'GET', signal,
-    )).data;
+    (
+      await this.request<AssistantConversationRead3>(
+        `/studies/${sid}/assistant`,
+        undefined,
+        'GET',
+        signal,
+      )
+    ).data;
   assistantSend = async (sid: string, body: AssistantMessageRequest1) =>
-    (await this.request<AssistantConversationRead2>(
-      `/studies/${sid}/assistant/messages`, body, 'POST',
-    )).data;
+    (
+      await this.request<AssistantConversationRead3>(
+        `/studies/${sid}/assistant/messages`,
+        body,
+        'POST',
+      )
+    ).data;
+  assistantResume = async (sid: string) =>
+    (await this.request<AssistantConversationRead3>(`/studies/${sid}/assistant/resume`, {}, 'POST'))
+      .data;
   assistantStop = async (sid: string) =>
-    (await this.request<AssistantConversationRead2>(
-      `/studies/${sid}/assistant/stop`, {}, 'POST',
-    )).data;
+    (await this.request<AssistantConversationRead3>(`/studies/${sid}/assistant/stop`, {}, 'POST'))
+      .data;
   /** The study brief: its draft and latest saved version, the saved versions (newest first,
    * paged by version number), and the draft and version commands on the shared receipt path. */
   brief = async (sid: string, signal?: AbortSignal) =>

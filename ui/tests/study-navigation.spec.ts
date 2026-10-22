@@ -1780,5 +1780,10 @@ test('Assistant progress cards reflect the backend stages in light and narrow la
   await page.setViewportSize({ width: 720, height: 900 });
   await expect(panel.getByRole('status')).toBeVisible();
   expect(await panel.getByRole('status').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const activity = await panel.getByRole('status').boundingBox();
+  const composer = await panel.locator('.hf-assistant-composer').boundingBox();
+  expect(activity).not.toBeNull();
+  expect(composer).not.toBeNull();
+  expect(composer!.y - (activity!.y + activity!.height)).toBeGreaterThanOrEqual(16);
   expect(state.unknown).toEqual([]);
 });

@@ -88,6 +88,19 @@ def failure(db, current):
     return code
 
 
+RECOVERABLE = frozenset({'assistant_internal_error', 'provider_unavailable',
+    'provider_rate_limit', 'turn_time_limit', 'invalid_provider_record',
+    'user_allowance_unknown', 'shared_allowance_unknown'})
+
+
+def may_resume(db, current, actor):
+    if not current or current['state'] != 'blocked' or current['error'] not in RECOVERABLE:
+        return False
+    active = turn(db, current['active_turn']) if current['active_turn'] else None
+    return bool(active and active['actor_id'] == actor and not active['stopped']
+                and active['delivery'] == 'accepted')
+
+
 def may_send(db, current):
     # A confirmed ended billing failure may receive a fresh human request after funding.
     # This never resumes or repeats the failed turn, nor admits uncertain active work.
@@ -203,6 +216,7 @@ def public(store, actor, study, *, available):
             error=failure(db, current),
             can_send=bool(available and may_send(db, current)),
             can_stop=bool(current and current['active_turn']),
+            can_resume=bool(available and may_resume(db, current, actor)),
             messages=messages[-200:],
             has_earlier_messages=len(messages) > 200,
         )

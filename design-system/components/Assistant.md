@@ -7,7 +7,10 @@ lifecycle. Conversation state is scoped to the selected study, not the page.
 Use `AssistantPane`, `ConversationLog`, `ConversationMessage` and
 `AssistantComposer`. Messages use the shared readable prose spacing, author label
 and tonal surfaces. Content wraps; the panel owns scrolling. The composer stays
-after the conversation, with Stop before the primary Send action on the right.
+after the conversation, with Stop before the primary Send or Resume action on the right. The scroll region
+and composer have a token-based external gap; activity cards never touch the divider.
+Resume continues the same accepted message after a recoverable interruption; it
+never resubmits the message or repeats an uncertain write.
 Enter sends through the same enabled action; Shift+Enter inserts a newline. IME
 composition and repeated keydown events never send. An uncertain delivery keeps its original command and locks the text for retry.
 A confirmed rejection (`outcome: unchanged`) keeps the text editable, shows the server's
@@ -49,4 +52,4 @@ Home presents one action row; selecting Start or Switch replaces that row with a
 labelled, spaced form. Cancel and its primary action remain together at bottom right.
 The study heading, Home form and message log have shared section gaps. Spending and
 provider caps are administrative concerns, not panel content. Show an actionable diagnostic
-if the shared allowance is unavailable. Never substitute an uncertain usage value with zero.
+if the cumulative user allowance is unavailable. Never substitute an uncertain usage value with zero.

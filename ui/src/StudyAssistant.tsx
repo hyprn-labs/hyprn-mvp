@@ -1,6 +1,6 @@
 import { AssistantHomeMenu } from './AssistantHomeMenu';
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantConversationRead2, HyprnMvpApi } from './api';
+import type { AssistantConversationRead3, HyprnMvpApi } from './api';
 import { ApiError } from './api';
 import {
   ActionGroup,
@@ -21,6 +21,12 @@ const diagnostics: Record<string, string> = {
   provider_rate_limit: 'Claude’s rate limit was reached. The request has been preserved.',
   provider_billing_error:
     'The provider account needs credits. Add credits to the configured Anthropic account, then send a new message.',
+  assistant_internal_error:
+    'The Assistant was interrupted. Saved work is preserved. Resume to continue.',
+  user_allowance_exhausted:
+    'Your cumulative $20 Assistant allowance has been used. Saved work is preserved.',
+  user_allowance_unknown:
+    'Spending could not be verified. Resume when the connection is available.',
   provider_budget_reached: 'The Assistant allowance needs review before work can continue.',
   shared_allowance_exhausted: 'The shared Assistant allowance has been used.',
   shared_allowance_unknown:
@@ -52,7 +58,7 @@ export function StudyAssistant({
   onToggleExpanded: () => void;
   onClose: () => void;
 }) {
-  const [conversation, setConversation] = useState<AssistantConversationRead2 | null>(null);
+  const [conversation, setConversation] = useState<AssistantConversationRead3 | null>(null);
   const [homeMode, setHomeMode] = useState<'chat' | 'create' | 'switch'>('chat');
   const choosingStudy = home && homeMode !== 'chat';
   const [draft, setDraft] = useState('');
@@ -152,17 +158,21 @@ export function StudyAssistant({
     }
   }
 
-  async function stop() {
+  async function stop(resume = false) {
     if (!studyId) return;
     const generation = lifetime.current;
     const fence = api.fence({ studyId });
     try {
-      const value = await api.assistantStop(studyId);
+      const value = await (resume ? api.assistantResume(studyId) : api.assistantStop(studyId));
       if (fence.valid() && lifetime.current === generation) setConversation(value);
     } catch (cause) {
       await api.readFailed(cause, fence, { command: true });
       if (fence.valid() && lifetime.current === generation)
-        setError('Could not confirm Stop. Try again.');
+        setError(
+          resume
+            ? 'Could not confirm Resume. Refresh before trying again.'
+            : 'Could not confirm Stop. Try again.',
+        );
     } finally {
       fence.done();
     }
@@ -223,18 +233,24 @@ export function StudyAssistant({
                   Stop
                 </Button>
               )}
-              <Button
-                variant="primary"
-                disabled={
-                  unavailable ||
-                  sending ||
-                  (!pending.current && !conversation?.can_send) ||
-                  !draft.trim()
-                }
-                onClick={() => void send()}
-              >
-                {sending ? 'Sending…' : pending.current ? 'Retry send' : 'Send'}
-              </Button>
+              {conversation?.can_resume ? (
+                <Button variant="primary" onClick={() => void stop(true)}>
+                  Resume
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  disabled={
+                    unavailable ||
+                    sending ||
+                    (!pending.current && !conversation?.can_send) ||
+                    !draft.trim()
+                  }
+                  onClick={() => void send()}
+                >
+                  {sending ? 'Sending…' : pending.current ? 'Retry send' : 'Send'}
+                </Button>
+              )}
             </ActionGroup>
           </AssistantComposer>
         ) : undefined

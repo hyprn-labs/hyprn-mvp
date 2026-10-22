@@ -15332,7 +15332,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantBudgetRead1"
+                      "$ref": "#/components/schemas/AssistantBudgetRead2"
                     }
                   },
                   "required": [
@@ -15347,7 +15347,7 @@
           }
         },
         "parameters": [],
-        "description": "Human-only budget visibility. USD list-cost snapshots refresh at most once per minute; unknown usage is null, not zero. Reservations are not spending. Only aggregate installation amounts and the authorized study are returned."
+        "description": "Human-only cumulative user spending across all owned study conversations. No session ceiling or automatic reset. Unknown usage is null, not zero."
       }
     },
     "/studies/{study_id}/assistant/budget": {
@@ -15481,7 +15481,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantBudgetRead1"
+                      "$ref": "#/components/schemas/AssistantBudgetRead2"
                     }
                   },
                   "required": [
@@ -15495,7 +15495,7 @@
             }
           }
         },
-        "description": "Human-only budget visibility. USD list-cost snapshots refresh at most once per minute; unknown usage is null, not zero. Reservations are not spending. Only aggregate installation amounts and the authorized study are returned."
+        "description": "Human-only cumulative user spending across all owned study conversations. No session ceiling or automatic reset. Unknown usage is null, not zero."
       }
     },
     "/studies/{study_id}/assistant": {
@@ -15629,7 +15629,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead2"
+                      "$ref": "#/components/schemas/AssistantConversationRead3"
                     }
                   },
                   "required": [
@@ -15803,7 +15803,181 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead2"
+                      "$ref": "#/components/schemas/AssistantConversationRead3"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Human-only, study-authorized managed conversation. One active turn per study; messages are idempotent by command_id. Stop fences new tool admission before requesting provider interruption. Uncertain delivery is never blindly retried. All scientific effects use the delegated tool runtime and public API. Provider credentials and raw provider records are never returned."
+      }
+    },
+    "/studies/{study_id}/assistant/resume": {
+      "post": {
+        "summary": "Assistant Resume",
+        "operationId": "assistant_resume_api_1_studies__study_id__assistant_resume_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantResumeRequest1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantConversationRead3"
                     }
                   },
                   "required": [
@@ -15977,7 +16151,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead2"
+                      "$ref": "#/components/schemas/AssistantConversationRead3"
                     }
                   },
                   "required": [
@@ -81166,6 +81340,190 @@
           "checked_at",
           "usage_current",
           "approved"
+        ],
+        "additionalProperties": false
+      },
+      "AssistantResumeRequest1": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "AssistantConversationRead3": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "idle",
+              "queued",
+              "starting",
+              "running",
+              "waiting",
+              "stopping",
+              "blocked",
+              "unavailable"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_send": {
+            "type": "boolean"
+          },
+          "can_stop": {
+            "type": "boolean"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "properties": {
+                "message_id": {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                "role": {
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 65536
+                },
+                "actor_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "author_display_name": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "created_at": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "message_id",
+                "role",
+                "text",
+                "actor_id",
+                "author_display_name",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "has_earlier_messages": {
+            "type": "boolean"
+          },
+          "can_resume": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "error",
+          "can_send",
+          "can_stop",
+          "messages",
+          "has_earlier_messages",
+          "can_resume"
+        ],
+        "additionalProperties": false
+      },
+      "AssistantBudgetRead2": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "currency": {
+            "const": "USD"
+          },
+          "limit_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000
+          },
+          "spent_cents": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remaining_cents": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "const": "user"
+          },
+          "period": {
+            "const": "cumulative"
+          },
+          "resets_at": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "configured",
+          "currency",
+          "limit_cents",
+          "spent_cents",
+          "remaining_cents",
+          "checked_at",
+          "scope",
+          "period",
+          "resets_at"
         ],
         "additionalProperties": false
       },

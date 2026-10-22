@@ -7,6 +7,8 @@ Interrupted local dispatch is uncertain; it is never replayed on process recover
 
 import asyncio
 import json
+import logging
+import traceback
 import time
 
 from ..agent_runtime import control
@@ -80,11 +82,21 @@ class Conversations:
         if turn and current['state'] in ('queued', 'starting', 'running', 'waiting', 'stopping'):
             self.wake(study)
 
+    def _restart(self, study):
+        _, turn = self._load(study)
+        if turn and turn['delivery'] == 'intended':
+            # Restart may reconcile a sent message once, never loop on uncertainty.
+            self.wake(study)
+        else:
+            self._continue(study)
+
     async def start(self):
         if hasattr(self.store, 'database'):
             if self.available():
                 for job in self.store.background_jobs('assistant'):
-                    self.wake(job['study_id'])
+                    with self.store.background_actor('assistant', job['study_id']) as admitted:
+                        if admitted:
+                            self._restart(job['study_id'])
             return
         with self.store.connection() as db:
             studies = [
@@ -95,7 +107,7 @@ class Conversations:
                 )
             ]
         for study in studies:
-            self.wake(study)
+            self._restart(study)
 
     async def close(self):
         self._closing = True
@@ -125,6 +137,36 @@ class Conversations:
                     records.update(db, study, state='stopping')
         if current and current['active_turn']:
             self.wake(study)
+        return self.read(actor, study)
+
+    def resume(self, actor, study):
+        """Human continuation of the same delivered turn, never a message resend."""
+        if not self.available():
+            raise DomainError('backend_unavailable', 503)
+        with self.store.connection() as db:
+            self.store.authorize(db, actor, study)
+            current = records.row(db, study)
+            if current and current['state'] in ('queued', 'starting', 'running', 'waiting'):
+                return self.read(actor, study)
+            if not records.may_resume(db, current, actor):
+                raise DomainError('conflict', 409)
+            turn = records.turn(db, current['active_turn'])
+            events = {e['id']: e for e in records.events(db, study)}
+            pending = db.execute('SELECT event_id FROM assistant_tool_results '
+                'WHERE study_id=? AND turn_id=? AND content IS NULL',
+                (study, turn['turn_id'])).fetchall()
+        for row in pending:
+            tool = self.runtime.registry.tool(events[row['event_id']]['name'])
+            if tool.effect != 'read':
+                raise DomainError('conflict', 409)
+        if turn['runtime_session']:
+            self.runtime.sessions.end(turn['runtime_session'])
+        self._open_runtime(turn)
+        with self.store.connection(write=True) as db:
+            records.save_event(db, study, dict(id='resume_'+turn['runtime_session'],
+                type='hyprn.turn_resumed', turn_id=turn['turn_id'], _received_at=time.time()))
+            records.update(db, study, state='queued', error=None)
+        self.wake(study)
         return self.read(actor, study)
 
     def _load(self, study):
@@ -295,17 +337,16 @@ class Conversations:
         if saved and saved['delivery'] == 'accepted':
             return
         if saved and saved['content'] is None:
-            # The process stopped across a runtime call. Its action journal is authoritative.
-            # Never invoke again merely because this surface did not retain the response.
-            raise ProviderError('tool_outcome_unknown', uncertain=True)
-        if not saved:
+            if self.runtime.registry.tool(event.get('name')).effect != 'read':
+                raise ProviderError('tool_outcome_unknown', uncertain=True)
+        if not saved or saved['content'] is None:
             # Child tool calls are cross-posted in this session's event stream.
             # They use the same current human delegation and Stop fence as the parent.
             if event.get('session_thread_id') is not None:
                 identity(event['session_thread_id'])
-            if not await asyncio.to_thread(self._intend_tool, study, turn, event_id):
+            if not saved and not await asyncio.to_thread(self._intend_tool, study, turn, event_id):
                 return
-            if event.get('name') == 'wait_for_runs':
+            if event.get('name') in ('wait_for_runs', 'get_sampling_status', 'get_analysis_execution'):
                 self._update(study, state='waiting')
             outcome = await self.runtime.call_tool(
                 turn['runtime_session'], event_id, event.get('name'), event.get('input')
@@ -336,6 +377,7 @@ class Conversations:
                 provider_id, event_id, saved['content'], is_error=bool(saved['is_error'])
             )
         await asyncio.to_thread(self._accept_tool_result, study, event_id)
+        return True
 
     async def _pump(self, study):
         with self.store.background_actor('assistant', study) as admitted:
@@ -343,40 +385,33 @@ class Conversations:
                 await self._funded_pump(study)
 
     async def _admit(self, study):
-        while True:
-            async with self._allowance_admission:
-                current, turn = self._load(study)
-                if not turn or turn['stopped']:
-                    return None
-                self._authorize(turn)
-                try:
-                    settings = await allowance.prepare(
-                        self.store, self.provider, self.settings, current, turn,
-                        renewing=turn['delivery'] != 'new')
-                except ProviderError as error:
-                    if error.code != 'shared_allowance_busy':
-                        raise
-                    self._update(study, state='queued', error=None)
-                else:
-                    # Stop can be admitted during provider accounting reads.
-                    _, latest = self._load(study)
-                    if not latest or latest['stopped']:
-                        return None
-                    self._update(study, state='starting', error=None)
-                    provider_id = await self._session(current, settings)
-                    _, latest = self._load(study)
-                    if not latest or latest['stopped']:
-                        return provider_id
-                    await self.provider.ensure_allowance(
-                        provider_id, settings.session_cents,
-                        continuing=turn['delivery'] != 'new')
-                    return provider_id
-            await asyncio.sleep(1)
+        async with self._allowance_admission:
+            current, turn = self._load(study)
+            if not turn or turn['stopped']:
+                return None
+            self._authorize(turn)
+            actor = allowance.owner(self.store, study)
+            await allowance.check(self.store, self.provider, actor)
+            _, latest = self._load(study)
+            if not latest or latest['stopped']:
+                return None
+            self._update(study, state='starting', error=None)
+            provider_id = await self._session(current, self.settings)
+            # This normal owner operation also upgrades existing sessions. It never
+            # raises a ceiling, reserves money, or changes scientific records.
+            await self.provider.remove_session_cap(provider_id)
+            return provider_id
 
     def _started_at(self, study, turn):
         event_id = 'turn_started_' + turn['turn_id']
         with self.store.connection(write=True) as db:
-            found = next((e for e in records.events(db, study) if e['id'] == event_id), None)
+            history = records.events(db, study)
+            resumed = [e['_received_at'] for e in history
+                       if e.get('type') == 'hyprn.turn_resumed'
+                       and e.get('turn_id') == turn['turn_id']]
+            if resumed:
+                return max(resumed)
+            found = next((e for e in history if e['id'] == event_id), None)
             if found:
                 return found['_received_at']
             started = time.time() if turn['delivery'] == 'new' else turn['created_at']
@@ -384,18 +419,9 @@ class Conversations:
                                               _received_at=started))
             return started
 
-    async def _renew(self, study, turn, provider_id):
-        async with self._allowance_admission:
-            current, latest = self._load(study)
-            if not latest or latest['stopped']:
-                return
-            self._authorize(latest)
-            settings = await allowance.prepare(
-                self.store, self.provider, self.settings, current, latest, renewing=True)
-            _, latest = self._load(study)
-            if latest and not latest['stopped']:
-                await self.provider.ensure_allowance(
-                    provider_id, settings.session_cents, continuing=True)
+    async def _check_spending(self, study):
+        actor = allowance.owner(self.store, study)
+        await allowance.check(self.store, self.provider, actor)
 
     async def _funded_pump(self, study):
         provider_id = None
@@ -432,7 +458,7 @@ class Conversations:
             if not turn['stopped']:
                 await self._deliver(study, turn, provider_id)
                 self._update(study, state='running', error=None)
-            renewed_at = time.monotonic()
+            checked_at = time.monotonic()
             while True:
                 _, turn = self._load(study)
                 if turn['stopped']:
@@ -441,36 +467,32 @@ class Conversations:
                 self._authorize(turn)
                 if time.time() - started_at > MAX_TURN_SECONDS:
                     raise ProviderError('turn_time_limit')
-                if time.monotonic() - renewed_at >= 15:
-                    try:
-                        await self._renew(study, turn, provider_id)
-                    except ProviderError as error:
-                        if error.code != 'shared_allowance_busy':
-                            raise
-                    renewed_at = time.monotonic()
+                if time.monotonic() - checked_at >= 10:
+                    await self._check_spending(study)
+                    checked_at = time.monotonic()
                 history = await self._history(study, provider_id, turn)
                 self._authorize(turn)
                 start = next(
                     (i for i, e in enumerate(history) if e['id'] == turn['provider_event']), None
                 )
                 relevant = history[start + 1 :] if start is not None else []
+                delivered = False
                 for event in relevant:
                     if event.get('type') == 'agent.custom_tool_use' and not turn['stopped']:
-                        await self._tool(study, turn, provider_id, event, history)
+                        if time.monotonic() - checked_at >= 10:
+                            await self._check_spending(study)
+                            checked_at = time.monotonic()
+                        delivered = await self._tool(study, turn, provider_id, event, history) or delivered
+                if delivered:
+                    # A result can wake the provider; never apply an earlier idle event.
+                    continue
                 idle = next(
                     (e for e in reversed(relevant)
                      if e.get('type') in ('session.status_idle', 'session.status_running')), None
                 )
                 if (idle and idle['type'] == 'session.status_idle'
-                        and idle.get('stop_reason', {}).get('type') != 'requires_action'):
-                    reason = idle.get('stop_reason', {}).get('type')
-                    if reason == 'budget_reached':
-                        # Renew only this admitted turn. Never resend its message/tools.
-                        self._update(study, state='queued')
-                        await self._admit(study)
-                        self._update(study, state='running')
-                        await asyncio.sleep(1)
-                        continue
+                        and (idle.get('stop_reason') or {}).get('type') != 'requires_action'):
+                    reason = (idle.get('stop_reason') or {}).get('type')
                     self.runtime.sessions.end(turn['runtime_session'])
                     self._update(
                         study,
@@ -496,8 +518,12 @@ class Conversations:
                     await self.provider.interrupt(provider_id)
                 except ProviderError:
                     pass
-        except Exception:
-            # Do not leak provider content or credentials through server exception logs.
+        except Exception as error:
+            # Keep the failure location, never exception messages, locals or payloads.
+            frames = traceback.extract_tb(error.__traceback__)
+            location = ' > '.join(f'{f.name}:{f.lineno}' for f in frames[-6:])
+            logging.getLogger(__name__).error('Assistant failure %s at %s',
+                                              type(error).__name__, location)
             self._update(study, state='blocked', error='assistant_internal_error')
 
     async def _stop_remote(self, study, turn, provider_id):

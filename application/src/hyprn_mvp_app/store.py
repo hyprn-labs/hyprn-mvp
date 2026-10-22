@@ -369,6 +369,17 @@ class Store:
         with self.connection() as db:
             return db.execute('SELECT * FROM assistant_conversations').fetchall()
 
+    def assistant_user_accounts(self):
+        """Stable human billing owners, independent of current study membership."""
+        if hasattr(self, 'database'):
+            with self.database.background_connection() as db:
+                return db.execute('SELECT * FROM hyprn_assistant_user_accounts()').fetchall()
+        with self.connection() as db:
+            return db.execute(
+                'SELECT c.*, (SELECT t.actor_id FROM assistant_turns t '
+                'WHERE t.study_id=c.study_id ORDER BY t.created_at,t.turn_id LIMIT 1) '
+                'AS actor_id FROM assistant_conversations c').fetchall()
+
     def lock_path(self, suffix):
         """Fixed process lock names share the explicitly configured storage root."""
         if suffix not in {'.dispatch.lock', '.calculation-samples.lock'}:
