@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
@@ -19,6 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'application/src'))
 import live_fence  # noqa: E402
 import managed_assistant as setup  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'editions/cloud/src'))
+from hyprn_mvp_cloud.assistant_startup import reconcile
+from hyprn_mvp_cloud.runtime import host_record
+from hyprn_mvp_app.assistant.claude import ProviderError
+from installed_hosted_app import assistant_plan
 
 setUpModule, tearDownModule = live_fence.unittest_module_hooks('unit')
 
@@ -543,3 +550,173 @@ class ProviderDouble:
         if kind == 'agents':
             assert request.url.params['version'] == '1'
         return httpx.Response(200, json=resource)
+
+
+class HostedAssistantStartupTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.plan = assistant_plan()
+        self.identity = dict(installation_id='fixture', release_sha256='a' * 64,
+                             config_sha256='b' * 64)
+        self.settings = SimpleNamespace(definitions_sha256=self.plan['definitions_sha256'],
+                                        agent_id='agent_fixture', agent_version=1,
+                                        environment_id='environment_fixture',
+                                        prior_cents=7, total_cents=100)
+        self.continuity = dict(schema='hyprn-assistant-continuity/v1', **self.identity,
+                               configuration_sha256=self.plan['configuration_sha256'],
+                               prior_cents=7, total_cents=100, carried_sessions={'session_old': 5},
+                               untracked_cents=2, review_sha256='c' * 64)
+        self.rows = [dict(provider_id='session_retained',
+                          conversation_id='conversation_fixture', provision='ready')]
+        self.store = SimpleNamespace(assistant_user_accounts=lambda: self.rows)
+        self.correlations = {'conversation_fixture': 'session_retained'}
+        test = self
+        class ReadOnlyProvider:
+            sessions = ['session_old', 'session_retained']
+            status = 'idle'
+            drift = False
+            skill_drift = False
+            reviewer_drift = False
+
+            async def request(self, method, path, params=None):
+                test.assertEqual(method, 'GET')
+                if path == '/v1/sessions':
+                    test.assertEqual(params, {'limit': 100, 'include_archived': 'true'})
+                    return {'data': [{'id': sid} for sid in self.sessions], 'next_page': None}
+                skill = test.plan['bindings']['skill']
+                if path == '/v1/skills/' + skill['id'] + '/versions/' + skill['version']:
+                    return {'id': skill['version'], 'skill_id': skill['id']}
+                for role, binding in test.plan['bindings']['reviewers'].items():
+                    if path == '/v1/agents/' + binding['id']:
+                        test.assertEqual(params, {'version': binding['version']})
+                        result = dict(copy.deepcopy(test.plan['reviewers'][role]), **binding)
+                        if self.reviewer_drift:
+                            result['tools'] = test.plan['agent']['tools']
+                        return result
+                if path == '/v1/agents/agent_fixture':
+                    test.assertEqual(params, {'version': 1})
+                    result = dict(copy.deepcopy(test.plan['agent']), id='agent_fixture', version=1)
+                    if self.drift:
+                        result['tools'] = []
+                    return result
+                if path == '/v1/environments/environment_fixture':
+                    result = dict(copy.deepcopy(test.plan['environment']), id='environment_fixture')
+                    result['config']['packages'] = {'type': 'packages',
+                        **{manager: [] for manager in setup.MANAGERS}}
+                    return result
+                raise AssertionError('Unexpected provider request')
+
+            async def skill_content(self, skill_id, version):
+                test.assertEqual((skill_id, version), ('skill_fixture', 'skver_fixture'))
+                return b'wrong archive' if self.skill_drift else setup.managed_skill.bundle()[0]
+
+            async def find_session(self, correlation):
+                found = test.correlations.get(correlation)
+                return {'id': found} if found else None
+
+            async def session_account(self, session_id):
+                return {'status': self.status,
+                        'spent_cents': 5 if session_id == 'session_old' else 11}
+        self.provider = ReadOnlyProvider()
+
+    async def check(self):
+        return await reconcile(self.store, self.provider, self.settings, self.plan,
+                               self.continuity, self.identity)
+
+    async def test_old_release_continuity_is_refused_before_provider_calls(self):
+        self.continuity['release_sha256'] = 'f' * 64
+        with patch.object(self.provider, 'request') as request:
+            with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+                await self.check()
+            request.assert_not_called()
+
+    async def test_exact_full_definition_and_archived_prior_spend_are_checked(self):
+        result = await self.check()
+        self.assertEqual(result['spent_cents'], 18)
+        self.assertEqual(result['sessions'], 2)
+
+    async def test_unknown_busy_or_changed_provider_records_refuse_startup(self):
+        self.provider.sessions.append('session_unknown')
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+            await self.check()
+        self.provider.sessions.pop()
+        self.provider.status = 'running'
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_busy'):
+            await self.check()
+        self.provider.status = 'idle'
+        self.provider.drift = True
+        with self.assertRaisesRegex(ProviderError, 'provider_definition_drift'):
+            await self.check()
+
+    async def test_changed_native_skill_or_reviewer_write_authority_blocks_startup(self):
+        self.provider.skill_drift = True
+        with self.assertRaisesRegex(ProviderError, 'provider_skill_drift'):
+            await self.check()
+        self.provider.skill_drift = False
+        self.provider.reviewer_drift = True
+        with self.assertRaisesRegex(ProviderError, 'provider_definition_drift'):
+            await self.check()
+
+    async def test_bootstrap_or_missing_pins_cannot_start_delivery(self):
+        original = self.plan
+        for invalid in (setup.bootstrap('staging', 'claude-sonnet-5-5', 'high'),
+                        {key: value for key, value in original.items() if key != 'bindings'}):
+            self.plan = invalid
+            with patch.object(self.provider, 'request') as request:
+                with self.assertRaises(ProviderError):
+                    await self.check()
+                request.assert_not_called()
+        self.plan = original
+
+    async def test_missing_prior_evidence_never_becomes_zero(self):
+        self.continuity['untracked_cents'] = 0
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+            await self.check()
+
+    def test_complete_released_assistant_plan_has_explicit_bounded_size(self):
+        plan = assistant_plan()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp).resolve() / 'plan.json'
+            path.write_text(json.dumps(plan))
+            self.assertGreater(path.stat().st_size, 65536)
+            self.assertEqual(host_record(path, owner=os.getuid(), max_bytes=1024 * 1024), plan)
+            with self.assertRaises(ValueError):
+                host_record(path, owner=os.getuid())
+
+
+    async def test_successor_generations_use_each_pinned_correlation_and_retain_all_usage(self):
+        self.rows.append(dict(provider_id='session_successor', conversation_id='generation_two',
+                              provision='accepted'))
+        self.correlations['generation_two'] = 'session_successor'
+        self.provider.sessions = [*self.provider.sessions, 'session_successor']
+        # The retired current-pointer reader would pair the first correlation with
+        # the successor ID. Startup must use the full per-user generation ledger.
+        self.store.assistant_accounts = lambda: [dict(
+            provider_id='session_successor', conversation_id='conversation_fixture',
+            provision='accepted')]
+        result = await self.check()
+        self.assertEqual(result['sessions'], 3)
+        self.assertEqual(result['spent_cents'], 29)
+
+    async def test_missing_or_mismatched_successor_identity_still_refuses_startup(self):
+        self.provider.sessions = [*self.provider.sessions, 'session_successor']
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+            await self.check()
+        self.rows.append(dict(provider_id='session_successor', conversation_id='generation_two',
+                              provision='accepted'))
+        self.correlations['generation_two'] = 'session_retained'
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+            await self.check()
+        self.correlations['generation_two'] = 'session_successor'
+        self.rows.append(dict(self.rows[-1]))
+        with self.assertRaisesRegex(ProviderError, 'shared_allowance_unknown'):
+            await self.check()
+
+    async def test_uncertain_successor_creation_is_reconciled_without_mutation(self):
+        self.rows.append(dict(provider_id=None, conversation_id='generation_two',
+                              provision='intended'))
+        self.correlations['generation_two'] = 'session_successor'
+        self.provider.sessions = [*self.provider.sessions, 'session_successor']
+        result = await self.check()
+        self.assertEqual(result['sessions'], 3)
+        self.assertEqual(result['spent_cents'], 29)
+        self.assertIsNone(self.rows[-1]['provider_id'])

@@ -40,7 +40,9 @@ async def reconcile(store, provider, settings, plan, continuity, expected_identi
             or sum(carried.values()) + continuity['untracked_cents'] != settings.prior_cents):
         raise ProviderError('shared_allowance_unknown')
     known = {}
-    for row in store.assistant_accounts():
+    # Each retained provider generation has its own immutable correlation key.
+    # The current conversation pointer is not an inventory of historical usage.
+    for row in store.assistant_user_accounts():
         if not row['provider_id'] and row['provision'] == 'new':
             continue
         found = await provider.find_session(row['conversation_id'])

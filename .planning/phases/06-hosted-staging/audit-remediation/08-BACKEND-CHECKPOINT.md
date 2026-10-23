@@ -63,3 +63,34 @@ Private logs: `/private/tmp/hyprn-assistant-attachments-*.log`. Test scopes are
 runner-created, isolated from user stores, with cleanup exit recorded by the runner.
 Full qualification and real cloud/provider behavior remain parent-owned; synthetic
 transport tests do not establish successful staging resumption.
+
+## Deployment-discovered startup reconciliation correction
+
+The parent observed cloud startup refusing `shared_allowance_unknown` after a study
+had moved to its second pinned provider generation. The retired current-conversation
+reader combines the original conversation correlation with the newest provider ID;
+those intentionally identify different generations. Runtime usage already uses the
+all-generation ledger, so startup must use that same authoritative projection.
+
+Commit `eac22d43` switches only cloud startup reconciliation to
+`store.assistant_user_accounts()`. Exact correlation-to-provider identity, duplicate
+and missing-session refusal, full credential-visible inventory matching, pinned
+agent/skill/environment readback, carried usage and idle-provider guards are retained.
+No provider mutation, schema change or monetary policy change.
+
+All seven independent startup test scenarios moved from the Docker lifecycle group
+to `test_managed_assistant.py`; an AST method-name comparison confirms none dropped.
+Three new tests cover successor-generation usage, missing/mismatched/duplicate
+successors and uncertain creation reconciliation. Docker lifecycle tests unchanged.
+
+Focused command: `./hyprn-mvp dev check hosted-assistant-setup`.
+Initial attempt refused before tests (exit 2): free space 4.8 GiB below the existing
+5 GiB reserve. No threshold was relaxed and no unrelated data was removed. Parent
+coordinates cleanup of its own obsolete build artifacts before rerun.
+
+After parent-owned duplicate build-artifact cleanup, free space rose above 5 GiB.
+`./hyprn-mvp dev check hosted-assistant-setup` on committed `26461c43` passed
+**37 tests in 18.154 s**, exit 0 and scope cleanup exit 0. Log:
+`/private/tmp/hyprn-assistant-generation-startup-accepted.log`.
+All 27 setup tests, seven relocated startup scenarios and three new generation
+regressions ran; no skips. Later checkpoint-only commit changes no tested behavior.
