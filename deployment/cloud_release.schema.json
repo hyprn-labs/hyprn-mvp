@@ -1,7 +1,7 @@
 {
   "schema": "hyprn-platform-consumer/v1",
   "repository": "hyprn-platform",
-  "commit": "34de6c5de8fa3cf1ae899a57cf5a635c38398127",
+  "commit": "6b03d8bb090635f68b77d1d7fb2330c4b092eef7",
   "files": {
     "contracts/v1/deployment.schema.json": "6bd56662fe8d534e8ae890fea49b3e7872eda0ef09265683ee1082c4effcc684",
     "contracts/v1/fixtures.json": "c90c1237082fefcbeccc29ccbc9b28a2f6d652b8be18d92419b73148007b4429",

@@ -1,5 +1,18 @@
 # Project State
 
+- **Assistant recovery and bounded storage deployed (2026-10-23):** runtime source
+  `2983615b`, release `060d1af1`, sequence27, schema16; ongoing staging access active.
+  Full boot disk caused pre-launch failures. Execution scratch now uses the data disk
+  with leases, stale cleanup and headroom checks; verified cloud-backed transfer-cache
+  maintenance runs hourly. Boot has about15GB free; data about41GB. Original study
+  records are unchanged. Public login, shared creation forms and explicit Resume
+  verified; no Assistant message or resume was sent. Four requested users are allowed.
+  Safe activity details and exact uncertain-run reconciliation are deployed. Platform
+  probe correction6b03d8b preserves the private deployment directory. Next: owner
+  resumes the study through Assistant; verify completion without weakening accuracy.
+  Full qualification (including12 baseline bindings failures) remains outstanding.
+  [Checkpoint](phases/06-hosted-staging/audit-remediation/11-PARENT-CHECKPOINT.md).
+
 - **Progress, retained-result latency and Help deployed (2026-10-23):** staging
   `efcdb75f`, sequence26, release `adb68e33`, configuration `4310b336`; schema15
   and numerical image bytes unchanged. Assistant reports observed calculation/
