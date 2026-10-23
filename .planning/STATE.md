@@ -1,24 +1,20 @@
 # Project State
 
-- **Staging public journey verified (2026-10-23):** source `3f12d9d4`,
-  published staging candidate `41c39ab4`, release `d626e342`, configuration
-  `3e9150e`, sequence 20; platform `492eeb2d` unchanged. The provider readback
-  correction passed 194 bridge + 27 provisioning checks; installed artifacts,
-  containment/startup and 19 network probes passed. Ongoing named-user staging
-  access is promoted. The owner-authorized database/spending reset occurred once
-  at sequence 19; this release preserves schema 13 and cumulative USD 20/user.
-  Public Chrome login, real Assistant authoring, 50 model runs, complete saved
-  answer and all three joint sliders passed. Kriging passed 15 independent
-  validation points; max error 0.0053 K. Slider interactions left the run count
-  at 50. This is a working staging demonstration, not full release qualification
-  or human acceptance. The study took about 34m30s: workers take 2.7–3.9s, but
-  native two-point batches take 30–33s with retained reads around 5s. Read profiling
-  identifies duplicate bundle traversal and per-object repository queries, not
-  RAM exhaustion. Next: eliminate that overhead with invariant-preserving bulk
-  reads; fix answer auto-refresh, route persistence and generic authoring friction.
-  Source-fetch/reviewer evaluation, automatic deployment and full qualification
-  remain open. No direct scientific-data repair or laptop-speed claim.
-  [Readback/deployment checkpoint](phases/06-hosted-staging/audit-remediation/06-SESSION-READBACK-CHECKPOINT.md)
+- **Performance and UX deployed (2026-10-23):** staging `ea1497cd`, release
+  `1339acb0`, configuration `62a5eaa1`, sequence 21; platform `492eeb2d` unchanged.
+  Same retained record median 5.77 → 0.19 seconds (30 times faster), first read
+  0.75 seconds, identical full-record hash. Bounded bulk repository reads remove
+  repeated traversal without relaxing validation. 1,189 focused tests plus fresh
+  build, containment/startup and 19 network probes pass. Public login, exact and
+  joint estimated slider values, authenticated route reload, and Assistant answer
+  publication/refresh while collapsed verified. All 50 existing runs and original
+  answer bytes preserved; only an ordinary Assistant-authored answer version added.
+  Ongoing named-user staging access promotion completed.
+  Worker/modeling images, schema13 and cumulative USD20/user unchanged; no reset.
+  Source-fetch/reviewer evaluation, broader concurrency/recovery, safe retention,
+  automatic deployment and full qualification remain open. End-to-end new study
+  timing and human acceptance are not claimed by this measurement.
+  [Performance/UX checkpoint](phases/06-hosted-staging/audit-remediation/07-PARENT-CHECKPOINT.md)
   and [coverage](phases/06-hosted-staging/audit-remediation/COVERAGE.md).
 
 - **Assistant user budget deployed (2026-10-22):** product `0fe32eba`, staging

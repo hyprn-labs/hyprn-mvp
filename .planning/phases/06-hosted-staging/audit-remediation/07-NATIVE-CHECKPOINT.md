@@ -51,7 +51,8 @@ numerical image or invalidating saved surrogate runtime pins.
   archive test's retired fixture importing the removed application `approach`
   module. That fixture also targets retired approach/outbox tables. No affected
   launcher/parser/retained-reader test failed. This group is **not passing**;
-  no test was skipped or weakened. Fixture migration remains parent-owned.
+  no test was skipped or weakened. Parent subsequently assigned fixture migration
+  to this lane; the completed repair is recorded below.
   Log: `/private/tmp/hyprn-native-read-units-launcher-green.log` (the filename
   records the intended rerun, not a successful outcome).
 - `git diff --check` passed. `results.py` has no diff.
@@ -77,3 +78,41 @@ staging before/after measurements and live sampling are parent's remaining work.
 `units-attestation` also covers the updated exact source inventory; this remains
 an integrated acceptance obligation. No live records or staging services were
 changed by this task.
+
+## Required fixture repairs and final checks
+
+- Production commit: `07cacb56`. Fixture migration: `d8dd2ad0`, corrected by
+  `467dfed6`. The current portable-archive fixture seeds the same historical
+  authoring bytes and uses the actual submission preparation, dispatch and
+  recording owners with a synthetic native boundary. It does not execute
+  candidate code or weaken archive, exact-model or quantity assertions.
+- First migrated-fixture run: **60 passed, 4 failed**, 42.73 s. Direct terminal
+  payload writes used an obsolete shape; the current database CHECK correctly
+  refused them. Replaced those writes with `Submissions.dispatch`, preserving
+  the current single-writer boundary. Log:
+  `/private/tmp/hyprn-native-read-units-launcher-current.log`.
+- Final `./hyprn-mvp dev check units-launcher` on `467dfed6`: **64 passed**,
+  24.36 s; runner 26.274 s and cleanup exit 0. One upstream event-loop
+  deprecation warning. Log:
+  `/private/tmp/hyprn-native-read-units-launcher-final.log`.
+- Parent's integrated `units-attestation` reported **57 failed, 26 passed**.
+  Its stale fixture inventory omitted the already-attested `cloud_native.py`
+  and `dispatch_bridge.py`, cascading into absent-file failures when testing
+  copied source trees. Added both fixture entries and corrected exact inventory
+  size from 53 to 56; no production attestation or containment rule changed.
+  Initial log: `/private/tmp/hyprn-performance-ux-release/units-attestation.log`.
+- Parent reports integrated **native-execution 114 passed**, **locality-contracts
+  166 passed**, **contracts 127 passed**, **hosted setup 27 passed**. Parent
+  checkpoint owns exact commands, logs and source identity for those runs.
+- Final `./hyprn-mvp dev check units-attestation` on `467dfed6`: **85 passed**,
+  112.17 s; runner 114.986 s and scoped cleanup exit 0. The two additional
+  source-drift cases account for the increase from 83 to 85 tests. Log:
+  `/private/tmp/hyprn-native-read-units-attestation-final.log`.
+
+All checks above use the pinned `./hyprn-mvp` entry point with the existing
+external development data/tools roots, a 20 GiB test build-cache ceiling and
+live port fences 54821, 54458, 54932. No live-store or service mutation occurred.
+The only delta after tested source commit `467dfed6` in this lane is this
+checkpoint. Parent retains staging release, before/after public measurements
+and signed-in Assistant/slider verification; those are not established by the
+local transport benchmark.

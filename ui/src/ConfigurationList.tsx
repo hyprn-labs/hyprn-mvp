@@ -25,6 +25,7 @@ export function ConfigurationList({
     study,
     scope: JSON.stringify([scope.model, scope.revision]),
     enabled: !!scope.revision,
+    prerequisite: 'Save a model version in Models to create configurations.',
     load: async (cursor, signal) => {
       const page = await api.configurationSummaries(
         study,

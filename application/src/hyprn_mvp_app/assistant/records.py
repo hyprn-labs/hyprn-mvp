@@ -134,7 +134,8 @@ def failure(db, current):
 RECOVERABLE = frozenset({'assistant_internal_error', 'provider_unavailable',
     'provider_rate_limit', 'turn_time_limit', 'invalid_provider_record',
     'user_allowance_unknown', 'shared_allowance_unknown', 'provider_session_busy',
-    'session_delivery_unknown'})
+    'session_delivery_unknown', 'provider_response_too_large',
+    'provider_resume_delivery_unknown'})
 
 
 def may_resume(db, current, actor):
@@ -213,13 +214,15 @@ def event_metadata(event):
         reference = event.get('custom_tool_use_id')
     elif kind == 'agent.tool_result':
         reference = event.get('tool_use_id')
-    elif kind in ('hyprn.turn_started', 'hyprn.turn_resumed', 'hyprn.reviewer_admitted'):
+    elif kind in ('hyprn.turn_started', 'hyprn.turn_resumed', 'hyprn.reviewer_admitted',
+                   'hyprn.provider_interrupted', 'hyprn.provider_continue_intended',
+                   'hyprn.provider_continue_accepted'):
         reference = event.get('turn_id') or event['id'].removeprefix('turn_started_')
     elif kind == 'user.message':
-        prefix = 'HYPRN request reference: '
         for item in event.get('content', []):
-            if item.get('type') == 'text' and str(item.get('text', '')).startswith(prefix):
-                reference = item['text'][len(prefix):]
+            for prefix in ('HYPRN request reference: ', 'HYPRN continuation reference: '):
+                if item.get('type') == 'text' and str(item.get('text', '')).startswith(prefix):
+                    reference = item['text'][len(prefix):]
     return kind, stamp, reference
 
 

@@ -4,6 +4,7 @@ import { ActionGroup } from './compositions';
 
 export type CollectionEntity = { singular: string; plural: string };
 export type CollectionState =
+  | { status: 'idle'; reason?: string }
   | { status: 'loading' }
   | { status: 'failed'; error: string }
   | {
@@ -51,8 +52,8 @@ export function CollectionStatus({
       : `${matches} ${matches === 1 ? 'match' : 'matches'} in ${coverage}`;
   const failedRead = `${title} could not be ${operation === 'refresh' ? 'refreshed' : 'loaded'}.`;
   const kept = ready ? ` The ${plural} already shown are kept.` : '';
-  if (countInHeading && ready && count > 0 && !busy && !error && !more
-      && matches === undefined) return null;
+  if (countInHeading && ready && count > 0 && !busy && !error && !more && matches === undefined)
+    return null;
   return (
     <div className="hf-collection-status hf-flow" aria-busy={busy}>
       {ready && (!countInHeading || matches !== undefined || more) && (
@@ -60,6 +61,7 @@ export function CollectionStatus({
           {summary}
         </p>
       )}
+      {state.status === 'idle' && state.reason && <p role="status">{state.reason}</p>}
       {state.status === 'loading' && <p role="status">Loading {plural}…</p>}
       {error && (
         <div role="alert">

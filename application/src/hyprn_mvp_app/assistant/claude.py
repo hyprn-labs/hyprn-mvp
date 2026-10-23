@@ -7,6 +7,9 @@ The endpoint is fixed: a configured credential cannot be redirected to another h
 
 from dataclasses import dataclass, field
 import copy
+import base64
+import binascii
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +21,9 @@ import httpx
 API = 'https://api.anthropic.com'
 BETA = 'managed-agents-2026-04-01'
 MAX_RESPONSE = 8 * 1024 * 1024
+MAX_ATTACHMENT_RESPONSE = 48 * 1024 * 1024
+MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
+MAX_RETAINED_EVENT = 1024 * 1024
 IDENTITY = re.compile(r'[a-zA-Z0-9_-]{1,128}')
 
 
@@ -27,6 +33,46 @@ class ProviderError(Exception):
     def __init__(self, code, *, uncertain=False, status=None):
         self.code, self.uncertain, self.status = code, uncertain, status
         super().__init__(code)
+
+
+def retained_event(event):
+    """Retain binary retrieval identity, not provider-owned bytes or a verified excerpt.
+
+    Only built-in result attachments are projected. Custom tool arguments/results and
+    fetched text retain their exact content and the ordinary event-size boundary.
+    """
+    value = copy.deepcopy(event)
+    total = 0
+    if value.get('type') == 'agent.tool_result':
+        content = value.get('content')
+        if isinstance(content, list):
+            content = value['content'] = [copy.deepcopy(block) for block in content]
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict) or block.get('type') not in ('document', 'image'):
+                continue
+            source = block.get('source')
+            if not isinstance(source, dict) or source.get('type') != 'base64':
+                continue
+            data, media = source.get('data'), source.get('media_type')
+            if not isinstance(data, str) or not isinstance(media, str) or len(media) > 128:
+                raise ProviderError('invalid_provider_attachment')
+            if len(data) > 4 * ((MAX_ATTACHMENT_BYTES + 2) // 3):
+                raise ProviderError('provider_attachment_too_large')
+            try:
+                raw = base64.b64decode(data, validate=True)
+            except (ValueError, binascii.Error):
+                raise ProviderError('invalid_provider_attachment') from None
+            total += len(raw)
+            if total > MAX_ATTACHMENT_BYTES:
+                raise ProviderError('provider_attachment_too_large')
+            block['source'] = dict(type='provider_attachment', media_type=media,
+                byte_length=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                provider_event_id=identity(value.get('id')))
+    size = len(json.dumps(value, ensure_ascii=False, allow_nan=False,
+                          separators=(',', ':'), sort_keys=True).encode())
+    if size > MAX_RETAINED_EVENT:
+        raise ProviderError('provider_response_too_large')
+    return value
 
 
 def credential(path):
@@ -200,7 +246,8 @@ class Claude:
     async def close(self):
         await self._client.aclose()
 
-    async def request(self, method, path, *, body=None, params=None, files=None, data=None, binary=False):
+    async def request(self, method, path, *, body=None, params=None, files=None,
+                      data=None, binary=False, response_limit=MAX_RESPONSE):
         if not path.startswith('/v1/') or '..' in path or '?' in path:
             raise ValueError('A provider path must be fixed by the adapter')
         headers = {
@@ -227,7 +274,7 @@ class Claude:
                 raw = bytearray()
                 async for chunk in reply.aiter_bytes():
                     raw.extend(chunk)
-                    if len(raw) > MAX_RESPONSE:
+                    if len(raw) > response_limit:
                         raise ProviderError('provider_response_too_large', uncertain=uncertain)
             if binary:
                 return bytes(raw)
@@ -363,14 +410,39 @@ class Claude:
         params = {'limit': 100, 'order': 'asc'}
         if since:
             params['created_at[gte]'] = since
-        for _ in range(100):
-            result = await self.request('GET', path, params=params)
-            for event in result.get('data', []):
+        response_limit = MAX_RESPONSE
+        received_count = 0
+        # Only idempotent reads shrink/retry; one attachment has a separate hard cap.
+        # Keep the exact page/cursor until the complete page has been accepted.
+        for _ in range(800):
+            try:
+                result = await self.request('GET', path, params=params,
+                                            response_limit=response_limit)
+            except ProviderError as error:
+                if error.code != 'provider_response_too_large':
+                    raise
+                if params['limit'] > 1:
+                    params['limit'] = max(1, params['limit'] // 2)
+                    continue
+                if response_limit == MAX_RESPONSE:
+                    response_limit = MAX_ATTACHMENT_RESPONSE
+                    continue
+                raise ProviderError('provider_attachment_too_large') from None
+            events = result.get('data')
+            if not isinstance(events, list) or len(events) > params['limit']:
+                raise ProviderError('invalid_provider_record')
+            received_count += len(events)
+            if received_count > 10_000:
+                raise ProviderError('provider_history_limit')
+            for event in events:
                 yield event
             page = result.get('next_page')
             if not page:
                 return
+            if page == params.get('page'):
+                raise ProviderError('invalid_provider_record')
             params['page'] = page
+            response_limit = MAX_RESPONSE
         raise ProviderError('provider_history_limit')
 
     async def send(self, session_id, event):

@@ -108,6 +108,7 @@ const disabledLink = render('Unavailable reader', h(F.OpenLink,
 check('Unavailable reader preserves native disabled semantics', disabledLink.includes('disabled=""'));
 
 for (const [name, state, expected] of [
+  ['prerequisite', { status: 'idle', reason: 'Save a model version first.' }, 'Save a model version first.'],
   ['initial', { status: 'loading' }, 'Loading runs'],
   ['partial', { status: 'ready', count: 20, more: true }, '20 runs shown · More available'],
   ['complete', { status: 'ready', count: 23, more: false }, '23 runs'],
@@ -132,6 +133,10 @@ for (const [name, state, expected] of [
     }),
   );
   check('Collection ' + name + ' has truthful coverage and named action', html.includes(expected));
+  if (name === 'prerequisite')
+    check('Idle collection does not invent a pending request',
+      !html.includes('Loading runs') && !html.includes('0 runs') && !html.includes('No runs')
+      && html.includes('aria-busy="false"'));
   if (name === 'initial')
     check(
       'Initial collection never claims zero or emptiness',

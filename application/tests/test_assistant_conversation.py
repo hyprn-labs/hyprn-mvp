@@ -1328,3 +1328,141 @@ def test_successor_refuses_busy_unknown_or_unsettled_previous_session(system, ob
         await owner.close()
 
     asyncio.run(exercise())
+
+
+def test_large_pdf_result_retains_digest_not_binary_or_quotation(system):
+    import base64
+    import hashlib
+    _, owner, provider, store, actor, sid = system
+    command = uid()
+    records.accept(store, actor, sid, command, 'Research a reference.', owner.settings)
+    _, turn = owner._load(sid)
+    owner._open_runtime(turn)
+    raw = b'%PDF-1.7\n' + b'x' * 4_780_500
+    event = dict(id='large_pdf', type='agent.tool_result', tool_use_id='fetch_pdf',
+                 is_error=False, content=[dict(type='document', source=dict(
+                     type='base64', media_type='application/pdf',
+                     data=base64.b64encode(raw).decode()))])
+    provider.history = [event]
+    received = asyncio.run(owner._history(sid, 'session_test', turn))
+    assert len(received) == 1 and len(json.dumps(received)) < 2000
+    with store.connection() as db:
+        retained = records.event(db, sid, 'large_pdf')
+    source = retained['content'][0]['source']
+    assert source['sha256'] == hashlib.sha256(raw).hexdigest()
+    assert source['byte_length'] == len(raw) and source['type'] == 'provider_attachment'
+    assert 'data' not in source and len(json.dumps(retained)) < 2000
+    from hyprn_mvp_app.assistant.research import _texts
+    assert list(_texts(retained)) == []
+
+
+@pytest.mark.parametrize('uncertain,missing', [(False, False), (True, False), (True, True)])
+def test_public_resume_wakes_interrupted_provider_once_without_replaying_tools(system,
+                                                                              uncertain, missing):
+    app, owner, provider, store, actor, sid = system
+    async def exercise():
+        client = await client_for(app)
+        base = '/api/1/studies/' + sid + '/assistant'
+        command = uid()
+        # Retained old-release failure: original message accepted and tool completed.
+        records.accept(store, actor, sid, command, 'Research and finish.', owner.settings)
+        current, turn = owner._load(sid)
+        owner._open_runtime(turn)
+        original = provider.event('user.message', content=[dict(type='text', text='Research.')])
+        completed = provider.event('agent.custom_tool_use', name='add_evidence', input={})
+        provider.event('user.custom_tool_result', custom_tool_use_id=completed['id'])
+        provider.event('user.interrupt')
+        provider.event('session.status_idle', stop_reason={'type': 'end_turn'})
+        with store.connection(write=True) as db:
+            db.execute("UPDATE assistant_turns SET delivery='accepted',provider_event=? "
+                       'WHERE turn_id=?', (original['id'], command))
+            db.execute('INSERT INTO assistant_tool_results VALUES(?,?,?,?,?,?)',
+                       (sid, completed['id'], command, '{"ok":true}', 0, 'accepted'))
+            records.update(db, sid, provider_id='session_test', provision='accepted',
+                           state='blocked', error='provider_response_too_large')
+        continuation = []
+        async def send(session, event):
+            continuation.append(event)
+            if not missing:
+                echoed = provider.event('user.message', content=event['content'])
+                provider.event('agent.message', content=[dict(type='text', text='Continued.')])
+                provider.event('session.status_idle', stop_reason={'type': 'end_turn'})
+            if uncertain:
+                raise ProviderError('provider_unavailable', uncertain=True)
+            return {'data': [echoed]}
+        provider.send = send
+        assert owner.read(actor, sid)['can_resume']
+        assert (await client.post(base + '/resume', json={})).status_code == 202
+        await drained(owner)
+        assert len(continuation) == 1 and not provider.results
+        if missing:
+            assert owner.read(actor, sid)['error'] == 'provider_resume_delivery_unknown'
+            assert (await client.post(base + '/resume', json={})).status_code == 202
+            await drained(owner)
+            assert len(continuation) == 1
+        else:
+            result = owner.read(actor, sid)
+            assert result['state'] == 'idle' and result['messages'][-1]['text'] == 'Continued.'
+            assert [m['text'] for m in result['messages'] if m['role'] == 'user'] == [
+                'Research and finish.']
+            assert len(provider.created) == 0
+        await client.aclose()
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_stop_after_unreadable_attachment_starts_at_new_interrupt_receipt(system):
+    _, owner, provider, store, actor, sid = system
+    async def exercise():
+        command = uid()
+        records.accept(store, actor, sid, command, 'Read document.', owner.settings)
+        _, turn = owner._load(sid)
+        owner._open_runtime(turn)
+        with store.connection(write=True) as db:
+            records.update(db, sid, provider_id='session_test', provision='accepted',
+                           state='blocked', error='provider_attachment_too_large',
+                           provider_cursor='2026-10-20T10:00:00Z')
+        stamp = '2026-10-20T10:01:00Z'
+        stopped = dict(id='interrupt_new', type='user.interrupt', created_at=stamp,
+                       processed_at=stamp)
+        async def interrupt(session):
+            return {'data': [stopped]}
+        async def events(session, since=None):
+            assert since == stamp  # Reading from the old cursor would re-hit the bad attachment.
+            yield stopped
+        provider.interrupt, provider.events = interrupt, events
+        owner.stop(actor, sid)
+        await drained(owner)
+        page = owner.read(actor, sid)
+        assert page['state'] == 'idle' and page['can_send']
+        assert not provider.sent and not provider.results
+        await owner.close()
+    asyncio.run(exercise())
+
+
+def test_old_interruption_does_not_wake_a_successfully_continued_turn_again(system):
+    _, owner, provider, store, actor, sid = system
+    async def exercise():
+        command = uid()
+        records.accept(store, actor, sid, command, 'Finish existing work.', owner.settings)
+        _, turn = owner._load(sid)
+        owner._open_runtime(turn)
+        original = provider.event('user.message', content=[])
+        continuation = provider.event('user.message', content=[])
+        provider.event('session.status_idle', stop_reason={'type': 'end_turn'})
+        with store.connection(write=True) as db:
+            db.execute("UPDATE assistant_turns SET delivery='accepted',provider_event=? "
+                       'WHERE turn_id=?', (original['id'], command))
+            records.save_event(db, sid, dict(id='old_interrupt', type='hyprn.provider_interrupted',
+                turn_id=command, _received_at=1))
+            records.save_event(db, sid, dict(id='old_continue',
+                type='hyprn.provider_continue_accepted', turn_id=command, intent_id='old_intent',
+                original_event=original['id'], provider_event=continuation['id'], _received_at=2))
+            records.update(db, sid, provider_id='session_test', provision='accepted',
+                           state='blocked', error='assistant_internal_error')
+        owner.resume(actor, sid)
+        await drained(owner)
+        assert owner.read(actor, sid)['state'] == 'idle'
+        assert not provider.sent
+        await owner.close()
+    asyncio.run(exercise())

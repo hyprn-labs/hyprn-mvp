@@ -16,6 +16,8 @@ received records only; label the control “Filter runs”, etc.
 
 | State | Summary/status | Action |
 |---|---|---|
+| Prerequisite absent | Explain the missing prerequisite; no count or loading claim | Applicable navigation/creation action only |
+| Disabled or hidden read | No loading indicator; no count or empty claim | None |
 | First read pending | Loading runs…; no count or empty claim | None |
 | First read failed | Runs could not be loaded. | Retry loading runs |
 | Partial success | 20 runs shown · More available | Load more runs |
@@ -37,7 +39,7 @@ never a scientific success/warning/status badge.
 
 ## Interaction and ownership
 
-One typed state represents initial loading/failure or a successful collection with explicit
+One typed state represents an idle prerequisite, initial loading/failure or a successful collection with explicit
 coverage and optional pending/failed append/refresh. Adopted consumers cannot supply arbitrary
 count strings. CollectionToolbar remains a layout wrapper for actions or noncollection context.
 CollectionStatus owns summary, no-match/empty copy, and named pagination/retry controls.
@@ -74,3 +76,8 @@ Keep full identity, provenance and authorship in the object's record details. An
 shows its version and configuration count; a configuration shows input count and reference
 mark; a run shows execution status. Never invent a configuration version number from list order.
 A collection count still counts the exact records returned, not inferred unique families.
+
+Disabled collection reads are idle, never loading. The shared read hook clears the previous
+scope and aborts pending requests when disabled. A prerequisite message belongs to the
+collection owner (for example, saving a model version before configurations). Enablement
+starts the real request; only its successful response can establish an empty collection.

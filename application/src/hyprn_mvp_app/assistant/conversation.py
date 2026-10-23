@@ -19,7 +19,7 @@ from ..agent_tools.catalogue.exploration import execution_projection
 from ..contracts import DomainError, canonical, digest
 from . import records, allowance, reviewers, research, provider_sessions
 from .budget import Budget
-from .claude import ProviderError, identity
+from .claude import ProviderError, identity, retained_event
 
 SURFACE = 'claude_managed'
 DISPLAY_NAME = 'Assistant'
@@ -158,6 +158,14 @@ class Conversations:
             if not records.may_resume(db, current, actor):
                 raise DomainError('conflict', 409)
             turn = records.turn(db, current['active_turn'])
+            interrupted = records.latest_event(db, study, ('hyprn.provider_interrupted',),
+                                                reference=turn['turn_id'])
+            continued = records.latest_event(db, study, ('hyprn.provider_continue_accepted',),
+                                              reference=turn['turn_id'])
+            needs_wake = interrupted and (not continued or
+                interrupted['_received_at'] > continued['_received_at'])
+            continue_provider = bool(needs_wake or current['error'] in (
+                'provider_response_too_large', 'provider_resume_delivery_unknown'))
             pending = db.execute('SELECT event_id FROM assistant_tool_results '
                 'WHERE study_id=? AND turn_id=? AND content IS NULL',
                 (study, turn['turn_id'])).fetchall()
@@ -175,7 +183,8 @@ class Conversations:
         self._open_runtime(turn)
         with self.store.connection(write=True) as db:
             records.save_event(db, study, dict(id='resume_'+turn['runtime_session'],
-                type='hyprn.turn_resumed', turn_id=turn['turn_id'], _received_at=time.time()))
+                type='hyprn.turn_resumed', turn_id=turn['turn_id'],
+                continue_provider=continue_provider, _received_at=time.time()))
             records.update(db, study, state='queued', error=None)
         self.wake(study)
         return self.read(actor, study)
@@ -241,6 +250,9 @@ class Conversations:
 
     def _pending(self, study, provider_event):
         with self.store.connection() as db:
+            continued = records.latest_event(db, study, ('hyprn.provider_continue_accepted',))
+            if continued and continued.get('original_event') == provider_event:
+                provider_event = continued['provider_event']
             return records.pending_events(db, study, provider_event)
 
     def _receive_event(self, study, turn, event):
@@ -248,11 +260,10 @@ class Conversations:
         identity(event.get('id'))
         if str(event.get('type', '')).startswith('hyprn.'):
             raise ProviderError('invalid_provider_record')
-        if len(canonical(event)) > 1024 * 1024:
-            raise ProviderError('provider_response_too_large')
+        event = retained_event(event)
         event['_received_at'] = time.time()
         with self.store.connection(write=True) as db:
-            return records.save_event(db, study, event)
+            return event if records.save_event(db, study, event) else None
 
     async def _history(self, study, provider_id, turn):
         # Database I/O must not block HTTP serving during a page of provider events.
@@ -261,8 +272,9 @@ class Conversations:
         since = current['provider_cursor']
         received = []
         async for event in self.provider.events(provider_id, since):
-            if await asyncio.to_thread(self._receive_event, study, turn, event):
-                received.append(event)
+            retained = await asyncio.to_thread(self._receive_event, study, turn, event)
+            if retained:
+                received.append(retained)
         return received
 
     async def _deliver(self, study, turn, provider_id):
@@ -462,6 +474,74 @@ class Conversations:
         await asyncio.to_thread(self._accept_tool_result, study, event_id)
         return True
 
+    async def _continue_provider(self, study, turn, provider_id):
+        """Wake an application-interrupted turn once, with durable delivery reconciliation.
+
+        No original message or scientific effect is replayed. A lost send response is
+        resolved by its exact correlation in provider history, never another send.
+        """
+        with self.store.connection() as db:
+            resumed = records.latest_event(db, study, ('hyprn.turn_resumed',),
+                                           reference=turn['turn_id'])
+            intended = records.latest_event(db, study, ('hyprn.provider_continue_intended',),
+                                            reference=turn['turn_id'])
+            accepted = records.latest_event(db, study, ('hyprn.provider_continue_accepted',),
+                                            reference=turn['turn_id'])
+        if intended and accepted and accepted['intent_id'] == intended['id']:
+            if not resumed or intended['resume_id'] == resumed['id']:
+                return False
+            intended = None
+        if not intended and (not resumed or not resumed.get('continue_provider')):
+            return False
+        # Existing provider work may still be stopping. Do not enqueue a second turn.
+        account = await self.provider.session_account(provider_id)
+        if account['status'] != 'idle' and not intended:
+            return True
+        intent_id = intended['id'] if intended else 'continue_' + resumed['id']
+        marker = 'HYPRN continuation reference: ' + intent_id
+        content = [dict(type='text', text=(
+            'Continue the existing study request after an application interruption. '
+            'Read the current study and retained tool results before taking action. '
+            'Do not repeat completed writes, submitted calculations or sampling. '
+            'Continue from the saved state and report any remaining blocker clearly.')),
+            dict(type='text', text=marker)]
+        with self.store.connection(write=True) as db:
+            claimed = records.save_event(db, study, dict(id=intent_id,
+                type='hyprn.provider_continue_intended', turn_id=turn['turn_id'],
+                resume_id=resumed['id'], _received_at=time.time()))
+        if claimed:
+            self.authorize_turn(turn)
+            await self._check_spending(study)
+            try:
+                await self.provider.send(provider_id, dict(type='user.message', content=content))
+            except ProviderError:
+                # The intent remains immutable even on a missing response.
+                pass
+        await self._history(study, provider_id, turn)
+        with self.store.connection(write=True) as db:
+            matches = [json.loads(row[0]) for row in db.execute(
+                "SELECT payload FROM assistant_events WHERE study_id=? "
+                "AND event_type='user.message' AND reference_id=? LIMIT 2", (study, intent_id))
+                if json.loads(row[0]).get('content') == content]
+            if len(matches) != 1:
+                raise ProviderError('provider_resume_delivery_unknown', uncertain=True)
+            records.save_event(db, study, dict(id='accepted_' + intent_id,
+                type='hyprn.provider_continue_accepted', turn_id=turn['turn_id'],
+                intent_id=intent_id, original_event=turn['provider_event'],
+                provider_event=matches[0]['id'], _received_at=time.time()))
+        return True
+
+    async def _interrupt_failed_turn(self, study, provider_id):
+        reply = await self.provider.interrupt(provider_id)
+        sent = reply.get('data', reply.get('events', []))
+        if sent:
+            event_id = identity(sent[0].get('id'))
+            with self.store.connection(write=True) as db:
+                current = records.row(db, study)
+                records.save_event(db, study, dict(id='interrupted_' + event_id,
+                    type='hyprn.provider_interrupted', turn_id=current['active_turn'],
+                    _received_at=time.time()))
+
     async def _pump(self, study):
         with self.store.background_actor('assistant', study) as admitted:
             if admitted:
@@ -580,6 +660,9 @@ class Conversations:
                     started_at = self._started_at(study, turn)
                     delay = 1.0
                     continue
+                if not relevant and await self._continue_provider(study, turn, provider_id):
+                    await asyncio.sleep(1)
+                    continue
                 if (idle and idle['type'] == 'session.status_idle'
                         and (idle.get('stop_reason') or {}).get('type') != 'requires_action'):
                     reason = (idle.get('stop_reason') or {}).get('type')
@@ -599,14 +682,14 @@ class Conversations:
             self._update(study, state='blocked', error='access_lost')
             if provider_id:
                 try:
-                    await self.provider.interrupt(provider_id)
+                    await self._interrupt_failed_turn(study, provider_id)
                 except ProviderError:
                     pass
         except ProviderError as error:
             self._update(study, state='blocked', error=error.code)
-            if provider_id:
+            if provider_id and error.code != 'provider_resume_delivery_unknown':
                 try:
-                    await self.provider.interrupt(provider_id)
+                    await self._interrupt_failed_turn(study, provider_id)
                 except ProviderError:
                     pass
         except Exception as error:
@@ -629,7 +712,9 @@ class Conversations:
             raise ProviderError('interrupt_delivery_unknown', uncertain=True)
         interrupt_id = identity(sent[0].get('id'))
         current, _ = self._load(study)
-        since = current['provider_cursor']
+        # Search from this interrupt, not the earlier unreadable attachment. Stop
+        # must remain possible when prior content exceeds an admission boundary.
+        since = sent[0].get('created_at') or current['provider_cursor']
         for _ in range(60):
             async for event in self.provider.events(provider_id, since):
                 stamp = event.get('created_at') or event.get('processed_at')

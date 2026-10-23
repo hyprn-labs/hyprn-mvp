@@ -10,6 +10,7 @@ export function useCollectionRead<T, C extends string | number>({
   load,
   identity,
   enabled = true,
+  prerequisite,
   onRows,
   onUnavailable,
   onSuccess,
@@ -20,11 +21,14 @@ export function useCollectionRead<T, C extends string | number>({
   load: (cursor: C | undefined, signal: AbortSignal) => Promise<{ rows: T[]; next: C | null }>;
   identity: (row: T) => string;
   enabled?: boolean;
+  prerequisite?: string;
   onRows?: (rows: T[]) => void;
   onUnavailable?: () => void;
   onSuccess?: () => void;
 }) {
-  const key = JSON.stringify([study, scope, api?.actor, enabled]);
+  const initialState: CollectionState =
+    enabled && api ? { status: 'loading' } : { status: 'idle', reason: prerequisite };
+  const key = JSON.stringify([study, scope, api?.actor, enabled, prerequisite]);
   const latest = useRef({ load, identity, onRows, onUnavailable, onSuccess, key, api });
   latest.current = { load, identity, onRows, onUnavailable, onSuccess, key, api };
   const [snapshot, setSnapshot] = useState<{
@@ -32,7 +36,7 @@ export function useCollectionRead<T, C extends string | number>({
     rows: T[];
     cursor: C | null;
     state: CollectionState;
-  }>({ key, rows: [], cursor: null, state: { status: 'loading' } });
+  }>({ key, rows: [], cursor: null, state: initialState });
   const saved = useRef(snapshot);
   const request = useRef<ReturnType<HyprnMvpApi['fence']> | null>(null);
   const epoch = useRef(0);
@@ -149,7 +153,7 @@ export function useCollectionRead<T, C extends string | number>({
     request.current?.abort();
     request.current = null;
     intent.current = undefined;
-    publish({ key, rows: [], cursor: null, state: { status: 'loading' } });
+    publish({ key, rows: [], cursor: null, state: initialState });
     const unsubscribe = api?.onSessionChange((change) => {
       if (change.kind !== 'access-lost' || change.studyId === study) clear();
     });
@@ -169,7 +173,7 @@ export function useCollectionRead<T, C extends string | number>({
           key,
           rows: [] as T[],
           cursor: null,
-          state: { status: 'loading' } as CollectionState,
+          state: initialState,
         };
   const busy =
     value.state.status === 'loading' ||

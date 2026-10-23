@@ -340,3 +340,94 @@ def test_session_accepts_only_the_observed_optional_fetch_null(key_file, extra):
         finally:
             await client.close()
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('kind', [
+    'agent.custom_tool_use', 'user.custom_tool_result', 'agent.message'])
+def test_large_non_attachment_content_is_never_silently_truncated(kind):
+    from hyprn_mvp_app.assistant.claude import retained_event
+    event = dict(id='event_test', type=kind, input={'data': 'x' * 1_100_000})
+    with pytest.raises(ProviderError, match='provider_response_too_large'):
+        retained_event(event)
+
+
+@pytest.mark.parametrize('data', ['not base64!', '\u00e9', True])
+def test_corrupt_attachment_cannot_be_retained_as_success(data):
+    from hyprn_mvp_app.assistant.claude import retained_event
+    event = dict(id='event_test', type='agent.tool_result', content=[dict(
+        type='document', source=dict(type='base64', media_type='application/pdf', data=data))])
+    with pytest.raises(ProviderError, match='invalid_provider_attachment'):
+        retained_event(event)
+
+
+def test_attachment_decoded_total_is_bounded(monkeypatch):
+    import base64
+    from hyprn_mvp_app.assistant import claude
+    monkeypatch.setattr(claude, 'MAX_ATTACHMENT_BYTES', 8)
+    block = dict(type='document', source=dict(type='base64', media_type='application/pdf',
+                                            data=base64.b64encode(b'12345').decode()))
+    with pytest.raises(ProviderError, match='provider_attachment_too_large'):
+        claude.retained_event(dict(id='event_test', type='agent.tool_result',
+                                   content=[block, block]))
+
+
+def test_large_event_pages_shrink_without_skipping_cursor_and_remain_bounded(key_file, monkeypatch):
+    from hyprn_mvp_app.assistant import claude
+    monkeypatch.setattr(claude, 'MAX_RESPONSE', 100)
+    monkeypatch.setattr(claude, 'MAX_ATTACHMENT_RESPONSE', 1000)
+    seen = []
+
+    def handler(request):
+        params = dict(request.url.params)
+        seen.append(params)
+        if params.get('page') == 'page_two':
+            return httpx.Response(200, json={'data': [dict(id='event_next')], 'next_page': None})
+        if int(params['limit']) > 1:
+            return httpx.Response(200, content=b' ' * 1001)
+        return httpx.Response(200, json={'data': [dict(id='event_large', data='x' * 200)],
+                                        'next_page': 'page_two'})
+
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        events = [event async for event in client.events('session_test', 'original_cursor')]
+        assert [event['id'] for event in events] == ['event_large', 'event_next']
+        await client.close()
+    asyncio.run(exercise())
+    assert [int(p['limit']) for p in seen] == [100, 50, 25, 12, 6, 3, 1, 1, 1]
+    assert all(p['created_at[gte]'] == 'original_cursor' for p in seen)
+    assert all('page' not in p for p in seen[:-1])
+
+
+def test_single_oversized_event_has_a_finite_transport_ceiling(key_file, monkeypatch):
+    from hyprn_mvp_app.assistant import claude
+    monkeypatch.setattr(claude, 'MAX_RESPONSE', 100)
+    monkeypatch.setattr(claude, 'MAX_ATTACHMENT_RESPONSE', 1000)
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, content=b'x' * 1001)
+    async def exercise():
+        client = Claude(key_file, transport=httpx.MockTransport(handler))
+        with pytest.raises(ProviderError, match='provider_attachment_too_large'):
+            [event async for event in client.events('session_test')]
+        await client.close()
+    asyncio.run(exercise())
+    assert len(calls) == 8
+
+
+def test_attachment_page_retries_do_not_expand_total_history_admission(key_file):
+    count = 0
+    async def exercise():
+        nonlocal count
+        client = Claude(key_file)
+        async def request(method, path, **kwargs):
+            page = int(kwargs['params'].get('page', '0'))
+            return {'data': [dict(id='event_' + str(i + page * 100)) for i in range(100)],
+                    'next_page': str(page + 1)}
+        client.request = request
+        with pytest.raises(ProviderError, match='provider_history_limit'):
+            async for _ in client.events('session_test'):
+                count += 1
+        await client.close()
+    asyncio.run(exercise())
+    assert count == 10_000

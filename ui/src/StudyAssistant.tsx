@@ -14,32 +14,6 @@ import {
   TextArea,
 } from './design';
 
-const diagnostics: Record<string, string> = {
-  access_lost: 'Study access ended. No further changes will be made.',
-  assistant_disabled: 'Assistant access is turned off.',
-  provider_authentication: 'The server’s Claude credential needs updating.',
-  provider_access: 'Claude access is unavailable for this account.',
-  provider_rate_limit: 'Claude’s rate limit was reached. The request has been preserved.',
-  provider_billing_error:
-    'The provider account needs credits. Add credits to the configured Anthropic account, then send a new message.',
-  assistant_internal_error:
-    'The Assistant was interrupted. Saved work is preserved. Resume to continue.',
-  user_allowance_exhausted:
-    'Your cumulative $20 Assistant allowance has been used. Saved work is preserved.',
-  user_allowance_unknown:
-    'Spending could not be verified. Resume when the connection is available.',
-  provider_budget_reached: 'The Assistant allowance needs review before work can continue.',
-  shared_allowance_exhausted: 'The shared Assistant allowance has been used.',
-  shared_allowance_unknown:
-    'Assistant availability could not be confirmed. Server review is needed.',
-  shared_allowance_busy: 'Another study is still active. Your message is saved.',
-  message_delivery_unknown: 'Message delivery is being reviewed. It has not been sent again.',
-  session_delivery_unknown: 'Session creation needs review. No replacement session was started.',
-  tool_outcome_unknown: 'An operation needs review. It has not been repeated.',
-  provider_unavailable: 'The connection to Claude was interrupted. Your conversation is saved.',
-  turn_time_limit: 'The assistant reached this turn’s time limit.',
-};
-
 export function StudyAssistant({
   api,
   studyId,
@@ -248,6 +222,7 @@ export function StudyAssistant({
 
   async function stop(resume = false) {
     if (!studyId) return;
+    setError('');
     const generation = lifetime.current;
     const fence = api.fence({ studyId });
     try {
@@ -390,12 +365,9 @@ export function StudyAssistant({
           {activity && (
             <AssistantActivity
               state={activity}
-              detail={
-                conversation?.error
-                  ? (diagnostics[conversation.error] ??
-                    'An operation needs review. Your conversation is saved.')
-                  : undefined
-              }
+              error={conversation?.error}
+              canResume={conversation?.can_resume}
+              canStop={conversation?.can_stop}
             />
           )}
           {error && <p role="alert">{error}</p>}

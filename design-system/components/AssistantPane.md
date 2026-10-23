@@ -41,3 +41,14 @@ invalidates the visible study readers once, after message catch-up, instead of
 reloading the workspace on each chat poll. Updates belong to the attached study
 and current authenticated session. Keep human editors and deliberately selected
 saved versions intact; defer reader refresh until edits are saved or cancelled.
+
+
+Blocked activity names the actual cause in plain language. Application transport failures
+use “Application problem”, not “Needs attention”, which incorrectly implies the engineer
+must supply scientific input. Conversation and saved work remain visible. The shared
+AssistantActivity recipe explains the next action from the API capability: show Resume
+only when can_resume is true. Unsupported or invalid documents offer Stop followed by
+a new source request only when can_stop is true; otherwise explain that recovery requires
+the application administrator. Never infer safe retry from an error label or resend a tool operation.
+Large-document interruptions explain that the document response could not be processed,
+without exposing its encoded body in chat. Recovery never implies repeating calculations.

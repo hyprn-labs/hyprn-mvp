@@ -2105,3 +2105,169 @@ test('Assistant completion preserves a deliberately selected saved model version
   expect(state.writes).toEqual([]);
   expect(state.unknown).toEqual([]);
 });
+
+for (const draftOnly of [false, true]) {
+  test(`Configurations await a saved version (${draftOnly ? 'draft' : 'no model'})`, async ({
+    page,
+  }) => {
+    const state = await harness(page);
+    state.versions = [];
+    if (draftOnly) state.model = { ...modelFixture(), model_id: mid, study_id: sid };
+    await login(page, `#v=1&view=calculations&study=${sid}`);
+    await page.getByRole('tab', { name: 'Configurations', exact: true }).click();
+    await expect(
+      page.getByText('Save a model version in Models to create configurations.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText('Loading configuration versions…', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('No configuration versions yet.', { exact: true })).toHaveCount(0);
+    expect(
+      state.reads.filter((url) => new URL(url).pathname.endsWith('/configuration-summaries')),
+    ).toHaveLength(0);
+    expect(
+      state.reads.filter((url) => new URL(url).pathname.endsWith('/reference-marks')),
+    ).toHaveLength(0);
+
+    // A saved version becomes available through the same public catalogue boundary.
+    state.model = { ...modelFixture(), model_id: mid, study_id: sid };
+    state.versions = [version];
+    const pending = latch();
+    let reads = 0;
+    await page.route('**/api/1/studies/*/configuration-summaries?*', async (route) => {
+      reads++;
+      await pending.promise;
+      await route.fulfill({ json: { schema_version: '1', data: [], next_cursor: null } });
+    });
+    await page.reload();
+    await page.getByLabel('Username', { exact: true }).fill('owner');
+    await page.getByLabel('Password', { exact: true }).fill('isolated-test-password');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Configurations', exact: true }))
+      .toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('Loading configuration versions…', { exact: true })).toBeVisible();
+    expect(reads).toBe(1);
+    pending.release();
+    await expect(page.getByText('No configuration versions yet.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Loading configuration versions…', { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText('Save a model version in Models to create configurations.', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    expect(state.writes).toEqual([]);
+    expect(state.unknown).toEqual([]);
+  });
+}
+
+for (const { code, canResume, canStop, cause } of [
+  {
+    code: 'provider_response_too_large',
+    canResume: true,
+    canStop: false,
+    cause: 'A document response was too large',
+  },
+  {
+    code: 'provider_response_too_large',
+    canResume: false,
+    canStop: false,
+    cause: 'A document response was too large',
+  },
+  {
+    code: 'provider_resume_delivery_unknown',
+    canResume: true,
+    canStop: false,
+    cause: 'The previous Resume could not be confirmed.',
+  },
+  {
+    code: 'provider_attachment_too_large',
+    canResume: false,
+    canStop: true,
+    cause: 'A document exceeds the supported attachment size.',
+  },
+  {
+    code: 'invalid_provider_attachment',
+    canResume: false,
+    canStop: true,
+    cause: 'A document attachment could not be read safely.',
+  },
+]) {
+  test(`Assistant ${code} explains recovery from capabilities (resume ${canResume})`, async ({
+    page,
+  }) => {
+    const state = await harness(page);
+    let resumed = false;
+    let resumeRequests = 0;
+    const conversation = () => ({
+      state: resumed ? 'queued' : 'blocked',
+      error: resumed ? null : code,
+      can_send: false,
+      can_stop: canStop || resumed,
+      can_resume: canResume && !resumed,
+      messages: [
+        {
+          message_id: 'retained-request',
+          role: 'user',
+          text: 'Assess the design.',
+          author_display_name: 'Engineer',
+          created_at: 1,
+        },
+      ],
+      has_earlier_messages: false,
+      has_more_messages: false,
+      next_cursor: 'latest',
+      earlier_cursor: null,
+    });
+    await page.route(/\/api\/1\/studies\/[^/]+\/assistant(?:[/?].*)?$/, (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/assistant/resume')) {
+        expect(route.request().method()).toBe('POST');
+        resumeRequests++;
+        if (code === 'provider_resume_delivery_unknown' && resumeRequests === 1)
+          return route.abort('failed');
+        resumed = true;
+      } else if (!path.endsWith('/assistant')) return route.fallback();
+      return route.fulfill({ json: { schema_version: '1', data: conversation() } });
+    });
+    await login(page, `#v=1&view=overview&study=${sid}`);
+    await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+    const label =
+      code === 'provider_response_too_large' ? 'Application problem' : 'Assistant paused';
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByText('Needs attention', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(cause, { exact: false })).toBeVisible();
+    await expect(page.getByText('Assess the design.', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 900 });
+    const problem = page.getByRole('alert').filter({ hasText: label });
+    const bounds = (await problem.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    if (canResume) {
+      await expect(problem).toContainText('Select Resume to continue.');
+      await page.getByRole('button', { name: 'Resume', exact: true }).click();
+      if (code === 'provider_resume_delivery_unknown') {
+        await expect(page.getByText('Could not confirm Resume.', { exact: false })).toBeVisible();
+        await page.getByRole('button', { name: 'Resume', exact: true }).click();
+      }
+      await expect(page.getByText('Could not confirm Resume.', { exact: false })).toHaveCount(0);
+      await expect(page.getByText('Queued', { exact: true })).toBeVisible();
+      await expect(page.getByText('Application problem', { exact: true })).toHaveCount(0);
+      expect(resumeRequests).toBe(code === 'provider_resume_delivery_unknown' ? 2 : 1);
+    } else {
+      await expect(problem).toContainText(
+        canStop
+          ? 'Once stopped, request a smaller or different source.'
+          : 'Contact your application administrator.',
+      );
+      await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(
+        canStop ? 1 : 0,
+      );
+      await expect(page.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+      expect(resumeRequests).toBe(0);
+    }
+    expect(state.writes).toEqual([]);
+    expect(state.assistantSends).toEqual([]);
+    expect(state.unknown).toEqual([]);
+  });
+}

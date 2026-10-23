@@ -43,7 +43,7 @@ The study is an evaluation fixture, never a special branch in product code.
 | F04 coherent real tool guidance | C3 | committed; catalogue integration and native export journey passed |
 | F05 requested deliverables/completion | parent | implemented; 31 checks passed; public answer saved complete with both deliverables fulfilled |
 | F06 idle background backoff | A2 | committed; bounded idle polling verified locally |
-| F07 small operational state/indexed discovery | B1/B2 | committed; cloud measurements recorded; retained-object N+1 reads remain |
+| F07 small operational state/indexed discovery | B1/B2 | delivered; bounded bulk retained-object reads remove N+1 queries; exact bytes verified |
 | F08 incremental chat/provider reads | C1 + parent UI | backend committed; UI build/design and 30 navigation/race checks passed |
 | F09 phase timings/original timeout cause | B3 + platform | committed; live worker/batch/read timings recorded in readback checkpoint |
 | F10 native polling/bounded batches | native/A3 | committed; preserves faster 0.1s default; not a measured speedup |
@@ -54,7 +54,7 @@ The study is an evaluation fixture, never a special branch in product code.
 | F15 bounded reviewers/context/effort evaluation | C2 + parent | reviewer enforcement committed; live medium/high evaluation pending |
 | F16 fair concurrent studies/cancellation/budget | A3/C1 + parent | 82 calculations checks passed; successor billing passes PostgreSQL/bridge checks; live acceptance pending |
 | F17 retention/observability/host verification cost | platform | activation verification and journal bounds committed; release/work deletion lacks safe lifecycle proof |
-| F18 measured performance and sizing decision | parent acceptance | live profiling complete; duplicate retained reads identified; optimization still pending; no RAM resize justified |
+| F18 measured performance and sizing decision | parent acceptance | delivered; identical-run median 5.77s to 0.19s; first read 0.75s; no RAM resize |
 
 Parent owns public schemas/generator/types/routes/UI; B owns migration 0010,
 parent reserves 0011+. Existing unrelated planning/design edits remain untouched.
@@ -102,27 +102,23 @@ identities. Automated evidence is not human acceptance.
 
 ## Current delivered state — 2026-10-23
 
-Sequence 20, release `d626e342`, source `3f12d9d4`, published candidate `41c39ab4`
-on origin/staging. Shared provider optional-null normalization repaired the real
-session startup refusal without widening accepted tools. 194 bridge and 27
-provisioning checks passed; installed artifacts, containment/startup and all 19
-network probes passed. Ongoing named-user access promotion completed with the
-unchanged platform, credentials and budget. Exact identities and prior failed
-receipts are preserved in `06-SESSION-READBACK-CHECKPOINT.md` and its private packet.
+Sequence 21, release `1339acb0`, published candidate `ea1497cd` on origin/staging.
+Host-only bounded bulk retained reads, route/settled-answer refresh and generic
+point naming/sample-role/authoring diagnostics are delivered. See
+`07-PARENT-CHECKPOINT.md` for identities, failures, commands and public evidence.
+1,189 focused tests, fresh build, containment/startup and 19 network probes passed.
 
-The real public Assistant completed a fresh coolant study in approximately 34m30s:
-2 scenario runs, 48 joint samples, a checked Kriging surrogate and a complete saved
-answer. One held-out point selected the method; 15 independently validated it.
-Largest error 0.005263 K, RMSE 0.002563 K, unchanged tolerance 0.1 K plus 1% of
-calculated magnitude. Three joint sliders, exact point loading and independent plot
-axis selection passed in signed-in Chrome. Run count remained 50 after all actions.
-No direct scientific-record repair or relaxed checks.
+Same retained record: median 5.769841 → 0.192387 seconds; first read 0.751977s.
+All record bytes/hash checks remain and returned hash is identical. Public sliders
+still show actual calculated or checked-surrogate estimates for joint changes;
+all 50 runs remain unchanged. Assistant published a wording-only answer version
+through normal tools; the collapsed-panel reader refreshed automatically. No
+migration/reset, direct scientific-data repair or relaxed accuracy gate.
 
-Performance is not at laptop parity. Native retained reads repeat bundle traversal
-and perform per-object repository queries; these dominate ordinary 4.7–5.1s read
-latency and contribute to roughly 57s per two-point batch cycle despite 2.7–3.9s
-workers. RAM was not pressured. Parent owns the invariant-preserving bulk-read
-optimization and new public refresh/route/authoring issues listed in the checkpoint.
+The preceding fresh coolant study took approximately 34m30s with 2 scenario runs,
+48 joint samples and a checked Kriging surrogate: 32 training, 1 method-selection,
+15 independent-validation points. Largest error 0.005263 K, RMSE 0.002563 K,
+tolerance 0.1 K plus 1% unchanged. End-to-end fresh study time has not been remeasured.
 F11 live research, F15 effort/reviewer comparison, F16 broader concurrency/recovery,
 F17 safe retention, automatic deployment, full qualification and second-user/human
-acceptance are still open. This working journey does not silently close them.
+acceptance remain open. Backup per-object verification still adds deployment time.
