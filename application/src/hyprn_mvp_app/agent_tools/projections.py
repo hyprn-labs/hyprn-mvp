@@ -75,12 +75,14 @@ _ERRORS = {
     'backend_unavailable': (
         'unavailable',
         True,
-        'Modeling or execution is unavailable; reads of saved records still work.',
+        'The service is temporarily unavailable. Retry the read after service recovery; '
+        'never resubmit an uncertain calculation.',
     ),
     'isolation_unverified': (
         'unavailable',
         True,
-        'Modeling or execution is unavailable; reads of saved records still work.',
+        'The service is temporarily unavailable. Retry the read after service recovery; '
+        'never resubmit an uncertain calculation.',
     ),
     'unauthenticated': ('session_expired', False, 'The agent session has expired.'),
     'forbidden': ('access_lost', False, 'Access to this study has ended.'),

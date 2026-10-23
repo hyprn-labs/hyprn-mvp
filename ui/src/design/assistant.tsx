@@ -86,7 +86,7 @@ function assistantProblem(error: string, canResume: boolean, canStop: boolean) {
     provider_resume_delivery_unknown: 'The previous Resume could not be confirmed.',
     provider_attachment_too_large: 'A document exceeds the supported attachment size.',
     invalid_provider_attachment: 'A document attachment could not be read safely.',
-    user_allowance_exhausted: 'Your cumulative $20 Assistant allowance has been used.',
+    user_allowance_exhausted: 'Your cumulative Assistant allowance has been used.',
     user_allowance_unknown: 'Spending could not be verified.',
     provider_budget_reached: 'The Assistant allowance needs review before work can continue.',
     shared_allowance_exhausted: 'The shared Assistant allowance has been used.',
@@ -127,7 +127,7 @@ export function AssistantActivity({
   analysisHref,
   activity,
 }: {
-  state: 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked';
+  state: 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked' | 'unconfirmed';
   detail?: string;
   error?: string | null;
   canResume?: boolean;
@@ -160,6 +160,8 @@ export function AssistantActivity({
     waiting: ['Waiting for calculations', 'Submitted calculations are still running.'],
     stopping: ['Stopping', 'Waiting for the Assistant to confirm the stop.'],
     blocked: ['Assistant paused', 'Your conversation is saved.'],
+    unconfirmed: ['Connection interrupted',
+      'Current progress could not be confirmed. Reconnecting automatically; your draft is kept.'],
   } as const;
   const [stageLabel, explanation] = stages[state];
   const problem =
@@ -174,7 +176,7 @@ export function AssistantActivity({
     >
       <div className="hf-assistant-activity__status"
         role={state === 'blocked' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">
-      <StatusTag tone={state === 'blocked' ? 'warning' : 'inert'}>{label}</StatusTag>
+      <StatusTag tone={state === 'blocked' || state === 'unconfirmed' ? 'warning' : 'inert'}>{label}</StatusTag>
       {waiting ? (
         <>
           <strong className="hf-assistant-activity__count">
@@ -215,7 +217,8 @@ export function AssistantActivity({
                   <div className="hf-assistant-steps__heading">
                     <strong>{step.label}</strong>
                     <StatusTag tone={step.state === 'failed' || step.state === 'uncertain'
-                      ? 'warning' : 'inert'}>{labels[step.state]}</StatusTag>
+                      ? 'warning' : 'inert'}>{state === 'unconfirmed' && ['running', 'waiting'].includes(step.state)
+                      ? 'Last observed' : labels[step.state]}</StatusTag>
                   </div>
                   <div className="hf-assistant-steps__meta">
                     {step.actor === 'reviewer' && <span>Reviewer</span>}

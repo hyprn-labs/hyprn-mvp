@@ -53,3 +53,11 @@ labelled, spaced form. Cancel and its primary action remain together at bottom r
 The study heading, Home form and message log have shared section gaps. Spending and
 provider caps are administrative concerns, not panel content. Show an actionable diagnostic
 if the cumulative user allowance is unavailable. Never substitute an uncertain usage value with zero.
+
+A failed conversation refresh is a connection state, not a new Assistant lifecycle
+state. Replace stale activity with **Connection interrupted**, retain the draft
+and history, mark unfinished tool steps **Last observed**, and disable mutations
+until a successful refresh. Reconnect automatically through the existing bounded
+polling loop; never send, resume or replay a message as part of reconnection.
+Allowance diagnostics do not embed a fixed dollar amount: limits are user-scoped
+server settings and spending stays cumulative across every study.

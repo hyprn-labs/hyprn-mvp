@@ -160,7 +160,7 @@ async def select(owner, current, turn, settings):
         if usage['status'] not in ('idle', 'terminated'):
             raise ProviderError('provider_session_busy')
         actor = allowance.owner(owner.store, row['study_id'])
-        await allowance.check(owner.store, owner.provider, actor)
+        await allowance.check(owner.store, owner.provider, actor, settings)
         with owner.store.connection(write=True) as db:
             row = successor(db, current, turn, row, desired)
         row = await _resolve(owner, row, settings)

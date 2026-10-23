@@ -113,7 +113,7 @@ policy. The private binding object contains identifiers, never credential materi
 Supply the runtime `KEY_FILE` separately through the approved secret-file delivery.
 
 Setup does not create a session, submit a message, provision a new allowance or change
-spending. Each user has one cumulative USD 20 allowance across their study
+spending. Each user has one cumulative allowance (USD 20 by default) across their study
 conversations and subagents, without automatic resets. The first human who starts
 a conversation is its billing owner; archiving or membership changes do not transfer
 or erase its cost. Admission and active turns read provider list cost for all of that
@@ -170,7 +170,7 @@ version rules.
 
 User allowance admission is described below. Stop, Trash and restart never erase
 incurred usage or bypass uncertain session creation. HYPRN stops work when observed
-user cost reaches USD 20; in-flight requests can exceed that threshold. A confirmed billing
+user cost reaches their configured allowance; in-flight requests can exceed that threshold. A confirmed billing
 failure is shown as a provider-credit problem and permits a new explicit human request
 after funding; the failed request is never replayed automatically.
 
@@ -223,7 +223,7 @@ Provider semantics verified against the official [multiagent guide](https://plat
 ## Cumulative user allowance
 
 The application checks actual provider cost across all conversations owned by the
-user, including child agents and previous studies. The fixed limit is USD 20, with
+user, including child agents and previous studies. The fixed default limit is USD 20, with
 no reset and no per-session cap or renewal. See the ownership and overshoot rules
 above. One user's cost never reduces another user's allowance. Concurrent studies
 are admitted independently against current aggregate cost; they share the same
@@ -233,3 +233,9 @@ The authenticated budget read reports only the requesting user's cumulative tota
 remaining amount and check time. Unknown usage is null, never a cached successful
 zero. Existing legacy configuration remains for deployment continuity, not as a
 second runtime limit. The app keeps spending out of the study conversation.
+
+Operators may set `HYPRN_MVP_ASSISTANT_USER_LIMITS_CENTS` to a JSON object mapping
+account actor IDs to positive integer USD-cent ceilings. The cloud runtime exposes
+these as `assistant.user_limits` records (`actor_id`, `limit_cents`). This changes
+only those users' cumulative ceilings, not recorded spending, sessions or reset
+policy. Absent users retain the default. Invalid settings refuse enablement.

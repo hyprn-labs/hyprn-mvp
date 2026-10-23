@@ -560,8 +560,12 @@ def _frozen_configuration(db, sid, revision):
     ).fetchone()
     if row is None:
         return None
+    return _validate_configuration_record(row['payload'], sid, revision)
+
+
+def _validate_configuration_record(payload, sid, revision):
     try:
-        frozen = json.loads(row['payload'])
+        frozen = json.loads(payload)
         validate_frozen_configuration(frozen)
         configuration = frozen['configuration']
         if (
@@ -572,6 +576,32 @@ def _frozen_configuration(db, sid, revision):
         return frozen
     except (ValueError, TypeError, KeyError, DomainError) as exc:
         raise DomainError('corrupt_retained_record', 409) from exc
+
+
+def _member_payloads(db, sid, content):
+    revisions = set(content['configuration_revision_ids'])
+    if content['design']['kind'] == 'sampled':
+        revisions.update(g['reference_configuration_revision_id']
+                         for g in content['design']['groups'])
+    found = {}
+    ordered = sorted(revisions)
+    # Bound parameter counts on both supported stores.
+    for start in range(0, len(ordered), 200):
+        chunk = ordered[start:start + 200]
+        rows = db.execute(
+            'SELECT configuration_revision_id,payload FROM configurations WHERE study_id=? '
+            'AND configuration_revision_id IN (' + ','.join('?' for _ in chunk) + ')',
+            (sid, *chunk),
+        ).fetchall()
+        found.update((r['configuration_revision_id'], r['payload']) for r in rows)
+    return found
+
+
+def _prepared_members(db, sid, content):
+    payloads = _member_payloads(db, sid, content)
+    frozen = {revision: _validate_configuration_record(payload, sid, revision)
+              for revision, payload in payloads.items()}
+    return payloads, frozen
 
 
 def independent_dimensions(dimensions):
@@ -763,10 +793,19 @@ class Analyses:
             'brief_version_id',
         )
 
-    def _check_content(self, db, actor, sid, content):
-        """Members, model version, brief version and bindings, read in the write
-        transaction; every problem is reported, nothing is repaired or converted."""
+    def _check_content(self, db, actor, sid, content, prepared=None):
+        """Check exact members and live authority under the writer lock. Public
+        saves prevalidate immutable records outside it; generated saves validate
+        their just-written members here. No scientific check is skipped."""
         problems = []
+        if prepared is None:
+            _, frozen_members = _prepared_members(db, sid, content)
+        else:
+            payloads, frozen_members = prepared
+            # Saved records are immutable. Recheck exact bytes under the writer
+            # lock; permission, model association and version CAS remain live.
+            if _member_payloads(db, sid, content) != payloads:
+                raise DomainError('corrupt_retained_record', 409)
         try:
             self.store.model_association(db, actor, sid, content['model_id'], write=True)
         except DomainError as error:
@@ -779,7 +818,7 @@ class Analyses:
             ) from None
         model = None
         for index, revision in enumerate(content['configuration_revision_ids']):
-            frozen = _frozen_configuration(db, sid, revision)
+            frozen = frozen_members.get(revision)
             if frozen is None:
                 problems.append(
                     issue(
@@ -802,7 +841,7 @@ class Analyses:
             elif model is None:
                 model = frozen['model_snapshot']
         if content['design']['kind'] == 'sampled':
-            problems += self._sampled_problems(db, sid, content)
+            problems += self._sampled_problems(content, frozen_members)
         plan = content.get('estimate_plan')
         if plan is not None:
             if content['design']['kind'] != 'sampled':
@@ -879,7 +918,7 @@ class Analyses:
         if problems:
             raise DomainError('invalid_request', 422, fields=problems[:20])
 
-    def _sampled_problems(self, db, sid, content):
+    def _sampled_problems(self, content, frozen_members):
         """A sampled design names its members exactly, point by point, and every reference
         configuration is a saved version of the calculation's model version."""
         design, problems = content['design'], []
@@ -893,9 +932,7 @@ class Analyses:
                 )
             )
         for index, group in enumerate(design['groups']):
-            frozen = _frozen_configuration(
-                db, sid, group['reference_configuration_revision_id']
-            )
+            frozen = frozen_members.get(group['reference_configuration_revision_id'])
             if (
                 frozen is None
                 or frozen['configuration']['model_revision_id']
@@ -971,10 +1008,13 @@ class Analyses:
         with self.store.connection() as db:
             self.store.authorize(db, actor, sid, write=True)
         validate_calculation('CalculationCreate4', body)
+        with self.store.connection() as db:
+            self.store.authorize(db, actor, sid, write=True)
+            prepared = _prepared_members(db, sid, body['content'])
 
         def operation(db):
             self._public_design(body['content'], None)
-            self._check_content(db, actor, sid, body['content'])
+            self._check_content(db, actor, sid, body['content'], prepared)
             cid = uid()
             db.execute('INSERT INTO calculations VALUES(?,?)', (cid, sid))
             return self._insert(db, actor, sid, cid, body['content'], None)
@@ -995,6 +1035,9 @@ class Analyses:
             self.store.authorize(db, actor, sid, write=True)
             self._family(db, sid, cid)
         validate_calculation('CalculationVersionSave4', body)
+        with self.store.connection() as db:
+            self.store.authorize(db, actor, sid, write=True)
+            prepared = _prepared_members(db, sid, body['content'])
 
         def operation(db):
             latest = self._latest(db, sid, cid)
@@ -1006,7 +1049,7 @@ class Analyses:
                     fields=[issue(['content', 'model_id'], 'A calculation keeps its model.')],
                 )
             self._public_design(body['content'], latest)
-            self._check_content(db, actor, sid, body['content'])
+            self._check_content(db, actor, sid, body['content'], prepared)
             return self._insert(db, actor, sid, cid, body['content'], latest)
 
         return self.store.command(

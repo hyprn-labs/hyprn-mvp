@@ -148,6 +148,8 @@ class Connection:
             cursor = self.raw.cursor()
             cursor.execute(statement, parameters)
             return Rows(cursor)
+        except OSError as error:
+            raise DatabaseUnavailable('Database transport unavailable; reconcile outcome') from error
         except pg8000.dbapi.IntegrityError as error:
             raise DatabaseConflict('Database integrity constraint refused') from error
         except pg8000.dbapi.InterfaceError as error:
@@ -214,7 +216,10 @@ class _ConnectionPool:
                         pass
                     raw = None
             if raw is None:
-                raw = self.credentials.connect()
+                try:
+                    raw = self.credentials.connect()
+                except OSError as error:
+                    raise DatabaseUnavailable('Database connection unavailable') from error
             yield raw
             try:
                 raw.rollback()
@@ -341,6 +346,9 @@ class PostgreSQL:
                     # The single writer serializes short write transactions. Domain
                     # CAS and receipts observe the prior accepted commit; no native
                     # or provider call holds this transaction lock.
+                    # Cancel contention server-side before the 15-second socket
+                    # deadline, preserving an unambiguous transaction rollback.
+                    db.execute("SET LOCAL lock_timeout = '5s'")
                     db.execute('SELECT pg_advisory_xact_lock(68272601)')
             yield db
             raw.commit()
@@ -351,6 +359,9 @@ class PostgreSQL:
                 # Preserve the statement/commit failure. A lost transport during
                 # cleanup cannot establish whether a commit was acknowledged.
                 primary.add_note('Transaction rollback also failed: ' + type(cleanup).__name__)
+            if isinstance(primary, OSError):
+                raise DatabaseUnavailable(
+                    'Database transport unavailable; reconcile outcome') from primary
             raise
 
     @contextmanager

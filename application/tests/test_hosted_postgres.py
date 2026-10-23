@@ -489,3 +489,24 @@ def test_explicit_staging_reset_is_atomic_and_preserves_roles(monkeypatch):
             assert tuple(cur.fetchone()) == (0,)
         finally:
             raw.close()
+
+
+def test_contended_writer_times_out_before_transport_and_can_reconcile(hosted):
+    from hyprn_mvp_app.database import DatabaseUnavailable
+    fixture, store, accounts = hosted
+    raw = fixture['admin'].connect()
+    try:
+        Connection(raw).execute('SELECT pg_advisory_xact_lock(68272601)')
+        started = time.monotonic()
+        with actor_scope(accounts[0]['actor']):
+            with pytest.raises(DatabaseUnavailable) as caught:
+                with store.connection(write=True):
+                    pytest.fail('A contended transaction must not enter its write body')
+        assert time.monotonic() - started < 10
+        assert caught.value.__cause__.args[0]['C'] == '55P03'
+    finally:
+        raw.rollback()
+        raw.close()
+    with actor_scope(accounts[0]['actor']):
+        with store.connection(write=True) as db:
+            assert db.execute('SELECT 1 AS ready').fetchone()['ready'] == 1

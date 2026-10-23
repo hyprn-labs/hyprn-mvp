@@ -556,7 +556,7 @@ class Conversations:
                 return None
             self.authorize_turn(turn)
             actor = allowance.owner(self.store, study)
-            await allowance.check(self.store, self.provider, actor)
+            await allowance.check(self.store, self.provider, actor, self.settings)
             _, latest = self._load(study)
             if not latest or latest['stopped']:
                 return None
@@ -584,7 +584,7 @@ class Conversations:
 
     async def _check_spending(self, study):
         actor = allowance.owner(self.store, study)
-        await allowance.check(self.store, self.provider, actor)
+        await allowance.check(self.store, self.provider, actor, self.settings)
 
     async def _funded_pump(self, study):
         provider_id = None

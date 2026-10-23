@@ -551,10 +551,11 @@ def test_rollback_failure_preserves_primary_transaction_failure(monkeypatch):
 
     monkeypatch.setattr(module, 'Connection', Connection)
     primary = TimeoutError('statement exceeded its deadline')
-    with pytest.raises(TimeoutError) as failure:
+    with pytest.raises(module.DatabaseUnavailable) as failure:
         with PostgreSQL._transaction(None, Raw(), write=False):
             raise primary
-    assert failure.value is primary
+    assert failure.value.__cause__ is primary
+    assert primary.__notes__ == ['Transaction rollback also failed: ConnectionError']
 
 
 def test_actual_attestation_does_not_certify_an_expired_executor_stage(api, monkeypatch):
@@ -630,3 +631,30 @@ def test_contention_unavailability_is_not_overwritten_by_inflight_attestation(ap
     assert not thread.is_alive()
     assert not owner.ready()
     assert api[1].execution_observation()['reason'] == 'executor_unavailable'
+
+@pytest.mark.parametrize('failure', [TimeoutError('read timed out'), OSError('connection lost')])
+def test_transport_loss_reaches_dispatcher_reconciliation_not_process_exit(failure):
+    from hyprn_mvp_app.database import Connection, DatabaseUnavailable
+    from hyprn_mvp_app.readiness import transient_lock_error
+    class Raw:
+        def cursor(self):
+            return self
+        def execute(self, statement, parameters):
+            raise failure
+    with pytest.raises(DatabaseUnavailable) as caught:
+        Connection(Raw()).execute('SELECT pg_advisory_xact_lock(68272601)')
+    assert transient_lock_error(caught.value)
+
+
+def test_concurrent_bridge_contention_waits_on_owner_stop_not_response_stdin(monkeypatch):
+    from hyprn_mvp_app import dispatcher
+    from hyprn_mvp_app.database import DatabaseUnavailable
+    class Stop:
+        def wait(self, seconds):
+            assert seconds == dispatcher.LOCK_BACKOFF_INITIAL
+            return False
+    def forbidden(*args):
+        pytest.fail('The response reader owns stdin while the bridge is concurrent')
+    monkeypatch.setattr(dispatcher.select, 'select', forbidden)
+    assert not dispatcher.wait_out_lock(DatabaseUnavailable('busy'), 1,
+                                        bounded=False, stop_event=Stop())

@@ -2431,3 +2431,30 @@ test('Assistant activity details disclose safe steps without replacing the live 
   expect(state.assistantSends).toEqual([]);
   expect(state.unknown).toEqual([]);
 });
+
+test('Lost Assistant refresh shows unconfirmed progress and recovers without sending', async ({ page }) => {
+  const state = await harness(page);
+  state.assistantStage = 'running';
+  state.assistantFailure = 'none';
+  let unavailable = false;
+  await page.route('**/api/1/studies/*/assistant*', route => {
+    if (route.request().method() !== 'GET' || !unavailable) return route.fallback();
+    return route.fulfill({ status: 503, json: { error: {
+      code: 'backend_unavailable', message: 'backend unavailable', fields: [],
+    } } });
+  });
+  await login(page);
+  await openStudy(page);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+  await expect(panel.getByText('Working', { exact: true })).toBeVisible();
+  await panel.getByRole('textbox', { name: 'Message assistant' }).fill('Keep my draft');
+  unavailable = true;
+  await expect(panel.getByText('Connection interrupted', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Working', { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Stop', exact: true })).toBeDisabled();
+  unavailable = false;
+  await expect(panel.getByText('Working', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(panel.getByRole('textbox', { name: 'Message assistant' })).toHaveValue('Keep my draft');
+  expect(state.assistantSends).toEqual([]);
+});

@@ -16,8 +16,9 @@ class Budget:
                 checked = time.time()
             except ProviderError:
                 pass
+        ceiling = allowance.limit(actor, settings)
         return dict(configured=bool(settings), currency='USD',
-                    limit_cents=allowance.USER_LIMIT_CENTS, spent_cents=spent,
-                    remaining_cents=max(0, allowance.USER_LIMIT_CENTS-spent)
+                    limit_cents=ceiling, spent_cents=spent,
+                    remaining_cents=max(0, ceiling-spent)
                     if spent is not None else None, checked_at=checked,
                     scope='user', period='cumulative', resets_at=None)

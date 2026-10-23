@@ -85,7 +85,7 @@ def lock_backoff(attempt):
     )
 
 
-def wait_out_lock(error, attempt, *, bounded):
+def wait_out_lock(error, attempt, *, bounded, stop_event=None):
     """Re-raise anything but transient lock contention (and bounded modes past their attempts);
     otherwise log and wait. True means the owned host closed stdin during the wait."""
     if not transient_lock_error(error) or (bounded and attempt >= ONE_SHOT_LOCK_ATTEMPTS):
@@ -97,6 +97,8 @@ def wait_out_lock(error, attempt, *, bounded):
         file=sys.stderr,
         flush=True,
     )
+    if stop_event is not None:
+        return stop_event.wait(delay)
     return bool(select.select([sys.stdin], [], [], delay)[0])
 
 
@@ -639,15 +641,22 @@ def main():
             except (sqlite3.OperationalError, DatabaseUnavailable) as error:
                 contended += 1
                 if transient_lock_error(error) and contended >= STALL_ITERATIONS:
-                    observation.stall(contended, error)
+                    try:
+                        observation.stall(contended, error)
+                    except DatabaseUnavailable:
+                        pass  # Existing observations expire; never fabricate readiness.
                     stalled = True
-                if wait_out_lock(error, contended, bounded=bounded):
+                if wait_out_lock(error, contended, bounded=bounded,
+                                 stop_event=native.stopped if native.concurrent else None):
                     return
                 continue
             contended = 0
             if stalled:
-                observation.recovered()
-                stalled = False
+                try:
+                    observation.recovered()
+                    stalled = False
+                except DatabaseUnavailable:
+                    pass
             if args.once or args.run_id:
                 return
             # Detect the owned host exiting even while idle; do not leave app orphans.

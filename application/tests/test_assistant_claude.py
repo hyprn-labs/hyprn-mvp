@@ -431,3 +431,16 @@ def test_attachment_page_retries_do_not_expand_total_history_admission(key_file)
         await client.close()
     asyncio.run(exercise())
     assert count == 10_000
+
+
+@pytest.mark.parametrize('overrides', ['[]', '{"not-an-actor": 4900}',
+    '{"11111111-1111-4111-8111-111111111111": true}',
+    '{"11111111-1111-4111-8111-111111111111": -1}'])
+def test_invalid_user_allowance_configuration_is_not_silently_defaulted(key_file, overrides):
+    env = {'HYPRN_MVP_ASSISTANT_' + key: value for key, value in {
+        'KEY_FILE': str(key_file), 'AGENT_ID': 'agent_test', 'AGENT_VERSION': '1',
+        'ENVIRONMENT_ID': 'env_test', 'TOTAL_CENTS': '10000',
+        'DEFINITIONS_SHA256': 'a' * 64, 'USER_LIMITS_CENTS': overrides,
+    }.items()}
+    with pytest.raises(ProviderError, match='configuration_invalid'):
+        Settings.from_environment(env)

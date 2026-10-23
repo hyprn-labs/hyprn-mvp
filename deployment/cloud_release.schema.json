@@ -1,10 +1,10 @@
 {
   "schema": "hyprn-platform-consumer/v1",
   "repository": "hyprn-platform",
-  "commit": "6b03d8bb090635f68b77d1d7fb2330c4b092eef7",
+  "commit": "2776a09ac4171e48407a8a4202be4f9939eaa7b3",
   "files": {
-    "contracts/v1/deployment.schema.json": "6bd56662fe8d534e8ae890fea49b3e7872eda0ef09265683ee1082c4effcc684",
-    "contracts/v1/fixtures.json": "c90c1237082fefcbeccc29ccbc9b28a2f6d652b8be18d92419b73148007b4429",
-    "host/contract.py": "214d371ed12a119e436e8a5602ecf52916b1a44888ad6014aaaf7ab8d84252f2"
+    "contracts/v1/deployment.schema.json": "a11ce991311d35376991684c24d86368f0d4ac54dbbd1333549a96b358e1fb8c",
+    "contracts/v1/fixtures.json": "d1a8315725122556573084a53aee888364c25cbe5d4f5c16a0865c1906c6a3d5",
+    "host/contract.py": "50a9edf35412c411e49d04cd0d2e82409bb4dac263356cd1581eda51f80f6d32"
   }
 }

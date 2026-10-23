@@ -1591,3 +1591,26 @@ def test_activity_never_treats_an_unconfirmed_tool_result_as_success(system):
     activity = owner.read(actor, sid)['activity']
     assert [s['state'] for s in activity['steps']] == ['completed', 'returned', 'uncertain']
     assert activity['steps'][-1]['finished_at'] is None
+
+
+def test_user_specific_limit_preserves_spending_and_other_users_default(system):
+    from dataclasses import replace
+    from hyprn_mvp_app.assistant import allowance
+    app, owner, provider, store, actor, sid = system
+    owner.settings = replace(owner.settings, user_limits_cents={actor: 4900})
+    async def exercise():
+        owner.send(actor, sid, uid(), 'Read.')
+        await drained(owner)
+        provider.cost = 2003
+        client = await client_for(app)
+        budget = (await client.get('/api/1/assistant/budget')).json()['data']
+        assert budget['limit_cents'] == 4900
+        assert budget['spent_cents'] == 2003 and budget['remaining_cents'] == 2897
+        assert allowance.limit(uid(), owner.settings) == 2000
+        assert (await allowance.check(store, provider, actor, owner.settings))[0] == 2003
+        provider.cost = 4900
+        with pytest.raises(ProviderError, match='user_allowance_exhausted'):
+            await allowance.check(store, provider, actor, owner.settings)
+        await client.aclose()
+        await owner.close()
+    asyncio.run(exercise())

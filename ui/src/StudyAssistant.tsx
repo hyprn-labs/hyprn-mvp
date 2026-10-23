@@ -43,6 +43,7 @@ export function StudyAssistant({
   const choosingStudy = home && homeMode !== 'chat';
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  const [refreshUnavailable, setRefreshUnavailable] = useState(false);
   const [sending, setSending] = useState(false);
   const pending = useRef<{ command_id: string; text: string } | null>(null);
   const lifetime = useRef(0);
@@ -61,6 +62,7 @@ export function StudyAssistant({
 
   function accept(value: AssistantConversationRead6, earlier = false) {
     if (!earlier) {
+      setRefreshUnavailable(false);
       const previous = observed.current;
       const settled = ['idle', 'blocked', 'unavailable'].includes(value.state);
       if (settled && (
@@ -103,6 +105,7 @@ export function StudyAssistant({
     observed.current = null;
     invalidated.current = false;
     setConversation(null);
+    setRefreshUnavailable(false);
     setDraft('');
     setError('');
     pending.current = null;
@@ -151,11 +154,8 @@ export function StudyAssistant({
         if (commands.current === commandGeneration || failure === 'access-lost') {
           if (failure === 'access-lost') setConversation(null);
           delay = Math.min(30000, Math.max(3000, delay * 2));
-          setError(
-            failure === 'access-lost'
-              ? 'Study access is no longer available.'
-              : 'Could not refresh the conversation.',
-          );
+          if (failure === 'access-lost') setError('Study access is no longer available.');
+          else setRefreshUnavailable(true);
         }
       } finally {
         polling = false;
@@ -183,6 +183,7 @@ export function StudyAssistant({
   }, [api, studyId]);
 
   async function send() {
+    if (refreshUnavailable) return;
     if (!studyId || sending || !draft.trim() || (!pending.current && !conversation?.can_send))
       return;
     const generation = lifetime.current;
@@ -302,7 +303,7 @@ export function StudyAssistant({
               rows={3}
               value={draft}
               maxLength={16384}
-              disabled={unavailable || sending || !!pending.current}
+              disabled={unavailable || refreshUnavailable || sending || !!pending.current}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (
@@ -318,19 +319,19 @@ export function StudyAssistant({
             />
             <ActionGroup align="end">
               {conversation?.can_stop && (
-                <Button variant="secondary" onClick={() => void stop()}>
+                <Button variant="secondary" disabled={refreshUnavailable} onClick={() => void stop()}>
                   Stop
                 </Button>
               )}
               {conversation?.can_resume ? (
-                <Button variant="primary" onClick={() => void stop(true)}>
+                <Button variant="primary" disabled={refreshUnavailable} onClick={() => void stop(true)}>
                   Resume
                 </Button>
               ) : (
                 <Button
                   variant="primary"
                   disabled={
-                    unavailable ||
+                    unavailable || refreshUnavailable ||
                     sending ||
                     (!pending.current && !conversation?.can_send) ||
                     !draft.trim()
@@ -363,9 +364,9 @@ export function StudyAssistant({
               authorDisplayName={message.author_display_name}
             />
           ))}
-          {activity && (
+          {(activity || refreshUnavailable) && (
             <AssistantActivity
-              state={activity}
+              state={refreshUnavailable ? 'unconfirmed' : activity!}
               error={conversation?.error}
               canResume={conversation?.can_resume}
               canStop={conversation?.can_stop}

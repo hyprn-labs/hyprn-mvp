@@ -1021,3 +1021,50 @@ def test_explicit_resume_reconciles_native_absence_once_without_rebuilding(calc,
     assert len(calls) == 1
     replay = calc['client'].post(path + '/resume', json=command)
     assert replay.json()['data'] == accepted.json()['data']
+
+
+def test_member_validation_does_not_hold_the_shared_writer_lock(calc, monkeypatch):
+    from contextlib import contextmanager
+    from hyprn_mvp_app import calculations
+    original_connection = calc['store'].connection
+    original_validate = calculations.validate_frozen_configuration
+    writing, observed = [], []
+    @contextmanager
+    def connection(write=False):
+        with original_connection(write=write) as db:
+            if write:
+                writing.append(True)
+            try:
+                yield db
+            finally:
+                if write:
+                    writing.pop()
+    def validate(value):
+        observed.append(bool(writing))
+        return original_validate(value)
+    monkeypatch.setattr(calc['store'], 'connection', connection)
+    monkeypatch.setattr(calculations, 'validate_frozen_configuration', validate)
+    created = create(calc, body(calc))
+    assert created.status_code == 201, created.text
+    first = created.json()['data']
+    saved = save_version(calc, first['calculation_id'], first['calculation_version_id'], body(calc))
+    assert saved.status_code == 201, saved.text
+    assert observed and not any(observed)
+
+
+def test_changed_member_bytes_between_validation_and_commit_refuse_analysis(calc, monkeypatch):
+    original_command = calc['store'].command
+    revision = calc['config']['configuration_revision_id']
+    def changed(*args, **kwargs):
+        with calc['store'].connection(write=True) as db:
+            # Deliberate corruption is confined to this disposable fixture.
+            db.execute('DROP TRIGGER immutable_configuration_update')
+            db.execute('UPDATE configurations SET payload=? WHERE configuration_revision_id=?',
+                       ('{}', revision))
+        return original_command(*args, **kwargs)
+    monkeypatch.setattr(calc['store'], 'command', changed)
+    reply = create(calc, body(calc))
+    assert reply.status_code == 409
+    assert reply.json()['error']['code'] == 'corrupt_retained_record'
+    with calc['store'].connection() as db:
+        assert db.execute('SELECT count(*) FROM calculations').fetchone()[0] == 0

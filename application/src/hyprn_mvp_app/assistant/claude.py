@@ -110,6 +110,7 @@ class Settings:
     approved_minor: int | None = None
     approved_currency: str | None = None
     conversion_date: str | None = None
+    user_limits_cents: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def from_environment(cls, environ):
@@ -131,7 +132,14 @@ class Settings:
                 if prefix + 'APPROVED_MINOR' in environ else None,
                 environ.get(prefix + 'APPROVED_CURRENCY'),
                 environ.get(prefix + 'CONVERSION_DATE'),
+                json.loads(environ.get(prefix + 'USER_LIMITS_CENTS', '{}')),
             )
+            if (not isinstance(value.user_limits_cents, dict)
+                or len(value.user_limits_cents) > 1000
+                or any(not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', actor)
+                       or type(limit) is not int or not 0 < limit <= 1_000_000
+                       for actor, limit in value.user_limits_cents.items())):
+                raise ValueError()
             if (
                 not value.key_file.is_absolute()
                 or not IDENTITY.fullmatch(value.agent_id)

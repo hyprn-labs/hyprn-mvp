@@ -38,8 +38,13 @@ def owner(store, study):
     return row['actor_id']
 
 
-async def check(store, provider, actor):
+def limit(actor, settings=None):
+    """Explicit operator overrides change the ceiling, never recorded spending."""
+    return settings.user_limits_cents.get(actor, USER_LIMIT_CENTS) if settings else USER_LIMIT_CENTS
+
+
+async def check(store, provider, actor, settings=None):
     spent, sessions = await account(store, provider, actor)
-    if spent >= USER_LIMIT_CENTS:
+    if spent >= limit(actor, settings):
         raise ProviderError('user_allowance_exhausted')
     return spent, sessions
