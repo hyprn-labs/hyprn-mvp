@@ -664,6 +664,8 @@ def test_retained_projection_survives_reader_restart_and_rechecks_sources(hosted
         rid = sample['record']([1.0, 2.0])
         rid = rid if isinstance(rid, str) else rid['run_id']
         first = History(store).retained_projection(owner, sid, rid)
+        exact = History(store).retained(owner, sid, rid)
+        assert first.runtime == exact.payload['bundle']['manifest']['runtime']
         reader = History(store)
         monkeypatch.setattr(reader, 'retained', lambda *a, **k: pytest.fail('Reloaded archive'))
         second = reader.retained_projection(owner, sid, rid)
@@ -1337,3 +1339,44 @@ def test_public_agent_resume_recovers_unprepared_child_and_crosses_claim_once_on
                 AnalysisExecution(store).cancel(actor, sid, vid)
     finally:
         worker.database.close()
+
+
+def test_analysis_completion_reuses_verified_history_after_reader_restart(hosted, monkeypatch):
+    """A launched plan consumes exact verified results without reopening their archives."""
+    from calculation_fixture import seed
+    from test_calculations_api import body
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.calculations import Analyses
+    from hyprn_mvp_app.execution import Submissions
+    from hyprn_mvp_app.history import History
+
+    fixture, store, accounts = hosted
+    owner = accounts[0]['actor']
+    sid = study(store, owner)
+    with actor_scope(owner):
+        sample = dict(store=store, actor=owner, sid=sid)
+        sample.update(seed(sample))
+        rid = sample['record']([1.0, 2.0])
+        expected = History(store).retained_projection(owner, sid, rid)
+        version = Analyses(store).create(owner, sid, dict(command_id=uid(), content=body(
+            sample, schema_version='4', estimate_plan=None)))
+    vid = version['calculation_version_id']
+    with live_api(store) as origin:
+        endpoint = origin + '/api/1/studies/' + sid + '/analysis-versions/' + vid + '/execution'
+        reply = httpx.post(endpoint, headers=headers(accounts[0], origin), json={})
+        assert reply.status_code == 202, reply.text
+        assert reply.json()['data']['runs'][0]['run_id'] == rid
+        monkeypatch.setattr(History, '_read_saved', lambda *a, **k: pytest.fail('Reloaded archive'))
+        worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                                background=fixture['dispatcher'])
+        try:
+            runner = AnalysisExecution(worker)
+            assert runner.process_one(Submissions(worker, None, None))
+        finally:
+            worker.database.close()
+        result = httpx.get(endpoint, headers=headers(accounts[0], origin))
+        assert result.status_code == 200, result.text
+        assert result.json()['data']['state'] == 'complete'
+        assert result.json()['data']['completed_count'] == 1
+        with actor_scope(owner):
+            assert History(store).retained_projection(owner, sid, rid) == expected

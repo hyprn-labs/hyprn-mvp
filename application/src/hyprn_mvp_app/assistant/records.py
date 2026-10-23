@@ -216,7 +216,7 @@ def event_metadata(event):
         reference = event.get('tool_use_id')
     elif kind in ('hyprn.turn_started', 'hyprn.turn_resumed', 'hyprn.reviewer_admitted',
                    'hyprn.provider_interrupted', 'hyprn.provider_continue_intended',
-                   'hyprn.provider_continue_accepted'):
+                   'hyprn.provider_continue_accepted', 'hyprn.analysis_progress'):
         reference = event.get('turn_id') or event['id'].removeprefix('turn_started_')
     elif kind == 'user.message':
         for item in event.get('content', []):
@@ -347,4 +347,39 @@ def public(store, actor, study, *, available, after=None, before=None):
             next_cursor=messages[-1]['message_id'] if messages else after,
             earlier_cursor=messages[0]['message_id'] if messages else before,
             has_more_messages=extra if after is not None else False,
+            analysis_progress=analysis_progress(db, current) if available else None,
         )
+
+
+def analysis_progress(db, current):
+    """Only the active finite wait contributes progress; settled turns never leak stale work."""
+    if not current or current['state'] != 'waiting' or not current['active_turn']:
+        return None
+    event = latest_event(db, current['study_id'], ('hyprn.analysis_progress',),
+                         reference=current['active_turn'])
+    if not event:
+        return None
+    pending = db.execute('SELECT 1 FROM assistant_tool_results WHERE study_id=? '
+        "AND turn_id=? AND event_id=? AND delivery='waiting'",
+        (current['study_id'], current['active_turn'], event['tool_event_id'])).fetchone()
+    return event['progress'] if pending else None
+
+
+def observe_analysis(store, study, turn_id, tool_event_id, value):
+    """Append changed owner facts only, without rewriting the retained provider tool result."""
+    runs = value.get('runs')
+    reused = sum(run['reused'] for run in runs) if runs is not None else None
+    progress = {key: value.get(key) for key in (
+        'calculation_version_id', 'state', 'completed_count', 'total_count', 'admission_state')}
+    progress['reused_count'] = reused
+    with store.connection(write=True) as db:
+        previous = latest_event(db, study, ('hyprn.analysis_progress',), reference=turn_id)
+        if (previous and previous['tool_event_id'] == tool_event_id
+                and all(previous['progress'].get(k) == v for k, v in progress.items())):
+            return
+        stamp = time.time()
+        progress['last_progress_at'] = stamp
+        save_event(db, study, dict(id='progress_' + uid(),
+            type='hyprn.analysis_progress', turn_id=turn_id, tool_event_id=tool_event_id,
+            progress=progress,
+            _received_at=stamp))

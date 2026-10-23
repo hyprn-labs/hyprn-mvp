@@ -377,7 +377,7 @@ for path,methods in spec["paths"].items():
                 'No session ceiling or automatic reset. Unknown usage is null, not zero.'
             )
         elif path.startswith('/studies/{study_id}/assistant'):
-            schema = ref('AssistantConversationRead4')
+            schema = ref('AssistantConversationRead5')
             status = '200' if method == 'get' else '202'
             if method == 'get' and path.endswith('/assistant'):
                 op['parameters'] += [

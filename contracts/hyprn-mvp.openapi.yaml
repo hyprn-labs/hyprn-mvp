@@ -16331,7 +16331,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead4"
+                      "$ref": "#/components/schemas/AssistantConversationRead5"
                     }
                   },
                   "required": [
@@ -16505,7 +16505,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead4"
+                      "$ref": "#/components/schemas/AssistantConversationRead5"
                     }
                   },
                   "required": [
@@ -16679,7 +16679,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead4"
+                      "$ref": "#/components/schemas/AssistantConversationRead5"
                     }
                   },
                   "required": [
@@ -16853,7 +16853,7 @@
                       "format": "uuid"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AssistantConversationRead4"
+                      "$ref": "#/components/schemas/AssistantConversationRead5"
                     }
                   },
                   "required": [
@@ -88013,6 +88013,265 @@
           "next_cursor",
           "earlier_cursor",
           "has_more_messages"
+        ],
+        "additionalProperties": false
+      },
+      "AssistantAnalysisProgress1": {
+        "type": "object",
+        "properties": {
+          "calculation_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "enum": [
+              "calculating",
+              "validating"
+            ]
+          },
+          "completed_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reused_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "admission_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_progress_at": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "calculation_version_id",
+          "state",
+          "completed_count",
+          "total_count",
+          "reused_count",
+          "admission_state",
+          "last_progress_at"
+        ],
+        "additionalProperties": false
+      },
+      "AssistantConversationRead5": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "idle",
+              "queued",
+              "starting",
+              "running",
+              "waiting",
+              "stopping",
+              "blocked",
+              "unavailable"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_send": {
+            "type": "boolean"
+          },
+          "can_stop": {
+            "type": "boolean"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "properties": {
+                "message_id": {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                "role": {
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 65536
+                },
+                "actor_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "author_display_name": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "created_at": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "message_id",
+                "role",
+                "text",
+                "actor_id",
+                "author_display_name",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "has_earlier_messages": {
+            "type": "boolean"
+          },
+          "can_resume": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "earlier_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_more_messages": {
+            "type": "boolean"
+          },
+          "analysis_progress": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "calculation_version_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "state": {
+                    "enum": [
+                      "calculating",
+                      "validating"
+                    ]
+                  },
+                  "completed_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "total_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reused_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "admission_state": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "last_progress_at": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "calculation_version_id",
+                  "state",
+                  "completed_count",
+                  "total_count",
+                  "reused_count",
+                  "admission_state",
+                  "last_progress_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "error",
+          "can_send",
+          "can_stop",
+          "messages",
+          "has_earlier_messages",
+          "can_resume",
+          "next_cursor",
+          "earlier_cursor",
+          "has_more_messages",
+          "analysis_progress"
         ],
         "additionalProperties": false
       },

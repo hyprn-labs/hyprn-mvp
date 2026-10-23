@@ -481,3 +481,114 @@ def test_answer_nested_version_diagnostics_do_not_blame_derived_monetary_basis()
     assert caught.value.fields == [dict(
         path='/content/outcome/alternative_id', code='invalid',
         message='Required field is missing.', element_ref=None)]
+
+
+def _nested_version_union_schema():
+    def tagged(version):
+        return dict(type='object', additionalProperties=False,
+                    required=['payload', 'schema_version'], properties=dict(
+                        payload=dict(type='array', items=dict(type='string', pattern='^valid$')),
+                        schema_version=dict(const=version)))
+
+    return {'$defs': {str(i): tagged(str(i)) for i in range(8)},
+            'type': 'object', 'required': ['record'], 'additionalProperties': False,
+            'properties': {'record': {'oneOf': [{'$ref': '#/$defs/' + str(i)}
+                                                for i in range(8)]}}}
+
+
+def test_nested_version_union_checks_only_possible_branch_but_all_its_fields(monkeypatch):
+    schema = _nested_version_union_schema()
+    original_pattern = contracts.JsonValidator.VALIDATORS['pattern']
+    calls = []
+
+    def counted_pattern(checker, pattern, value, current):
+        calls.append(value)
+        yield from original_pattern(checker, pattern, value, current)
+
+    monkeypatch.setitem(contracts.JsonValidator.VALIDATORS, 'pattern', counted_pattern)
+    original = contracts.JsonValidator(schema)
+    selected = contracts._compile_schema(schema)
+    value = dict(record=dict(schema_version='7', payload=['valid'] * 20))
+    assert original.is_valid(value)
+    original_calls = len(calls)
+    calls.clear()
+    assert selected.is_valid(value)
+    assert len(calls) == 20 and original_calls == 160
+    # A later mutation must never reuse a successful validation of the old bytes.
+    value['record']['payload'][0] = 'corrupt'
+    for _ in range(2):
+        assert not selected.is_valid(value)
+    value['record']['payload'][0] = 'valid'
+    value['record']['unknown'] = True
+    assert not selected.is_valid(value)
+
+
+def test_nested_version_union_preserves_all_diagnostics_and_exact_json_types(monkeypatch):
+    from itertools import product
+
+    schema = _nested_version_union_schema()
+    original = contracts.JsonValidator(schema)
+    selected = contracts._compile_schema(schema)
+    for version, payload, extra in product(
+        ['0', '7', '8', True, 7, None],
+        [['valid'], ['invalid'], [True], ['valid', 0], None],
+        [False, True],
+    ):
+        value = dict(record=dict(schema_version=version, payload=payload))
+        if extra:
+            value['record']['extra'] = 'field'
+        assert contracts.diagnostics(selected.iter_errors(value)) == contracts.diagnostics(
+            original.iter_errors(value))
+    monkeypatch.setattr(contracts, 'validator', lambda _: selected)
+    for invalid in [float('nan'), float('inf'), 2**53 + 1, True]:
+        with pytest.raises(contracts.ContractError):
+            contracts.validate('nested-test', dict(record=dict(schema_version='7', payload=[invalid])))
+
+
+def test_nested_version_union_falls_back_for_ambiguous_tags_and_unversioned_branches():
+    from copy import deepcopy
+
+    for change in ('overlap', 'unversioned', 'constraint'):
+        schema = _nested_version_union_schema()
+        if change == 'overlap':
+            schema['$defs']['6'] = deepcopy(schema['$defs']['7'])
+        elif change == 'unversioned':
+            schema['$defs']['6'] = dict(type='object')
+        else:
+            schema['properties']['record']['oneOf'].append(dict(
+                allOf=[{'$ref': '#/$defs/7'}]))
+        original = contracts.JsonValidator(schema)
+        selected = contracts._compile_schema(schema)
+        for version in ['6', '7', 'missing', None]:
+            value = dict(record=dict(schema_version=version, payload=['valid']))
+            assert selected.is_valid(value) == original.is_valid(value)
+
+
+def test_nested_version_union_cannot_reuse_another_schema_namespace():
+    from copy import deepcopy
+
+    first = _nested_version_union_schema()
+    second = deepcopy(first)
+    second['$defs']['7']['properties']['payload']['items']['pattern'] = '^different$'
+    a, b = contracts._compile_schema(first), contracts._compile_schema(second)
+    value = dict(record=dict(schema_version='7', payload=['valid']))
+    assert a.is_valid(value)
+    assert not b.is_valid(value)
+    assert a.is_valid(value)
+
+
+@pytest.mark.parametrize('keyword,value', [
+    ('$id', 'https://example.invalid/nested'),
+    ('$dynamicAnchor', 'record'),
+    ('$anchor', 'record'),
+    ('$schema', 'https://json-schema.org/draft/2020-12/schema'),
+])
+def test_nested_version_union_leaves_resource_scope_to_the_library(keyword, value):
+    schema = _nested_version_union_schema()
+    schema['$defs']['7'][keyword] = value
+    selected = contracts._compile_schema(schema)
+    assert type(selected) is contracts.JsonValidator
+    original = contracts.JsonValidator(schema)
+    for version in ['6', '7']:
+        record = dict(record=dict(schema_version=version, payload=['valid']))
+        assert selected.is_valid(record) == original.is_valid(record)

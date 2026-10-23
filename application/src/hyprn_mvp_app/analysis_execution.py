@@ -316,7 +316,7 @@ class AnalysisExecution:
             elif run['state'] == 'preparation_failed':
                 raise DomainError('analysis_run_preparation_failed', 409)
             elif run['state'] == 'recorded':
-                retained = History(self.store).retained(actor, sid, member['run_id'])
+                retained = History(self.store).retained_projection(actor, sid, member['run_id'])
                 outcome = (retained.history.get('results') or {}).get('execution')
                 if not isinstance(outcome, dict) or outcome.get('state') != 'finished':
                     raise DomainError('analysis_run_failed', 409)

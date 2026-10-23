@@ -1235,3 +1235,48 @@ def test_replayed_generated_point_retains_its_original_name_and_exact_snapshot(e
     assert owner.exploration_point(*args, name='Response sweep · Point 1') == saved
     assert owner.read(env['actor'], env['sid'], saved['configuration_revision_id']) == before
     assert before['configuration']['name'] == original['name']
+
+
+@pytest.mark.parametrize('mixed_runtime', [False, True])
+def test_estimate_uses_verified_projection_and_preserves_runtime_boundary(recordable, monkeypatch,
+                                                                        mixed_runtime):
+    from hyprn_mvp_app.history import History
+
+    e = recordable
+    first, version = complete(e, sample_request(e))
+    target = next(
+        dict(instance_id=i['instance_id'], port_id=p['port_id'])
+        for i in e['case']['frozen']['model_snapshot']['instances']
+        for d in e['case']['frozen']['model_snapshot']['definitions']
+        if d['definition_version_id'] == i['definition_version_id']
+        for p in d['ports'] if p['direction'] == 'output'
+    )
+    runs = []
+    for member in version['content']['configuration_revision_ids'][:2]:
+        frozen = e['client'].get(path(e, 'configurations/' + member)).json()['data']
+        rid, _ = record_run(e['store'], e['actor'], e['sid'], point_case(e, frozen), [42])
+        runs.append(rid)
+    checked = {rid: History(e['store']).retained_projection(e['actor'], e['sid'], rid)
+               for rid in runs}
+    if mixed_runtime:
+        value = checked[runs[-1]]
+        checked[runs[-1]] = value._replace(runtime=dict(value.runtime,
+                                                       image_digest='sha256:' + 'c' * 64))
+    reads = []
+
+    def verified(self, actor, sid, rid):
+        assert actor == e['actor'] and sid == e['sid']
+        reads.append(rid)
+        return checked[rid]
+
+    monkeypatch.setattr(History, 'retained_projection', verified)
+    monkeypatch.setattr(History, 'retained', lambda *a, **k: pytest.fail('Reloaded archive'))
+    reply = e['client'].post(path(e, 'calculation-estimates'), json=dict(
+        command_id=uid(), calculation_version_id=first['calculation_version_id'],
+        tolerances=[dict(target=target, absolute=0.1, relative=0.01)]))
+    assert sorted(reads) == sorted(runs)
+    assert reply.status_code == (422 if mixed_runtime else 202), reply.text
+    if mixed_runtime:
+        assert 'different execution runtimes' in reply.text
+    else:
+        assert reply.json()['data']['original_runtime'] == checked[runs[0]].runtime

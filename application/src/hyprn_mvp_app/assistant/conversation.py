@@ -411,6 +411,8 @@ class Conversations:
                         type='hyprn.turn_resumed', turn_id=turn['turn_id'], _received_at=time.time()))
                     records.update(db, study, state='running')
                 return dict(content=content, is_error=False, delivery='ready')
+            await asyncio.to_thread(records.observe_analysis, self.store, study,
+                                    turn['turn_id'], event['id'], value)
             progress = (value['state'], value.get('completed_count'), value.get('admission_state'))
             delay = 1.0 if progress != previous else min(30.0, delay * 1.5)
             previous = progress

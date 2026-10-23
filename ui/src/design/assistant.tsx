@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { StatusTag } from './components';
 import { ConversationProse } from './conversationProse';
+import { OpenLink } from './navigation';
 
 /** Study conversations share readable prose, author labels and token-based separation. */
 export function ConversationMessage({
@@ -121,12 +122,23 @@ export function AssistantActivity({
   error,
   canResume = false,
   canStop = false,
+  progress,
+  analysisHref,
 }: {
   state: 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked';
   detail?: string;
   error?: string | null;
   canResume?: boolean;
   canStop?: boolean;
+  progress?: {
+    state: 'calculating' | 'validating';
+    completed_count: number;
+    total_count: number;
+    reused_count: number | null;
+    admission_state: string | null;
+    last_progress_at: number;
+  } | null;
+  analysisHref?: string;
 }) {
   const stages = {
     queued: ['Queued', 'Your message is saved. Waiting for available Assistant capacity.'],
@@ -139,7 +151,9 @@ export function AssistantActivity({
   const [stageLabel, explanation] = stages[state];
   const problem =
     state === 'blocked' ? assistantProblem(error ?? 'unknown', canResume, canStop) : null;
-  const label = problem?.label ?? stageLabel;
+  const waiting = state === 'waiting' ? progress : null;
+  const label = problem?.label ?? (waiting?.state === 'validating'
+    ? 'Validating surrogate' : waiting ? 'Calculating' : stageLabel);
   return (
     <section
       className="hf-assistant-activity"
@@ -149,7 +163,28 @@ export function AssistantActivity({
       data-state={state}
     >
       <StatusTag tone={state === 'blocked' ? 'warning' : 'inert'}>{label}</StatusTag>
-      <p>{detail ?? problem?.detail ?? explanation}</p>
+      {waiting ? (
+        <>
+          <strong className="hf-assistant-activity__count">
+            {waiting.completed_count} / {waiting.total_count} calculations completed
+          </strong>
+          {waiting.reused_count !== null && waiting.reused_count > 0 && (
+            <p>{waiting.reused_count} existing calculations reused</p>
+          )}
+          <p>{waiting.state === 'validating'
+            ? 'Checking estimates against independent calculations. The Assistant continues when checks finish.'
+            : 'HYPRN is processing the analysis. The Assistant waits without requesting more reasoning.'}</p>
+          {waiting.admission_state && ['unavailable', 'invalid_attestation'].includes(
+            waiting.admission_state,
+          ) && <StatusTag tone="warning">Execution temporarily unavailable</StatusTag>}
+          <p>Last progress observed <time dateTime={new Date(
+            waiting.last_progress_at * 1000,
+          ).toISOString()}>{new Date(waiting.last_progress_at * 1000).toLocaleTimeString(
+            [], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false },
+          )}</time></p>
+          {analysisHref && <OpenLink href={analysisHref} size="sm">View analysis</OpenLink>}
+        </>
+      ) : <p>{detail ?? problem?.detail ?? explanation}</p>}
     </section>
   );
 }

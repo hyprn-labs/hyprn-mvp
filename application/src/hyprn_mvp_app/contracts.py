@@ -271,7 +271,7 @@ def validator(name):
     schema = authored_schema()
     if name not in schema['$defs']:
         raise KeyError(name)
-    return JsonValidator({**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker())
+    return _compile_schema({**schema, '$ref': '#/$defs/' + name})
 
 
 MAX_DIAGNOSTICS = 20
@@ -309,7 +309,7 @@ def _execution_validator(name):
     schema = _execution_schema()
     if name not in schema['$defs']:
         raise KeyError(name)
-    return JsonValidator({**schema, '$ref': '#/$defs/' + name}, format_checker=FormatChecker())
+    return _compile_schema({**schema, '$ref': '#/$defs/' + name})
 
 
 def _schema_versions(schema, node, seen=frozenset()):
@@ -333,6 +333,56 @@ def _schema_versions(schema, node, seen=frozenset()):
         if values and all(type(v) is str for v in values):
             return frozenset(values)
     return None
+
+
+def _compile_schema(schema):
+    """Skip only union branches proved impossible by their required version tag.
+
+    The complete chosen branch still validates scalars, closed fields and every
+    nested constraint. Unversioned/ambiguous branches use the original validator.
+    On failure the original union supplies unchanged diagnostic paths/messages.
+    """
+    def static_namespace(node, *, root=False):
+        if isinstance(node, list):
+            return all(static_namespace(child) for child in node)
+        if not isinstance(node, dict):
+            return True
+        if any(key in node for key in (
+            '$dynamicRef', '$dynamicAnchor', '$recursiveRef', '$recursiveAnchor', '$anchor'
+        )) or (not root and ('$id' in node or '$schema' in node)):
+            return False
+        ref = node.get('$ref')
+        if ref is not None and ref not in local_refs:
+            return False
+        return all(static_namespace(child) for child in node.values())
+
+    local_refs = {'#/$defs/' + name for name in schema.get('$defs', {})}
+    if not static_namespace(schema, root=True):
+        return JsonValidator(schema, format_checker=FormatChecker())
+    branch_tags = {}
+
+    def versioned_union(checker, branches, value, current, *, keyword):
+        original = JsonValidator.VALIDATORS[keyword]
+        version = value.get('schema_version') if isinstance(value, dict) else None
+        if type(version) is str:
+            identity = id(branches)
+            if identity not in branch_tags:
+                branch_tags[identity] = [_schema_versions(schema, child) for child in branches]
+            tags = branch_tags[identity]
+            if all(values is not None for values in tags):
+                selected = [child for child, values in zip(branches, tags) if version in values]
+                if len(selected) == 1:
+                    # A valid selected branch proves the whole union. Failed
+                    # branches retain the library's exact diagnostic aggregation.
+                    if checker.evolve(schema=selected[0]).is_valid(value):
+                        return
+        yield from original(checker, branches, value, current)
+
+    def one_of(checker, branches, value, current):
+        yield from versioned_union(checker, branches, value, current, keyword='oneOf')
+
+    compiled = validators.extend(JsonValidator, {'oneOf': one_of})
+    return compiled(schema, format_checker=FormatChecker())
 
 
 @lru_cache(maxsize=128)
@@ -367,7 +417,7 @@ def _execution_version_validator(name, version):
         node = candidates[0]
     if not isinstance(node, dict):
         return _execution_validator(name)
-    return JsonValidator({'$defs': schema['$defs'], **node}, format_checker=FormatChecker())
+    return _compile_schema({'$defs': schema['$defs'], **node})
 
 
 def validate_execution(name, value):

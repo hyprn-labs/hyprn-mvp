@@ -10,7 +10,7 @@ import {
   BrandLogo,
   ResourceCard,
   NavigationRail,
-  FeatureUnavailable,
+  HelpCenter,
   Button,
   ContentColumn,
   PageHeader,
@@ -1349,7 +1349,7 @@ export function Workspace() {
                 />
               }
             >
-              {page === 'help' && <FeatureUnavailable name="Help" />}
+              {page === 'help' && <HelpCenter />}
               {page === 'profile' && (
                 <ContentColumn width="form">
                   <Panel className="profile-page">

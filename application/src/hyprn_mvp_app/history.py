@@ -343,6 +343,7 @@ class RetainedProjection(NamedTuple):
     history: dict
     token: dict
     run: dict | None = None
+    runtime: dict | None = None
 
 
 @cache
@@ -602,7 +603,8 @@ class History:
                 if row and raw_hash(row['payload'].encode('utf-8')) == row['payload_sha256']:
                     try:
                         candidate = data_json(row['payload'].encode('utf-8'))
-                        if (set(candidate) == {'history', 'token', 'run'}
+                        if (set(candidate) == {'history', 'token', 'run', 'runtime'}
+                                and isinstance(candidate['runtime'], dict)
                                 and candidate['token']['run_id'] == rid
                                 and candidate['history']['configuration']['study_id'] == sid
                                 and retained_read_integrity(rid, candidate['history'])['results_digest']):
@@ -618,8 +620,9 @@ class History:
                     self.recheck(db, actor, sid, [value['token']])
                     return RetainedProjection(**value)
         retained = self.retained(actor, sid, rid)
+        runtime = retained.payload['bundle']['manifest']['runtime']
         if not hosted:
-            return RetainedProjection(retained.history, retained.token)
+            return RetainedProjection(retained.history, retained.token, runtime=runtime)
         with self.store.connection() as db:
             row, receipt = self.run_row(db, actor, sid, rid, payload=False)
         run = self._submission_projection(actor, sid, row, retained.payload)
@@ -628,8 +631,8 @@ class History:
             run, retained.history,
             lambda aid: self._read_saved(row, receipt, retained.payload, aid),
         )
-        result = RetainedProjection(retained.history, retained.token, run)
-        raw = canonical(dict(history=result.history, token=result.token, run=result.run))
+        result = RetainedProjection(retained.history, retained.token, run, runtime)
+        raw = canonical(result._asdict())
         if hosted and len(raw) <= 1048576:
             with self.store.connection(write=True) as db:
                 self.recheck(db, actor, sid, [result.token])

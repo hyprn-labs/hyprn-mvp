@@ -98,6 +98,19 @@ DEFINITIONS['AssistantConversationRead4']['properties'].update(
 DEFINITIONS['AssistantConversationRead4']['required'] += [
     'next_cursor', 'earlier_cursor', 'has_more_messages',
 ]
+DEFINITIONS['AssistantAnalysisProgress1'] = obj({
+    'calculation_version_id': {'type': 'string', 'format': 'uuid'},
+    'state': {'enum': ['calculating', 'validating']},
+    'completed_count': {'type': 'integer', 'minimum': 0},
+    'total_count': {'type': 'integer', 'minimum': 0},
+    'reused_count': nullable({'type': 'integer', 'minimum': 0}),
+    'admission_state': nullable(text(64)),
+    'last_progress_at': {'type': 'number'},
+})
+DEFINITIONS['AssistantConversationRead5'] = deepcopy(DEFINITIONS['AssistantConversationRead4'])
+DEFINITIONS['AssistantConversationRead5']['properties']['analysis_progress'] = nullable(
+    DEFINITIONS['AssistantAnalysisProgress1'])
+DEFINITIONS['AssistantConversationRead5']['required'].append('analysis_progress')
 DEFINITIONS['AssistantBudgetRead2'] = obj({
     'configured': {'type': 'boolean'}, 'currency': {'const': 'USD'},
     'limit_cents': money, 'spent_cents': nullable(money), 'remaining_cents': nullable(money),

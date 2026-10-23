@@ -105,6 +105,7 @@ async function harness(page: Page) {
     profileLostResponse: false,
     messages: [] as Array<Record<string, unknown>>,
     assistantStage: 'idle',
+    analysisProgress: null as Record<string, unknown> | null,
     assistantFailure: 'budget' as 'budget' | 'unknown' | 'none',
     assistantSends: [] as Array<{command_id: string; text: string}>,
   };
@@ -163,7 +164,7 @@ async function harness(page: Page) {
     }
     if (/^\/studies\/[^/]+\/assistant$/.test(path) && method === 'GET')
       return ok({
-        state: state.assistantStage, error: null,
+        state: state.assistantStage, error: null, analysis_progress: state.analysisProgress,
         can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
         messages: state.messages, has_earlier_messages: false,
         next_cursor: 'newest', earlier_cursor: null, has_more_messages: false,
@@ -1107,8 +1108,8 @@ test('Grouped sidebar preserves routes and honest placeholders when collapsed', 
   await expect(page.getByRole('region', { name: 'Documents', exact: true })).toBeVisible();
   await expect(rail).toHaveAttribute('data-collapsed', 'true');
   await rail.getByRole('button', { name: 'Help', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Help', exact: true })).toContainText(
-    'This functionality is not implemented yet.',
+  await expect(page.getByRole('region', { name: 'Help center', exact: true })).toContainText(
+    'From a question to a supported answer',
   );
   await rail.getByRole('button', { name: 'Expand menu', exact: true }).click();
   await rail.getByRole('button', { name: 'Evidence', exact: true }).click();
@@ -1785,6 +1786,21 @@ test('Assistant progress cards reflect the backend stages in light and narrow la
     state.assistantStage = stage;
     await expect(panel.getByRole('status')).toContainText(label);
   }
+  state.assistantStage = 'waiting';
+  state.analysisProgress = {
+    calculation_version_id: '12345678-1234-4234-8234-123456789abc',
+    state: 'calculating', completed_count: 108, total_count: 128, reused_count: 108,
+    admission_state: 'ready', last_progress_at: 1792757872,
+  };
+  await expect(panel.getByRole('status')).toContainText('108 / 128 calculations completed');
+  await expect(panel.getByRole('status')).toContainText('108 existing calculations reused');
+  await expect(panel.getByRole('link', { name: 'View analysis' })).toHaveAttribute(
+    'href', /calculation_version=12345678-1234-4234-8234-123456789abc/,
+  );
+  state.analysisProgress = { ...state.analysisProgress, state: 'validating', completed_count: 128 };
+  await expect(panel.getByRole('status')).toContainText('Validating surrogate');
+  await expect(panel.getByRole('status')).toContainText('128 / 128 calculations completed');
+  await expect(panel.getByRole('status')).toContainText('Last progress observed');
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
   await page.setViewportSize({ width: 720, height: 900 });
   await expect(panel.getByRole('status')).toBeVisible();
@@ -1817,7 +1833,7 @@ test('Earlier Assistant pages do not overwrite a newer running turn', async ({ p
   });
   await page.route('**/api/1/studies/*/assistant', async (route) => {
     await route.fulfill({ json: { schema_version: '1', data: {
-      state: state.assistantStage, error: null,
+      state: state.assistantStage, error: null, analysis_progress: state.analysisProgress,
       can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
       messages: [{ message_id: 'recent', role: 'assistant', text: 'Retained recent reply.',
         actor_id: null, author_display_name: null, created_at: 2 }],
@@ -2271,3 +2287,73 @@ for (const { code, canResume, canStop, cause } of [
     expect(state.unknown).toEqual([]);
   });
 }
+
+
+test('Help center teaches the shared workflow without writing study data', async ({ page }) => {
+  const state = await harness(page);
+  await login(page, '#help');
+  const help = page.getByRole('region', { name: 'Help center', exact: true });
+  await expect(help.getByRole('heading', { name: 'Help center', exact: true })).toBeVisible();
+  await help.getByRole('button', { name: 'Calculate', exact: true }).click();
+  await expect(help.getByRole('heading', { name: 'One investigation, many explicit inputs' }))
+    .toBeFocused();
+  await expect(help).toContainText('Independent validation points are held out');
+  await expect(help.getByRole('button', { name: 'Analyses and sampling', exact: true }))
+    .toHaveAttribute('aria-current', 'page');
+  await help.getByRole('button', { name: 'Answers and graphs', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(help).toContainText('without rerunning the engineering model');
+  await help.getByRole('button', { name: 'Assistant and recovery', exact: true }).click();
+  await expect(help).toContainText('A provider session may look idle');
+  await expect(help).toContainText('do not create a duplicate analysis');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await openStudy(page);
+  await page.getByRole('button', { name: 'Edit brief', exact: true }).click();
+  await page.getByLabel('Study question', { exact: true }).fill('Keep this question');
+  await page.getByRole('button', { name: 'Help', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(page.getByLabel('Study question', { exact: true })).toHaveValue('Keep this question');
+  await page.getByRole('button', { name: 'Help', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(help).toBeVisible();
+  expect(new URL(page.url()).hash).toContain('study=' + sid);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Help center topics remain readable in both themes and narrow windows', async ({ page }) => {
+  const state = await harness(page);
+  await login(page, '#help');
+  const help = page.getByRole('region', { name: 'Help center', exact: true });
+  const topics = ['Start here', 'Study brief', 'Models and quantities', 'Analyses and sampling',
+    'Answers and graphs', 'Evidence and limits', 'Assistant and recovery'];
+  for (const width of [1440, 720, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+      for (const topic of topics) {
+        await help.getByRole('button', { name: topic, exact: true }).click();
+        await expect(help.locator('#help-topic-title')).toBeFocused();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+          .toBe(true);
+        expect(await help.locator('.hf-help-center__card').evaluateAll(cards =>
+          cards.every(card => card.scrollWidth <= card.clientWidth))).toBe(true);
+        const cards = await help.locator('.hf-help-center__card').evaluateAll(items =>
+          items.map(item => { const r = item.getBoundingClientRect();
+            return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
+        for (let i = 1; i < cards.length; i++) {
+          const previous = cards[i - 1], current = cards[i];
+          expect(current.left >= previous.right + 15 || current.top >= previous.bottom + 15)
+            .toBe(true);
+        }
+      }
+      await help.getByRole('button', { name: 'Start here', exact: true }).click();
+      await page.screenshot({
+        path: `${process.env.HYPRN_MVP_UI_EVIDENCE_ROOT}/help-${width}-${theme}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});

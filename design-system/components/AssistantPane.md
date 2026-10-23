@@ -52,3 +52,19 @@ a new source request only when can_stop is true; otherwise explain that recovery
 the application administrator. Never infer safe retry from an error label or resend a tool operation.
 Large-document interruptions explain that the document response could not be processed,
 without exposing its encoded body in chat. Recovery never implies repeating calculations.
+
+## Waiting on an analysis
+
+The activity card reads the current conversation's compact progress projection.
+Use a neutral Calculating or Validating surrogate status, completed / total counts,
+and the count of existing calculations reused when the owner supplies it. Reuse
+is part of the total, never added to it. Link View analysis to that exact saved
+version. The timestamp says Last progress observed: it records a changed owner
+fact, not a heartbeat, estimated finish or proof that execution stalled.
+
+The Assistant waits without further reasoning requests while HYPRN executes the
+accepted analysis. Only backend terminal/recovery states warrant a failure or
+Resume action. An unchanged timestamp alone never produces a stalled warning.
+Progress disappears when the turn settles or changes. The card shares the existing
+activity surface, wrapping prose and numeric type role in Light, Dark and narrow
+layouts; it remains separated from the composer by the conversation layout.

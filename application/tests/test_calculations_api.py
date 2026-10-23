@@ -618,7 +618,7 @@ def test_126_member_finite_plan_survives_owner_restart_without_resubmitting(calc
         return dict(result, state='recorded') if run_id in completed else result
 
     monkeypatch.setattr(submissions, 'read', read)
-    monkeypatch.setattr(History, 'retained', lambda *args: SimpleNamespace(
+    monkeypatch.setattr(History, 'retained_projection', lambda *args: SimpleNamespace(
         history={'results': {'execution': {'state': 'finished'}}}))
     for _ in range(14):
         # A fresh owner proves receipt recovery; execution here is a lifecycle

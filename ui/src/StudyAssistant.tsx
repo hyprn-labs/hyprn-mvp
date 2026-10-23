@@ -1,8 +1,9 @@
 import { createPortal } from 'react-dom';
 import { AssistantHomeMenu } from './AssistantHomeMenu';
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantConversationRead4, HyprnMvpApi } from './api';
+import type { AssistantConversationRead5, HyprnMvpApi } from './api';
 import { ApiError } from './api';
+import { workspaceHash } from './workspaceModel';
 import {
   ActionGroup,
   AssistantActivity,
@@ -37,7 +38,7 @@ export function StudyAssistant({
   onToggleExpanded: () => void;
   onClose: () => void;
 }) {
-  const [conversation, setConversation] = useState<AssistantConversationRead4 | null>(null);
+  const [conversation, setConversation] = useState<AssistantConversationRead5 | null>(null);
   const [homeMode, setHomeMode] = useState<'chat' | 'create' | 'switch'>('chat');
   const choosingStudy = home && homeMode !== 'chat';
   const [draft, setDraft] = useState('');
@@ -58,7 +59,7 @@ export function StudyAssistant({
   const invalidated = useRef(false);
   useEffect(() => { if (container) wake.current(); }, [container]);
 
-  function accept(value: AssistantConversationRead4, earlier = false) {
+  function accept(value: AssistantConversationRead5, earlier = false) {
     if (!earlier) {
       const previous = observed.current;
       const settled = ['idle', 'blocked', 'unavailable'].includes(value.state);
@@ -368,6 +369,11 @@ export function StudyAssistant({
               error={conversation?.error}
               canResume={conversation?.can_resume}
               canStop={conversation?.can_stop}
+              progress={conversation?.analysis_progress}
+              analysisHref={studyId && conversation?.analysis_progress ? workspaceHash({
+                view: 'calculations', study: studyId,
+                calculation_version: conversation.analysis_progress.calculation_version_id,
+              }) : undefined}
             />
           )}
           {error && <p role="alert">{error}</p>}

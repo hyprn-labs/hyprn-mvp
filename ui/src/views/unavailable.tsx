@@ -7,8 +7,3 @@ export const documentsView: ViewEntry<'documents'> = {
   parseLink: resourceViewLink, available: () => true,
   render: ({view}) => view === 'documents' ? <FeatureUnavailable name="Documents" /> : null,
 };
-export const helpView: ViewEntry<'help'> = {
-  name: 'help', placement: {kind: 'link', tab: 'help', breadcrumb: 'Help'},
-  parseLink: resourceViewLink, available: () => true,
-  render: ({view}) => view === 'help' ? <FeatureUnavailable name="Help" /> : null,
-};

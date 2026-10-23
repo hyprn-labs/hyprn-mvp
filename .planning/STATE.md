@@ -1,5 +1,22 @@
 # Project State
 
+- **Analysis recovery deployed (2026-10-23):** staging `17f27084`, sequence25,
+  release `22dc5479`, configuration `bbec6d47`, additive schema15; ongoing named-user
+  access promoted. Credential replacement preserves accepted finite execution;
+  explicit public Resume safely recovers only proven unstarted authority failures,
+  with append-only audit. Same eight blocked original runs now finished natively
+  with exit zero and identical frozen inputs. The public Assistant resumed the
+  existing 108-point analysis; final surrogate validation and answer publication
+  remain pending its normal completion. No direct study-data repair, replacement
+  analysis, accuracy relaxation, budget reset or numerical-image change.
+  Final focused backend/contract checks:447 passed; previous UI/tool checks reused
+  because their source is unchanged. Fresh build, coherent backup, containment,
+  startup and19 network checks passed. One earlier unexplained concurrent-test500
+  remains honestly recorded; three independent final PG recovery cases pass.
+  [Checkpoint](phases/06-hosted-staging/audit-remediation/09-PARENT-CHECKPOINT.md).
+  Next: normal Assistant completes samples/validation and publishes only if valid;
+  full qualification and human acceptance remain separate obligations.
+
 - **Document recovery deployed (2026-10-23):** staging source `679bb62b`,
   sequence 23 release `e4cb5242`, configuration `516db174`, ongoing named-user access.
   Generic bounded provider attachments, explicit safe recovery and idle collection

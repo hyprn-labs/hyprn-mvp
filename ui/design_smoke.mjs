@@ -61,6 +61,13 @@ function render(name, el) {
   return html;
 }
 
+const helpCenter = render('Help center', h(F.HelpCenter));
+check('Help teaches a navigable workflow without an unavailable placeholder',
+  helpCenter.includes('aria-label="Help topics"') &&
+  helpCenter.includes('aria-label="Study workflow"') &&
+  helpCenter.includes('From a question to a supported answer') &&
+  !helpCenter.includes('not implemented yet'));
+
 const tableControls = render('Single table control row', h(F.TableControls,
   { label: 'Results pagination', itemLabel: 'Points', page: 1, pageSize: 10, total: 23,
     onPage() {}, columns: h(F.Button, null, 'Columns') }));

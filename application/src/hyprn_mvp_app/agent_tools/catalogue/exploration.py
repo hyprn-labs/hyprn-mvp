@@ -604,7 +604,10 @@ TOOLS = (
         'get_analysis_execution',
         'Read analysis progress',
         'Reads real execution progress and the estimate id. Complete means the frozen '
-        'validation plan passed; physical applicability still needs engineering review.',
+        'validation plan passed; physical applicability still needs engineering review. '
+        'In the embedded Assistant, an active analysis keeps this call pending beyond '
+        'wait_seconds until it settles; HYPRN shows live progress and resumes reasoning '
+        'automatically without repeated inference requests.',
         VERSION_INPUT,
         get_analysis_execution,
         (EXECUTION, RECOVERY),

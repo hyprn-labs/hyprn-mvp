@@ -39,7 +39,8 @@ import { evidenceView } from './evidence';
 import { modelView } from './model';
 import { overviewView } from './overview';
 import { runsView } from './runs';
-import { documentsView, helpView } from './unavailable';
+import { documentsView } from './unavailable';
+import { helpView } from './help';
 
 /** Session features a view may require before it is offered. Every study view is available
  * with no feature today; a view added later states the feature it needs. */

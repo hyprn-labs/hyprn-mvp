@@ -884,6 +884,14 @@ def test_durable_wait_survives_restart_and_expiry_without_inference_polling(syst
             await asyncio.sleep(.01)
         assert reads and not provider.results and not provider.sent
         assert owner.read(actor, sid)['state'] == 'waiting'
+        for _ in range(100):
+            progress = owner.read(actor, sid)['analysis_progress']
+            if progress:
+                break
+            await asyncio.sleep(.01)
+        assert progress['calculation_version_id'] == result['calculation_version_id']
+        assert progress['completed_count'] == 0 and progress['total_count'] == 126
+        assert progress['state'] == 'calculating'
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
         with store.connection(write=True) as db:
@@ -893,12 +901,47 @@ def test_durable_wait_survives_restart_and_expiry_without_inference_polling(syst
         await owner.start()
         await drained(owner)
         assert owner.read(actor, sid)['state'] == 'idle'
+        assert owner.read(actor, sid)['analysis_progress'] is None
         assert not provider.sent and len(provider.results) == 1
         assert provider.results[0]['content']['state'] == 'complete'
         with store.connection() as db:
             assert db.execute('SELECT count(*) FROM assistant_tool_results').fetchone()[0] == 1
         await owner.close()
     asyncio.run(exercise())
+
+
+def test_analysis_progress_changes_are_compact_durable_and_turn_scoped(system, monkeypatch):
+    _, owner, provider, store, actor, sid = system
+    turn, result = waiting_analysis(system)
+    event_id = next(e['id'] for e in provider.history if e['type'] == 'agent.custom_tool_use')
+    result.update(admission_state='ready', runs=[dict(reused=True), dict(reused=False)])
+    monkeypatch.setattr(records.time, 'time', lambda: 100)
+    records.observe_analysis(store, sid, turn['turn_id'], event_id, result)
+    initial = owner.read(actor, sid)['analysis_progress']
+    assert initial['reused_count'] == 1
+    assert initial['last_progress_at'] == 100
+    monkeypatch.setattr(records.time, 'time', lambda: 200)
+    records.observe_analysis(store, sid, turn['turn_id'], event_id, result)
+    assert owner.read(actor, sid)['analysis_progress'] == initial
+    result.update(completed_count=126, state='validating')
+    records.observe_analysis(store, sid, turn['turn_id'], event_id, result)
+    current = owner.read(actor, sid)['analysis_progress']
+    assert current['last_progress_at'] == 200 and current['state'] == 'validating'
+    assert current['completed_count'] == current['total_count'] == 126
+    with store.connection(write=True) as db:
+        assert db.execute("SELECT count(*) FROM assistant_events WHERE "
+            "event_type='hyprn.analysis_progress'").fetchone()[0] == 2
+        saved = db.execute('SELECT content FROM assistant_tool_results').fetchone()[0]
+        assert json.loads(saved)['content']['completed_count'] == 0
+        db.execute("UPDATE assistant_tool_results SET delivery='accepted'")
+    assert owner.read(actor, sid)['analysis_progress'] is None
+    with store.connection(write=True) as db:
+        db.execute("UPDATE assistant_tool_results SET delivery='waiting'")
+        records.update(db, sid, active_turn=uid())
+    assert owner.read(actor, sid)['analysis_progress'] is None
+    with pytest.raises(DomainError):
+        owner.read(uid(), sid)
+    assert not provider.results and not provider.sent
 
 
 @pytest.mark.parametrize('revocation', ['delegation', 'membership', 'stop'])

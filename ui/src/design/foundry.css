@@ -1585,4 +1585,5 @@ fieldset:is(.hf-form-stack,.form-stack) > legend { font-weight:var(--type-body-s
 
 .hf-assistant-activity { display:grid; justify-items:start; gap:var(--space-2); padding:var(--space-3) var(--space-4); background:var(--surface-sunken); border:1px solid var(--line); border-radius:var(--radius-md); }
 .hf-assistant-activity p { margin:0; color:var(--ink-2); font-size:var(--type-small-size); line-height:var(--type-prose-line); }
+.hf-assistant-activity__count { font-size:var(--type-body-size); line-height:var(--type-prose-line); font-variant-numeric:tabular-nums; }
 .hf-assistant-activity[data-state="blocked"] { border-color:var(--warning); }

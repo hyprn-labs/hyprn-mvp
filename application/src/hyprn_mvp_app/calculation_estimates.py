@@ -288,11 +288,11 @@ class Estimates:
             revision = point['configuration_revision_id']
             run_id, results_digest, values = latest.get(revision), None, [None] * len(targets)
             if run_id is not None:
-                retained = history.retained(actor, sid, run_id)
+                retained = history.retained_projection(actor, sid, run_id)
                 results = retained.history['results'] or {}
                 results_digest = digest(retained.history['results'])
                 runtimes.add(
-                    json.dumps(retained.payload['bundle']['manifest']['runtime'], sort_keys=True)
+                    json.dumps(retained.runtime, sort_keys=True)
                 )
                 tokens.append(retained.token)
                 recorded = {_key(o['target']): o for o in results.get('outputs', [])}
