@@ -316,10 +316,10 @@ export class BriefController {
     });
   }
   /** Read the brief and every saved version of `studyId`. Refused while edits are unsaved. */
-  open = async (studyId: string): Promise<boolean> => {
-    if (this.dirty || this.busy) return false;
+  open = async (studyId: string, refresh = false): Promise<boolean> => {
+    if (this.dirty || this.busy || (refresh && this.state.local)) return false;
     this.unsubscribe ??= this.api.onSessionChange(this.sessionChanged);
-    this.clear();
+    if (!refresh || this.state.studyId !== studyId || this.actor !== this.api.actor) this.clear();
     this.actor = this.api.actor;
     const valid = this.ticket();
     this.read = new AbortController();

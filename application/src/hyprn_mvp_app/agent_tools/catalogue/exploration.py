@@ -66,7 +66,11 @@ GROUP = obj(
         ),
         dimensions=array(DIMENSION, 32, 1),
         training_count=dict(type='integer', minimum=3, maximum=64),
-        validation_count=dict(type='integer', minimum=2, maximum=64),
+        validation_count=dict(
+            type='integer', minimum=2, maximum=64,
+            description='Held-out pool: one point selects the method; the remaining points '
+                        'independently validate it. For 16, this is 1 selection + 15 validation.',
+        ),
     ),
     ('configuration_version_id', 'dimensions', 'training_count', 'validation_count'),
 )
@@ -247,6 +251,20 @@ async def _estimate(ctx, eid):
     return value, ports
 
 
+def _sample_roles(samples, group):
+    """Project the frozen pool using the qualified fitter's reserved-first-point policy.
+
+    Counts are reserved roles, not evidence of successful execution or assessment;
+    each output's metrics report the actual assessed and unavailable results.
+    """
+    points = [s for s in samples if s['group'] == group]
+    training = sum(s['partition'] == 'training' for s in points)
+    held_out = len(points) - training
+    selection = min(1, held_out)
+    return dict(training=training, held_out_pool=held_out, method_selection=selection,
+                independent_validation=held_out - selection)
+
+
 async def get_surrogate(a, ctx):
     value, ports = await _estimate(ctx, a['estimate_id'])
     result = {
@@ -263,6 +281,7 @@ async def get_surrogate(a, ctx):
     result['groups'] = [
         dict(
             group=g['group'],
+            sample_roles=_sample_roles(value['samples'], g['group']),
             outputs=[
                 dict(
                     output=ports.view.quantity_ref(o['target']),
@@ -498,13 +517,15 @@ TOOLS = (
         'Creates a distinct analysis or a new version of the same investigation. Explicit '
         'joint ranges, units, seed and sample counts; no hidden input values. Use '
         'boundary_latin_hypercube for full-box exploration: training_count includes all '
-        '2^d independent corners plus interior points. Validation points are held out. '
+        '2^d independent corners plus interior points. validation_count is the held-out pool: '
+        'one point selects the method and the rest independently validate it. '
         'Set tolerances before launch: absolute in each output unit, relative as a fraction. '
         'Null/omitted tolerances means no surrogate. Save explicit input vectors with '
         'provenance first. For revision supply calculation_id and expected_revision together. '
         'Capacity is 128 total training plus validation points across all groups (64 each per group). '
         'Check the requested total before sending. Refine ranges or create a new version after '
         'reviewing failed targets; preserve independent validation and tolerances. '
+        'Bind every criterion this analysis will assess before launch. '
         'Returns an operation; poll get_sampling_status. Never loosen accuracy to publish.',
         obj(
             dict(
@@ -567,7 +588,8 @@ TOOLS = (
     tool(
         'get_surrogate',
         'Read surrogate validation',
-        'Reads selected methods, held-out validation counts, largest error, RMSE and '
+        'Reads selected methods, reserved training/selection/independent-validation counts, '
+        'actual assessed counts, largest error, RMSE and '
         'declared tolerances. Failed validation never becomes a usable estimate.',
         ESTIMATE_INPUT,
         get_surrogate,

@@ -533,8 +533,9 @@ def _selected_union_errors(error):
     """Follow an explicit wire discriminator or the submitted JSON type.
 
     Do not guess a version from the number of failing fields. A branch can be
-    excluded only by its own type or kind/schema_version constraint; ambiguous
-    alternatives keep the ordinary closest-form diagnostic.
+    excluded only by its own type or kind/schema_version constraint. An envelope
+    may carry its version inside content; follow that explicit nested version too.
+    Ambiguous alternatives keep the ordinary closest-form diagnostic.
     """
 
     def branches(union):
@@ -566,8 +567,9 @@ def _selected_union_errors(error):
             return True
         if (
             child.validator in ('const', 'enum')
-            and len(child.path) == 1
-            and child.path[0] in ('kind', 'schema_version')
+            and child.path
+            and (child.path[-1] == 'schema_version'
+                 or (len(child.path) == 1 and child.path[0] == 'kind'))
         ):
             return True
         if child.validator in ('oneOf', 'anyOf') and not child.path:

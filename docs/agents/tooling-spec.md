@@ -933,6 +933,14 @@ on the reasoning session staying open; sampled members are not manually schedule
 with submit_runs. A wait reads light status for at most 20 seconds. Readiness requires complete joint support and passing
 independent validation for every displayed output; publication checks it again.
 
+`get_surrogate.groups[].sample_roles` reports reserved `training`, `held_out_pool`,
+`method_selection` and `independent_validation` counts from the frozen estimate samples.
+The qualified fitter reserves the first held-out point in each group for method
+selection; per-output metrics separately report actual assessed/unavailable results.
+These counts never imply physical validity or successful calculation. Generated
+sample configurations receive deterministic analysis-and-point names; retained
+configuration names and exact identities remain unchanged.
+
 `edit_model.update_component` also exposes versioned quantity creation, renaming,
 unit/symbol changes and removal (`set_quantities`, `remove_quantities`). Description
 and model/component limits remain in the versioned model explanation; assumptions

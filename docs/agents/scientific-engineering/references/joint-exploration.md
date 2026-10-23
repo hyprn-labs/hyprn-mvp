@@ -64,7 +64,9 @@ surfaces; a restricted catalogue never grants permission to bypass the public bo
    disjoint validation and output-specific tolerances. Count every group against the
    advertised capacity: currently 128 training plus validation points in total, at most
    64 of each per group. Training must accommodate all 2^d corners plus interior points.
-   Reserve unused capacity for added training and fresh independent validation. If the
+   Bind the criteria this analysis is intended to assess before launch, even when
+   it also supplies interactive exploration. Reserve unused capacity for added
+   training and fresh independent validation. If the
    required dimension count cannot fit, explain the capability gap instead of hiding
    variables, weakening targets or silently narrowing the domain.
 3. Poll `get_sampling_status`, retain the saved analysis version and call
@@ -73,7 +75,10 @@ surfaces; a restricted catalogue never grants permission to bypass the public bo
    Do not manually submit member points or run a separate fit. A changed plan needs a
    new analysis version. Resolve uncertain operations before any deliberate retry.
 4. Inspect `get_surrogate` for every output and group. Method-selection points choose
-   the approximation; validation points independently assess its selected method.
+   the approximation; the remaining held-out points independently assess its selected
+   method. Read `sample_roles` for planned counts and each output's metrics for actual
+   assessment. A held-out pool of 16 yields 1 selection and 15 independent validation
+   points under the current fitter; it is not a lost calculation.
    After a failure, diagnose and refine without relaxing accuracy. Once validation
    outcomes influence refinement, reserve fresh validation before claiming independence.
 5. Require `prepare_answer_exploration` ready for all displayed outputs, then copy its

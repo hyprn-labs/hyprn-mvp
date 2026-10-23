@@ -279,13 +279,15 @@ def test_a_sampled_version_freezes_generated_points_and_never_runs_candidate_cod
         p['configuration_revision_id'] for p in design['points']
     ]
     reference = e['case']['frozen']['configuration']
-    for point in design['points']:
+    for index, point in enumerate(design['points'], start=1):
         frozen = (
             e['client']
             .get(path(e, 'configurations/' + point['configuration_revision_id']))
             .json()['data']
         )
         config = frozen['configuration']
+        assert config['name'] == f"{body['name']} · Point {index}"
+        assert config['name'] != reference['name']
         # Only the sampled input moves; the other keeps its saved value and every pin holds.
         assert [i['value'] for i in config['inputs']] == point['vector'] + [7]
         assert [i['units'] for i in config['inputs']] == [
@@ -1220,3 +1222,16 @@ def test_concurrent_exploration_shares_verification_but_rechecks_each_reader(
     assert len(reads) == 1
     assert len(rechecks) >= 2
     assert not owners[0]._basis_reads
+
+
+def test_replayed_generated_point_retains_its_original_name_and_exact_snapshot(env):
+    owner = Configurations(env['store'], None)
+    original = env['case']['frozen']['configuration']
+    values = [{key: item[key] for key in ('target', 'value', 'units')}
+              for item in original['inputs']]
+    args = (env['actor'], env['sid'], uid(), env['reference'], values, 'Declared range.')
+    saved = owner.exploration_point(*args)
+    before = owner.read(env['actor'], env['sid'], saved['configuration_revision_id'])
+    assert owner.exploration_point(*args, name='Response sweep · Point 1') == saved
+    assert owner.read(env['actor'], env['sid'], saved['configuration_revision_id']) == before
+    assert before['configuration']['name'] == original['name']

@@ -199,3 +199,34 @@ def test_sampling_capacity_is_reported_before_a_design_is_sent(env):
     assert '132' in str(value.envelope()) and '128' in str(value.envelope())
     with env['store'].connection() as db:
         assert db.execute("SELECT count(*) FROM receipts WHERE category='calculation_sample'").fetchone()[0] == 0
+
+
+def test_surrogate_read_separates_reserved_roles_from_actual_output_assessment(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from hyprn_mvp_app.agent_tools.catalogue import exploration
+
+    samples = ([dict(group=0, partition='training')] * 32
+               + [dict(group=0, partition='validation')] * 16
+               + [dict(group=1, partition='training')] * 5
+               + [dict(group=1, partition='check')] * 2)
+    metrics = dict(assessed_count=15, evaluable_count=15, failed_count=0,
+                   max_absolute_error=0.01, rmse=0.005, target_met=True)
+    value = dict(estimate_id='estimate', calculation_version_id='version', state='ready',
+                 completed_groups=2, total_groups=2, reason=None, samples=samples,
+                 request=dict(tolerances=[]), groups=[dict(group=group, outputs=[dict(
+                     target='output', units='K', method='kriging', reason=None,
+                     metrics=metrics if group == 0 else None)]) for group in range(2)])
+
+    async def estimate(ctx, identity):
+        return value, SimpleNamespace(view=SimpleNamespace(quantity_ref=lambda t: t))
+
+    monkeypatch.setattr(exploration, '_estimate', estimate)
+    result = asyncio.run(exploration.get_surrogate(dict(estimate_id='estimate'), None))
+    first, second = result['groups']
+    assert first['sample_roles'] == dict(
+        training=32, held_out_pool=16, method_selection=1, independent_validation=15)
+    assert first['outputs'][0]['metrics'] == metrics
+    assert second['sample_roles'] == dict(
+        training=5, held_out_pool=2, method_selection=1, independent_validation=1)
+    assert second['outputs'][0]['metrics'] is None

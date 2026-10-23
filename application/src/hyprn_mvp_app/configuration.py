@@ -23,7 +23,7 @@ class Configurations:
     def __init__(self,store,coordinator):
         self.store,self.coordinator=store,coordinator
 
-    def exploration_point(self, actor, sid, command, baseline, values, rationale):
+    def exploration_point(self, actor, sid, command, baseline, values, rationale, *, name=None):
         """Freeze one explicit sampled vector from an immutable configuration.
 
         This owner preserves exact model, evidence, approach and numerical pins.
@@ -37,6 +37,8 @@ class Configurations:
         # New configurations carry no criteria: only a version 6 baseline is copied.
         if configuration['schema_version'] != '6':
             raise DomainError('unsupported_record_version', 422)
+        if name is not None:
+            configuration['name'] = name
         original = configuration['inputs']
         key = lambda item: (item['target']['instance_id'], item['target']['port_id'])
         mapping = {key(item): item for item in values}
@@ -68,6 +70,9 @@ class Configurations:
                        (configuration['configuration_id'], sid,
                         configuration['configuration_revision_id']))
             return dict(configuration_revision_id=configuration['configuration_revision_id'])
+        # The containing sampling command pins the analysis name. Preserve this
+        # point's numerical replay identity so an interrupted older operation reuses
+        # its already saved configuration, including its immutable historical name.
         return self.store.command(actor, sid, 'exploration_configuration', command,
                                   dict(baseline=baseline, values=values, rationale=rationale), save,
                                   attribute=lambda saved: [('configuration_version',

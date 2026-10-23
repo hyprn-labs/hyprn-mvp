@@ -32,3 +32,12 @@ The separator supports pointer dragging, Left/Right keys, Home/double-click rese
 and End maximum. Width uses bounded tenths of the shared dock token (80–180%,
 maximum 60% of the stage, further bounded to preserve the reader when details are present). When the workspace cannot fit three readable columns, details stack within the reading region. At narrow widths the assistant stacks above the reader
 and the separator is absent. No page may implement its own panel toggles.
+
+
+Conversation activity and the dock's visibility have separate lifetimes. Hiding
+an active conversation keeps its bounded status polling alive until the turn
+settles; a hidden idle conversation does not poll continuously. A settled turn
+invalidates the visible study readers once, after message catch-up, instead of
+reloading the workspace on each chat poll. Updates belong to the attached study
+and current authenticated session. Keep human editors and deliberately selected
+saved versions intact; defer reader refresh until edits are saved or cancelled.

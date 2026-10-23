@@ -221,6 +221,64 @@ export function Workspace() {
     window.addEventListener('beforeunload', unload);
     return () => window.removeEventListener('beforeunload', unload);
   }, [dirty]);
+  const [assistantChange, setAssistantChange] = useState<{ studyId: string; sequence: number }>();
+  const refreshedAssistantChange = useRef(0);
+  const [refreshingAssistant, setRefreshingAssistant] = useState(false);
+  const editingEpoch = useRef({ dirty, generation: 0 });
+  if (editingEpoch.current.dirty !== dirty)
+    editingEpoch.current = { dirty, generation: editingEpoch.current.generation + 1 };
+  function assistantSettled(studyId: string) {
+    setAssistantChange((previous) => ({ studyId, sequence: (previous?.sequence ?? 0) + 1 }));
+  }
+  useEffect(() => {
+    if (!assistantChange || refreshedAssistantChange.current === assistantChange.sequence ||
+        refreshingAssistant || page !== 'study' ||
+        study?.study_id !== assistantChange.studyId || loading || busy ||
+        api.pending || dirty || brief.busy || answer.busy ||
+        brief.getSnapshot().local || answer.getSnapshot().local) return;
+    const sid = study.study_id;
+    const token = generation.current, editToken = editingEpoch.current.generation;
+    const fence = api.fence({ studyId: sid });
+    const valid = () => fence.valid() && token === generation.current &&
+      editToken === editingEpoch.current.generation && !guardsDirty(guards);
+    refreshedAssistantChange.current = assistantChange.sequence;
+    setRefreshingAssistant(true);
+    async function refresh() {
+      try {
+        if (view === 'overview') {
+          await Promise.all([brief.open(sid, true), answer.open(sid, true)]);
+        } else if (view === 'model') {
+          const modelId = (model ?? revision)?.model_id;
+          const [associations, current, versions] = await Promise.all([
+            api.models(sid, fence.signal),
+            model && !revision ? api.model(sid, model.model_id, fence.signal) : null,
+            modelId ? api.revisions(sid, modelId, fence.signal) : null,
+          ]);
+          if (!valid()) return;
+          setModels(associations.map((item) => ({
+            model_id: item.model_id, name: item.name ?? 'Model name unavailable',
+          })));
+          if (current) currentModel(current);
+          if (versions) setRevisions(versions);
+        }
+      } catch (cause) {
+        if (valid()) {
+          const result = await api.readFailed(cause, fence);
+          if (result !== 'stale' && valid()) setError(cause);
+        }
+      } finally {
+        // Editing may start and finish during an in-flight read. Defer that reply
+        // and re-read after the editor settles rather than replacing newer work.
+        if (fence.valid() && token === generation.current &&
+            editToken !== editingEpoch.current.generation &&
+            refreshedAssistantChange.current === assistantChange!.sequence)
+          refreshedAssistantChange.current = 0;
+        fence.done();
+        setRefreshingAssistant(false);
+      }
+    }
+    void refresh();
+  });
   function setCurrentStudy(value: Study) {
     setStudy(value);
     setStudies((previous) =>
@@ -248,6 +306,8 @@ export function Workspace() {
   // Session end also forgets navigation return state, run filters, the requested
   // approach reading positions; none may outlive the session that read them.
   function clearSession() {
+    setAssistantChange(undefined);
+    refreshedAssistantChange.current = 0;
     if (api.hosted) {
       window.history.replaceState(null, '', '/ui/');
       currentLink.current = '';
@@ -285,13 +345,24 @@ export function Workspace() {
     setSignedIn(false);
   }
   api.onAuthorizationLoss = clearSession;
+  async function restoreRoute(hash: string) {
+    const target = parseViewLink(hash);
+    if (target) await openLink(target);
+    else await openPage(
+      hash === '#help' ? 'help' : hash === '#profile' ? 'profile'
+        : hash === '#new-study' ? 'new-study' : 'home',
+    );
+  }
   async function hostedSignIn() {
+    // Bootstrap clears the previous session and its URL. Keep the requested route
+    // before that reset, then resolve it through ordinary authorized reads.
+    const requestedRoute = window.location.hash;
     setSigningIn(true);
     try {
       setProfile((await api.bootstrap()) ?? null);
       setSignedIn(true);
-      await openPage('home');
-    } catch { clearSession(); }
+      await restoreRoute(requestedRoute);
+    } catch (cause) { setError(cause); }
     finally { setSigningIn(false); }
   }
   async function beginSession() {
@@ -1141,18 +1212,7 @@ export function Workspace() {
                     setProfile((await api.login(username, password)) ?? null);
                     setPassword('');
                     setSignedIn(true);
-                    const target = parseViewLink(window.location.hash);
-                    if (target) await openLink(target);
-                    else
-                      await openPage(
-                        window.location.hash === '#help'
-                          ? 'help'
-                          : window.location.hash === '#profile'
-                            ? 'profile'
-                            : window.location.hash === '#new-study'
-                              ? 'new-study'
-                              : 'home',
-                      );
+                    await restoreRoute(window.location.hash);
                   });
                 }}
               >
@@ -1253,6 +1313,7 @@ export function Workspace() {
             <ContextWorkspace
               api={api}
               home={page === 'home'}
+              onStudyChanged={assistantSettled}
               onOpenStudy={id => navigate(() => void openLink({ study: id, view: 'overview' }))}
               studyId={study?.study_id}
               studyName={study?.name}

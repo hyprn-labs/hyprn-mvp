@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { AssistantHomeMenu } from './AssistantHomeMenu';
 import { useEffect, useRef, useState } from 'react';
 import type { AssistantConversationRead4, HyprnMvpApi } from './api';
@@ -45,6 +46,8 @@ export function StudyAssistant({
   studyName,
   home,
   onOpenStudy,
+  onStudyChanged,
+  container,
   expanded,
   onToggleExpanded,
   onClose,
@@ -54,6 +57,8 @@ export function StudyAssistant({
   studyName?: string;
   home: boolean;
   onOpenStudy: (id: string) => void;
+  onStudyChanged: (studyId: string) => void;
+  container: HTMLElement | null;
   expanded: boolean;
   onToggleExpanded: () => void;
   onClose: () => void;
@@ -71,8 +76,31 @@ export function StudyAssistant({
   const wake = useRef<() => void>(() => {});
   const [loadingEarlier, setLoadingEarlier] = useState(false);
 
+  const latestChange = useRef(onStudyChanged);
+  latestChange.current = onStudyChanged;
+  const visible = useRef(!!container);
+  visible.current = !!container;
+  const observed = useRef<{ state: string; cursor: string | null } | null>(null);
+  const invalidated = useRef(false);
+  useEffect(() => { if (container) wake.current(); }, [container]);
+
   function accept(value: AssistantConversationRead4, earlier = false) {
-    if (!earlier) cursor.current = value.next_cursor;
+    if (!earlier) {
+      const previous = observed.current;
+      const settled = ['idle', 'blocked', 'unavailable'].includes(value.state);
+      if (settled && (
+        (previous && !['idle', 'blocked', 'unavailable'].includes(previous.state)) ||
+        (value.messages.some((item) => item.role === 'assistant') &&
+          previous?.cursor !== value.next_cursor)
+      )) invalidated.current = true;
+      // Catch-up pages describe one settled turn, not separate authoring changes.
+      if (studyId && settled && !value.has_more_messages && invalidated.current) {
+        invalidated.current = false;
+        latestChange.current(studyId);
+      }
+      observed.current = { state: value.state, cursor: value.next_cursor };
+      cursor.current = value.next_cursor;
+    }
     setConversation((previous) => {
       if (!previous) return value;
       const ordered = earlier
@@ -97,6 +125,8 @@ export function StudyAssistant({
     let polling = false;
     let delay = 1500;
     cursor.current = null;
+    observed.current = null;
+    invalidated.current = false;
     setConversation(null);
     setDraft('');
     setError('');
@@ -155,7 +185,9 @@ export function StudyAssistant({
       } finally {
         polling = false;
       }
-      if (!closed && fence.valid()) timer = setTimeout(poll, delay);
+      if (!closed && fence.valid() && (visible.current || invalidated.current ||
+          !['idle', 'blocked', 'unavailable'].includes(observed.current?.state ?? 'idle')))
+        timer = setTimeout(poll, delay);
     }
     const refresh = () => {
       clearTimeout(timer);
@@ -264,7 +296,8 @@ export function StudyAssistant({
       ? (conversation.state as
           'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked')
       : null;
-  return (
+  if (!container) return null;
+  return createPortal(
     <AssistantPane
       state="connected"
       context={
@@ -368,6 +401,7 @@ export function StudyAssistant({
           {error && <p role="alert">{error}</p>}
         </ConversationLog>
       )}
-    </AssistantPane>
+    </AssistantPane>,
+    container,
   );
 }

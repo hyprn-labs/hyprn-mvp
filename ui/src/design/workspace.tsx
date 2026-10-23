@@ -18,6 +18,7 @@ export function WorkspaceShell({
   context,
   assistant,
   onToggleAssistant,
+  onAssistantHost,
   assistantExpanded = false,
 }: {
   navigation: ReactNode;
@@ -25,6 +26,7 @@ export function WorkspaceShell({
   context?: ReactNode;
   assistant?: ReactNode;
   onToggleAssistant?: () => void;
+  onAssistantHost?: (node: HTMLDivElement | null) => void;
   assistantExpanded?: boolean;
 }) {
   const [width, setWidth] = useState(0);
@@ -47,7 +49,7 @@ export function WorkspaceShell({
           {context && <DetailsDock>{context}</DetailsDock>}
         </div>
         {assistant && (
-          <div id="workspace-assistant" className="hf-workspace__assistant">
+          <div ref={onAssistantHost} id="workspace-assistant" className="hf-workspace__assistant">
             {!assistantExpanded && <div className="hf-assistant-resizer" role="separator" tabIndex={0}
               aria-label="Resize assistant" aria-orientation="vertical" aria-valuemin={-2} aria-valuemax={8} aria-valuenow={width}
               aria-valuetext={width === 0 ? 'Default width' : String(100 + width * 10) + '% of default width'}

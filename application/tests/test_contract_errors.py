@@ -456,3 +456,28 @@ def test_execution_version_selection_keeps_unprovable_branches(monkeypatch, othe
                 assert selected.is_valid(value) == original.is_valid(value)
         finally:
             contracts._execution_version_validator.cache_clear()
+
+
+def test_answer_nested_version_diagnostics_do_not_blame_derived_monetary_basis():
+    from uuid import uuid4
+    from test_study_answer_api import answer
+    from hyprn_mvp_app.study_answer import validate_answer
+
+    identity = lambda: str(uuid4())
+    f = dict(alternatives=[dict(alternative_id=identity())], brief=identity(),
+             calculation=identity(), run=identity(), limit=dict(criterion_id=identity()))
+    content = answer(f, schema_version='3',
+                     outcome=dict(kind='no_go', alternative_id=identity(), reason='A limit fails.'),
+                     completion=dict(state='interim', deliverables=[]),
+                     scientific_review={key: dict(state='limited', explanation='Screen only.')
+                         for key in ('brief_fidelity', 'source_basis',
+                                     'physical_validity', 'sensitivity')})
+    content['comparison'][0]['monetary_basis'] = None
+    body = dict(command_id=identity(), expected_revision=None, content=content)
+    validate_answer('StudyAnswerDraftSaveRead3', body)
+    del content['outcome']['alternative_id']
+    with pytest.raises(DomainError) as caught:
+        validate_answer('StudyAnswerDraftSaveRead3', body)
+    assert caught.value.fields == [dict(
+        path='/content/outcome/alternative_id', code='invalid',
+        message='Required field is missing.', element_ref=None)]

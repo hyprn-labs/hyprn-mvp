@@ -718,8 +718,10 @@ class CalculationSamples:
         a repeated step return the same versions), then save the calculation version in one
         transaction with the operation's completion."""
         request, operation = result['request'], result['operation_id']
-        for point in work['points']:
+        for index, point in enumerate(work['points'], start=1):
             if point['configuration_revision_id'] is None:
+                suffix = f' · Point {index}'
+                name = request['name'][:256 - len(suffix)] + suffix
                 saved = self.configurations.exploration_point(
                     actor,
                     sid,
@@ -727,6 +729,7 @@ class CalculationSamples:
                     request['groups'][point['group']]['reference_configuration_revision_id'],
                     point['inputs'],
                     request['rationale'],
+                    name=name,
                 )
                 point['configuration_revision_id'] = saved['configuration_revision_id']
         design = dict(

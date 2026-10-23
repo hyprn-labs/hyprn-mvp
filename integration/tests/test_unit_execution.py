@@ -20,7 +20,7 @@ from hyprn_mvp_app.scientific_configuration import project_scientific_configurat
 from hyprn_mvp_integration import launcher
 from hyprn_mvp_integration.calculation import ScalarCalculation, NativeExecution
 from execution_fixtures import fixture, runtime_fixture
-from test_unit_execution_admission import (catalog, case6, assemble, repin, reseal,
+from test_unit_execution_admission import (catalog, current_catalog, case6, assemble, repin, reseal,
     relocate_catalog, CATALOG_PATH, signed, UNIT_CATALOG_DIGEST)
 from test_result_dependencies import source
 
@@ -297,10 +297,78 @@ def test_raw_legacy_bundle5_offline_has_no_invented_study_revision(catalog,linke
     assert seen==[True]
 
 
+def retain_portable_history(environment):
+    """Current submission/history owners, synthetic terminal data, no candidate execution.
+
+    Old-format configurations are explicitly seeded by the historical-reader
+    fixture. No removed approach authoring service is needed to inspect them.
+    """
+    from hyprn_mvp_app.execution import Submissions
+
+    store = environment['store']
+    actor, sid = environment['actor'], environment['sid']
+    case = environment['case']
+    frozen = case['frozen']
+    configuration = frozen['configuration']
+    outputs = json.loads(case['files'][case['prepared']['entrypoint']['bindings_path']])['outputs']
+    result = dict(
+        schema_version='1',
+        execution=dict(state='finished', exit_code=0, message='Synthetic terminal fixture'),
+        convergence=dict(state='not_applicable', diagnostics_ref=None),
+        optimization=dict(termination='not_applicable', feasibility='not_applicable'),
+        completeness=dict(expected=len(outputs), available=len(outputs), failed=0, unavailable=0),
+        outputs=[dict(target=output['target'], value=7+index, units=output['units'],
+                      availability='available', reason=None, producer_completed=True, assigned=True)
+                 for index, output in enumerate(outputs)],
+        criteria=[dict(criterion_id=criterion['criterion_id'], outcome='unresolved',
+                       reason='Synthetic fixture') for criterion in configuration['criteria']],
+        applicability=dict(state='unassessed', evidence_refs=[]), artifacts=[],
+    )
+    association = dict(store_uuid=uid(), process_uuid=uid())
+
+    class RetainedDouble:
+        """Synthetic native boundary; real application preparation and recording."""
+        record = None
+
+        def require_attestation(self):
+            return True
+
+        def bundle_runtime(self):
+            return runtime_fixture()
+
+        def matches(self, request):
+            return []
+
+        def launch(self, bundle, request):
+            retained_result = dict(result, run_id=request['run_id'],
+                                   bundle_digest=request['bundle_digest'])
+            self.record = dict(
+                request=request, bundle=bundle, results=retained_result,
+                assessment=None, artifacts={}, errors=[], process_state='finished',
+                exit_status=0, **association,
+            )
+            return {key: self.record[key] for key in (
+                'process_uuid', 'store_uuid', 'process_state', 'exit_status'
+            )}
+
+        def read_record(self, request, selected):
+            assert request == self.record['request'] and selected == association
+            return self.record
+
+    service = Submissions(
+        store, lambda *_: (case['prepared'], case['files']), RetainedDouble()
+    )
+    run = service.submit(actor, sid, dict(
+        command_id=uid(), configuration_revision_id=configuration['configuration_revision_id']
+    ))
+    service.dispatch(run['run_id'])
+    assert service.read(actor, sid, run['run_id'])['state'] == 'recorded'
+    return run['run_id']
+
+
 @pytest.mark.parametrize('kind',['physical','unspecified','legacy','typed'])
 def test_portable_raw_inspection_preserves_exact_selected_model_without_wrapper(catalog,tmp_path,kind):
     from test_unit_execution_admission import mixed_case
-    from test_approach_modified_runs import retain_api
     from hyprn_mvp_app.store import Store
     from test_unit_history import portable,archive
     from hyprn_mvp_app.computational_export import inspect_record
@@ -313,7 +381,7 @@ def test_portable_raw_inspection_preserves_exact_selected_model_without_wrapper(
         db.execute('UPDATE memberships SET study_id=? WHERE study_id=?',(c['study_id'],study['study_id']))
         db.execute('INSERT INTO configurations VALUES(?,?,?,?)',(c['configuration_revision_id'],c['configuration_id'],c['study_id'],json.dumps(case['frozen'])))
     e=dict(store=store,actor=actor,sid=c['study_id'],case=case)
-    e['rid']=retain_api(e,case['frozen']);files=portable(e);before=deepcopy(files)
+    e['rid']=retain_portable_history(e);files=portable(e);before=deepcopy(files)
     manifest=inspect_record(archive(files))
     assert manifest['selected_run_ids']==[e['rid']]
     loc='hyprn-mvp/runs/'+e['rid']+'/bundle/'

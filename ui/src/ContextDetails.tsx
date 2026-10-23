@@ -104,6 +104,7 @@ export function ContextWorkspace({
   navigation,
   home,
   onOpenStudy,
+  onStudyChanged,
   children,
 }: {
   api: HyprnMvpApi;
@@ -113,6 +114,7 @@ export function ContextWorkspace({
   navigation: ReactNode;
   home: boolean;
   onOpenStudy: (id: string) => void;
+  onStudyChanged: (studyId: string) => void;
   children: ReactNode;
 }) {
   const [detail, setDetail] = useState<EvidenceDetail | null>(null);
@@ -135,6 +137,8 @@ export function ContextWorkspace({
   }).current;
   const [reader, setReader] = useState<Reader | null>(null);
   const [assistant, setAssistant] = useState(false);
+  const [assistantStarted, setAssistantStarted] = useState(false);
+  const [assistantHost, setAssistantHost] = useState<HTMLDivElement | null>(null);
   const [attachedStudy, setAttachedStudy] = useState<{ id: string; name?: string } | null>(null);
   const attachedId = studyId ?? attachedStudy?.id;
   const attachedName = studyId ? studyName : attachedStudy?.name;
@@ -184,6 +188,7 @@ export function ContextWorkspace({
     setAssistant(false);
     setAssistantExpanded(false);
     setAttachedStudy(null);
+    setAssistantStarted(false);
   }, [api.actor, api.csrf]);
   useEffect(
     () =>
@@ -283,26 +288,28 @@ export function ContextWorkspace({
         onToggleAssistant={() => {
           assistantInvoker.current = document.activeElement as HTMLElement;
           if (assistant) closeAssistant();
-          else setAssistant(true);
+          else { setAssistantStarted(true); setAssistant(true); }
         }}
-        assistant={
-          assistant && (
-            <StudyAssistant
-              key={attachedId ?? 'no-study'}
-              api={api}
-              studyId={attachedId}
-              studyName={attachedName}
-              home={home}
-              onOpenStudy={onOpenStudy}
-              expanded={assistantExpanded}
-              onToggleExpanded={() => setAssistantExpanded(value => !value)}
-              onClose={closeAssistant}
-            />
-          )
-        }
+        assistant={assistant ? <></> : undefined}
+        onAssistantHost={setAssistantHost}
       >
         {children}
       </WorkspaceShell>
+      {assistantStarted && (
+        <StudyAssistant
+          key={attachedId ?? 'no-study'}
+          api={api}
+          studyId={attachedId}
+          studyName={attachedName}
+          home={home}
+          onOpenStudy={onOpenStudy}
+          onStudyChanged={onStudyChanged}
+          container={assistantHost}
+          expanded={assistantExpanded}
+          onToggleExpanded={() => setAssistantExpanded(value => !value)}
+          onClose={closeAssistant}
+        />
+      )}
       {host && createPortal(<DetailsDock modal>{panel}</DetailsDock>, host)}
     </Context.Provider>
   );

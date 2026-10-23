@@ -215,6 +215,8 @@ def test_catalogue_backed_monetary_edits_negotiate_current_model_format(env):
             'source': "def compute(inputs, outputs):\n    outputs['expense'] = inputs['mass'] * inputs['price']\n",
         }],
     })
+    from hyprn_mvp_app.agent_tools.spec import ToolError
+    assert not isinstance(preview, ToolError), preview.envelope()
     assert preview['preview_only'] is True
     ((action, batch),) = env['double'].batches
     assert action == 'preview' and batch['schema_version'] == '5'

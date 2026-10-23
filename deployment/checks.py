@@ -215,6 +215,7 @@ GROUPS = {
         'deployment/tests/test_native_journey.py::test_addition_b',
     ),
     'bridge-history': (
+        'integration/tests/test_retained_repository.py',
         'deployment/tests/test_bridge.py',
         'application/tests/test_history_reuse.py',
         'integration/tests/test_results.py::test_retained_versions_read_without_worker_modeling_or_reassessment',

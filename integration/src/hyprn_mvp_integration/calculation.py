@@ -37,6 +37,17 @@ from .results import (
 )
 
 
+def _read_bundle(folder, request):
+    """Batch immutable stored files without caching or changing their validation."""
+    repository = folder.base.repository
+    if not folder.is_stored:
+        return retained_bundle(repository, request)
+    from .repository import read_bundle
+
+    backend = folder.backend.get_repository()
+    return read_bundle(repository, backend, request)
+
+
 class ScalarCalculation(CalcJob):
     @staticmethod
     def validate_upstream(value, _port):
@@ -178,7 +189,7 @@ class ScalarParser(Parser):
             with self.retrieved.base.repository.open('result.json', mode='rb') as stream:
                 raw = stream.read(131073)
             request = self.node.inputs.request.get_dict()
-            bundle = retained_bundle(self.node.inputs.frozen_bundle.base.repository, request)
+            bundle = _read_bundle(self.node.inputs.frozen_bundle, request)
             model = json.loads(bundle['files']['model.json'])
             result = validate_result(
                 raw,
@@ -664,7 +675,7 @@ class NativeExecution:
         if 'results' in node.outputs:
             try:
                 request = node.inputs.request.get_dict()
-                bundle = retained_bundle(node.inputs.frozen_bundle.base.repository, request)
+                bundle = _read_bundle(node.inputs.frozen_bundle, request)
                 assessment = (
                     node.outputs.assessment.get_dict() if 'assessment' in node.outputs else None
                 )
@@ -682,11 +693,13 @@ class NativeExecution:
         return result
 
     def retained_bundle(self, process_uuid):
-        self.inspect(process_uuid)
         node = orm.load_node(process_uuid)
-        return retained_bundle(
-            node.inputs.frozen_bundle.base.repository, node.inputs.request.get_dict()
-        )
+        if (
+            not isinstance(node, orm.CalcJobNode)
+            or node.process_type != 'aiida.calculations:hyprn_mvp.scalar'
+        ):
+            raise ValueError('Unexpected native process')
+        return _read_bundle(node.inputs.frozen_bundle, node.inputs.request.get_dict())
 
     def read_record(self, request, association):
         """Fixed data-only read of an exact app-owned request and native association.
@@ -732,7 +745,7 @@ class NativeExecution:
             record['errors'].append(dict(code=code, partial=True))
 
         try:
-            record['bundle'] = self.retained_bundle(node.uuid)
+            record['bundle'] = _read_bundle(node.inputs.frozen_bundle, request)
             if 'assessment' in node.outputs:
                 record['assessment'] = node.outputs.assessment.get_dict()
             if 'results' in node.outputs:

@@ -74,6 +74,8 @@ function latch() {
 }
 async function harness(page: Page) {
   const state = {
+    hosted: false,
+    answer: null as any,
     studies: [
       {
         study_id: sid,
@@ -119,7 +121,9 @@ async function harness(page: Page) {
       actor_id: state.actor, account_name: state.actor, display_alias: state.alias,
       display_name: state.alias || state.actor, revision: state.profileRevision,
     });
-    if (path === '/session/mode') return ok({ mode: 'local' });
+    if (path === '/session/mode') return ok({ mode: state.hosted ? 'hosted' : 'local' });
+    if (path === '/session/external')
+      return ok({ actor_id: state.actor, csrf_token: 'isolated-hosted-token', profile: profile() });
     if (path === '/session') {
       if (method === 'POST') state.actor = body.username;
       return ok({ actor_id: state.actor, csrf_token: 'isolated-fixture-token', profile: profile() });
@@ -362,9 +366,9 @@ async function harness(page: Page) {
     if (path === `/studies/${id}/brief/versions` && study && method === 'GET')
       return ok({ items: [], next_cursor: null });
     if (path === `/studies/${id}/answer` && study && method === 'GET')
-      return ok({ draft: null, latest_version: null });
+      return ok({ draft: null, latest_version: id === sid ? state.answer : null });
     if (path === `/studies/${id}/answer/versions` && study && method === 'GET')
-      return ok({ items: [], next_cursor: null });
+      return ok({ items: id === sid && state.answer ? [state.answer] : [], next_cursor: null });
     if (path === `/studies/${id}/models/${mid}/explanation` && study && method === 'GET')
       return ok({ draft: null, latest_version: null });
     // These studies have no calculations and no reference marks; the Calculations area reads both.
@@ -1837,5 +1841,267 @@ test('Earlier Assistant pages do not overwrite a newer running turn', async ({ p
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Earlier messages', exact: true })).toHaveCount(0);
   expect(state.assistantSends).toHaveLength(1);
+  expect(state.unknown).toEqual([]);
+});
+
+
+function publishedAnswer() {
+  return {
+    schema_version: '3',
+    study_id: sid,
+    answer_version_id: 'answer-published',
+    version_number: 1,
+    content: {
+      schema_version: '3',
+      brief_version_id: null,
+      alternative_mappings: [],
+      comparison: [],
+      justifications: [],
+      interpretation: { interpretation: 'The saved assessment is available.' },
+      outcome: {
+        kind: 'no_recommendation',
+        basis: 'insufficient_evidence',
+        reason: 'Further measurements are needed before selecting an option.',
+      },
+      decisive_uncertainties: [],
+      next_analysis: { statement: '', resolves: '' },
+      exploration_basis: null,
+      completion: { state: 'interim', deliverables: [] },
+      scientific_review: Object.fromEntries(
+        ['brief_fidelity', 'source_basis', 'physical_validity', 'sensitivity'].map((key) => [
+          key,
+          { state: 'unassessed', explanation: '' },
+        ]),
+      ),
+    },
+  };
+}
+
+async function assistantPoll(page: Page) {
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+}
+
+test('Hosted bootstrap and reload preserve the exact requested model version', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.hosted = true;
+  state.model = { ...modelFixture(), model_id: mid, study_id: sid };
+  const hash = `#v=1&view=model&study=${sid}&model=${mid}&revision=${version}`;
+  await page.goto(origin + '/ui/' + hash);
+  await expect(
+    page.getByRole('heading', { name: state.model.name, exact: true }).first(),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toContain(`revision=${version}`);
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: state.model.name, exact: true }).first(),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toContain(`revision=${version}`);
+  expect(new URL(page.url()).hash).toContain(`study=${sid}`);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Assistant completion refreshes the answer once even when the dock is collapsed', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.assistantStage = 'running';
+  await login(page, `#v=1&study=${sid}&view=overview`);
+  await expect(page.getByText('No study answer yet.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hide assistant', exact: true }).click();
+  let catchup = 0;
+  await page.route(`**/api/1/studies/${sid}/assistant?*`, async (route) => {
+    catchup++;
+    await route.fulfill({
+      json: {
+        schema_version: '1',
+        data: {
+          state: 'idle',
+          error: null,
+          can_send: true,
+          can_stop: false,
+          can_resume: false,
+          messages:
+            catchup === 1
+              ? [
+                  {
+                    message_id: 'published',
+                    role: 'assistant',
+                    text: 'Answer saved.',
+                    actor_id: null,
+                    author_display_name: null,
+                    created_at: 1,
+                  },
+                ]
+              : [],
+          next_cursor: catchup === 1 ? 'catchup' : 'complete',
+          earlier_cursor: null,
+          has_earlier_messages: false,
+          has_more_messages: catchup === 1,
+        },
+      },
+    });
+  });
+  state.answer = publishedAnswer();
+  state.assistantStage = 'idle';
+  await assistantPoll(page);
+  await expect(
+    page.getByText(state.answer.content.outcome.reason, { exact: false }),
+  ).toBeVisible();
+  const answerReads = () =>
+    state.reads.filter((url) => new URL(url).pathname.endsWith('/answer')).length;
+  const count = answerReads();
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await assistantPoll(page);
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
+  expect(answerReads()).toBe(count);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Assistant completion waits for the human brief editor and refreshes after cancel', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.assistantStage = 'running';
+  await login(page, `#v=1&study=${sid}&view=overview`);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit brief', exact: true }).click();
+  const question = page.getByRole('textbox', { name: 'Study question', exact: true });
+  await question.fill('Keep my unsaved engineering question.');
+  const before = state.reads.filter((url) => new URL(url).pathname.endsWith('/answer')).length;
+  state.answer = publishedAnswer();
+  state.assistantStage = 'idle';
+  await assistantPoll(page);
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+  await expect(question).toHaveValue('Keep my unsaved engineering question.');
+  expect(state.reads.filter((url) => new URL(url).pathname.endsWith('/answer')).length).toBe(
+    before,
+  );
+  await page.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+  await expect(
+    page.getByText(state.answer.content.outcome.reason, { exact: false }),
+  ).toBeVisible();
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Assistant completion updates the visible model draft without changing its selection', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.model = { ...modelFixture(), model_id: mid, study_id: sid };
+  state.assistantStage = 'running';
+  await login(page, `#v=1&study=${sid}&view=model&model=${mid}`);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  state.model = {
+    ...state.model,
+    name: 'Updated engineering model',
+    draft_revision: 'new-draft',
+  };
+  state.assistantStage = 'idle';
+  await assistantPoll(page);
+  await expect(
+    page.getByRole('heading', { name: state.model.name, exact: true }).first(),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toContain(`model=${mid}`);
+  expect(new URL(page.url()).hash).not.toContain('revision=');
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('A late Assistant reply cannot refresh the previously attached study after navigation', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.studies.push({ ...state.studies[0], study_id: sid2, name: 'Second study' });
+  state.assistantStage = 'running';
+  await login(page, `#v=1&study=${sid}&view=overview`);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  const late = latch(),
+    received = latch();
+  await page.route(`**/api/1/studies/${sid}/assistant?*`, async (route) => {
+    received.release();
+    await late.promise;
+    await route.fulfill({
+      json: {
+        schema_version: '1',
+        data: {
+          state: 'idle',
+          error: null,
+          can_send: true,
+          can_stop: false,
+          can_resume: false,
+          messages: [],
+          next_cursor: 'done',
+          earlier_cursor: null,
+          has_earlier_messages: false,
+          has_more_messages: false,
+        },
+      },
+    });
+  });
+  await assistantPoll(page);
+  await received.promise;
+  await page.evaluate((hash) => {
+    location.hash = hash;
+  }, `#v=1&study=${sid2}&view=overview`);
+  await expect(page.getByRole('heading', { name: 'Second study', exact: true })).toBeVisible();
+  state.answer = publishedAnswer();
+  late.release();
+  await expect(page.getByText('No study answer yet.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText(state.answer.content.outcome.reason, { exact: false }),
+  ).toHaveCount(0);
+  expect(new URL(page.url()).hash).toContain(`study=${sid2}`);
+  expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+test('Assistant completion preserves a deliberately selected saved model version', async ({
+  page,
+}) => {
+  const state = await harness(page);
+  state.model = { ...modelFixture(), model_id: mid, study_id: sid };
+  state.assistantStage = 'running';
+  const originalName = state.model.name;
+  // The immutable read stays pinned while the draft and model catalogue change.
+  await page.route(`**/api/1/studies/${sid}/models/${mid}/revisions/${version}`, (route) =>
+    route.fulfill({
+      json: {
+        schema_version: '1',
+        data: {
+          ...state.model,
+          name: originalName,
+          model_revision_id: version,
+          digest: 'retained-model',
+        },
+      },
+    }),
+  );
+  await login(page, `#v=1&study=${sid}&view=model&model=${mid}&revision=${version}`);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  state.model = {
+    ...state.model,
+    name: 'New draft from the Assistant',
+    draft_revision: 'new-draft',
+  };
+  state.versions.push('new-saved-model-version');
+  state.assistantStage = 'idle';
+  await assistantPoll(page);
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: originalName, exact: true }).first(),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toContain(`revision=${version}`);
+  expect(state.writes).toEqual([]);
   expect(state.unknown).toEqual([]);
 });

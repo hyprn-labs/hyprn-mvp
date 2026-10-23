@@ -37,24 +37,24 @@ The study is an evaluation fixture, never a special branch in product code.
 
 | Finding | Implementation owner | Status |
 |---|---|---|
-| F01 durable analysis launch | A1 | committed; local acceptance passed; live pending |
-| F02 reasoning-turn/run-limit independence | A1/A3, C1 | committed; integrated/live pending |
+| F01 durable analysis launch | A1 | committed; public Assistant completed durable 48-point design |
+| F02 reasoning-turn/run-limit independence | A1/A3, C1 | committed; public durable wait resumed automatically; 50 runs completed |
 | F03 truthful readiness/transient diagnosis | A2 | committed; 67 runtime checks passed |
 | F04 coherent real tool guidance | C3 | committed; catalogue integration and native export journey passed |
-| F05 requested deliverables/completion | parent | implemented; 31 answer checks passed with monetary/public receipt guards |
+| F05 requested deliverables/completion | parent | implemented; 31 checks passed; public answer saved complete with both deliverables fulfilled |
 | F06 idle background backoff | A2 | committed; bounded idle polling verified locally |
-| F07 small operational state/indexed discovery | B1/B2 | committed; local SQL/read tests passed; cloud measurement pending |
+| F07 small operational state/indexed discovery | B1/B2 | committed; cloud measurements recorded; retained-object N+1 reads remain |
 | F08 incremental chat/provider reads | C1 + parent UI | backend committed; UI build/design and 30 navigation/race checks passed |
-| F09 phase timings/original timeout cause | B3 + platform | committed; local checks passed; deployed timings pending |
+| F09 phase timings/original timeout cause | B3 + platform | committed; live worker/batch/read timings recorded in readback checkpoint |
 | F10 native polling/bounded batches | native/A3 | committed; preserves faster 0.1s default; not a measured speedup |
 | F11 retained source inspection | C2/C3 + parent | committed receipt owner, 185 bridge checks passed; public/tool integration:329 agent checks passed; live fetch pending |
-| F12 scientific fidelity/money/sensitivity/claim strength | parent + C3 + catalogue | implemented; native monetary/export journey 14/14 passed; live scientific assessment pending |
+| F12 scientific fidelity/money/sensitivity/claim strength | parent + C3 + catalogue | implemented; native money/export 14/14; live thermal-screen limits and fidelity assessment retained |
 | F13 design capacity/refinement | A1 + C3 | committed; actual finite-analysis and guidance checks passed |
-| F14 pinned native skill/single source | C2/C3 | committed; successor ledger committed;191 bridge/47 PostgreSQL checks passed; live attachment pending |
+| F14 pinned native skill/single source | C2/C3 | committed; pinned provider/tool readback and public playbook authoring passed; full attachment evaluation remains |
 | F15 bounded reviewers/context/effort evaluation | C2 + parent | reviewer enforcement committed; live medium/high evaluation pending |
 | F16 fair concurrent studies/cancellation/budget | A3/C1 + parent | 82 calculations checks passed; successor billing passes PostgreSQL/bridge checks; live acceptance pending |
 | F17 retention/observability/host verification cost | platform | activation verification and journal bounds committed; release/work deletion lacks safe lifecycle proof |
-| F18 measured performance and sizing decision | parent acceptance | requires integrated deployment; no resizing or speed claim made |
+| F18 measured performance and sizing decision | parent acceptance | live profiling complete; duplicate retained reads identified; optimization still pending; no RAM resize justified |
 
 Parent owns public schemas/generator/types/routes/UI; B owns migration 0010,
 parent reserves 0011+. Existing unrelated planning/design edits remain untouched.
@@ -80,11 +80,9 @@ clean-start decision, the atomic reset passed48 PostgreSQL checks and its live
 application completed. No uncertain migration was retried. Sequence19 continuity
 classifies all10 retired provider sessions without charging fresh user accounts.
 Host qualification, startup,19 network probes and bounded activation passed.
-Chrome is awaiting a fresh owner email sign-in.
+This sequence was subsequently superseded by sequence 20 below.
 Release `99844b1c66da96e005899af2fcf290de09515b0057528bd6da7f13c2361fb0c6`;
-platform `492eeb2d6388aae8266bb5a3cfb8ee970b1a0993`. Live
-Assistant/exploration, representative performance remeasurement and application staging push
-remain pending. No direct staging scientific-record repair. Full release
+platform `492eeb2d6388aae8266bb5a3cfb8ee970b1a0993`. The later public journey, performance measurements and staging push are recorded below. No direct staging scientific-record repair. Full release
 qualification and human acceptance are not established by these focused checks.
 
 ## Observable acceptance
@@ -100,3 +98,31 @@ verify native skill pin/research/review tools through the managed provider.
 Compare SQL transactions/bytes, queue/preparation/worker/recording time, idle load
 and prediction latency against the audit. Record exact tested commit and deployment
 identities. Automated evidence is not human acceptance.
+
+
+## Current delivered state — 2026-10-23
+
+Sequence 20, release `d626e342`, source `3f12d9d4`, published candidate `41c39ab4`
+on origin/staging. Shared provider optional-null normalization repaired the real
+session startup refusal without widening accepted tools. 194 bridge and 27
+provisioning checks passed; installed artifacts, containment/startup and all 19
+network probes passed. Ongoing named-user access promotion completed with the
+unchanged platform, credentials and budget. Exact identities and prior failed
+receipts are preserved in `06-SESSION-READBACK-CHECKPOINT.md` and its private packet.
+
+The real public Assistant completed a fresh coolant study in approximately 34m30s:
+2 scenario runs, 48 joint samples, a checked Kriging surrogate and a complete saved
+answer. One held-out point selected the method; 15 independently validated it.
+Largest error 0.005263 K, RMSE 0.002563 K, unchanged tolerance 0.1 K plus 1% of
+calculated magnitude. Three joint sliders, exact point loading and independent plot
+axis selection passed in signed-in Chrome. Run count remained 50 after all actions.
+No direct scientific-record repair or relaxed checks.
+
+Performance is not at laptop parity. Native retained reads repeat bundle traversal
+and perform per-object repository queries; these dominate ordinary 4.7–5.1s read
+latency and contribute to roughly 57s per two-point batch cycle despite 2.7–3.9s
+workers. RAM was not pressured. Parent owns the invariant-preserving bulk-read
+optimization and new public refresh/route/authoring issues listed in the checkpoint.
+F11 live research, F15 effort/reviewer comparison, F16 broader concurrency/recovery,
+F17 safe retention, automatic deployment, full qualification and second-user/human
+acceptance are still open. This working journey does not silently close them.

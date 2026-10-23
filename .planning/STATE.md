@@ -1,23 +1,25 @@
 # Project State
 
-- **Audit remediation deployment in progress (2026-10-22):** durable analysis,
-  operational state, incremental chat, pinned skill/reviewers and catalogue-derived
-  monetary units are integrated. Real units/native export14/14, installed AMD64
-  app1/1 and native3/3 passed. Candidate7cbe3e has the tested d2072a3f tree;
-  release99844b1c, platform492eeb2d. Retained-data migration refused atomically;
-  owner then explicitly authorized empty PostgreSQL and resetting spending for
-  this staging restart. The tested atomic reset (48 PostgreSQL checks) completed,
-  backup retained; sequence19 classifies retired provider sessions for startup
-  without carrying their spending to fresh user accounts. Host qualification is
-  complete. Startup and19 network probes passed; bounded staging access is open.
-  Public Chrome login and study creation passed. Provider session readback
-  exposed an optional-null mismatch; shared normalization now passes 194 Assistant
-  and 27 provisioning checks. Next: deploy this correction, resume
-  Assistant/execution/exploration,
-  performance measurements and staging push. Subsequent budgets remain cumulative
-  USD20/user. Retained migration and full release qualification are not claimed.
-  Current scope/ownership:
-  [coverage](phases/06-hosted-staging/audit-remediation/COVERAGE.md).
+- **Staging public journey verified (2026-10-23):** source `3f12d9d4`,
+  published staging candidate `41c39ab4`, release `d626e342`, configuration
+  `3e9150e`, sequence 20; platform `492eeb2d` unchanged. The provider readback
+  correction passed 194 bridge + 27 provisioning checks; installed artifacts,
+  containment/startup and 19 network probes passed. Ongoing named-user staging
+  access is promoted. The owner-authorized database/spending reset occurred once
+  at sequence 19; this release preserves schema 13 and cumulative USD 20/user.
+  Public Chrome login, real Assistant authoring, 50 model runs, complete saved
+  answer and all three joint sliders passed. Kriging passed 15 independent
+  validation points; max error 0.0053 K. Slider interactions left the run count
+  at 50. This is a working staging demonstration, not full release qualification
+  or human acceptance. The study took about 34m30s: workers take 2.7–3.9s, but
+  native two-point batches take 30–33s with retained reads around 5s. Read profiling
+  identifies duplicate bundle traversal and per-object repository queries, not
+  RAM exhaustion. Next: eliminate that overhead with invariant-preserving bulk
+  reads; fix answer auto-refresh, route persistence and generic authoring friction.
+  Source-fetch/reviewer evaluation, automatic deployment and full qualification
+  remain open. No direct scientific-data repair or laptop-speed claim.
+  [Readback/deployment checkpoint](phases/06-hosted-staging/audit-remediation/06-SESSION-READBACK-CHECKPOINT.md)
+  and [coverage](phases/06-hosted-staging/audit-remediation/COVERAGE.md).
 
 - **Assistant user budget deployed (2026-10-22):** product `0fe32eba`, staging
   source `b62fd35a`, release `2e6d90ab`, sequence 17, schema 9. USD 20 cumulative

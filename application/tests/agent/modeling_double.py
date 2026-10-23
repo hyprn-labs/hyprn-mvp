@@ -167,7 +167,8 @@ class ModelingDouble:
         action = parts[2]
         if action in ('preview', 'edits'):
             self.batches.append((action, copy.deepcopy(body)))
-            result = dict(copy.deepcopy(draft), draft_revision=uid())
+            result = dict(copy.deepcopy(draft), draft_revision=uid(),
+                          schema_version=body['schema_version'])
             if action == 'edits':
                 self.drafts[model_id] = result
             return 200, {'data': copy.deepcopy(result), 'created_ids': {}, 'diagnostics': []}

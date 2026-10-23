@@ -43,6 +43,10 @@ The New model dialog supplies a name and an empty model or an ordinary example.
 This creates a draft scaffold, not a scientifically complete model. Example code
 and values are not an endorsed engineering basis.
 
+Give each quantity a readable human name; keep its Python identifier in `code_symbol`.
+Do not use a code symbol as the display label when a clear engineering name exists.
+Read the saved names back alongside meanings and units.
+
 Author the component definitions, quantities, source, connections, scoped assumptions
 and local explanations. Inspect source as text and use supported static validation.
 Then explain the assembled model and save an exact model version. Model persistence
@@ -89,8 +93,10 @@ For sampling, select the method, training count, validation pool count and seed
 before evaluation. UI defaults are numerical suggestions, not scientific choices.
 Use [Joint answer exploration](joint-exploration.md) for boundary coverage, budgets
 and publication requirements. Keep requested validation-pool size distinct from
-the independent validation count: any points used for method selection are excluded
-from independent assessment. Read the returned partition and metrics.
+the independent validation count: the first held-out point selects the method and
+the rest independently assess it. For example, a pool of 16 is 1 selection plus
+15 independent validation points, not an unexplained missing result. Read
+`get_surrogate.sample_roles` and the per-output assessed/unavailable metrics.
 
 When estimates are needed, enable **Estimate between calculated points** and select
 the outputs and both error limits at creation. Save these in `estimate_plan` before
@@ -105,7 +111,10 @@ Calculation-only investigations use no estimate plan. The current hand-picked
 creation UI has no estimate controls; do not promise interpolation from that path.
 The analysis pins a brief and may suggest criterion bindings automatically. Inspect
 the saved bindings by physical meaning, unit and intended output; a suggested match
-is not a scientific review. Keep a missing or unsuitable binding explicit.
+is not a scientific review. Before launching, bind every criterion this investigation
+is intended to assess, including an exploration analysis used in the answer. Do not
+require unrelated criteria on investigations with another purpose. Keep a missing or
+unsuitable binding explicit; do not discover it only during answer publication.
 
 ## Saving, launching and reading are different steps
 

@@ -304,10 +304,10 @@ export class StudyAnswerController {
   }
   /** Read the answer, its saved versions and the records it can cite. Refused while edits
    * are unsaved. */
-  open = async (studyId: string): Promise<boolean> => {
-    if (this.dirty || this.busy) return false;
+  open = async (studyId: string, refresh = false): Promise<boolean> => {
+    if (this.dirty || this.busy || (refresh && this.state.local)) return false;
     this.unsubscribe ??= this.api.onSessionChange(this.sessionChanged);
-    this.clear();
+    if (!refresh || this.state.studyId !== studyId || this.actor !== this.api.actor) this.clear();
     this.actor = this.api.actor;
     const valid = this.ticket();
     this.read = new AbortController();

@@ -236,6 +236,7 @@ def execution_source_hashes():
         'integration/src/hyprn_mvp_integration/surrogate.py',
         'integration/src/hyprn_mvp_integration/results.py',
         'integration/src/hyprn_mvp_integration/calculation.py',
+        'integration/src/hyprn_mvp_integration/repository.py',
         'integration/src/hyprn_mvp_integration/computational_export.py',
         'integration/src/hyprn_mvp_integration/installation.py',
         'application/src/hyprn_mvp_app/__init__.py',

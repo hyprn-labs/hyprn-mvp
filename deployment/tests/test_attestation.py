@@ -33,6 +33,7 @@ EXECUTION_SOURCES = (
     'integration/src/hyprn_mvp_integration/surrogate.py',
     'integration/src/hyprn_mvp_integration/results.py',
     'integration/src/hyprn_mvp_integration/calculation.py',
+    'integration/src/hyprn_mvp_integration/repository.py',
     # Exactly the modules reachable from a launch; modules unreachable from every launch
     # path (execution, modeling, result_bindings, store) are never part of the inventory.
     'integration/src/hyprn_mvp_integration/computational_export.py',
@@ -49,6 +50,8 @@ EXECUTION_SOURCES = (
     # The frozen bundle contract the launcher, calculation and retained reader import.
     'application/src/hyprn_mvp_app/execution_bundle.py',
     'deployment/execution_runtime.py',
+    'deployment/cloud_native.py',
+    'deployment/dispatch_bridge.py',
     'deployment/worker.Dockerfile',
     'deployment/images/engine.Dockerfile', 'deployment/images/install_python.py',
     'deployment/images/build_engine.py', 'deployment/locks/tools.json',
@@ -305,7 +308,7 @@ def test_units_attestation_inventories_bind_every_changed_authority(tmp_path, mo
     monetary = 'upstream/whatsopt-patches/110-monetary-units.patch'
     assert inventories[1][monetary] == inventories[2][monetary] == hashlib.sha256(
         (REPO/monetary).read_bytes()).hexdigest()
-    assert len(inventories[2]) == 53
+    assert len(inventories[2]) == 56
     for removed in ('execution', 'modeling', 'result_bindings', 'store'):
         assert f'application/src/hyprn_mvp_app/{removed}.py' not in inventories[2]
 

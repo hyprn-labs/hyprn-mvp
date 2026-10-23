@@ -38,7 +38,15 @@ def test_actual_retained_failed_record_exact_results_and_artifacts(retained_nati
     node=orm.load_node(association['process_uuid'])
     count=orm.QueryBuilder().append(orm.CalcJobNode).count()
     before=node.outputs.retrieved.base.repository.get_object_content('result.json',mode='rb')
+    from hyprn_mvp_integration import repository as bulk_repository
+    bulk_reads=[]
+    original_read=bulk_repository.read_files
+    def tracked(repository,backend,bounds):
+        bulk_reads.append(len(bounds))
+        return original_read(repository,backend,bounds)
+    monkeypatch.setattr(bulk_repository,'read_files',tracked)
     record=native.read_record(request,association)
+    assert bulk_reads==[len(record['bundle']['files'])]
     assert record['request']==request and record['results']==node.outputs.results.get_dict()
     assert record['assessment']==node.outputs.assessment.get_dict()
     retained_manifest = json.loads(
