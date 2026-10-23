@@ -849,3 +849,120 @@ def test_recovery_reconciles_unprojected_uncertain_children_before_any_new_admis
     assert [r['run_id'] for r in state['runs']] == [None, None, run_id]
     with store.connection() as db:
         assert db.execute('SELECT count(*) FROM run_associations WHERE study_id=?', (sid,)).fetchone()[0] == 1
+
+
+def analysis_with_unprepared_authority_failure(store, actor, sid, sample, worker=None, *, revoked_parent=False):
+    """Reproduce the old false authorization refusal through the real preparation owner."""
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.database import actor_scope
+    from hyprn_mvp_app.execution import Submissions
+    worker = worker or store
+    agent, _, vid = agent_analysis(store, actor, sid, sample, 1)
+    runner = AnalysisExecution(worker)
+    runner.process_one(Submissions(worker, None, None))
+    with actor_scope(actor):
+        state = AnalysisExecution(store).read(actor, sid, vid)
+    rid = state['runs'][0]['run_id']
+    grant = replace_analysis_grant(store, actor, agent, sid)
+    authorized = worker.analysis_authorized
+    worker.analysis_authorized = lambda *args: False
+    try:
+        Submissions(worker, None, None).dispatch(rid)
+    finally:
+        worker.analysis_authorized = authorized
+    with actor_scope(actor):
+        assert Submissions(store, None, None).read(actor, sid, rid)['state'] == 'preparation_failed'
+    if revoked_parent:
+        legacy_interrupted_analysis(store, actor, sid, vid)
+    else:
+        runner.process_one(Submissions(worker, None, None))
+        with actor_scope(actor):
+            assert AnalysisExecution(store).read(actor, sid, vid)['admission_state'] == 'stopped'
+    return agent, grant, vid, rid
+
+
+def recovered_submission_owner(store):
+    """Real bundle validation/claim with an explicitly uncertain native-boundary double."""
+    from execution_fixtures import fixture, runtime_fixture
+    from hyprn_mvp_app.execution import Submissions, executable_digest
+    def prepare(actor, sid, command, frozen):
+        case = fixture('chain')
+        prepared = case['prepared']
+        config = frozen['configuration']
+        prepared.update(configuration_digest=config['digest'],
+                        configuration_revision_id=config['configuration_revision_id'])
+        prepared['executable_content_digest'] = executable_digest(prepared)
+        prepared['prepared_digest'] = digest({k:v for k,v in prepared.items() if k != 'prepared_digest'})
+        return prepared, case['files']
+    class Native:
+        launches = 0
+        def require_attestation(self):
+            pass
+        def bundle_runtime(self):
+            return runtime_fixture()
+        def launch(self, bundle, request):
+            self.launches += 1
+            raise TimeoutError('Explicit uncertain native-boundary double')
+        def matches(self, request):
+            return []
+    native = Native()
+    return Submissions(store, prepare, native), native
+
+
+@pytest.mark.parametrize('revoked_parent', [False, True])
+def test_public_resume_repairs_only_unprepared_authority_refusal_and_advances_same_run(calc, revoked_parent):
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    agent, grant, vid, rid = analysis_with_unprepared_authority_failure(
+        store, actor, sid, calc, revoked_parent=revoked_parent)
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    with store.connection() as db:
+        source = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+    assert calc['client'].get(path + '/recovery').json()['data']['can_resume'] is True
+    command = dict(command_id=uid())
+    response = calc['client'].post(path + '/resume', json=command)
+    assert response.status_code == 202, response.text
+    assert response.json()['data']['runs'][0]['run_id'] == rid
+    assert Submissions(store, None, None).read(actor, sid, rid)['state'] == 'accepted_run'
+    with store.connection() as db:
+        audit = db.execute('SELECT * FROM analysis_run_resumptions WHERE run_id=?', (rid,)).fetchone()
+        assert json.loads(audit['previous_receipt'])['error']['code'] == 'analysis_authority_revoked'
+        assert json.loads(audit['previous_operation'])['preparation_state'] == 'preparation_failed'
+        assert db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0] == source
+    submissions, native = recovered_submission_owner(store)
+    submissions.dispatch(rid)
+    assert submissions.read(actor, sid, rid)['state'] == 'uncertain'
+    assert native.launches == 1
+    assert calc['client'].post(path + '/resume', json=command).json()['data'] == response.json()['data']
+    submissions.dispatch(rid)
+    assert native.launches == 1
+    assert submissions.read(actor, sid, rid)['state'] == 'uncertain'
+
+
+@pytest.mark.parametrize('interruption', ['preparation', 'prepared', 'uncertain', 'recorded', 'revoked'])
+def test_public_child_recovery_refuses_actual_failures_prepared_or_claimed_work(calc, interruption):
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    agent, grant, vid, rid = analysis_with_unprepared_authority_failure(store, actor, sid, calc)
+    with store.connection(write=True) as db:
+        if interruption == 'preparation':
+            receipt = db.execute('SELECT command_id FROM run_associations WHERE run_id=?', (rid,)).fetchone()
+            db.execute("UPDATE receipts SET error=? WHERE scope=? AND category='run' AND command_id=?",
+                       (json.dumps(dict(code='invalid_preparation', status=422, current_revision=None,
+                                        fields=[], outcome='unchanged')), sid, receipt['command_id']))
+        elif interruption == 'prepared':
+            source = json.loads(db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0])
+            source['request'] = {}
+            db.execute('UPDATE outbox SET payload=? WHERE run_id=?', (json.dumps(source), rid))
+        elif interruption in ('uncertain', 'recorded'):
+            db.execute('UPDATE execution_operations SET state=? WHERE run_id=?', (interruption, rid))
+        else:
+            store.revoke_delegation(db, grant['delegation_id'], 'owner_revoked')
+    if interruption == 'revoked':
+        replace_analysis_grant(store, actor, agent, sid)
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    assert calc['client'].get(path + '/recovery').json()['data']['can_resume'] is False
+    response = calc['client'].post(path + '/resume', json=dict(command_id=uid()))
+    assert response.status_code == 409, response.text
+    with store.connection() as db:
+        assert db.execute('SELECT count(*) FROM analysis_run_resumptions WHERE run_id=?', (rid,)).fetchone()[0] == 0
+        assert db.execute('SELECT preparation_state FROM execution_operations WHERE run_id=?', (rid,)).fetchone()[0] == 'preparation_failed'

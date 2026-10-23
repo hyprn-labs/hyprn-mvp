@@ -245,6 +245,17 @@ CREATE TRIGGER IF NOT EXISTS analysis_resumptions_fixed BEFORE UPDATE ON analysi
  BEGIN SELECT RAISE(ABORT,'analysis recovery audit is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS analysis_resumptions_no_delete BEFORE DELETE ON analysis_execution_resumptions
  BEGIN SELECT RAISE(ABORT,'analysis recovery audit is immutable'); END;
+CREATE TABLE IF NOT EXISTS analysis_run_resumptions(
+ study_id TEXT NOT NULL, command_id TEXT NOT NULL, analysis_command TEXT NOT NULL,
+ run_id TEXT NOT NULL, child_command TEXT NOT NULL, actor_id TEXT NOT NULL,
+ source_sha256 TEXT NOT NULL, previous_receipt TEXT NOT NULL, previous_operation TEXT NOT NULL,
+ PRIMARY KEY(study_id,command_id,run_id),
+ FOREIGN KEY(study_id,command_id) REFERENCES analysis_execution_resumptions(study_id,command_id)
+);
+CREATE TRIGGER IF NOT EXISTS analysis_run_resumptions_fixed BEFORE UPDATE ON analysis_run_resumptions
+ BEGIN SELECT RAISE(ABORT,'analysis child recovery audit is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS analysis_run_resumptions_no_delete BEFORE DELETE ON analysis_run_resumptions
+ BEGIN SELECT RAISE(ABORT,'analysis child recovery audit is immutable'); END;
 CREATE TABLE IF NOT EXISTS agent_actors(
  actor_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='agent'),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),

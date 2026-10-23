@@ -446,7 +446,7 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `criterion_evaluation` | — |
 | `calculations` | `brief`, `contracts`, `criterion_evaluation`, `execution_bundle`, `history`, `units`, `explanations` |
 | `study_answer` | `calculation_preparation`, `brief`, `calculation_estimates`, `calculations`, `contracts`, `criterion_evaluation`, `history`, `explanations`, `units` |
-| `analysis_execution` | `calculations`, `calculation_estimates`, `contracts`, `history` |
+| `analysis_execution` | `calculations`, `calculation_estimates`, `contracts`, `execution`, `history` |
 | `calculation_designs` | `calculations`, `contracts`, `quantity_projection`, `sampling_coordinates`, `readiness` |
 | `calculation_estimates` | `calculation_designs`, `calculations`, `contracts`, `quantity_projection`, `history` |
 | `quantity_projection` | `execution_bundle`, `units` |
@@ -680,9 +680,14 @@ is needed to change settings. The existing dispatcher advances this receipt; no 
 scheduler, native evaluator, store, or browser orchestration is introduced.
 
 The execution receipt is an operational progress projection. An explicit
-`analysis_resume` command may reopen a failed/revoked projection only after proving
-continuous authority and auditing the previous outcome. This narrow recovery
-exception preserves the frozen request, child commands and runs. Ordinary launch
+`analysis_resume` command may reopen a projection interrupted by replaced credentials
+only after proving continuous authority and auditing the previous outcome. The
+Submissions owner may also recover linked children refused solely for that authority
+interruption before preparation or dispatch. Recovery requires the original accepted
+state, no prepared request or bundle, and no execution results; the prior failure is
+retained in an append-only audit. Claimed, uncertain, recorded and genuinely failed
+calculations cannot use this path. This narrow recovery exception preserves the frozen
+request, child commands and run identities. Ordinary launch
 replay never initiates recovery; the resume command itself retains its original
 replay outcome. Saved scientific versions and recorded runs never change.
 

@@ -224,6 +224,79 @@ class Submissions:
         db.execute("UPDATE receipts SET state=?,result=? WHERE scope=? AND category='run' AND command_id=?",
                    (state,json.dumps(result),sid,command))
 
+    def analysis_authority_failures(self, db, sid, parent):
+        """Return only proven unprepared authorization interruptions of this finite plan.
+
+        None means a different failure or uncertain execution prevents recovery. Empty
+        means no child needs repair. Frozen source bytes and native identities never change.
+        """
+        linked = {row['run_id']: row['child_command'] for row in db.execute(
+            'SELECT run_id,child_command FROM analysis_execution_children '
+            "WHERE study_id=? AND analysis_command=? AND child_category='run'",
+            (sid, parent['command_id'])).fetchall()}
+        runs = set(linked) | {r['run_id'] for r in parent['result']['runs'] if r['run_id']}
+        interrupted, unsafe = [], False
+        for rid in runs:
+            row = run_association(db, rid, study_id=sid, payload=False)
+            if row is None:
+                return None
+            operational = db.execute('SELECT o.state AS source_state,'
+                "CASE WHEN x.preparation_state='preparation_failed' THEN o.payload END AS source_payload,"
+                'x.actor_id,x.preparation_state,'
+                "CASE WHEN x.preparation_state='preparation_failed' THEN x.payload END AS operation_payload,"
+                "CASE WHEN x.state='recorded' THEN json_extract(x.payload,"
+                "'$.history.results.execution.state') END AS execution_state "
+                'FROM outbox o JOIN execution_operations x USING(run_id) WHERE x.run_id=?',
+                (rid,)).fetchone()
+            if operational is None:
+                return None
+            row.update(dict(operational))
+            if row['state'] in ('uncertain', 'dispatching'):
+                unsafe = True
+            if row['state'] == 'recorded' and row['execution_state'] != 'finished':
+                return None
+            if row['preparation_state'] != 'preparation_failed':
+                continue
+            operation = json.loads(row['operation_payload'])
+            receipt = self.store.command_receipt(db, sid, 'run', row['command_id'])
+            source = json.loads(row['source_payload'])
+            expected_error = dict(code='analysis_authority_revoked', status=403,
+                                  current_revision=None, fields=[], outcome='unchanged')
+            if (linked.get(rid) != row['command_id'] or row['state'] != 'accepted_run'
+                    or row['source_state'] != 'accepted_run'
+                    or row['store_uuid'] is not None or row['process_uuid'] is not None
+                    or operation != {} or not receipt or receipt['state'] != 'preparation_failed'
+                    or receipt['error'] != expected_error
+                    or receipt['actor_id'] != parent['actor_id']
+                    or row['actor_id'] != parent['actor_id']
+                    or source.get('actor') != parent['actor_id']
+                    or not set(source) <= {'actor', 'frozen', 'expected_runtime', 'execution_budget'}
+                    or not {'actor', 'frozen'} <= set(source)):
+                return None
+            interrupted.append(dict(run_id=rid, child_command=row['command_id'],
+                source_sha256=raw_hash(row['source_payload'].encode()),
+                previous_receipt=receipt, previous_operation=dict(
+                    state=row['state'], preparation_state=row['preparation_state'],
+                    payload=row['operation_payload'])))
+        return None if interrupted and unsafe else interrupted
+
+    def resume_analysis_preparation(self, db, actor, sid, parent, command, children):
+        """Audit and release only the preflight-approved unlaunched children atomically."""
+        for child in children:
+            db.execute('INSERT INTO analysis_run_resumptions '
+                '(study_id,command_id,analysis_command,run_id,child_command,actor_id,'
+                'source_sha256,previous_receipt,previous_operation) VALUES(?,?,?,?,?,?,?,?,?)',
+                (sid, command, parent['command_id'], child['run_id'], child['child_command'], actor,
+                 child['source_sha256'], json.dumps(child['previous_receipt']),
+                 json.dumps(child['previous_operation'])))
+            db.execute('UPDATE execution_operations SET preparation_state=NULL WHERE run_id=?',
+                       (child['run_id'],))
+            receipt = child['previous_receipt']
+            result = dict(receipt['result'], state='accepted_run')
+            db.execute("UPDATE receipts SET state='accepted_run',result=?,error=NULL "
+                       "WHERE scope=? AND category='run' AND command_id=?",
+                       (json.dumps(result), sid, child['child_command']))
+
     def dispatch_batch(self, run_ids):
         if (not isinstance(run_ids, list) or not run_ids
                 or len(set(run_ids)) != len(run_ids)):

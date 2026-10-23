@@ -13,6 +13,7 @@ from .calculations import Analyses, validate_calculation
 from .calculation_estimates import Estimates
 from .contracts import DomainError, issue
 from .history import History, calculation_runs
+from .execution import Submissions
 
 CATEGORY = 'analysis_execution'
 ADMISSION_LIMIT = 10
@@ -107,10 +108,17 @@ class AnalysisExecution:
         except DomainError:
             return saved, 'Current permission to submit calculations is required.'
         if (saved['state'] != 'committed' or saved['result']['state'] != 'failed'
-                or saved['result'].get('admission_state') != 'revoked'):
+                or saved['result'].get('admission_state') not in ('revoked', 'stopped')):
             return saved, 'Only an execution interrupted by replaced credentials can be resumed.'
         if not self.store.analysis_authorized(db, saved, sid):
             return saved, 'The original execution authority was revoked or continuity cannot be verified.'
+        children = Submissions(self.store, None, None).analysis_authority_failures(db, sid, saved)
+        if children is None:
+            return saved, 'A run has an execution outcome or preparation failure that cannot be safely resumed.'
+        if saved['result'].get('admission_state') == 'stopped' and (
+                not children or saved['result']['reason'] !=
+                'A calculation could not start. Review its run diagnostics.'):
+            return saved, 'Only a proven unlaunched authorization interruption can be resumed.'
         return saved, None
 
     def recovery(self, actor, sid, version_id):
@@ -132,6 +140,9 @@ class AnalysisExecution:
             db.execute('INSERT INTO analysis_execution_resumptions VALUES(?,?,?,?,?,?)',
                        (sid, body['command_id'], identity(version_id), actor,
                         json.dumps(saved['result']), json.dumps(result)))
+            submissions = Submissions(self.store, None, None)
+            children = submissions.analysis_authority_failures(db, sid, saved)
+            submissions.resume_analysis_preparation(db, actor, sid, saved, body['command_id'], children)
             db.execute("UPDATE receipts SET state='pending_remote',result=? WHERE scope=? "
                        "AND category=? AND command_id=? AND state='committed'",
                        (json.dumps(result), sid, CATEGORY, identity(version_id)))

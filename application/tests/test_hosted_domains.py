@@ -1257,3 +1257,83 @@ def test_recovery_reconciles_uncertain_unprojected_child_on_postgres(hosted):
             AnalysisExecution(store).cancel(actor, sid, vid)
     finally:
         worker.database.close()
+
+
+@pytest.fixture
+def recovery_hosted(tmp_path):
+    # Full frozen sources and their audits use a fresh bounded database per case.
+    from hosted_fixture import postgres_fixture
+    with postgres_fixture() as fixture:
+        store = Store.postgres(fixture['request'], fixture['auth'],
+                               artifact_root=tmp_path / 'artifacts', background=fixture['assistant'])
+        try:
+            yield fixture, store
+        finally:
+            store.database.close()
+
+
+@pytest.mark.parametrize('revoked_parent', [False, True, False])
+def test_public_agent_resume_recovers_unprepared_child_and_crosses_claim_once_on_postgres(
+        recovery_hosted, monkeypatch, revoked_parent):
+    from calculation_fixture import seed
+    from test_calculations_api import analysis_with_unprepared_authority_failure, recovered_submission_owner
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    failures = []
+    resume = AnalysisExecution.resume
+    def diagnostic_resume(self, *args, **kwargs):
+        try:
+            return resume(self, *args, **kwargs)
+        except Exception as error:
+            import traceback
+            failures.append(''.join(traceback.format_exception(error)))
+            raise
+    monkeypatch.setattr(AnalysisExecution, 'resume', diagnostic_resume)
+    fixture, store = recovery_hosted
+    account = isolated_analysis_account(fixture)
+    actor = account['actor']
+    sid = study(store, actor)
+    with actor_scope(actor):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    create_app(worker, Auth(worker, 'http://test'), None)
+    try:
+        agent, grant, vid, rid = analysis_with_unprepared_authority_failure(store, actor, sid, sample, worker, revoked_parent=revoked_parent)
+        with actor_scope(actor), store.connection() as db:
+            source = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+        with actor_scope(actor), pytest.raises(DatabaseConflict):
+            with store.connection(write=True) as db:
+                db.execute('UPDATE execution_operations SET preparation_state=NULL WHERE run_id=?', (rid,))
+        with live_api(store) as origin:
+            with actor_scope(actor):
+                session = Auth(store, origin).mint_agent_session(grant['delegation_id'])
+            own = headers(dict(token=session['token'], csrf=session['csrf_token']), origin)
+            path = origin + '/api/1/studies/' + sid + '/analysis-versions/' + vid + '/execution'
+            recovery = httpx.get(path + '/recovery', headers=own)
+            assert recovery.status_code == 200 and recovery.json()['data']['can_resume'], recovery.text
+            command = dict(command_id=uid())
+            with ThreadPoolExecutor(2) as pool:
+                replies = list(pool.map(lambda _: httpx.post(path + '/resume', headers=own, json=command), range(2)))
+            assert [r.status_code for r in replies] == [202, 202], '\n'.join([r.text for r in replies] + failures)
+            assert replies[0].json()['data'] == replies[1].json()['data']
+            with actor_scope(actor), store.connection() as db:
+                assert db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0] == source
+                audit = db.execute('SELECT previous_receipt FROM analysis_run_resumptions WHERE run_id=?', (rid,)).fetchall()
+                assert len(audit) == 1
+                assert json.loads(audit[0]['previous_receipt'])['error']['code'] == 'analysis_authority_revoked'
+            submissions, native = recovered_submission_owner(worker)
+            submissions.dispatch(rid)
+            with actor_scope(actor):
+                assert Submissions(store, None, None).read(actor, sid, rid)['state'] == 'uncertain'
+            assert native.launches == 1
+            replay = httpx.post(path + '/resume', headers=own, json=command)
+            assert replay.status_code == 202 and replay.json()['data'] == replies[0].json()['data'], replay.text
+            submissions.dispatch(rid)
+            assert native.launches == 1
+            with actor_scope(actor):
+                AnalysisExecution(store).cancel(actor, sid, vid)
+    finally:
+        worker.database.close()

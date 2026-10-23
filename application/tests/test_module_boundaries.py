@@ -1268,7 +1268,7 @@ LAYERS = {
     'calculation_exploration': frozenset(
         {'calculation_estimates', 'calculations', 'contracts', 'history', 'quantity_projection'}
     ),
-    'analysis_execution': frozenset({'calculations', 'calculation_estimates', 'contracts', 'history'}),
+    'analysis_execution': frozenset({'calculations', 'calculation_estimates', 'contracts', 'history', 'execution'}),
     'calculation_designs': frozenset(
         {'calculations', 'contracts', 'quantity_projection', 'sampling_coordinates', 'readiness'}
     ),
