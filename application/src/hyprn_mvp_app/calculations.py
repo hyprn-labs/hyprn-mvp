@@ -423,6 +423,13 @@ for old, new, field, target in (
 
 
 DEFINITIONS['AnalysisLaunch1'] = _object({})
+DEFINITIONS['AnalysisResume1'] = _object(dict(
+    command_id=DEFINITIONS['CalculationVersion1']['properties']['calculation_id'],
+))
+DEFINITIONS['AnalysisExecutionRecovery1'] = _object(dict(
+    schema_version=dict(const='1'), can_resume=dict(type='boolean'),
+    reason=dict(anyOf=[dict(type='string', maxLength=4096), dict(type='null')]),
+))
 DEFINITIONS['AnalysisExecution1'] = _object(dict(
     schema_version=dict(const='1'),
     calculation_version_id=DEFINITIONS['CalculationVersion1']['properties']['calculation_id'],

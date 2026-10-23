@@ -204,3 +204,12 @@ Inspect terminal execution state and failure reason even when results are absent
 An ambiguous submission requires receipt reconciliation, never an automatic retry.
 Saved analysis launch owns missing-run admission and the frozen surrogate plan;
 standalone run tools remain appropriate for separate verification calculations.
+
+### Interrupted analysis
+
+Read `get_analysis_execution` before repeating any launch. If `can_resume` is true,
+use `resume_analysis` on the same saved version and monitor progress. Existing run
+identities and accuracy targets are preserved. If recovery is refused, explain the
+returned cause; do not invent authorization controls or create duplicate analyses
+or manual member runs as a workaround. Normal chat credential renewal should not
+interrupt an accepted finite analysis.

@@ -918,7 +918,7 @@ through model edits. Trash/Restore remains human-only archive state.
 ### Complete sampled-analysis tool surface (current amendment)
 
 The common catalogue now exposes `create_sampled_analysis`, `get_sampling_status`,
-`launch_analysis`, `get_analysis_execution`, `get_surrogate`,
+`launch_analysis`, `get_analysis_execution`, `resume_analysis`, `get_surrogate`,
 `prepare_answer_exploration`, `get_answer_exploration`, `predict_answer` and
 `wait_for_runs`. These use the existing public analysis/sample/estimate/exploration
 owners; they introduce no numerical implementation or scientific fallback.
@@ -932,6 +932,15 @@ missing members under current queue, actor and authority limits. It does not dep
 on the reasoning session staying open; sampled members are not manually scheduled
 with submit_runs. A wait reads light status for at most 20 seconds. Readiness requires complete joint support and passing
 independent validation for every displayed output; publication checks it again.
+
+Failed execution reads include the owner's `can_resume` and recovery reason.
+`resume_analysis` uses POST execution/resume and a runtime-journaled command ID
+(`analysis_resume` receipt). It resumes only a recoverable accepted plan under
+current authority, preserving pinned runs, settings and validation targets.
+Credential replacement differs from explicit revocation; neither a duplicate
+analysis nor manual member submissions is a recovery mechanism. Permission
+refusals must name a real available action, never invented access controls.
+
 
 `get_surrogate.groups[].sample_roles` reports reserved `training`, `held_out_pool`,
 `method_selection` and `independent_validation` counts from the frozen estimate samples.

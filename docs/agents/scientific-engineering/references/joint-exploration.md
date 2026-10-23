@@ -146,3 +146,12 @@ saved answer. The reader's Select outcomes control changes only the current view
 persistent scientific answer changes require a new saved answer version.
 Do not hide a consequential limitation or failed requested outcome to make the
 compact view appear successful.
+
+### Interrupted analysis
+
+Read `get_analysis_execution` before repeating any launch. If `can_resume` is true,
+use `resume_analysis` on the same saved version and monitor progress. Existing run
+identities and accuracy targets are preserved. If recovery is refused, explain the
+returned cause; do not invent authorization controls or create duplicate analyses
+or manual member runs as a workaround. Normal chat credential renewal should not
+interrupt an accepted finite analysis.

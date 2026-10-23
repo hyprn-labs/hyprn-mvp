@@ -1125,3 +1125,135 @@ def test_analysis_authority_survives_expiry_and_is_finite_revocable_and_private(
             assert AnalysisExecution(store).read(owner, sid, vid)['admission_state'] == 'revoked'
     finally:
         worker.database.close()
+
+
+def isolated_analysis_account(fixture):
+    from hyprn_mvp_app.auth import token_hash
+    actor, token, csrf = uid(), uid(), uid()
+    raw = fixture['admin'].connect()
+    try:
+        db = Connection(raw)
+        db.execute('INSERT INTO users(actor_id,username) VALUES(?,?)', (actor, actor))
+        db.execute('INSERT INTO sessions VALUES(?,?,?,?)',
+                   (token_hash(token), actor, token_hash(csrf), time.time()+600))
+        raw.commit()
+    finally:
+        raw.close()
+    return dict(actor=actor, token=token, csrf=csrf)
+
+
+@pytest.mark.parametrize('interruption', [None, 'revoke', 'narrow', 'membership'])
+def test_analysis_recovery_proves_continuity_and_preserves_frozen_work_on_postgres(hosted, interruption):
+    from calculation_fixture import seed
+    from test_calculations_api import agent_analysis, replace_analysis_grant, legacy_interrupted_analysis
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.execution import Submissions
+    fixture, store, accounts = hosted
+    accounts = [isolated_analysis_account(fixture), accounts[1]]
+    actor, foreign = (a['actor'] for a in accounts)
+    sid = study(store, actor)
+    with actor_scope(actor):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    agent, grant, vid = agent_analysis(store, actor, sid, sample, 2)
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    create_app(worker, Auth(worker, 'http://test'), None)
+    runner = AnalysisExecution(worker)
+    try:
+        for _ in range(3):
+            replace_analysis_grant(store, actor, agent, sid)
+        assert runner.process_one(Submissions(worker, None, None))
+        with actor_scope(actor):
+            progress = AnalysisExecution(store).read(actor, sid, vid)
+            assert progress['state'] == 'calculating', progress
+            assert sum(bool(r['run_id']) for r in progress['runs']) == 2
+        request, failed = legacy_interrupted_analysis(store, actor, sid, vid)
+        if interruption == 'membership':
+            with actor_scope(actor), store.connection(write=True) as db:
+                db.execute("UPDATE memberships SET role='reader' WHERE study_id=? AND actor_id=?", (sid, actor))
+            raw = fixture['admin'].connect()
+            try:
+                Connection(raw).execute("UPDATE memberships SET role='owner' WHERE study_id=? AND actor_id=?", (sid, actor))
+                raw.commit()
+            finally:
+                raw.close()
+        elif interruption:
+            replace_analysis_grant(store, actor, agent, sid,
+                                   narrow=interruption == 'narrow', revoke=interruption == 'revoke')
+        current_grant = replace_analysis_grant(store, actor, agent, sid)
+        with actor_scope(actor), pytest.raises(DatabaseConflict):
+            with store.connection(write=True) as db:
+                db.execute("UPDATE receipts SET state='pending_remote' WHERE scope=? "
+                           "AND category='analysis_execution' AND command_id=?", (sid, identity(vid)))
+        with live_api(store) as origin:
+            path = origin + '/api/1/studies/' + sid + '/analysis-versions/' + vid + '/execution'
+            own, other = (headers(a, origin) for a in accounts)
+            if interruption is None:
+                with actor_scope(actor):
+                    session = Auth(store, origin).mint_agent_session(current_grant['delegation_id'])
+                own = headers(dict(token=session['token'], csrf=session['csrf_token']), origin)
+            assert httpx.get(path + '/recovery', headers=other).status_code == 404
+            recovery = httpx.get(path + '/recovery', headers=own)
+            assert recovery.status_code == 200, recovery.text
+            assert recovery.json()['data']['can_resume'] is (interruption is None), recovery.text
+            assert httpx.post(path, headers=own, json={}).json()['data'] == failed
+            command = dict(command_id=uid())
+            if interruption:
+                refused = httpx.post(path + '/resume', headers=own, json=command)
+                assert refused.status_code == 409, refused.text
+            else:
+                with ThreadPoolExecutor(2) as pool:
+                    replies = list(pool.map(lambda _: httpx.post(path + '/resume', headers=own, json=command), range(2)))
+                assert [r.status_code for r in replies] == [202, 202], [r.text for r in replies]
+                assert replies[0].json()['data'] == replies[1].json()['data']
+                assert replies[0].json()['data']['runs'] == failed['runs']
+                assert httpx.post(path + '/resume', headers=own, json=dict(command_id=uid())).status_code == 409
+        with actor_scope(actor), store.connection() as db:
+            saved = store.command_receipt(db, sid, 'analysis_execution', identity(vid))
+            assert saved['request'] == request
+            assert db.execute('SELECT count(*) FROM run_associations WHERE study_id=?', (sid,)).fetchone()[0] == 2
+        if interruption is None:
+            runner.process_one(Submissions(worker, None, None))
+            with actor_scope(actor):
+                progress = AnalysisExecution(store).read(actor, sid, vid)
+                assert progress['runs'] == failed['runs']
+                assert progress['admission_state'] == 'ready'
+                AnalysisExecution(store).cancel(actor, sid, vid)
+    finally:
+        worker.database.close()
+
+
+def test_recovery_reconciles_uncertain_unprojected_child_on_postgres(hosted):
+    from calculation_fixture import seed
+    from test_calculations_api import interrupted_analysis_with_unprojected_uncertain_child
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    fixture, store, accounts = hosted
+    accounts = [isolated_analysis_account(fixture), accounts[1]]
+    actor = accounts[0]['actor']
+    sid = study(store, actor)
+    with actor_scope(actor):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    vid, run_id = interrupted_analysis_with_unprojected_uncertain_child(store, actor, sid, sample)
+    with live_api(store) as origin:
+        path = origin + '/api/1/studies/' + sid + '/analysis-versions/' + vid + '/execution'
+        response = httpx.post(path + '/resume', headers=headers(accounts[0], origin), json=dict(command_id=uid()))
+        assert response.status_code == 202, response.text
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    create_app(worker, Auth(worker, 'http://test'), None)
+    try:
+        AnalysisExecution(worker).process_one(Submissions(worker, None, None))
+        with actor_scope(actor):
+            state = AnalysisExecution(store).read(actor, sid, vid)
+            assert state['state'] == 'needs_review', state
+            assert [r['run_id'] for r in state['runs']] == [None, None, run_id]
+            with store.connection() as db:
+                assert db.execute('SELECT count(*) FROM run_associations WHERE study_id=?', (sid,)).fetchone()[0] == 1
+            AnalysisExecution(store).cancel(actor, sid, vid)
+    finally:
+        worker.database.close()

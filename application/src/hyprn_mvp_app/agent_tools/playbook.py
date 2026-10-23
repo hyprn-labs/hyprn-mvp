@@ -527,7 +527,7 @@ CONFIGURATION_AND_RUNS = Section(
         'set_reference_mark',
         'clear_reference_mark',
         'create_sampled_analysis', 'get_sampling_status', 'launch_analysis',
-        'get_analysis_execution', 'get_surrogate', 'prepare_answer_exploration',
+        'get_analysis_execution', 'resume_analysis', 'get_surrogate', 'prepare_answer_exploration',
         'get_answer_exploration', 'predict_answer',
     ),
     tools_line=(
@@ -538,7 +538,7 @@ CONFIGURATION_AND_RUNS = Section(
         '`list_analysis_versions`, `get_analysis_runs`, `create_analysis`, '
         '`save_analysis_version`, `list_reference_marks`, `set_reference_mark`, '
         '`clear_reference_mark`, `create_sampled_analysis`, `get_sampling_status`, '
-        '`launch_analysis`, `get_analysis_execution`, `get_surrogate`, '
+        '`launch_analysis`, `get_analysis_execution`, `resume_analysis`, `get_surrogate`, '
         '`prepare_answer_exploration`, `get_answer_exploration`, `predict_answer`.'
     ),
     body=(
@@ -580,6 +580,12 @@ CONFIGURATION_AND_RUNS = Section(
         '`launch_analysis` once and monitor `get_analysis_execution`. This durable operation '
         'admits missing runs, reuses pinned results and fits the saved estimate plan without '
         'an open conversation. Do not manually submit batches for its member points. '
+        'Normal Assistant credential renewal must not interrupt an accepted plan. '
+        'If execution fails, read its can_resume flag and recovery reason. When allowed, '
+        'call `resume_analysis` on the same version, then monitor progress. It preserves '
+        'already accepted runs. Otherwise report the actual refusal and available action; '
+        'never invent access settings, duplicate an analysis or submit member runs to '
+        'bypass a failure. '
         'Use submit_runs and wait_for_runs only for standalone verification calculations. '
         'Reconcile uncertain outcomes rather than repeating submissions. Failed validation '
         'requires diagnosis and a new analysis version with unchanged targets and fresh '

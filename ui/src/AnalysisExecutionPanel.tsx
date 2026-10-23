@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { message, type HyprnMvpApi } from './api';
 import { useStudyRead } from './calculationReads';
-import type { AnalysisExecution1, CalculationVersionRead4 } from './contract';
+import type {
+  AnalysisExecutionRead2,
+  AnalysisExecutionRecovery1,
+  CalculationVersionRead4,
+} from './contract';
 import { ActionGroup, Button, Progress, StatusTag } from './design';
 
 export function AnalysisExecutionPanel({
@@ -13,9 +17,10 @@ export function AnalysisExecutionPanel({
   api: HyprnMvpApi;
   study: string;
   version: CalculationVersionRead4;
-  onProgress: (execution: AnalysisExecution1 | null) => void;
+  onProgress: (execution: AnalysisExecutionRead2) => void;
 }) {
-  const [execution, setExecution] = useState<AnalysisExecution1 | null>(null);
+  const [execution, setExecution] = useState<AnalysisExecutionRead2>(null);
+  const [recovery, setRecovery] = useState<AnalysisExecutionRecovery1 | null>(null);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -29,10 +34,18 @@ export function AnalysisExecutionPanel({
     let timer: number | undefined;
     const load = () =>
       void read(
-        (signal) => api.analysisExecution(study, version.calculation_version_id, signal),
-        (value) => {
+        async (signal) => {
+          const value = await api.analysisExecution(study, version.calculation_version_id, signal);
+          const recovery =
+            value?.state === 'failed'
+              ? await api.analysisRecovery(study, version.calculation_version_id, signal)
+              : null;
+          return { value, recovery };
+        },
+        ({ value, recovery }) => {
           if (stopped) return;
           setExecution(value);
+          setRecovery(recovery);
           setLoading(false);
           setError(null);
           const signature = JSON.stringify([
@@ -42,7 +55,7 @@ export function AnalysisExecutionPanel({
           ]);
           if (progress.current !== signature) changed.current(value);
           progress.current = signature;
-          if (value && !['complete', 'failed'].includes(value.state))
+          if (value && !['complete', 'failed', 'cancelled', 'needs_review'].includes(value.state))
             timer = window.setTimeout(load, 2000);
         },
         (e) => {
@@ -50,6 +63,7 @@ export function AnalysisExecutionPanel({
             setError(e);
             setLoading(false);
             setExecution(null);
+            setRecovery(null);
           }
         },
       );
@@ -59,11 +73,12 @@ export function AnalysisExecutionPanel({
       window.clearTimeout(timer);
     };
   }, [study, version.calculation_version_id, refresh]);
-  async function launch() {
+  async function launch(resume = false) {
     setLaunching(true);
     setError(null);
     try {
-      await api.launchAnalysis(study, version.calculation_version_id);
+      if (resume) await api.resumeAnalysis(study, version.calculation_version_id);
+      else await api.launchAnalysis(study, version.calculation_version_id);
       setRefresh((v) => v + 1);
     } catch (e) {
       setError(e);
@@ -78,6 +93,9 @@ export function AnalysisExecutionPanel({
         and validated estimates together.
       </p>
     );
+  const reason = recovery?.can_resume
+    ? 'The analysis was interrupted. Resume to continue using its saved calculations.'
+    : execution?.reason || recovery?.reason;
   const busy = execution && ['calculating', 'validating'].includes(execution.state);
   return (
     <div className="hf-flow">
@@ -101,19 +119,34 @@ export function AnalysisExecutionPanel({
           tone={
             execution.state === 'complete'
               ? 'ok'
-              : execution.state === 'failed'
+              : execution.state === 'failed' && !recovery?.can_resume
                 ? 'alarm'
                 : 'warning'
           }
         >
           {execution.state === 'complete'
             ? `${execution.completed_count}/${execution.total_count} calculated`
-            : execution.state === 'failed'
-              ? 'Failed'
-              : 'Needs review'}
+            : recovery?.can_resume
+              ? 'Paused'
+              : execution.state === 'failed'
+                ? 'Failed'
+                : execution.state === 'cancelled'
+                  ? 'Cancelled'
+                  : 'Needs review'}
         </StatusTag>
       )}
-      {execution?.reason && <p role="status">{execution.reason}</p>}
+      {reason && <p role="status">{reason}</p>}
+      {recovery?.can_resume && (
+        <ActionGroup>
+          <Button
+            variant="primary"
+            disabled={launching || !!api.pending}
+            onClick={() => void launch(true)}
+          >
+            {launching ? 'Resuming…' : 'Resume analysis'}
+          </Button>
+        </ActionGroup>
+      )}
       {!loading && !execution && !error && (
         <ActionGroup>
           <Button

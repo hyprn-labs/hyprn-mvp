@@ -48,6 +48,15 @@ advances calculations and the pinned surrogate build. Every requested output in 
 group must pass validation for completion. Standalone fit/run-request endpoints refuse
 format 4; old records retain their historical readers and compatibility endpoints.
 
+Execution recovery is a separate operation: GET `execution/recovery` reports
+whether the current caller can resume; POST `execution/resume` takes a fresh
+`command_id` and records an idempotent `analysis_resume` receipt. It preserves
+accepted run identities and the original frozen request. A normal replacement of
+Assistant credentials preserves finite authority; genuine revocation, narrowed
+permissions or lost human membership do not. Recovery does not change a saved
+analysis, reset validation, or retry an uncertain model launch.
+
+
 ### Validation terminology (owner-approved, 2026-10-19)
 
 New sampling requests use `SampledGroup2.validation_count`; new saved sampled

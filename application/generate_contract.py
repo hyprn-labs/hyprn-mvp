@@ -586,6 +586,10 @@ for path,methods in spec["paths"].items():
                     ('AnalysisExecutionRead2', None),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution', 'post'):
                     ('AnalysisExecution2', 'AnalysisLaunch1'),
+                ('/studies/{study_id}/calculation-versions/{version_id}/execution/recovery', 'get'):
+                    ('AnalysisExecutionRecovery1', None),
+                ('/studies/{study_id}/calculation-versions/{version_id}/execution/resume', 'post'):
+                    ('AnalysisExecution2', 'AnalysisResume1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation', 'post'):
                     ('AnalysisExecutionRead2', 'AnalysisLaunch1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/runs', 'get'): (

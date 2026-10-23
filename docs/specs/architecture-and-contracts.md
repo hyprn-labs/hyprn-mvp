@@ -339,6 +339,21 @@ A analysis version's design is hand-picked or sampled (ADR-0009). Only a samplin
 
 An estimate (`calculation_estimates`, receipt category `calculation_estimate`) is fitted to exactly one sampled version: each point contributes the latest recorded run of its configuration version, pinned by run id and results digest, or is unavailable. The fit is the bounded native build described below; outputs carry the same assessment, and an estimate is never a calculated result.
 
+Accepted format-4 analysis execution pins a finite set of run commands and its
+estimate plan. Background authority survives expiry and normal replacement of
+reasoning credentials, but not explicit revocation, narrowed delegation or lost
+human study membership. Permission continuity is checked by the Store and the
+PostgreSQL policies, with permanent barriers for membership loss. Ordinary agent
+sessions gain no additional permissions from this background scope.
+
+A separate public recovery operation reports eligibility and accepts an idempotent
+`analysis_resume` command for an execution stranded by credential replacement.
+It audits the previous operational outcome, preserves the original request and
+child identities, and reopens only that execution. The dispatcher reconciles pinned
+runs before admitting more work. Cancellation, numerical failure, failed validation
+and uncertain launches are not silently retried. Repeating launch remains a readback
+of its existing outcome, not a recovery request.
+
 ### Assessed answer surrogates
 
 Original sampling, surrogate construction and prediction are separate operations. An immutable exploration design maps each valid category tuple to exact model/configuration revisions and complete input vectors. The sampling owner retains original runs and their training/validation partitions. An explicitly calculated selected point may enrich the retained training partition; an existing validation point is never silently reassigned. Refinement spends only its declared additional original-evaluation budget. A ready version remains addressable while a later sample or construction operation runs, and cancellation or failure cannot publish a partial ready version.
@@ -663,6 +678,13 @@ A crash after acceptance recovers the same run. Uncertain runs require reconcili
 failed/preparation-failed runs fail the analysis without implicit retries. A new version
 is needed to change settings. The existing dispatcher advances this receipt; no second
 scheduler, native evaluator, store, or browser orchestration is introduced.
+
+The execution receipt is an operational progress projection. An explicit
+`analysis_resume` command may reopen a failed/revoked projection only after proving
+continuous authority and auditing the previous outcome. This narrow recovery
+exception preserves the frozen request, child commands and runs. Ordinary launch
+replay never initiates recovery; the resume command itself retains its original
+replay outcome. Saved scientific versions and recorded runs never change.
 
 After all pinned runs finish, the existing Estimates owner fits from those exact pins and
 saved error limits. Completion requires all requested outputs in all groups to pass their

@@ -18,6 +18,8 @@ SAMPLES = ('POST', ROOT + '/analysis-samples')
 SAMPLE = ('GET', ROOT + '/analysis-samples/{operation_id}')
 EXECUTION = ('GET', ROOT + '/analysis-versions/{version_id}/execution')
 LAUNCH = ('POST', ROOT + '/analysis-versions/{version_id}/execution')
+RECOVERY = ('GET', ROOT + '/analysis-versions/{version_id}/execution/recovery')
+RESUME = ('POST', ROOT + '/analysis-versions/{version_id}/execution/resume')
 ESTIMATE = ('GET', ROOT + '/analysis-estimates/{estimate_id}')
 PREPARATION = ('POST', ROOT + '/analysis-estimates/{estimate_id}/preparation')
 EXPLORATION = ('GET', ROOT + '/analysis-versions/{version_id}/exploration')
@@ -224,7 +226,7 @@ async def get_analysis_execution(a, ctx):
         a.get('wait_seconds', 0),
         {'complete', 'failed', 'needs_review', 'cancelled'},
     )
-    return execution_projection(value)
+    return await execution_recovery(value, ctx)
 
 
 async def launch_analysis(a, ctx):
@@ -240,6 +242,28 @@ async def launch_analysis(a, ctx):
             conflict_step='Read get_analysis_execution before retrying an uncertain launch.',
         )
     )['data']
+    return await execution_recovery(value, ctx)
+
+
+async def execution_recovery(value, ctx):
+    result = execution_projection(value)
+    if value is not None and value['state'] == 'failed':
+        recovery = (await read(ctx, study_path(
+            ctx, 'analysis-versions', value['calculation_version_id'],
+            'execution', 'recovery')))['data']
+        result['can_resume'] = recovery['can_resume']
+        result['recovery'] = untrusted('analysis recovery diagnostic', text=recovery['reason'])
+    return result
+
+
+async def resume_analysis(a, ctx):
+    value = (await send(
+        ctx, 'POST', study_path(ctx, 'analysis-versions',
+                               a['calculation_version_id'], 'execution', 'resume'),
+        {'command_id': command_id(ctx)}, tool='resume_analysis',
+        conflict_step='Read get_analysis_execution and its recovery reason. '
+                      'Do not relaunch or create a duplicate analysis to bypass a refusal.',
+    ))['data']
     return execution_projection(value)
 
 
@@ -572,7 +596,7 @@ TOOLS = (
             ('calculation_version_id',),
         ),
         launch_analysis,
-        (LAUNCH,),
+        (LAUNCH, RECOVERY),
         effect='submit',
         outcome='receipt:analysis_execution',
     ),
@@ -583,7 +607,21 @@ TOOLS = (
         'validation plan passed; physical applicability still needs engineering review.',
         VERSION_INPUT,
         get_analysis_execution,
-        (EXECUTION,),
+        (EXECUTION, RECOVERY),
+    ),
+    tool(
+        'resume_analysis',
+        'Resume analysis',
+        'Resumes the same accepted plan only when get_analysis_execution reports can_resume. '
+        'Reuses accepted runs and unchanged accuracy targets; never creates new versions or '
+        'reruns completed work. A refusal is not permission to submit member runs manually. '
+        'After uncertain delivery, reconcile the original command and read analysis progress.',
+        obj(dict(calculation_version_id=uuid_schema('Recoverable saved analysis version.')),
+            ('calculation_version_id',)),
+        resume_analysis,
+        (RESUME,),
+        effect='submit',
+        outcome='receipt:analysis_resume',
     ),
     tool(
         'get_surrogate',

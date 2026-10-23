@@ -11458,6 +11458,348 @@
         "deprecated": true
       }
     },
+    "/studies/{study_id}/calculation-versions/{version_id}/execution/recovery": {
+      "get": {
+        "summary": "Analysis Recovery",
+        "operationId": "analysis_recovery_api_1_studies__study_id__calculation_versions__version_id__execution_recovery_get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisExecutionRecovery1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Calculations (ADR-0009, ADR-0010): immutable, numbered versions, each freezing a set of configuration versions of one model version, how the set was made and the binding of each criterion of one saved brief version to the output that measures it. A binding needs the output's units to equal the criterion's exactly; nothing is converted. A calculation keeps its model; saving a version checks expected_version_id against the latest version. Runs are the member configurations' runs, evaluated from their integrity-checked records: constraints met, not_met or unresolved, objectives measured or unresolved, an unbound criterion unresolved. Reference marks label a configuration version as a baseline for its model; set and clear never change or pin it. A sampled version is generated only by a sampling operation (202, receipt category calculation_sample): seeded Latin hypercube points around reference configurations, in each input's saved units, frozen as configuration versions, then saved as the version's members; points of the latest sampled version that still fit are kept. A client may carry a sampled design unchanged into a new version. A run request submits ordinary runs for named members (receipt category run, one derived command per member) and never creates a version. An estimate (202, receipt category calculation_estimate) is fitted to exactly one sampled version and the latest recorded run of each point; its values are estimates, never calculated results. Receipt categories calculation_create, calculation_version and reference_mark; no other query fields are accepted.",
+        "deprecated": true
+      }
+    },
+    "/studies/{study_id}/calculation-versions/{version_id}/execution/resume": {
+      "post": {
+        "summary": "Analysis Resume",
+        "operationId": "analysis_resume_api_1_studies__study_id__calculation_versions__version_id__execution_resume_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisResume1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisExecution2"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Calculations (ADR-0009, ADR-0010): immutable, numbered versions, each freezing a set of configuration versions of one model version, how the set was made and the binding of each criterion of one saved brief version to the output that measures it. A binding needs the output's units to equal the criterion's exactly; nothing is converted. A calculation keeps its model; saving a version checks expected_version_id against the latest version. Runs are the member configurations' runs, evaluated from their integrity-checked records: constraints met, not_met or unresolved, objectives measured or unresolved, an unbound criterion unresolved. Reference marks label a configuration version as a baseline for its model; set and clear never change or pin it. A sampled version is generated only by a sampling operation (202, receipt category calculation_sample): seeded Latin hypercube points around reference configurations, in each input's saved units, frozen as configuration versions, then saved as the version's members; points of the latest sampled version that still fit are kept. A client may carry a sampled design unchanged into a new version. A run request submits ordinary runs for named members (receipt category run, one derived command per member) and never creates a version. An estimate (202, receipt category calculation_estimate) is fitted to exactly one sampled version and the latest recorded run of each point; its values are estimates, never calculated results. Receipt categories calculation_create, calculation_version and reference_mark; no other query fields are accepted.",
+        "deprecated": true
+      }
+    },
     "/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation": {
       "post": {
         "summary": "Analysis Cancel",
@@ -17751,6 +18093,346 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AnalysisLaunch1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisExecution2"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Analysis API. Configuration and run records remain independently addressable. Legacy calculation_* payload keys denote analysis identities and are preserved for immutable records and command receipts. Calculations (ADR-0009, ADR-0010): immutable, numbered versions, each freezing a set of configuration versions of one model version, how the set was made and the binding of each criterion of one saved brief version to the output that measures it. A binding needs the output's units to equal the criterion's exactly; nothing is converted. A calculation keeps its model; saving a version checks expected_version_id against the latest version. Runs are the member configurations' runs, evaluated from their integrity-checked records: constraints met, not_met or unresolved, objectives measured or unresolved, an unbound criterion unresolved. Reference marks label a configuration version as a baseline for its model; set and clear never change or pin it. A sampled version is generated only by a sampling operation (202, receipt category calculation_sample): seeded Latin hypercube points around reference configurations, in each input's saved units, frozen as configuration versions, then saved as the version's members; points of the latest sampled version that still fit are kept. A client may carry a sampled design unchanged into a new version. A run request submits ordinary runs for named members (receipt category run, one derived command per member) and never creates a version. An estimate (202, receipt category calculation_estimate) is fitted to exactly one sampled version and the latest recorded run of each point; its values are estimates, never calculated results. Receipt categories calculation_create, calculation_version and reference_mark; no other query fields are accepted."
+      }
+    },
+    "/studies/{study_id}/analysis-versions/{version_id}/execution/recovery": {
+      "get": {
+        "summary": "Analysis Recovery",
+        "operationId": "analysis_recovery_api_1_studies__study_id__analysis_versions__version_id__execution_recovery_get",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed error; inspect outcome before retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Authorized typed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisExecutionRecovery1"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "request_id",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "description": "Analysis API. Configuration and run records remain independently addressable. Legacy calculation_* payload keys denote analysis identities and are preserved for immutable records and command receipts. Calculations (ADR-0009, ADR-0010): immutable, numbered versions, each freezing a set of configuration versions of one model version, how the set was made and the binding of each criterion of one saved brief version to the output that measures it. A binding needs the output's units to equal the criterion's exactly; nothing is converted. A calculation keeps its model; saving a version checks expected_version_id against the latest version. Runs are the member configurations' runs, evaluated from their integrity-checked records: constraints met, not_met or unresolved, objectives measured or unresolved, an unbound criterion unresolved. Reference marks label a configuration version as a baseline for its model; set and clear never change or pin it. A sampled version is generated only by a sampling operation (202, receipt category calculation_sample): seeded Latin hypercube points around reference configurations, in each input's saved units, frozen as configuration versions, then saved as the version's members; points of the latest sampled version that still fit are kept. A client may carry a sampled design unchanged into a new version. A run request submits ordinary runs for named members (receipt category run, one derived command per member) and never creates a version. An estimate (202, receipt category calculation_estimate) is fitted to exactly one sampled version and the latest recorded run of each point; its values are estimates, never calculated results. Receipt categories calculation_create, calculation_version and reference_mark; no other query fields are accepted."
+      }
+    },
+    "/studies/{study_id}/analysis-versions/{version_id}/execution/resume": {
+      "post": {
+        "summary": "Analysis Resume",
+        "operationId": "analysis_resume_api_1_studies__study_id__analysis_versions__version_id__execution_resume_post",
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisResume1"
               }
             }
           }
@@ -80187,6 +80869,48 @@
         "type": "object",
         "properties": {},
         "required": [],
+        "additionalProperties": false
+      },
+      "AnalysisResume1": {
+        "type": "object",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "command_id"
+        ],
+        "additionalProperties": false
+      },
+      "AnalysisExecutionRecovery1": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1"
+          },
+          "can_resume": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "can_resume",
+          "reason"
+        ],
         "additionalProperties": false
       },
       "AnalysisExecution1": {

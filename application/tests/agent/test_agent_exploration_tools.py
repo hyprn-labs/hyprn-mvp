@@ -230,3 +230,41 @@ def test_surrogate_read_separates_reserved_roles_from_actual_output_assessment(m
     assert second['sample_roles'] == dict(
         training=5, held_out_pool=2, method_selection=1, independent_validation=1)
     assert second['outputs'][0]['metrics'] is None
+
+
+def test_resume_tool_recovers_same_analysis_after_replaced_credentials(env):
+    import json
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.execution import Submissions
+    from writer_tools import WRITER
+
+    vid = one(env, 'create_analysis', calculation(env))['calculation_version']['id']
+    one(env, 'launch_analysis', {'calculation_version_id': vid})
+    owner = AnalysisExecution(env['store'])
+    owner.process_one(Submissions(env['store'], None, None))
+    before = owner.read(env['owner'], env['sid'], vid)
+    with env['store'].connection(write=True) as db:
+        grant = env['store'].create_delegation(
+            db, env['agent'], env['sid'], 'writer', WRITER, time.time() + 3600)
+        # Retained failure produced by the older credential-replacement bug.
+        failed = dict(before, state='failed', admission_state='revoked',
+                      reason='Permission to execute this analysis was lost.')
+        db.execute("UPDATE receipts SET state='committed',result=? WHERE scope=? "
+                   "AND category='analysis_execution' AND command_id=?",
+                   (json.dumps(failed), env['sid'], identity(vid)))
+    env['writer'] = env['auth'].mint_agent_session(grant['delegation_id'])
+    status = one(env, 'get_analysis_execution', {'calculation_version_id': vid})
+    assert not isinstance(status, ToolError), status
+    assert status['can_resume'] is True
+    resumed = one(env, 'resume_analysis', {'calculation_version_id': vid})
+    assert not isinstance(resumed, ToolError), resumed
+    assert resumed['state'] == 'calculating'
+    assert owner.read(env['owner'], env['sid'], vid)['runs'] == before['runs']
+    assert one(env, 'get_analysis_execution', {'calculation_version_id': vid}) == resumed
+    with env['store'].connection() as db:
+        receipts = db.execute("SELECT request FROM receipts WHERE scope=? "
+                              "AND category='analysis_resume'", (env['sid'],)).fetchall()
+    assert len(receipts) == 1
+    refused = one(env, 'resume_analysis', {'calculation_version_id': vid},
+                  session='reader', effects=frozenset({'read', 'outside_study'}))
+    assert isinstance(refused, ToolError)

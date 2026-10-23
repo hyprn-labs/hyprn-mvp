@@ -84,6 +84,61 @@ class AnalysisExecution:
             receipt_state='pending_remote', request=request,
         )
 
+    def _recovery(self, db, actor, sid, version_id):
+        self.store.authorize(db, actor, sid)
+        saved = self.store.command_receipt(db, sid, CATEGORY, identity(version_id))
+        if saved is None:
+            return None, 'This analysis has not been launched.'
+        original_actor = saved['actor_id']
+        original_agent = self.store.agent_actor(db, original_actor)
+        if actor != original_actor and (not original_agent
+                or actor != original_agent['delegator_actor_id']):
+            return saved, 'Only the launching actor or its delegating engineer can resume this analysis.'
+        try:
+            self.store.authorize(db, actor, sid, write=True)
+            agent = self.store.agent_actor(db, actor)
+            if agent:
+                row = db.execute('SELECT delegation_id FROM agent_delegations '
+                                 'WHERE agent_actor_id=? AND study_id=? AND revoked_at IS NULL',
+                                 (actor, sid)).fetchone()
+                delegation = self.store.live_delegation(db, row['delegation_id']) if row else None
+                if delegation is None or 'submit' not in delegation['effects']:
+                    return saved, 'Current permission to submit calculations is required.'
+        except DomainError:
+            return saved, 'Current permission to submit calculations is required.'
+        if (saved['state'] != 'committed' or saved['result']['state'] != 'failed'
+                or saved['result'].get('admission_state') != 'revoked'):
+            return saved, 'Only an execution interrupted by replaced credentials can be resumed.'
+        if not self.store.analysis_authorized(db, saved, sid):
+            return saved, 'The original execution authority was revoked or continuity cannot be verified.'
+        return saved, None
+
+    def recovery(self, actor, sid, version_id):
+        self.analyses.version(actor, sid, version_id)
+        with self.store.connection() as db:
+            _, reason = self._recovery(db, actor, sid, version_id)
+        return dict(schema_version='1', can_resume=reason is None, reason=reason)
+
+    def resume(self, actor, sid, version_id, body):
+        validate_calculation('AnalysisResume1', body)
+        self.analyses.version(actor, sid, version_id)
+        def apply(db):
+            saved, reason = self._recovery(db, actor, sid, version_id)
+            if reason:
+                raise DomainError('analysis_resume_unavailable', 409, fields=[issue([], reason)])
+            result = dict(saved['result'], state='calculating', admission_state='ready', reason=None)
+            # No launch happens here. The dispatcher first reconciles every pinned run,
+            # and command replay recovers any accepted child not yet copied to this result.
+            db.execute('INSERT INTO analysis_execution_resumptions VALUES(?,?,?,?,?,?)',
+                       (sid, body['command_id'], identity(version_id), actor,
+                        json.dumps(saved['result']), json.dumps(result)))
+            db.execute("UPDATE receipts SET state='pending_remote',result=? WHERE scope=? "
+                       "AND category=? AND command_id=? AND state='committed'",
+                       (json.dumps(result), sid, CATEGORY, identity(version_id)))
+            return result
+        return self.store.command(actor, sid, 'analysis_resume', body['command_id'],
+                                  dict(calculation_version_id=version_id), apply)
+
     def cancel(self, actor, sid, version_id, body=None):
         validate_calculation('AnalysisLaunch1', {} if body is None else body)
         self.analyses.version(actor, sid, version_id)
@@ -202,11 +257,12 @@ class AnalysisExecution:
                 result.update(admission_state='unavailable',
                               reason='Execution admission is temporarily unavailable: ' + exc.code)
             else:
-                revoked = exc.code in ('analysis_authority_revoked', 'forbidden',
-                                       'resource_not_found')
+                revoked = exc.code == 'analysis_authority_revoked'
                 reason = {
                     'analysis_run_failed': 'A calculation failed. Review its run before creating a new analysis version.',
                     'analysis_run_preparation_failed': 'A calculation could not start. Review its run diagnostics.',
+                    'forbidden': 'A required operation was forbidden. Review its access diagnostics.',
+                    'resource_not_found': 'A required analysis resource was not available. Review its access or resource diagnostics.',
                 }.get(exc.code, 'Permission to execute this analysis was lost.' if revoked else
                       'Analysis preparation stopped: ' + exc.code.replace('_', ' '))
                 result.update(state='failed', admission_state='revoked' if revoked else 'stopped',
@@ -223,6 +279,19 @@ class AnalysisExecution:
         terminal = False
         complete = 0
         needs_review = False
+        # A child acceptance and its immutable parent link commit together, but a
+        # crashed dispatcher may not yet have copied the run id into this projection.
+        # Reconcile all such links before admitting anything: an uncertain later
+        # member must also stop earlier members that have not been submitted yet.
+        with self.store.connection() as db:
+            accepted = {r['child_command']: r['run_id'] for r in db.execute(
+                'SELECT child_command,run_id FROM analysis_execution_children '
+                "WHERE study_id=? AND analysis_command=? AND child_category='run'",
+                (sid, command)).fetchall()}
+        for member in result['runs']:
+            if member['run_id'] is None:
+                child = str(uuid5(UUID(command), member['configuration_revision_id']))
+                member['run_id'] = accepted.get(child)
         # Inspect all pinned runs before dispatch: uncertainty must never be retried.
         for member in result['runs']:
             if member['completed']:

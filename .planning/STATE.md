@@ -1,5 +1,19 @@
 # Project State
 
+- **Document recovery deployed (2026-10-23):** staging source `679bb62b`,
+  sequence 23 release `e4cb5242`, configuration `516db174`, ongoing named-user access.
+  Generic bounded provider attachments, explicit safe recovery and idle collection
+  state delivered. Startup now reconciles all retained Assistant generations.
+  583 focused tests, fresh image/native build, containment/startup and 19 network
+  probes passed. Public configuration prerequisite and existing-study continuation
+  verified; original 127 events and 11 tool receipts unchanged. The Assistant
+  passed the PDF failure and authored a brief/model, seven evidence records,
+  ten configurations and one run by 10:14 UTC. No direct study-data repair,
+  migration, budget change or numerical-image change. The study remains running;
+  its completed answer and validated exploration are not yet asserted.
+  [Recovery checkpoint](phases/06-hosted-staging/audit-remediation/08-PARENT-CHECKPOINT.md).
+  Full qualification and human acceptance remain separate obligations.
+
 - **Performance and UX deployed (2026-10-23):** staging `ea1497cd`, release
   `1339acb0`, configuration `62a5eaa1`, sequence 21; platform `492eeb2d` unchanged.
   Same retained record median 5.77 → 0.19 seconds (30 times faster), first read

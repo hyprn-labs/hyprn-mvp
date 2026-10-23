@@ -211,6 +211,13 @@ async def send(ctx, method, path, body, *, tool, conflict_step, field_prefix='',
             fields=fields,
             next_step='Fix the listed fields and call ' + tool + ' again.',
         )
+    if code == 'analysis_resume_unavailable':
+        raise ToolError(
+            'conflict',
+            'This analysis cannot be resumed in its current state; nothing was written.',
+            fields=fields,
+            next_step=conflict_step,
+        )
     if code == 'reference_conflict':
         raise ToolError(
             'conflict',

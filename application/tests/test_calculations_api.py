@@ -675,3 +675,177 @@ def test_distinct_studies_progress_with_actor_scoped_capacity(calc, different_ac
     if different_actor:
         assert other['client'].get(first).status_code == 404
         assert calc['client'].get(second).status_code == 404
+
+
+def agent_analysis(store, actor, sid, sample, count=3):
+    """A real accepted plan with a reasoning credential and frozen member commands."""
+    import time
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.calculations import Analyses
+    from hyprn_mvp_app.database import actor_scope
+    with actor_scope(actor):
+        members = [sample['config']['configuration_revision_id']]
+        members += [sibling(sample, sample['frozen']) for _ in range(count - 1)]
+        version = Analyses(store).create(actor, sid, dict(command_id=uid(),
+            content=body(sample, members=members, schema_version='4', estimate_plan=None)))
+        with store.connection(write=True) as db:
+            agent = store.ensure_agent_actor(db, actor, 'claude_managed', 'Assistant')
+            grant = store.create_delegation(db, agent, sid, 'writer',
+                                            {'read', 'record', 'submit'}, time.time()+600)
+    with actor_scope(agent):
+        AnalysisExecution(store).launch(agent, sid, version['calculation_version_id'], {})
+    return agent, grant, version['calculation_version_id']
+
+
+def replace_analysis_grant(store, actor, agent, sid, *, narrow=False, revoke=False):
+    import time
+    from hyprn_mvp_app.database import actor_scope
+    with actor_scope(actor), store.connection(write=True) as db:
+        if revoke:
+            row = db.execute('SELECT delegation_id FROM agent_delegations '
+                             'WHERE agent_actor_id=? AND study_id=? AND revoked_at IS NULL',
+                             (agent, sid)).fetchone()
+            store.revoke_delegation(db, row['delegation_id'], 'owner_revoked')
+        return store.create_delegation(db, agent, sid, 'reader' if narrow else 'writer',
+                                      {'read'} if narrow else {'read', 'record', 'submit'},
+                                      time.time()+600)
+
+
+def legacy_interrupted_analysis(store, actor, sid, vid):
+    """Retain the exact terminal outcome emitted before credential-rotation repair."""
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.database import actor_scope
+    with actor_scope(actor), store.connection(write=True) as db:
+        saved = store.command_receipt(db, sid, 'analysis_execution', identity(vid))
+        result = dict(saved['result'], state='failed', admission_state='revoked',
+                      reason='Permission to execute this analysis was lost.')
+        AnalysisExecution(store)._save(db, sid, identity(vid), result, True)
+        return saved['request'], result
+
+
+def test_repeated_reasoning_replacement_preserves_finite_authority(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    agent, _, vid = agent_analysis(store, actor, sid, calc)
+    for _ in range(3):
+        replace_analysis_grant(store, actor, agent, sid)
+    runner = AnalysisExecution(store)
+    assert runner.process_one(Submissions(store, None, None))
+    result = runner.read(actor, sid, vid)
+    assert result['state'] == 'calculating'
+    assert all(r['run_id'] for r in result['runs'])
+
+
+def test_public_resume_preserves_frozen_work_replays_and_blocks_uncertain_runs(calc):
+    from concurrent.futures import ThreadPoolExecutor
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.database import actor_scope
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    agent, _, vid = agent_analysis(store, actor, sid, calc, 12)
+    runner = AnalysisExecution(store)
+    submissions = Submissions(store, None, None)
+    runner.process_one(submissions)
+    request, failed = legacy_interrupted_analysis(store, actor, sid, vid)
+    replace_analysis_grant(store, actor, agent, sid)
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    assert calc['client'].post(path, json={}).json()['data'] == failed
+    assert calc['client'].get(path + '/recovery').json()['data']['can_resume'] is True
+    command = dict(command_id=uid())
+    with ThreadPoolExecutor(2) as pool:
+        replies = list(pool.map(lambda _: calc['client'].post(path + '/resume', json=command), range(2)))
+    assert [r.status_code for r in replies] == [202, 202], [r.text for r in replies]
+    resumed = replies[0].json()['data']
+    assert replies[1].json()['data'] == resumed
+    assert resumed['runs'] == failed['runs']
+    assert calc['client'].post(path + '/resume', json=dict(command_id=uid())).status_code == 409
+    with actor_scope(actor), store.connection() as db:
+        saved = store.command_receipt(db, sid, 'analysis_execution', identity(vid))
+        assert saved['request'] == request
+        assert db.execute('SELECT count(*) FROM analysis_execution_resumptions WHERE study_id=?',
+                          (sid,)).fetchone()[0] == 1
+        assert db.execute('SELECT count(*) FROM run_associations WHERE study_id=?', (sid,)).fetchone()[0] == 10
+    first = resumed['runs'][0]['run_id']
+    read = submissions.read
+    submissions.read = lambda who, study, run: dict(read(who, study, run), state='uncertain') if run == first else read(who, study, run)
+    assert runner.process_one(submissions)
+    assert runner.read(actor, sid, vid)['state'] == 'needs_review'
+    assert runner.read(actor, sid, vid)['runs'] == resumed['runs']
+    # Public foreign-study identity does not expose recovery or resume availability.
+    other = store.create_study(actor, uid(), 'Other study')['study_id']
+    foreign_path = path.replace(sid, other)
+    assert calc['client'].get(foreign_path + '/recovery').status_code == 404
+    assert calc['client'].post(foreign_path + '/resume', json=dict(command_id=uid())).status_code == 404
+
+
+@pytest.mark.parametrize('interruption', ['revoke', 'narrow', 'membership'])
+def test_regrant_cannot_restore_interrupted_analysis_authority(calc, interruption):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    agent, _, vid = agent_analysis(store, actor, sid, calc)
+    if interruption == 'membership':
+        with store.connection(write=True) as db:
+            db.execute("UPDATE memberships SET role='reader' WHERE study_id=? AND actor_id=?", (sid, actor))
+            db.execute("UPDATE memberships SET role='owner' WHERE study_id=? AND actor_id=?", (sid, actor))
+    else:
+        replace_analysis_grant(store, actor, agent, sid,
+                               narrow=interruption == 'narrow', revoke=interruption == 'revoke')
+    replace_analysis_grant(store, actor, agent, sid)
+    runner = AnalysisExecution(store)
+    assert runner.process_one(Submissions(store, None, None))
+    assert runner.read(actor, sid, vid)['admission_state'] == 'revoked'
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    assert calc['client'].get(path + '/recovery').json()['data']['can_resume'] is False
+    assert calc['client'].post(path + '/resume', json=dict(command_id=uid())).status_code == 409
+
+
+@pytest.mark.parametrize('code', ['forbidden', 'resource_not_found'])
+def test_resource_failure_is_not_reported_as_explicit_authority_revocation(calc, code):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.contracts import DomainError
+    from hyprn_mvp_app.execution import Submissions
+    _, endpoint = finite_analysis(calc, 1)
+    submissions = Submissions(calc['store'], None, None)
+    def denied(*args, **kwargs):
+        raise DomainError(code, 403 if code == 'forbidden' else 404)
+    submissions.submit = denied
+    AnalysisExecution(calc['store']).process_one(submissions)
+    result = calc['client'].get(endpoint).json()['data']
+    assert result['admission_state'] == 'stopped'
+    assert 'Permission to execute this analysis was lost' not in result['reason']
+
+
+def interrupted_analysis_with_unprojected_uncertain_child(store, actor, sid, sample):
+    from uuid import UUID, uuid5
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.database import actor_scope
+    from hyprn_mvp_app.execution import Submissions
+    agent, _, vid = agent_analysis(store, actor, sid, sample)
+    with actor_scope(agent), store.analysis_authority(agent, sid, identity(vid)):
+        result = AnalysisExecution(store).read(agent, sid, vid)
+        last = result['runs'][-1]['configuration_revision_id']
+        accepted = Submissions(store, None, None).submit(agent, sid, dict(
+            command_id=str(uuid5(UUID(identity(vid)), last)), configuration_revision_id=last))
+        with store.connection(write=True) as db:
+            db.execute("UPDATE outbox SET state='uncertain' WHERE run_id=?", (accepted['run_id'],))
+    legacy_interrupted_analysis(store, actor, sid, vid)
+    replace_analysis_grant(store, actor, agent, sid)
+    return vid, accepted['run_id']
+
+
+def test_recovery_reconciles_unprojected_uncertain_children_before_any_new_admission(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    vid, run_id = interrupted_analysis_with_unprojected_uncertain_child(store, actor, sid, calc)
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    response = calc['client'].post(path + '/resume', json=dict(command_id=uid()))
+    assert response.status_code == 202, response.text
+    AnalysisExecution(store).process_one(Submissions(store, None, None))
+    state = calc['client'].get(path).json()['data']
+    assert state['state'] == 'needs_review'
+    assert [r['run_id'] for r in state['runs']] == [None, None, run_id]
+    with store.connection() as db:
+        assert db.execute('SELECT count(*) FROM run_associations WHERE study_id=?', (sid,)).fetchone()[0] == 1

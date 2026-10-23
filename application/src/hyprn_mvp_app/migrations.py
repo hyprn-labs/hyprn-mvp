@@ -11,7 +11,7 @@ MIGRATIONS = tuple(Path(__file__).with_name('migrations') / name for name in
                     '0006_retained_fingerprint.sql', '0007_retained_read_cache.sql',
                     '0008_run_listing_projection.sql', '0009_assistant_user_accounts.sql',
                     '0010_operational_execution.sql', '0011_assistant_projection.sql', '0012_analysis_authority.sql',
-                    '0013_assistant_provider_sessions.sql'))
+                    '0013_assistant_provider_sessions.sql', '0014_analysis_recovery.sql'))
 
 
 def expected(migration=None):

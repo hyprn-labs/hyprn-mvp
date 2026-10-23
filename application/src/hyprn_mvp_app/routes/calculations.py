@@ -116,6 +116,19 @@ def router(deps):
         return result(request, 'AnalysisExecution2',
                       AnalysisExecution(deps.store).launch(who, sid, valid_id(version_id), body), 202)
 
+    @r.get('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution/recovery')
+    def analysis_recovery(study_id: str, version_id: str, request: Request, who: Actor):
+        sid, _ = scope(request, who, study_id)
+        return result(request, 'AnalysisExecutionRecovery1',
+                      AnalysisExecution(deps.store).recovery(who, sid, valid_id(version_id)))
+
+    @r.post('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution/resume', status_code=202)
+    def analysis_resume(study_id: str, version_id: str, request: Request, who: Actor,
+                        body: dict = Body(...)):
+        sid, _ = scope(request, who, study_id)
+        return result(request, 'AnalysisExecution2',
+                      AnalysisExecution(deps.store).resume(who, sid, valid_id(version_id), body), 202)
+
     @r.post('/api/1/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation')
     def analysis_cancel(study_id: str, version_id: str, request: Request, who: Actor,
                         body: dict = Body(...)):

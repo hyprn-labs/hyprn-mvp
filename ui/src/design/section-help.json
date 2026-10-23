@@ -44,7 +44,7 @@
     "title": "Results",
     "paragraphs": [
       "Each row is one configuration: a combination of input values. Outputs come from its recorded run. The arrows beside the point and execution status open the configuration and run.",
-      "Completed describes execution, not scientific validity or whether criteria were met. In sampled analyses, all points are calculated by the model: training fits the surrogate, method selection chooses its method, and independent validation assesses its accuracy."
+      "An accepted analysis continues when a conversation ends. If an interruption is recoverable, Resume analysis continues the same plan using its saved calculations. Completed describes execution, not scientific validity or whether criteria were met. In sampled analyses, all points are calculated by the model: training fits the surrogate, method selection chooses its method, and independent validation assesses its accuracy."
     ]
   },
   "surrogate": {

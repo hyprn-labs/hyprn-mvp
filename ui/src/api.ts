@@ -1,4 +1,4 @@
-import type { AnalysisExecution1 } from './contract';
+import type { AnalysisExecution2, AnalysisExecutionRead2, AnalysisExecutionRecovery1 } from './contract';
 import type {
   AssistantBudgetRead2,
   AssistantConversationRead4,
@@ -545,7 +545,7 @@ export class HyprnMvpApi {
     ).data;
   analysisExecution = async (sid: string, versionId: string, signal?: AbortSignal) =>
     (
-      await this.request<AnalysisExecution1 | null>(
+      await this.request<AnalysisExecutionRead2>(
         `/studies/${sid}/analysis-versions/${versionId}/execution`,
         undefined,
         'GET',
@@ -554,10 +554,28 @@ export class HyprnMvpApi {
     ).data;
   launchAnalysis = async (sid: string, versionId: string) =>
     (
-      await this.request<AnalysisExecution1>(
+      await this.request<AnalysisExecution2>(
         `/studies/${sid}/analysis-versions/${versionId}/execution`,
         {},
         'POST',
+      )
+    ).data;
+  analysisRecovery = async (sid: string, versionId: string, signal?: AbortSignal) =>
+    (
+      await this.request<AnalysisExecutionRecovery1>(
+        `/studies/${sid}/analysis-versions/${versionId}/execution/recovery`,
+        undefined,
+        'GET',
+        signal,
+      )
+    ).data;
+  resumeAnalysis = async (sid: string, versionId: string) =>
+    (
+      await this.mutate<AnalysisExecution2>(
+        `/studies/${sid}/analysis-versions/${versionId}/execution/resume`,
+        { command_id: crypto.randomUUID() },
+        'analysis_resume',
+        sid,
       )
     ).data;
   /** Ordinary runs for named members; repeating the same command returns the same runs. */

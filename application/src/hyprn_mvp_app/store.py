@@ -215,6 +215,36 @@ CREATE TRIGGER IF NOT EXISTS analysis_execution_children_no_update BEFORE UPDATE
  BEGIN SELECT RAISE(ABORT,'accepted analysis child identity never changes'); END;
 CREATE TRIGGER IF NOT EXISTS analysis_execution_children_no_delete BEFORE DELETE ON analysis_execution_children
  BEGIN SELECT RAISE(ABORT,'accepted analysis child identity never changes'); END;
+CREATE TABLE IF NOT EXISTS analysis_authority_barriers(
+ study_id TEXT NOT NULL, analysis_command TEXT NOT NULL,
+ PRIMARY KEY(study_id,analysis_command)
+);
+CREATE TRIGGER IF NOT EXISTS analysis_membership_downgrade AFTER UPDATE OF role ON memberships
+ WHEN OLD.role IN ('writer','owner') AND NEW.role NOT IN ('writer','owner') BEGIN
+ INSERT OR IGNORE INTO analysis_authority_barriers
+ SELECT r.scope,r.command_id FROM receipts r WHERE r.scope=OLD.study_id
+ AND r.category='analysis_execution' AND (r.actor_id=OLD.actor_id OR r.actor_id IN
+ (SELECT actor_id FROM agent_actors WHERE delegator_actor_id=OLD.actor_id));
+END;
+CREATE TRIGGER IF NOT EXISTS analysis_membership_removal AFTER DELETE ON memberships BEGIN
+ INSERT OR IGNORE INTO analysis_authority_barriers
+ SELECT r.scope,r.command_id FROM receipts r WHERE r.scope=OLD.study_id
+ AND r.category='analysis_execution' AND (r.actor_id=OLD.actor_id OR r.actor_id IN
+ (SELECT actor_id FROM agent_actors WHERE delegator_actor_id=OLD.actor_id));
+END;
+CREATE TRIGGER IF NOT EXISTS analysis_barriers_fixed BEFORE UPDATE ON analysis_authority_barriers
+ BEGIN SELECT RAISE(ABORT,'analysis authority loss is permanent'); END;
+CREATE TRIGGER IF NOT EXISTS analysis_barriers_no_delete BEFORE DELETE ON analysis_authority_barriers
+ BEGIN SELECT RAISE(ABORT,'analysis authority loss is permanent'); END;
+CREATE TABLE IF NOT EXISTS analysis_execution_resumptions(
+ study_id TEXT NOT NULL, command_id TEXT NOT NULL, analysis_command TEXT NOT NULL,
+ actor_id TEXT NOT NULL, previous_result TEXT NOT NULL, resumed_result TEXT NOT NULL,
+ PRIMARY KEY(study_id,command_id)
+);
+CREATE TRIGGER IF NOT EXISTS analysis_resumptions_fixed BEFORE UPDATE ON analysis_execution_resumptions
+ BEGIN SELECT RAISE(ABORT,'analysis recovery audit is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS analysis_resumptions_no_delete BEFORE DELETE ON analysis_execution_resumptions
+ BEGIN SELECT RAISE(ABORT,'analysis recovery audit is immutable'); END;
 CREATE TABLE IF NOT EXISTS agent_actors(
  actor_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='agent'),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),
@@ -235,6 +265,20 @@ CREATE TABLE IF NOT EXISTS agent_delegations(
  revoked_at REAL, revoked_reason TEXT,
  CHECK((revoked_at IS NULL)=(revoked_reason IS NULL))
 );
+-- Persist authority interruptions even if subsequent grant clocks move backwards.
+CREATE TRIGGER IF NOT EXISTS analysis_delegation_revoked AFTER UPDATE OF revoked_at ON agent_delegations
+ WHEN OLD.revoked_at IS NULL AND NEW.revoked_at IS NOT NULL AND NEW.revoked_reason<>'replaced' BEGIN
+ INSERT OR IGNORE INTO analysis_authority_barriers
+ SELECT scope,command_id FROM receipts WHERE scope=NEW.study_id AND actor_id=NEW.agent_actor_id
+ AND category='analysis_execution';
+END;
+CREATE TRIGGER IF NOT EXISTS analysis_delegation_narrowed AFTER INSERT ON agent_delegations
+ WHEN NEW.role_ceiling<>'writer' OR NOT EXISTS(
+ SELECT 1 FROM json_each(NEW.allowed_effects) WHERE value='submit') BEGIN
+ INSERT OR IGNORE INTO analysis_authority_barriers
+ SELECT scope,command_id FROM receipts WHERE scope=NEW.study_id AND actor_id=NEW.agent_actor_id
+ AND category='analysis_execution';
+END;
 CREATE UNIQUE INDEX IF NOT EXISTS agent_delegations_one_live
  ON agent_delegations(agent_actor_id,study_id) WHERE revoked_at IS NULL;
 -- Delegated agent API sessions: hashes only; the cookie and cross-site request values are
@@ -360,7 +404,14 @@ class Store:
         with self.connection() as db:
             operational_exists = db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_operations'").fetchone()
+            authority_exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='analysis_authority_barriers'").fetchone()
             db.executescript(SCHEMA)
+            if not authority_exists:
+                db.execute("""INSERT OR IGNORE INTO analysis_authority_barriers
+                    SELECT r.scope,r.command_id FROM receipts r WHERE r.category='analysis_execution'
+                    AND EXISTS(SELECT 1 FROM receipts m WHERE m.scope=r.scope
+                    AND m.category='membership' AND m.state='committed' AND m.rowid>r.rowid)""")
         # Additive, idempotent migration. Historical records and observation
         # values remain untouched; pre-existing rows simply have no runtime.
         with self.connection(write=True) as db:
@@ -582,23 +633,44 @@ class Store:
         if (not receipt or receipt['actor_id'] != actor
                 or (receipt['state'] != 'pending_remote' and not scope[4])):
             raise DomainError('analysis_authority_revoked', 403)
-        authority = (receipt['request'] or {}).get('authority')
-        if not authority or authority['actor_id'] != actor:
-            raise DomainError('analysis_authority_revoked', 403)
-        agent = self.agent_actor(db, actor)
-        if agent is not None:
-            row = db.execute('SELECT * FROM agent_delegations WHERE delegation_id=?',
-                             (authority['delegation_id'],)).fetchone()
-            if (not row or row['agent_actor_id'] != actor or row['study_id'] != study
-                    or row['revoked_at'] is not None or row['role_ceiling'] != 'writer'
-                    or 'submit' not in json.loads(row['allowed_effects'])):
-                raise DomainError('analysis_authority_revoked', 403)
-            subject = agent['delegator_actor_id']
-        else:
-            subject = actor
-        if self._membership_role(db, study, subject) not in ('owner', 'writer'):
+        if not self.analysis_authorized(db, receipt, study):
             raise DomainError('analysis_authority_revoked', 403)
         return receipt
+
+    def analysis_authorized(self, db, receipt, study):
+        """Verify uninterrupted finite authority, including historical replacement grants.
+
+        Expiry ends reasoning credentials, not an accepted finite plan. A narrower grant,
+        explicit revocation or membership loss permanently interrupts that plan's authority.
+        """
+        actor = receipt['actor_id']
+        authority = (receipt['request'] or {}).get('authority')
+        if not authority or authority.get('actor_id') != actor:
+            return False
+        if hasattr(self, 'database'):
+            return bool(db.execute('SELECT hyprn_analysis_authorized(?,?) AS allowed',
+                                   (study, receipt['command_id'])).fetchone()['allowed'])
+        if db.execute('SELECT 1 FROM analysis_authority_barriers WHERE study_id=? '
+                      'AND analysis_command=?', (study, receipt['command_id'])).fetchone():
+            return False
+        agent = self.agent_actor(db, actor)
+        subject = agent['delegator_actor_id'] if agent else actor
+        if self._membership_role(db, study, subject) not in ('owner', 'writer'):
+            return False
+        if agent is None:
+            return True
+        pinned = db.execute('SELECT * FROM agent_delegations WHERE delegation_id=? '
+                            'AND agent_actor_id=? AND study_id=?',
+                            (authority.get('delegation_id'), actor, study)).fetchone()
+        if not pinned:
+            return False
+        rows = db.execute('SELECT * FROM agent_delegations WHERE agent_actor_id=? '
+                          'AND study_id=? AND created_at>=?',
+                          (actor, study, pinned['created_at'])).fetchall()
+        return all(row['role_ceiling'] == 'writer'
+                   and 'submit' in json.loads(row['allowed_effects'])
+                   and (row['revoked_at'] is None or row['revoked_reason'] == 'replaced')
+                   for row in rows) and any(row['revoked_at'] is None for row in rows)
 
     def _analysis_command(self, db, actor, study, category, command, payload):
         receipt = self._analysis_permission(db, actor, study)

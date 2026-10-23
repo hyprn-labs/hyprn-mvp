@@ -53,6 +53,7 @@ The study is an evaluation fixture, never a special branch in product code.
 | F14 pinned native skill/single source | C2/C3 | committed; pinned provider/tool readback and public playbook authoring passed; full attachment evaluation remains |
 | F15 bounded reviewers/context/effort evaluation | C2 + parent | reviewer enforcement committed; live medium/high evaluation pending |
 | F16 fair concurrent studies/cancellation/budget | A3/C1 + parent | 82 calculations checks passed; successor billing passes PostgreSQL/bridge checks; live acceptance pending |
+| F17 bounded provider documents/recovery/idle lists | parent + backend/UI executors | deployed `679bb62b`; 583 focused tests, real startup/network and public continued authoring; original history preserved; final study answer still running |
 | F17 retention/observability/host verification cost | platform | activation verification and journal bounds committed; release/work deletion lacks safe lifecycle proof |
 | F18 measured performance and sizing decision | parent acceptance | delivered; identical-run median 5.77s to 0.19s; first read 0.75s; no RAM resize |
 

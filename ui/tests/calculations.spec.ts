@@ -98,9 +98,9 @@ test('@calculations each run reads against the brief criteria bound to its confi
   await expect(bindings).toContainText('Minimize');
   const runs = page.getByRole('region', { name: 'Analysis results', exact: true });
   await expect(runs.getByRole('row')).toHaveCount(2);
-  // The constraint is compared with its threshold; the objective reports its measured value.
+  // The constraint is compared with its threshold; the objective reports its calculated value.
   await expect(runs).toContainText(/Met\s*15[01]/);
-  await expect(runs).toContainText(/Measured\s*15[01]/);
+  await expect(runs).toContainText(/Calculated\s*15[01]/);
   await expect(runs).not.toContainText('Not met');
   await expect(page.getByRole('button', { name: 'Help: Versions' })).toHaveCount(0);
   const resultsHelp = page.getByRole('button', { name: 'Help: Results', exact: true });
@@ -228,8 +228,14 @@ test('@calculations reference marks label a configuration version without changi
       const sameLine =
         inputsBox.y < badgeBox.y + badgeBox.height && badgeBox.y < inputsBox.y + inputsBox.height;
       const clearance = sameLine
-        ? inputsBox.x - (badgeBox.x + badgeBox.width)
-        : inputsBox.y - (badgeBox.y + badgeBox.height);
+        ? Math.max(
+            inputsBox.x - (badgeBox.x + badgeBox.width),
+            badgeBox.x - (inputsBox.x + inputsBox.width),
+          )
+        : Math.max(
+            inputsBox.y - (badgeBox.y + badgeBox.height),
+            badgeBox.y - (inputsBox.y + inputsBox.height),
+          );
       expect(clearance).toBeGreaterThanOrEqual(gap - 0.5);
       await shot(page, `configuration-reference-${theme}-${width}`);
     }
@@ -277,7 +283,7 @@ test('@calculations the analysis record fits genuine 200 percent zoom in both th
   // Matching criteria show their recorded evaluations even at the narrow layout.
   const runs = page.getByRole('region', { name: 'Analysis results', exact: true });
   await expect(runs).toContainText('Met');
-  await expect(runs).toContainText('Measured');
+  await expect(runs).toContainText('Calculated');
   await expect(runs).not.toContainText('Criterion not bound');
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
@@ -541,12 +547,17 @@ test('@calculations one creation dialog preserves selections between existing co
   const dialog = page.getByRole('dialog', { name: 'New analysis', exact: true });
   const footer = dialog.locator(':scope > .dialog-footer');
   await expect(footer.getByRole('button')).toHaveText(['Cancel', 'Save analysis']);
-  await expect(footer.getByRole('button', { name: 'Save analysis', exact: true })).toHaveClass(/hf-btn--primary/);
+  await expect(footer.getByRole('button', { name: 'Save analysis', exact: true })).toHaveClass(
+    /hf-btn--primary/,
+  );
   await expect(footer.getByRole('button', { name: 'Save analysis', exact: true })).toHaveCount(1);
   await expect(footer.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
   // The footer retains native form submission even though it sits outside the form.
-  expect(await footer.getByRole('button', { name: 'Save analysis', exact: true })
-    .evaluate((button: HTMLButtonElement) => button.form?.tagName)).toBe('FORM');
+  expect(
+    await footer
+      .getByRole('button', { name: 'Save analysis', exact: true })
+      .evaluate((button: HTMLButtonElement) => button.form?.tagName),
+  ).toBe('FORM');
   await dialog.getByLabel('Analysis name', { exact: true }).fill('Operating points');
   const description = dialog.getByLabel('Analysis description', { exact: true });
   await expect(description).toBeVisible();
@@ -580,25 +591,31 @@ test('@calculations one creation dialog preserves selections between existing co
   await expect(dialog.getByLabel(seeded.configuration_name, { exact: true })).toBeChecked();
   await expect(dialog.getByLabel('Cruise point B', { exact: true })).toBeChecked();
   for (const theme of ['light', 'dark'] as const) {
-    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
     await page.setViewportSize({ width: 390, height: 600 });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBeLessThanOrEqual(0);
-    const saveBox = await footer.getByRole('button', { name: 'Save analysis', exact: true }).boundingBox();
-    const cancelBox = await footer.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+    const saveBox = await footer
+      .getByRole('button', { name: 'Save analysis', exact: true })
+      .boundingBox();
+    const cancelBox = await footer
+      .getByRole('button', { name: 'Cancel', exact: true })
+      .boundingBox();
     expect(saveBox).not.toBeNull();
     expect(cancelBox).not.toBeNull();
     expect(Math.abs(saveBox!.y - cancelBox!.y)).toBeLessThanOrEqual(1);
     expect(cancelBox!.x + cancelBox!.width).toBeLessThan(saveBox!.x);
-    const edge = await dialog.evaluate(element => {
+    const edge = await dialog.evaluate((element) => {
       const body = element.querySelector('.dialog-body')!;
       const field = body.querySelector('label')!;
       return {
-        gap:field.getBoundingClientRect().top-body.getBoundingClientRect().top,
-        padding:parseFloat(getComputedStyle(body).paddingTop),
+        gap: field.getBoundingClientRect().top - body.getBoundingClientRect().top,
+        padding: parseFloat(getComputedStyle(body).paddingTop),
       };
     });
     expect(edge.gap).toBeCloseTo(edge.padding, 0);
@@ -665,4 +682,65 @@ test('@calculations simplified dialogs preserve automatic and saved criterion bi
   await expect(bindings.getByRole('columnheader', { name: /linear · u/ })).toBeVisible();
   await expect(bindings.getByRole('columnheader', { name: /Secondary response/ })).toBeVisible();
   await expect(bindings).toContainText('Output not assigned');
+});
+
+test('@calculations recoverable interruption offers one resume action and preserves result links', async ({
+  page,
+}) => {
+  const seeded = await openStudy(page);
+  await openCalculations(page);
+  let resumed = false;
+  const resumeCommands: string[] = [];
+  await page.route('**/analysis-versions/*/execution**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const version = path.split('/analysis-versions/')[1].split('/')[0];
+    if (path.endsWith('/recovery')) {
+      return route.fulfill({
+        json: { data: { schema_version: '1', can_resume: true, reason: null } },
+      });
+    }
+    if (path.endsWith('/resume')) {
+      expect(route.request().method()).toBe('POST');
+      resumeCommands.push(route.request().postDataJSON().command_id);
+      resumed = true;
+    }
+    return route.fulfill({
+      json: {
+        data: {
+          schema_version: '2',
+          calculation_version_id: version,
+          state: resumed ? 'complete' : 'failed',
+          admission_state: resumed ? 'ready' : 'revoked',
+          reason: resumed ? null : 'Permission to execute this analysis was lost.',
+          completed_count: 1,
+          total_count: 1,
+          estimate_id: null,
+          runs: [
+            {
+              configuration_revision_id: seeded.configuration,
+              run_id: seeded.run,
+              completed: true,
+              reused: true,
+            },
+          ],
+        },
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'New analysis', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'New analysis', exact: true });
+  await editor.getByLabel('Analysis name', { exact: true }).fill('Recoverable investigation');
+  await editor.getByLabel(seeded.configuration_name, { exact: true }).check();
+  await editor.getByRole('button', { name: 'Save analysis', exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect(page.getByText('Paused', { exact: true })).toBeVisible();
+  await expect(page.getByText('Permission to execute this analysis was lost.')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Launch analysis', exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.getByRole('button', { name: 'Resume analysis', exact: true }).click();
+  await expect(page.getByText('1/1 calculated', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume analysis', exact: true })).toHaveCount(0);
+  expect(resumeCommands).toHaveLength(1);
+  expect(resumeCommands[0]).toMatch(/^[a-f0-9-]{36}$/);
+  await expect(page.getByRole('button', { name: /^Open run ·/ }).first()).toBeVisible();
 });
