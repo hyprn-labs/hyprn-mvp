@@ -2,6 +2,8 @@
 import json
 from uuid import UUID, uuid5
 
+from .history import run_count
+
 
 def analysis_progress(db, study, version):
     """Read current durable execution facts without waiting for an Assistant event."""
@@ -26,10 +28,9 @@ def read(store, actor, study):
     """Bounded operational reads; no model service, retained bundle or provider calls."""
     with store.connection() as db:
         store.authorize(db, actor, study)
-        counts = {}
-        for name, table in (('models', 'model_associations'),
-                            ('configuration_versions', 'configurations'),
-                            ('runs', 'run_associations'), ('analyses', 'calculations')):
+        counts = dict(models=store.model_count(db, actor, study), runs=run_count(db, study))
+        for name, table in (('configuration_versions', 'configurations'),
+                            ('analyses', 'calculations')):
             counts[name] = db.execute('SELECT count(*) FROM ' + table + ' WHERE study_id=?',
                                       (study,)).fetchone()[0]
         rows = db.execute("SELECT json_extract(result,'$.calculation_version_id') AS version "

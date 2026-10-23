@@ -1159,6 +1159,7 @@ ROUTE_OWNERS = frozenset(
         'calculation_preparation',
         'explanations',
         'study_answer',
+        'study_activity',
         'execution',
         'history',
         'result_bindings',
@@ -1236,7 +1237,9 @@ LAYERS = {
     'store': frozenset(
         {'contracts', 'database', 'migrations', 'locations', 'readiness', 'evidence_content', 'identity'}
     ),
-    'history': frozenset({'contracts', 'execution_bundle', 'units', 'listing', 'readiness'}),
+    'history': frozenset(
+        {'contracts', 'database', 'execution_bundle', 'units', 'listing', 'readiness'}
+    ),
     'result_bindings': frozenset({'contracts', 'execution_bundle', 'history', 'units'}),
     'modified_runs': frozenset({'contracts', 'history', 'readiness'}),
     'modeling': frozenset({'contracts', 'store', 'units'}),
@@ -1268,6 +1271,7 @@ LAYERS = {
     'calculation_exploration': frozenset(
         {'calculation_estimates', 'calculations', 'contracts', 'history', 'quantity_projection'}
     ),
+    'study_activity': frozenset({'history'}),
     'analysis_execution': frozenset({'calculations', 'calculation_estimates', 'contracts', 'history', 'execution'}),
     'calculation_designs': frozenset(
         {'calculations', 'contracts', 'quantity_projection', 'sampling_coordinates', 'readiness'}
@@ -1363,13 +1367,16 @@ LAYERS = {
             'result_bindings',
             'store',
             'study_answer',
+            'study_activity',
         }
     ),
     'agent_tools': frozenset({'contracts', 'evidence_content'}),
     'agent_policy': frozenset({'agent_tools', 'contracts'}),
     'agent_runtime': frozenset({'agent_tools', 'auth', 'contracts', 'database', 'edge', 'store', 'identity'}),
     'agent_surface': frozenset({'agent_runtime'}),
-    'assistant': frozenset({'agent_runtime', 'agent_tools', 'contracts', 'identity', 'evidence_content'}),
+    'assistant': frozenset(
+        {'agent_runtime', 'agent_tools', 'contracts', 'identity', 'evidence_content', 'study_activity'}
+    ),
     'api': frozenset(
         {
             'assistant',

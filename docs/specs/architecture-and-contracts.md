@@ -440,7 +440,7 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `evidence_content` | `contracts` |
 | `identity` | `contracts` |
 | `store` | `contracts`, `database`, `migrations`, `locations`, `readiness`, `evidence_content`, `identity` |
-| `history` | `contracts`, `listing`, `execution_bundle`, `units`, `readiness` |
+| `history` | `contracts`, `database`, `listing`, `execution_bundle`, `units`, `readiness` |
 | `result_bindings` | `contracts`, `execution_bundle`, `history`, `units` |
 | `modified_runs` | `contracts`, `history`, `readiness` |
 | `modeling` | `contracts`, `store`, `units` |
@@ -449,6 +449,7 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `criterion_evaluation` | — |
 | `calculations` | `brief`, `contracts`, `criterion_evaluation`, `execution_bundle`, `history`, `units`, `explanations` |
 | `study_answer` | `calculation_preparation`, `brief`, `calculation_estimates`, `calculations`, `contracts`, `criterion_evaluation`, `history`, `explanations`, `units` |
+| `study_activity` | `history` |
 | `analysis_execution` | `calculations`, `calculation_estimates`, `contracts`, `execution`, `history` |
 | `calculation_designs` | `calculations`, `contracts`, `quantity_projection`, `sampling_coordinates`, `readiness` |
 | `calculation_estimates` | `calculation_designs`, `calculations`, `contracts`, `quantity_projection`, `history` |
@@ -464,12 +465,12 @@ The study answer of ADR-0008 and ADR-0010 is owned by `study_answer` and replace
 | `external_identity` | `auth`, `contracts` |
 | `ui` | — |
 | `edge` | `contracts` |
-| `routes` (package) | `database`, `identity`, `assistant`, `analysis_execution`, `calculation_preparation`, `auth`, `brief`, `calculation_designs`, `calculation_estimates`, `calculation_exploration`, `calculations`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store`, `study_answer` |
+| `routes` (package) | `database`, `identity`, `assistant`, `analysis_execution`, `calculation_preparation`, `auth`, `brief`, `calculation_designs`, `calculation_estimates`, `calculation_exploration`, `calculations`, `computational_export`, `configuration`, `contracts`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `readiness`, `result_bindings`, `store`, `study_answer`, `study_activity` |
 | `agent_tools` (package) | `contracts`, `evidence_content` |
 | `agent_policy` | `agent_tools`, `contracts` |
 | `agent_runtime` (package) | `agent_tools`, `auth`, `contracts`, `database`, `edge`, `store`, `identity` |
 | `agent_surface` (package, planned) | `agent_runtime` |
-| `assistant` (package) | `agent_runtime`, `agent_tools`, `contracts`, `identity`, `evidence_content` |
+| `assistant` (package) | `agent_runtime`, `agent_tools`, `contracts`, `identity`, `evidence_content`, `study_activity` |
 | `api` | `assistant`, `agent_tools`, `agent_policy`, `agent_runtime`, `auth`, `brief`, `calculations`, `computational_export`, `configuration`, `contracts`, `database`, `edge`, `execution`, `explanations`, `history`, `modeling`, `modified_runs`, `result_bindings`, `routes`, `store`, `study_answer`, `ui`, `analysis_execution` |
 
 The `assistant` package also owns the durable study conversation projection and
@@ -761,3 +762,8 @@ recorded atomically alongside the immutable configuration. Existing agent-author
 may use their exact version attribution time; other missing historical dates stay null.
 `RunHistoryItem3.submitted_at` is the original acceptance time, not execution start/finish.
 Analysis cards use their existing version creation time. No historical record is rewritten.
+
+A retained-result cache is optional: if its write is denied, the history owner
+rechecks read authority and the exact retained witness in a fresh transaction before
+returning the fully verified uncached projection. Accepted finite analysis authority
+does not become general cache-write permission; revocation still fails closed.

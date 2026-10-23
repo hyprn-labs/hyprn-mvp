@@ -891,6 +891,12 @@ class Store:
         if row is None: raise DomainError("resource_not_found",404)
         return dict(row)
 
+    def model_count(self, db, actor, sid):
+        """Count associated models without reading or hydrating model versions."""
+        self.authorize(db, actor, sid)
+        return db.execute('SELECT count(*) FROM model_associations WHERE study_id=?',
+                          (sid,)).fetchone()[0]
+
     def model_association(self,db,actor,sid,mid,*,write=False):
         """Authorized association of study ``sid`` with remote model ``mid``, read in ``db``.
 

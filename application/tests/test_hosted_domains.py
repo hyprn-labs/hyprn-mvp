@@ -1452,3 +1452,58 @@ def test_native_reconciliation_proof_is_dispatcher_only_and_preserves_source(rec
         assert native.launches == 2
     finally:
         worker.database.close()
+
+
+def test_accepted_analysis_reads_cold_results_without_general_cache_write_authority(hosted):
+    """Expired reasoning credentials do not prevent finite accepted validation work."""
+    from hyprn_mvp_app.contracts import DomainError
+    from calculation_fixture import seed
+    from test_calculations_api import body
+    from hyprn_mvp_app.calculations import Analyses
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution, identity
+    from hyprn_mvp_app.history import History
+
+    fixture, store, accounts = hosted
+    owner, foreign = (a['actor'] for a in accounts)
+    sid = study(store, owner)
+    with actor_scope(owner):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=owner, sid=sid)
+        sample.update(seed(sample))
+        version = Analyses(store).create(owner, sid, dict(command_id=uid(), content=body(
+            sample, schema_version='4', estimate_plan=None)))
+        with store.connection(write=True) as db:
+            agent = store.ensure_agent_actor(db, owner, 'claude_managed', 'Assistant')
+            grant = store.create_delegation(db, agent, sid, 'writer',
+                                            {'read', 'record', 'submit'}, time.time()+600)
+    vid = version['calculation_version_id']
+    sample['actor'] = agent
+    with actor_scope(agent):
+        rid = sample['record']([1.0, 2.0])
+        AnalysisExecution(store).launch(agent, sid, vid, {})
+    raw = fixture['admin'].connect()
+    try:
+        Connection(raw).execute('UPDATE agent_delegations SET expires_at=? WHERE delegation_id=?',
+                                (time.time()-1, grant['delegation_id']))
+        raw.commit()
+    finally:
+        raw.close()
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    try:
+        with actor_scope(agent), worker.analysis_authority(agent, sid, identity(vid)):
+            result = History(worker).retained_projection(agent, sid, rid)
+            assert result.run['state'] == 'recorded'
+            assert result.token['run_id'] == rid
+        with actor_scope(foreign), pytest.raises(DomainError):
+            History(worker).retained_projection(foreign, sid, rid)
+        with actor_scope(owner), store.connection() as db:
+            assert db.execute('SELECT * FROM retained_read_cache WHERE run_id=?',
+                              (rid,)).fetchone() is None
+        with actor_scope(owner), store.connection(write=True) as db:
+            store.revoke_delegation(db, grant['delegation_id'], 'owner_revoked')
+        with actor_scope(agent), pytest.raises(DomainError):
+            with worker.analysis_authority(agent, sid, identity(vid)):
+                History(worker).retained_projection(agent, sid, rid)
+    finally:
+        worker.database.close()

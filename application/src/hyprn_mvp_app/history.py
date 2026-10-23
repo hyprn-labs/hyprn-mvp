@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import NamedTuple
 from uuid import UUID, uuid5
 from .contracts import DomainError, canonical, check_digest, data_json, digest, raw_hash, validate
+from .database import DatabasePermissionDenied
 from .execution_bundle import (
     MAX_BYTES,
     RETAINED_PAIRINGS,
@@ -524,6 +525,12 @@ def run_association(db,run_id,*,study_id=None,payload=True):
         row['payload'] = json.dumps(original)
     return row
 
+def run_count(db, study):
+    """Count associated runs in an already-authorized study transaction."""
+    return db.execute('SELECT count(*) FROM run_associations WHERE study_id=?',
+                      (study,)).fetchone()[0]
+
+
 def last_run_position(db,sid):
     """The highest run insertion position of the study (0 when it has no run)."""
     return db.execute('SELECT COALESCE(MAX(rowid),0) FROM run_associations WHERE study_id=?',(sid,)).fetchone()[0]
@@ -635,14 +642,21 @@ class History:
         raw = canonical(dict(history=result.history, token=result.token,
                              run=result.run, runtime=result.runtime))
         if hosted and len(raw) <= 1048576:
-            with self.store.connection(write=True) as db:
-                self.recheck(db, actor, sid, [result.token])
-                db.execute(
-                    'INSERT INTO retained_read_cache VALUES(?,?,?,?,?) '
-                    'ON CONFLICT(run_id) DO UPDATE SET reader_sha256=excluded.reader_sha256,'
-                    'payload=excluded.payload,payload_sha256=excluded.payload_sha256',
-                    (rid, sid, identity, raw.decode('utf-8'), raw_hash(raw)),
-                )
+            try:
+                with self.store.connection(write=True) as db:
+                    self.recheck(db, actor, sid, [result.token])
+                    db.execute(
+                        'INSERT INTO retained_read_cache VALUES(?,?,?,?,?) '
+                        'ON CONFLICT(run_id) DO UPDATE SET reader_sha256=excluded.reader_sha256,'
+                        'payload=excluded.payload,payload_sha256=excluded.payload_sha256',
+                        (rid, sid, identity, raw.decode('utf-8'), raw_hash(raw)),
+                    )
+            except DatabasePermissionDenied:
+                # Finite accepted work may read its results after its reasoning
+                # credential expires, without permission to persist this optional cache.
+                # Recheck in a fresh transaction: a revoked read must still fail closed.
+                with self.store.connection() as db:
+                    self.recheck(db, actor, sid, [result.token])
         return result
 
     def public_run(self, actor, sid, rid):
