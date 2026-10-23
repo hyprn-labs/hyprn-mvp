@@ -134,7 +134,8 @@ def failure(db, current):
 
 RECOVERABLE = frozenset({'assistant_internal_error', 'provider_unavailable',
     'provider_rate_limit', 'turn_time_limit', 'invalid_provider_record',
-    'user_allowance_unknown', 'shared_allowance_unknown', 'provider_session_busy',
+    'user_allowance_unknown', 'user_allowance_exhausted',
+    'shared_allowance_unknown', 'provider_session_busy',
     'session_delivery_unknown', 'provider_response_too_large',
     'provider_resume_delivery_unknown'})
 

@@ -1614,3 +1614,33 @@ def test_user_specific_limit_preserves_spending_and_other_users_default(system):
         await client.aclose()
         await owner.close()
     asyncio.run(exercise())
+
+
+def test_allowance_increase_requires_explicit_resume_and_rechecks_actual_spending(system):
+    _, owner, provider, store, actor, sid = system
+    other = store.create_study(actor, uid(), 'Existing spending')['study_id']
+    async def exercise():
+        records.accept(store, actor, other, uid(), 'Completed turn.', owner.settings)
+        with store.connection(write=True) as db:
+            records.update(db, other, provider_id='session_spent', provision='accepted',
+                           state='idle', active_turn=None)
+        provider.cost = 2003
+        command = uid()
+        owner.send(actor, sid, command, 'Retained request.')
+        await drained(owner)
+        assert owner.read(actor, sid)['can_resume']
+        owner.resume(actor, sid)
+        await drained(owner)
+        assert owner.read(actor, sid)['error'] == 'user_allowance_exhausted'
+        assert not provider.sent
+        owner.settings = replace(owner.settings, user_limits_cents={actor: 4900})
+        await owner.start()
+        assert not owner._tasks and not provider.sent
+        owner.resume(actor, sid)
+        await drained(owner)
+        assert len(provider.sent) == 1
+        assert owner.read(actor, sid)['state'] == 'idle'
+        with store.connection() as db:
+            assert records.turn(db, command)['delivery'] == 'accepted'
+        await owner.close()
+    asyncio.run(exercise())

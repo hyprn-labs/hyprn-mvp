@@ -86,7 +86,7 @@ function assistantProblem(error: string, canResume: boolean, canStop: boolean) {
     provider_resume_delivery_unknown: 'The previous Resume could not be confirmed.',
     provider_attachment_too_large: 'A document exceeds the supported attachment size.',
     invalid_provider_attachment: 'A document attachment could not be read safely.',
-    user_allowance_exhausted: 'Your cumulative Assistant allowance has been used.',
+    user_allowance_exhausted: 'The Assistant paused when your cumulative allowance was reached.',
     user_allowance_unknown: 'Spending could not be verified.',
     provider_budget_reached: 'The Assistant allowance needs review before work can continue.',
     shared_allowance_exhausted: 'The shared Assistant allowance has been used.',
@@ -109,7 +109,9 @@ function assistantProblem(error: string, canResume: boolean, canStop: boolean) {
     error,
   );
   const next = canResume
-    ? 'Select Resume to continue.'
+    ? error === 'user_allowance_exhausted'
+      ? 'If the limit has been increased, select Resume. Spending will be checked again.'
+      : 'Select Resume to continue.'
     : sourceProblem && canStop
       ? 'Select Stop. Once stopped, request a smaller or different source.'
       : 'Recovery is unavailable here. Contact your application administrator.';
