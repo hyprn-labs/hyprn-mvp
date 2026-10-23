@@ -1,10 +1,11 @@
-import type { AnalysisExecution2, AnalysisExecutionRead2, AnalysisExecutionRecovery1 } from './contract';
+import type { StudyActivity1 } from './contract';
+import type { AnalysisExecutionResult3, AnalysisExecutionRead3, AnalysisExecutionRecovery1 } from './contract';
 import type {
   AssistantBudgetRead2,
   AssistantConversationRead6,
   AssistantMessageRequest1,
 } from './contract';
-import type { ConfigurationSummary1 } from './contract';
+import type { ConfigurationSummary2 } from './contract';
 import type {
   ConfigurationCommit6,
   ConfigurationPreview8,
@@ -70,7 +71,7 @@ import type {
   FrozenConfigurationRead7,
   PublicRun,
   PublicRunDetail2,
-  RunHistoryItem2,
+  RunHistoryItem3,
   RevisionSummary,
   EvidenceRecord,
   EvidenceCreate2,
@@ -545,7 +546,7 @@ export class HyprnMvpApi {
     ).data;
   analysisExecution = async (sid: string, versionId: string, signal?: AbortSignal) =>
     (
-      await this.request<AnalysisExecutionRead2>(
+      await this.request<AnalysisExecutionRead3>(
         `/studies/${sid}/analysis-versions/${versionId}/execution`,
         undefined,
         'GET',
@@ -554,7 +555,7 @@ export class HyprnMvpApi {
     ).data;
   launchAnalysis = async (sid: string, versionId: string) =>
     (
-      await this.request<AnalysisExecution2>(
+      await this.request<AnalysisExecutionResult3>(
         `/studies/${sid}/analysis-versions/${versionId}/execution`,
         {},
         'POST',
@@ -571,7 +572,7 @@ export class HyprnMvpApi {
     ).data;
   resumeAnalysis = async (sid: string, versionId: string) =>
     (
-      await this.mutate<AnalysisExecution2>(
+      await this.mutate<AnalysisExecutionResult3>(
         `/studies/${sid}/analysis-versions/${versionId}/execution/resume`,
         { command_id: crypto.randomUUID() },
         'analysis_resume',
@@ -1051,6 +1052,8 @@ export class HyprnMvpApi {
     (await this.mutate<Study>(`/studies/${sid}/archive`, command, 'study_archive', sid)).data;
   restoreStudy = async (sid: string, command: StudyArchiveCommand) =>
     (await this.mutate<Study>(`/studies/${sid}/restore`, command, 'study_archive', sid)).data;
+  studyActivity = async (sid: string, signal?: AbortSignal) =>
+    (await this.request<StudyActivity1>(`/studies/${sid}/activity`, undefined, 'GET', signal)).data;
   study = async (sid: string, signal?: AbortSignal) =>
     (await this.request<Study>(`/studies/${sid}`, undefined, 'GET', signal)).data;
   createStudy = async (name: string, commandId = crypto.randomUUID()) =>
@@ -1269,7 +1272,7 @@ export class HyprnMvpApi {
   ) => {
     const params = new URLSearchParams({ limit: '50' });
     for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
-    return this.request<ConfigurationSummary1[]>(
+    return this.request<ConfigurationSummary2[]>(
       `/studies/${sid}/configuration-summaries?${params}`,
       undefined,
       'GET',
@@ -1283,7 +1286,7 @@ export class HyprnMvpApi {
   ) => {
     const params = new URLSearchParams({ limit: '20', newest_first: 'true' });
     for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
-    return this.request<RunHistoryItem2[]>(
+    return this.request<RunHistoryItem3[]>(
       `/studies/${sid}/runs?${params}`,
       undefined,
       'GET',
@@ -1327,7 +1330,7 @@ export class HyprnMvpApi {
         sid,
       )
     ).data;
-  runs = (sid: string, signal?: AbortSignal) => this.list<RunHistoryItem2>(`/studies/${sid}/runs`, signal);
+  runs = (sid: string, signal?: AbortSignal) => this.list<RunHistoryItem3>(`/studies/${sid}/runs`, signal);
   run = async (sid: string, rid: string, signal?: AbortSignal) =>
     (await this.request<PublicRunDetail2>(`/studies/${sid}/runs/${rid}`, undefined, 'GET', signal)).data;
   previewComputationalRecord = async (sid: string, body: RecordPreviewRequest) =>

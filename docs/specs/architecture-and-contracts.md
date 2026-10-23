@@ -745,3 +745,19 @@ Lists therefore do not repeatedly parse embedded model/archive bytes. The projec
 is a lifecycle view, never proof of scientific validity; full diagnostic and artifact
 reads retain the original bytes. Retained-run projection ownership, including the
 prepared-runtime comparison, stays in History; submission orchestration delegates reads.
+
+### Study activity and saved instants
+
+`GET /studies/{study_id}/activity` is a bounded, member-authorized operational projection.
+It counts models, configuration versions, runs and analysis identities in the study, and
+returns at most ten active analysis execution receipts with exact navigation pins. It reads
+no model backend, execution archive or provider API, and does not mutate records. The
+Assistant counter reads that same execution receipt instead of waiting for a copied event.
+`AnalysisExecution3` adds the owner's last actual progress time; historical receipt shapes
+remain readable. This timestamp is operational metadata, not part of scientific inputs.
+
+`ConfigurationSummary2.saved_at` reads the successful configuration command's saved time,
+recorded atomically alongside the immutable configuration. Existing agent-authored records
+may use their exact version attribution time; other missing historical dates stay null.
+`RunHistoryItem3.submitted_at` is the original acceptance time, not execution start/finish.
+Analysis cards use their existing version creation time. No historical record is rewritten.

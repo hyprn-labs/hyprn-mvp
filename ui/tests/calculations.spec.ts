@@ -715,7 +715,8 @@ for (const initialState of ["failed", "needs_review"] as const) {
       return route.fulfill({
         json: {
           data: {
-            schema_version: "2",
+            schema_version: initialState === "needs_review" ? "3" : "2",
+            ...(initialState === "needs_review" ? { last_progress_at: 1792700000 } : {}),
             calculation_version_id: version,
             state: waiting
               ? "calculating"

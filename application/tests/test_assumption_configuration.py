@@ -447,3 +447,18 @@ def test_replayed_retained_model_integrity_is_unavailable_backend(config,tamper)
         db.execute("UPDATE receipts SET result=? WHERE category='configuration' AND command_id=?",(json.dumps(result),b['command_id']))
     with pytest.raises(DomainError) as error:Configurations(e['store'],NoModelService()).commit(e['actor'],e['sid'],b)
     assert (error.value.code,error.value.status)==('backend_unavailable',503) and counts(e)==before
+
+
+def test_configuration_saved_time_is_atomic_replay_stable_and_outside_scientific_bytes(config):
+    from datetime import datetime
+    e, owner, _, _, _ = config
+    command = body(config)
+    saved = owner.commit(e['actor'], e['sid'], command)
+    rows, _ = owner.read_page(e['actor'], e['sid'], summary=True)
+    row = next(r for r in rows if r['configuration_revision_id'] ==
+               saved['configuration']['configuration_revision_id'])
+    assert datetime.fromisoformat(row['saved_at']).tzinfo is not None
+    assert 'saved_at' not in saved['configuration']
+    assert owner.commit(e['actor'], e['sid'], command) == saved
+    again, _ = owner.read_page(e['actor'], e['sid'], summary=True)
+    assert again == rows

@@ -566,6 +566,14 @@ def test_run_summaries_keep_pagination_status_and_privacy_with_large_artifacts(h
         statuses = history.status(owner, sid, ids[::-1])
         assert [r['run_id'] for r in statuses] == ids[::-1]
         assert len(json.dumps(listed)) < 10000
+        from hyprn_mvp_app.study_activity import read as read_activity
+        from hyprn_mvp_app.configuration import Configurations
+        activity = read_activity(store, owner, sid)
+        assert activity['counts']['runs'] == len(ids)
+        assert activity['analyses'] == []
+        summaries, _ = Configurations(store, None).read_page(owner, sid, summary=True)
+        assert summaries and all('saved_at' in item for item in summaries)
+        assert all('submitted_at' in item for item in listed)
     with actor_scope(foreign):
         with pytest.raises(Exception) as refused:
             History(store).list(foreign, sid)

@@ -156,5 +156,13 @@
       "The author records how the answer addresses the brief, what sources support it, where the model applies and how sensitive the conclusions are. Each aspect includes its remaining limits.",
       "This review does not certify the model. Agreement between a surrogate and its model establishes numerical accuracy against that model, not physical validity. Source retrieval confirms access to material, not the truth of its claims."
     ]
+  },
+  "studyActivity": {
+    "title": "Study activity",
+    "paragraphs": [
+      "Live counts come from saved records and the analysis execution owner, independently of the Assistant conversation. Runs recorded includes failed calculations; it does not mean that the outputs or surrogate passed scientific checks.",
+      "Submitted points may be queued or running. Awaiting submission points have not yet been admitted. Last progress changes when the recorded work changes, not on every refresh.",
+      "Configuration and analysis dates refer to saving. Run dates refer to submission. Times use your local time zone; hover for the full date and zone. Older records without a reliable timestamp remain unlabelled."
+    ]
   }
 }

@@ -1,8 +1,8 @@
-import { OpenLink } from './design';
+import { OpenLink, RecordTimestamp } from './design';
 import { useCollectionRead } from './useCollectionRead';
 import { CollectionStatus } from './design';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ConfigurationSummary1, HyprnMvpApi } from './api';
+import type { ConfigurationSummary2, HyprnMvpApi } from './api';
 import type { CalculationScope } from './calculationScope';
 import { ActionGroup, Button, Panel, ResourceCard, StatusTag } from './design';
 import { message } from './api';
@@ -20,7 +20,7 @@ export function ConfigurationList({
   onOpen: (id: string) => void;
   actions?: ReactNode;
 }) {
-  const collection = useCollectionRead<ConfigurationSummary1, string>({
+  const collection = useCollectionRead<ConfigurationSummary2, string>({
     api,
     study,
     scope: JSON.stringify([scope.model, scope.revision]),
@@ -120,6 +120,7 @@ export function ConfigurationList({
           title={c.name}
           facts={[
             `${c.input_count} inputs`,
+            <RecordTimestamp at={c.saved_at} label="Saved" />,
             marked.has(c.configuration_revision_id) && (
               <StatusTag tone="inert">Reference</StatusTag>
             ),

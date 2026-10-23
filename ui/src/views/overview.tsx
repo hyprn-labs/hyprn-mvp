@@ -1,3 +1,4 @@
+import { StudyActivity } from '../StudyActivity';
 import { StudyBrief } from '../StudyBrief';
 import { StudyAnswer } from '../StudyAnswer';
 import { ContentColumn } from '../design';
@@ -16,6 +17,8 @@ function renderOverview(ctx: ViewContext) {
         studyId={study.study_id}
         controller={ctx.brief}
       />
+      <StudyActivity key={`activity:${api.actor}:${study.study_id}`} api={api}
+        study={study.study_id} onOpen={link => navigate(() => void openLink(link, true))} />
       <StudyAnswer
         key={`answer:${api.actor}:${study.study_id}`}
         api={api}

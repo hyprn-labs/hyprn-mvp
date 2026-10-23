@@ -105,6 +105,8 @@ async function harness(page: Page) {
     profileLostResponse: false,
     messages: [] as Array<Record<string, unknown>>,
     assistantStage: 'idle',
+    studyProgress: [] as Array<Record<string, unknown>>,
+    failActivity: false,
     analysisProgress: null as Record<string, unknown> | null,
     activity: { steps: [] as Array<Record<string, unknown>>, has_earlier_steps: false },
     assistantFailure: 'budget' as 'budget' | 'unknown' | 'none',
@@ -228,6 +230,13 @@ async function harness(page: Page) {
         });
       if (state.delayStudy) await state.delayStudy.promise;
       return ok(study);
+    }
+    if (path === `/studies/${id}/activity`) {
+      if (state.failActivity) return route.fulfill({ status: 503,
+        json: { error: { code: 'backend_unavailable', message: 'backend unavailable' } } });
+      return ok({ counts: { models: state.model ? 1 : 0,
+        configuration_versions: state.configurations.length, runs: state.runs.length, analyses: 1 },
+        analyses: state.studyProgress, has_more_analyses: false, assistant_state: state.assistantStage });
     }
     if (path === `/studies/${id}/models`) {
       if (method === 'GET')
@@ -2457,4 +2466,32 @@ test('Lost Assistant refresh shows unconfirmed progress and recovers without sen
   await expect(panel.getByText('Working', { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(panel.getByRole('textbox', { name: 'Message assistant' })).toHaveValue('Keep my draft');
   expect(state.assistantSends).toEqual([]);
+});
+
+
+test('Overview progress refreshes with chat closed and retains clearly stale observations', async ({ page }) => {
+  const state = await harness(page);
+  state.studyProgress = [{ calculation_version_id: version, name: 'Joint response',
+    model_id: mid, revision: version, state: 'calculating', completed_count: 2,
+    total_count: 10, assigned_count: 4, reused_count: 0, admission_state: 'waiting',
+    last_progress_at: 1792790000 }];
+  await login(page);
+  await openStudy(page);
+  const panel = page.getByRole('region', { name: 'Study activity', exact: true });
+  await expect(panel.getByText('2 / 10 runs recorded')).toBeVisible();
+  await expect(panel.getByText('2 submitted · 6 awaiting submission')).toBeVisible();
+  expect(state.reads.filter(path => path.includes('/assistant'))).toEqual([]);
+  state.studyProgress[0].completed_count = 3;
+  await expect(panel.getByText('3 / 10 runs recorded')).toBeVisible({ timeout: 12000 });
+  state.failActivity = true;
+  await expect(panel.getByText('Updates unavailable. Showing last confirmed activity.'))
+    .toBeVisible({ timeout: 12000 });
+  await expect(panel.getByRole('progressbar')).toHaveCount(0);
+  await expect(panel.getByText('Last confirmed: Calculating')).toBeVisible();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(t => document.documentElement.setAttribute('data-theme', t), theme);
+    await page.setViewportSize({ width: 480, height: 800 });
+    await expect(panel.getByRole('button', { name: 'Open analysis' })).toBeVisible();
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  }
 });

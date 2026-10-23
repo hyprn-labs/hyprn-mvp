@@ -719,13 +719,14 @@ class History:
             # retained bundles and can exhaust bounded SQLite temporary storage.
             projection = _RunProjection(db)
             rows = db.execute(
-                "SELECT " + projection.execution + "r.run_id,r.configuration_revision_id,r.command_id,"
+                "SELECT " + projection.execution + "r.run_id,r.configuration_revision_id,r.command_id,r.accepted_at,"
                 + projection.state + ' FROM run_associations r JOIN execution_operations x USING(run_id) '
                 + projection.join + 'WHERE r.study_id=? ORDER BY r.rowid', (sid,),
             ).fetchall()
             contexts=self._contexts(db,sid,rows)
         return [dict(run_id=r['run_id'],configuration_revision_id=r['configuration_revision_id'],command_id=r['command_id'],
                      state=r['public_state'],configuration_name=contexts[r['configuration_revision_id']],
+                     submitted_at=r['accepted_at'],
                      execution_summary=listed_execution_summary(r)) for r in rows]
 
     def list_page(self, actor, sid, *, cursor=None, limit=100, model_id=None, model_revision_id=None, newest_first=False):
@@ -740,7 +741,7 @@ class History:
             where, values, order = window(db, 'run_associations', 'run_id', clauses, values, cursor, limit, descending=newest_first)
             projection = _RunProjection(db)
             rows = db.execute(
-                "SELECT " + projection.execution + "c.run_id,c.configuration_revision_id,c.command_id,"
+                "SELECT " + projection.execution + "c.run_id,c.configuration_revision_id,c.command_id,c.accepted_at,"
                 + projection.state + ' FROM run_associations c JOIN execution_operations x USING(run_id) '
                 + projection.join + f'WHERE {where} ORDER BY c.rowid {order} LIMIT ?',
                 (*values, limit + 1),
@@ -750,6 +751,7 @@ class History:
             contexts = self._contexts(db, sid, rows)
         result = [dict(run_id=r['run_id'], configuration_revision_id=r['configuration_revision_id'], command_id=r['command_id'],
                        state=r['public_state'], configuration_name=contexts[r['configuration_revision_id']],
+                       submitted_at=r['accepted_at'],
                        execution_summary=listed_execution_summary(r)) for r in rows]
         return result, rows[-1]['run_id'] if more else None
 

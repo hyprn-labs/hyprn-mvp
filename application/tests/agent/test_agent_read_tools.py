@@ -338,6 +338,7 @@ class RecordedApi:
                     'model_revision_id': c['configuration']['model_revision_id'],
                     'name': c['configuration']['name'],
                     'input_count': len(c['configuration']['inputs']),
+                    'saved_at': None,
                 }
                 for c in d['configurations']
                 if query.get('model_revision_id') in (None, c['configuration']['model_revision_id'])
@@ -354,7 +355,7 @@ class RecordedApi:
             return {'items': items, 'next_cursor': after}, {}
         if parts == ['runs']:
             items, after = _page(d['runs'], lambda r: r['run_id'], pairs)
-            return items, {'next_cursor': after}
+            return [dict(r, submitted_at=None) for r in items], {'next_cursor': after}
         if head == 'runs' and len(parts) == 2:
             return self.lookup(d['run_details'], parts[1]), {}
         if parts == ['run-status']:

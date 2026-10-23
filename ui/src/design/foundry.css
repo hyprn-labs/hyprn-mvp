@@ -1598,3 +1598,7 @@ fieldset:is(.hf-form-stack,.form-stack) > legend { font-weight:var(--type-body-s
 .hf-assistant-steps__heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-2); }
 .hf-assistant-steps__heading strong { font-size:var(--type-small-size); overflow-wrap:anywhere; }
 .hf-assistant-steps__meta { display:flex; flex-wrap:wrap; gap:var(--space-3); color:var(--ink-muted); font-size:var(--type-small-size); font-variant-numeric:tabular-nums; }
+
+/* Stored dates are secondary facts, consistent across every experiment card. */
+.hf-record-time { color:var(--ink-muted); font-size:var(--type-small-size); line-height:var(--type-small-line); font-variant-numeric:tabular-nums; }
+.hf-activity-counts { color:var(--ink-2); font-size:var(--type-small-size); }

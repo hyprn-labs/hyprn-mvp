@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { message, type HyprnMvpApi } from './api';
 import { useStudyRead } from './calculationReads';
 import type {
-  AnalysisExecutionRead2,
+  AnalysisExecutionRead3,
   AnalysisExecutionRecovery1,
   CalculationVersionRead4,
 } from './contract';
@@ -17,9 +17,9 @@ export function AnalysisExecutionPanel({
   api: HyprnMvpApi;
   study: string;
   version: CalculationVersionRead4;
-  onProgress: (execution: AnalysisExecutionRead2) => void;
+  onProgress: (execution: AnalysisExecutionRead3) => void;
 }) {
-  const [execution, setExecution] = useState<AnalysisExecutionRead2>(null);
+  const [execution, setExecution] = useState<AnalysisExecutionRead3>(null);
   const [recovery, setRecovery] = useState<AnalysisExecutionRecovery1 | null>(null);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState(false);
@@ -58,7 +58,7 @@ export function AnalysisExecutionPanel({
           if (
             value &&
             (!['complete', 'failed', 'cancelled', 'needs_review'].includes(value.state) ||
-              (value.schema_version === '2' &&
+              ('admission_state' in value &&
                 value.state === 'needs_review' &&
                 value.admission_state === 'waiting'))
           )
@@ -105,7 +105,7 @@ export function AnalysisExecutionPanel({
       : 'The analysis was interrupted. Resume to continue using its saved calculations.'
     : execution?.reason || recovery?.reason;
   const checking =
-    execution?.schema_version === '2' &&
+    execution && 'admission_state' in execution &&
     execution.state === 'needs_review' &&
     execution.admission_state === 'waiting';
   const busy = execution && (checking || ['calculating', 'validating'].includes(execution.state));
@@ -117,7 +117,7 @@ export function AnalysisExecutionPanel({
           label={
             checking
               ? 'Checking execution records'
-              : execution.schema_version === '2' && execution.admission_state === 'waiting'
+              : 'admission_state' in execution && execution.admission_state === 'waiting'
                 ? 'Waiting to continue'
                 : execution.state === 'calculating'
                   ? 'Calculating points'

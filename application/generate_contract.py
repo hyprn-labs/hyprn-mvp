@@ -222,6 +222,29 @@ schemas['ExecutionSummary1'] = obj(dict(
 ))
 schemas['PublicRunDetail2']['properties']['execution_summary'] = ref('ExecutionSummary1')
 schemas['RunHistoryItem2']['properties']['execution_summary'] = ref('ExecutionSummary1')
+schemas['RunHistoryItem3'] = copy.deepcopy(schemas['RunHistoryItem2'])
+schemas['RunHistoryItem3']['properties']['submitted_at'] = nullable({'type': 'string'})
+schemas['RunHistoryItem3']['required'].append('submitted_at')
+schemas['ConfigurationSummary2'] = copy.deepcopy(schemas['ConfigurationSummary1'])
+schemas['ConfigurationSummary2']['properties']['saved_at'] = nullable({'type': 'string'})
+schemas['ConfigurationSummary2']['required'].append('saved_at')
+schemas['StudyActivity1'] = obj(dict(
+    counts=obj({key: {'type': 'integer', 'minimum': 0} for key in
+                ('models', 'configuration_versions', 'runs', 'analyses')}),
+    assistant_state=nullable({'type': 'string'}),
+    has_more_analyses={'type': 'boolean'},
+    analyses=array(obj(dict(
+        calculation_version_id=uuid, name={'type': 'string'}, model_id=uuid, revision=uuid,
+        state={'enum': ['calculating', 'validating', 'complete', 'needs_review', 'failed', 'cancelled']},
+        completed_count={'type': 'integer', 'minimum': 0},
+        total_count={'type': 'integer', 'minimum': 0},
+        assigned_count={'type': 'integer', 'minimum': 0},
+        reused_count={'type': 'integer', 'minimum': 0},
+        admission_state=nullable({'type': 'string'}),
+        last_progress_at=nullable({'type': 'number'}),
+    ))),
+))
+
 
 
 # Light run status: the facets and criterion outcomes reuse the RetainedResults definitions;
@@ -402,6 +425,10 @@ for path,methods in spec["paths"].items():
                 'All scientific effects use the delegated tool runtime and public API. '
                 'Provider credentials and raw provider records are never returned.'
             )
+        elif path == '/studies/{study_id}/activity':
+            schema = ref('StudyActivity1')
+            op['description'] = ('Authorized bounded study activity from saved owner records. '
+                'Counts are records, not validity or whole-study completion. No provider calls.')
         elif path == '/studies/{study_id}':
             schema = ref('Study')
         elif path in ('/studies/{study_id}/archive', '/studies/{study_id}/restore'):
@@ -583,15 +610,15 @@ for path,methods in spec["paths"].items():
                     None,
                 ),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution', 'get'):
-                    ('AnalysisExecutionRead2', None),
+                    ('AnalysisExecutionRead3', None),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution', 'post'):
-                    ('AnalysisExecution2', 'AnalysisLaunch1'),
+                    ('AnalysisExecutionResult3', 'AnalysisLaunch1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution/recovery', 'get'):
                     ('AnalysisExecutionRecovery1', None),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution/resume', 'post'):
-                    ('AnalysisExecution2', 'AnalysisResume1'),
+                    ('AnalysisExecutionResult3', 'AnalysisResume1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/execution/cancellation', 'post'):
-                    ('AnalysisExecutionRead2', 'AnalysisLaunch1'),
+                    ('AnalysisExecutionRead3', 'AnalysisLaunch1'),
                 ('/studies/{study_id}/calculation-versions/{version_id}/runs', 'get'): (
                     'CalculationRunPage1',
                     None,
@@ -733,7 +760,7 @@ for path,methods in spec["paths"].items():
             op["requestBody"]["content"]["application/json"]["schema"]=ref("PublicConfigurationRequest")
             schema=ref("PublicConfigurationPreview")
         elif path.endswith("/configuration-summaries"):
-            schema=array(ref("ConfigurationSummary1"))
+            schema=array(ref("ConfigurationSummary2"))
         elif path.endswith("/configurations"):
             schema=array(ref("FrozenConfigurationRead7")) if method=="get" else ref("FrozenConfigurationRead7");status="200" if method=="get" else "201"
             if method=='post':op['requestBody']['content']['application/json']['schema']=ref('PublicConfigurationCommit')
@@ -787,7 +814,7 @@ for path,methods in spec["paths"].items():
         elif "/evidence/" in path:schema=ref("EvidenceRecord")
         elif path.endswith('/modified-run-seed'):schema=ref('ModifiedRunSeedRead6')
         elif path.endswith("/runs"):
-            schema=array(ref('RunHistoryItem2')) if method=='get' else ref('PublicRun');status='200' if method=='get' else '202'
+            schema=array(ref('RunHistoryItem3')) if method=='get' else ref('PublicRun');status='200' if method=='get' else '202'
         elif path.endswith('/run-status'):
             schema={**array(ref('RunStatus1')),'minItems':1,'maxItems':20}
             for parameter in op['parameters']:

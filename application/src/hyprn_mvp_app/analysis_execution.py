@@ -7,6 +7,7 @@ remain with their existing owners. Closing a client never interrupts preparation
 from collections import Counter
 from contextlib import nullcontext
 import json
+import time
 from uuid import UUID, uuid5
 
 from .calculations import Analyses, validate_calculation
@@ -73,7 +74,8 @@ class AnalysisExecution:
                 'AND run_id IN (SELECT value FROM json_each(?))',
                 (actor, json.dumps(list(latest.values())))).fetchall()}
             return dict(
-                schema_version='2', calculation_version_id=version_id, state='calculating',
+                schema_version='3', last_progress_at=time.time(),
+                calculation_version_id=version_id, state='calculating',
                 admission_state='ready',
                 reason=None, completed_count=0, total_count=len(members), estimate_id=None,
                 runs=[dict(configuration_revision_id=m, run_id=latest.get(m),
@@ -251,7 +253,12 @@ class AnalysisExecution:
                 raise DomainError('corrupt_retained_record', 409)
             member['completed'] = member['completed'] or old['completed']
         result['completed_count'] = sum(m['completed'] for m in result['runs'])
-        validate_calculation('AnalysisExecution2', result, retained=True)
+        result['schema_version'] = '3'
+        result['last_progress_at'] = saved['result'].get('last_progress_at')
+        meaningful = ('state', 'completed_count', 'estimate_id', 'runs')
+        if any(result.get(k) != saved['result'].get(k) for k in meaningful):
+            result['last_progress_at'] = time.time()
+        validate_calculation('AnalysisExecution3', result, retained=True)
         if not terminal and result == saved['result']:
             return
         db.execute(

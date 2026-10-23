@@ -1,5 +1,19 @@
 # Project State
 
+- **Database contention recovery deployed (2026-10-23):** staging source `b1412959`,
+  release `a6e01611`, sequence28, unchanged schema16; platform `2776a09`. Dispatcher
+  transport failures are normalized and bounded; immutable analysis validation is
+  bulk-read before the write lock with exact-byte recheck. Chat distinguishes an
+  unconfirmed connection from progress and permits explicit Resume after a cap
+  increase. Requested owner's ceiling is USD49 cumulative, prior spending retained;
+  default other-user ceilings unchanged. Focused product checks990 + platform28 pass.
+  Backup, containment/startup,19 network checks and signed-in Chrome verification
+  passed. All128 configs,5 analysis versions,20 recorded runs and paused Assistant
+  retained; no direct study edit, migration, provider message or resume. Ongoing
+  staging access promoted. Next: owner explicitly resumes; verify completion under
+  real workload. Full qualification and human acceptance remain separate obligations.
+  [Checkpoint](phases/06-hosted-staging/audit-remediation/13-DATABASE-RECOVERY-CHECKPOINT.md).
+
 - **Assistant recovery and bounded storage deployed (2026-10-23):** runtime source
   `2983615b`, release `060d1af1`, sequence27, schema16; ongoing staging access active.
   Full boot disk caused pre-launch failures. Execution scratch now uses the data disk

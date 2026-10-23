@@ -1,3 +1,4 @@
+import { RecordTimestamp } from './design';
 import { OpenLink, ReturnLink } from './design';
 import { DialogActions } from './design';
 import { AnalysisExecutionPanel } from './AnalysisExecutionPanel';
@@ -478,6 +479,7 @@ export function CalculationList({
             title={content.name}
             facts={[
               `Version ${c.latest_version.version_number}`,
+              <RecordTimestamp at={c.latest_version.created_at} label="Saved" />,
               count(content.configuration_revision_ids.length, 'configuration'),
             ]}
             actions={

@@ -462,6 +462,20 @@ DEFINITIONS['AnalysisExecutionRead2'] = dict(anyOf=[
     {'$ref': '#/$defs/AnalysisExecution1'}, {'$ref': '#/$defs/AnalysisExecution2'}, dict(type='null'),
 ])
 
+DEFINITIONS['AnalysisExecution3'] = deepcopy(DEFINITIONS['AnalysisExecution2'])
+DEFINITIONS['AnalysisExecution3']['properties'].update(
+    schema_version=dict(const='3'),
+    last_progress_at=dict(anyOf=[dict(type='number'), dict(type='null')]),
+)
+DEFINITIONS['AnalysisExecution3']['required'].append('last_progress_at')
+DEFINITIONS['AnalysisExecutionResult3'] = dict(anyOf=[
+    {'$ref': '#/$defs/AnalysisExecution1'}, {'$ref': '#/$defs/AnalysisExecution2'},
+    {'$ref': '#/$defs/AnalysisExecution3'},
+])
+DEFINITIONS['AnalysisExecutionRead3'] = dict(anyOf=[
+    {'$ref': '#/$defs/AnalysisExecutionResult3'}, dict(type='null'),
+])
+
 _VALIDATORS = {}
 
 

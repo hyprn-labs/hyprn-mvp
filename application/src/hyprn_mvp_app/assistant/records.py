@@ -9,6 +9,7 @@ from ..contracts import DomainError, uid
 from ..identity import display_name
 from .provider_sessions import SQLITE_SCHEMA
 from . import activity
+from ..study_activity import analysis_progress as current_analysis_progress
 
 
 def ensure(store):
@@ -365,7 +366,19 @@ def analysis_progress(db, current):
     pending = db.execute('SELECT 1 FROM assistant_tool_results WHERE study_id=? '
         "AND turn_id=? AND event_id=? AND delivery='waiting'",
         (current['study_id'], current['active_turn'], event['tool_event_id'])).fetchone()
-    return event['progress'] if pending else None
+    if not pending:
+        return None
+    retained = event['progress']
+    current_progress = current_analysis_progress(
+        db, current['study_id'], retained['calculation_version_id'])
+    if current_progress is None:
+        return retained
+    if current_progress['state'] not in ('calculating', 'validating'):
+        return None
+    current_progress.pop('assigned_count')
+    current_progress['last_progress_at'] = (
+        current_progress['last_progress_at'] or retained['last_progress_at'])
+    return current_progress
 
 
 def observe_analysis(store, study, turn_id, tool_event_id, value):

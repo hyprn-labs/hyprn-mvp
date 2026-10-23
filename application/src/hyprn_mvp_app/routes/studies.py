@@ -1,6 +1,7 @@
 """Studies: list, create, read, archive, and restore, all owned by ``store``."""
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Request
+from .. import study_activity
 from ..contracts import DomainError
 from ..edge import NewStudy, StudyArchiveCommand, delegated_scope, page, response, valid_id
 
@@ -30,4 +31,9 @@ def router(deps):
     @r.post("/api/1/studies/{study_id}/restore")
     def restore_study(study_id:str,body:StudyArchiveCommand,request:Request,who:Actor):
         return response(request,store.set_study_archived(who,valid_id(study_id),body.command_id,False))
+    @r.get("/api/1/studies/{study_id}/activity")
+    def activity(study_id: str, request: Request, who: Actor):
+        if request.query_params:
+            raise DomainError('invalid_request', 400)
+        return response(request, study_activity.read(store, who, valid_id(study_id)))
     return r

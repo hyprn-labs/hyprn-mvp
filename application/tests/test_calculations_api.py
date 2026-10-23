@@ -1068,3 +1068,35 @@ def test_changed_member_bytes_between_validation_and_commit_refuse_analysis(calc
     assert reply.json()['error']['code'] == 'corrupt_retained_record'
     with calc['store'].connection() as db:
         assert db.execute('SELECT count(*) FROM calculations').fetchone()[0] == 0
+
+
+def test_study_activity_reads_owner_counts_without_model_or_assistant(calc):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    from test_public_contract import check
+
+    version, endpoint = finite_analysis(calc, 3)
+    path = study_path(calc, 'activity')
+    first = calc['client'].get(path)
+    check(first)
+    assert first.status_code == 200, first.text
+    data = first.json()['data']
+    assert data['counts']['models'] == 1
+    assert data['counts']['analyses'] == 1
+    assert data['counts']['configuration_versions'] == 3
+    assert len(data['analyses']) == 1
+    assert data['analyses'][0]['completed_count'] == 0
+    initial_time = data['analyses'][0]['last_progress_at']
+    assert initial_time is not None
+    owner = AnalysisExecution(calc['store'])
+    owner.process_one(Submissions(calc['store'], None, None))
+    next_read = calc['client'].get(path)
+    check(next_read)
+    current = next_read.json()['data']
+    assert current['analyses'][0]['assigned_count'] == 3
+    assert current['counts']['runs'] == 3
+    assert current['analyses'][0]['last_progress_at'] >= initial_time
+    assert calc['client'].get(path).json()['data'] == current
+    assert calc['client'].get(path + '?unknown=1').status_code == 400
+    assert calc['client'].get(path.replace(calc['sid'], uid())).status_code == 404
+    assert owner.read(calc['actor'], calc['sid'], version)['total_count'] == 3

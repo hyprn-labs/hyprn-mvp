@@ -81,3 +81,19 @@ Disabled collection reads are idle, never loading. The shared read hook clears t
 scope and aborts pending requests when disabled. A prerequisite message belongs to the
 collection owner (for example, saving a model version before configurations). Enablement
 starts the real request; only its successful response can establish an empty collection.
+
+## Saved instants and live activity
+
+Use `RecordTimestamp` for card dates: **Saved** for configuration/analysis versions and
+**Submitted** for runs. Show local date/time through seconds; the tooltip includes the
+full date and time zone. Do not label submission as execution start or completion. Missing
+historical dates stay absent. Names and scientific status remain the primary information.
+Never sort only the loaded page to imply a globally newest-first collection.
+
+Overview places `StudyActivityPanel` between the brief and answer. Counts cover the study,
+not merely the selected model or loaded page. Progress comes from the analysis execution
+owner; chat visibility and provider activity are not prerequisites. A recorded run can have
+failed: it is not a validated result. Last progress changes only on observed work changes,
+not on every refresh. Admission waits and queued work stay distinct from recorded work.
+A failed refresh retains explicitly stale facts and removes the live progress animation.
+Use the shared section help for these distinctions, not repeated instructional paragraphs.

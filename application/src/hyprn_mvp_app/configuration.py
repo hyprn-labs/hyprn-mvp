@@ -3,6 +3,7 @@ import json
 import base64
 import hashlib
 from copy import deepcopy
+from datetime import datetime, timezone
 from .contracts import DomainError, digest, uid, validate
 from .store import ForeignEvidence, evidence_snapshot
 from .units import UNIT_CATALOG_DIGEST, port_units, resolved_model_units
@@ -361,6 +362,7 @@ class Configurations:
             return retained
         if body['configuration']['derivation'] is not None and (body['configuration_id'] is not None or body['expected_revision'] is not None):
             raise DomainError('reference_conflict',409)
+        saved_metadata = {}
         preview,model,study,records,pins=self._preview_resolved(actor,sid,body['configuration'])
         if not preview['compatibility']['compatible']:raise DomainError('invalid_configuration',422,fields=preview['compatibility']['diagnostics'])
         if preview['candidate_digest']!=body['expected_preview_digest']:raise DomainError('reference_conflict')
@@ -384,6 +386,8 @@ class Configurations:
             elif body['expected_revision'] is not None:raise DomainError('stale_revision')
             else:family=uid()
             revision=uid();snapshot=dict(candidate,configuration_id=family,configuration_revision_id=revision,parent_revision_id=parent)
+            saved_metadata.update(configuration_revision_id=revision,
+                                  saved_at=datetime.now(timezone.utc).isoformat())
             snapshot['digest']=digest(snapshot);validate('ConfigurationRevision6',snapshot)
             result=dict(schema_version='10' if model['schema_version']=='5' else '9',configuration=snapshot,model_snapshot=model,study_revision=study['revision'])
             validate('FrozenConfigurationRead10',result)
@@ -391,7 +395,7 @@ class Configurations:
             db.execute('INSERT INTO configuration_families VALUES(?,?,?) ON CONFLICT(configuration_id) DO UPDATE SET head=excluded.head',(family,sid,revision))
             return result
         return self.store.command(actor,sid,'configuration',body['command_id'],payload,save,
-            attribute=_configuration_written)
+            attribute=_configuration_written, request=saved_metadata)
 
     def read_page(self, actor, sid, *, cursor=None, limit=100, model_id=None, model_revision_id=None, summary=False):
         from .listing import window, configuration_filter
@@ -403,7 +407,14 @@ class Configurations:
                 json_extract(c.payload,'$.configuration.model_id') AS model_id,
                 json_extract(c.payload,'$.configuration.model_revision_id') AS model_revision_id,
                 json_extract(c.payload,'$.configuration.name') AS name,
-                json_array_length(c.payload,'$.configuration.inputs') AS input_count""" if summary else 'c.configuration_revision_id,c.payload'
+                json_array_length(c.payload,'$.configuration.inputs') AS input_count,
+                COALESCE((SELECT json_extract(r.request,'$.saved_at') FROM receipts r
+                  WHERE r.scope=c.study_id AND r.category='configuration'
+                  AND json_extract(r.request,'$.configuration_revision_id')=
+                    c.configuration_revision_id LIMIT 1),
+                  (SELECT min(a.recorded_at) FROM agent_attribution a
+                   WHERE a.study_id=c.study_id AND a.record_kind='configuration_version'
+                   AND a.version_id=c.configuration_revision_id)) AS saved_at""" if summary else 'c.configuration_revision_id,c.payload'
             rows = db.execute(f'SELECT {projection} FROM configurations c WHERE {where} ORDER BY c.rowid {order} LIMIT ?', (*values, limit + 1)).fetchall()
         more = len(rows) > limit
         selected = rows[:limit]

@@ -1644,3 +1644,25 @@ def test_allowance_increase_requires_explicit_resume_and_rechecks_actual_spendin
             assert records.turn(db, command)['delivery'] == 'accepted'
         await owner.close()
     asyncio.run(exercise())
+
+
+def test_chat_counter_uses_current_owner_receipt_before_next_observation(system):
+    from hyprn_mvp_app.analysis_execution import identity
+    _, owner, provider, store, actor, sid = system
+    turn, result = waiting_analysis(system)
+    event_id = next(e['id'] for e in provider.history if e['type'] == 'agent.custom_tool_use')
+    records.observe_analysis(store, sid, turn['turn_id'], event_id, result)
+    current = dict(result, completed_count=25, last_progress_at=12345, runs=[])
+    with store.connection(write=True) as db:
+        db.execute('INSERT INTO receipts VALUES(?,?,?,?,?,?,?,?,?)',
+                   (sid, 'analysis_execution', identity(result['calculation_version_id']), actor,
+                    'a' * 64, 'pending_remote', json.dumps(current), None, '{}'))
+    read = owner.read(actor, sid)['analysis_progress']
+    assert read['completed_count'] == 25
+    assert read['last_progress_at'] == 12345
+    # No provider request and no event rewrite is needed to observe the new count.
+    assert not provider.results and not provider.sent
+    with store.connection() as db:
+        event = records.latest_event(db, sid, ('hyprn.analysis_progress',),
+                                     reference=turn['turn_id'])
+        assert event['progress']['completed_count'] == 0

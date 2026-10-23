@@ -1,3 +1,4 @@
+import { RecordTimestamp } from './design';
 import { OpenLink } from './design';
 import { useCollectionRead } from './useCollectionRead';
 import { CollectionStatus } from './design';
@@ -22,7 +23,7 @@ import type {
   PublicRun,
   PublicRunDetail2,
   RunHistoryRead6,
-  RunHistoryItem2,
+  RunHistoryItem3,
   ModifiedRunSeedRead6,
 } from './api';
 import {
@@ -123,7 +124,7 @@ export function RunPanel({
   onFilters?: (filters: RunFilters) => void;
 }) {
   const [selected, setSelected] = useState(submitted?.run_id ?? '');
-  const collection = useCollectionRead<RunHistoryItem2, string>({
+  const collection = useCollectionRead<RunHistoryItem3, string>({
     api,
     study: studyId,
     scope: JSON.stringify([modelScope?.model, modelScope?.revision]),
@@ -404,6 +405,7 @@ export function RunPanel({
             title={runLabel(r)}
             facts={[
               <StatusTag tone={executionStatus(r).tone}>{executionStatus(r).label}</StatusTag>,
+              <RecordTimestamp at={r.submitted_at} label="Submitted" />,
             ]}
             actions={
               <OpenLink

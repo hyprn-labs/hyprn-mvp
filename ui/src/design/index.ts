@@ -144,3 +144,5 @@ export { AssistantActivity } from './assistant';
 export { criterionStatus, evaluationReasons } from './scientific';
 
 export { HelpCenter } from './help';
+
+export { RecordTimestamp, StudyActivityPanel } from './activity';

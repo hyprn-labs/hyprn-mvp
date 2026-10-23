@@ -285,10 +285,14 @@ def test_run_list_name_uses_exact_revision_not_family_head_offline(submission):
     from pathlib import Path
     # Validated against the whole public contract so its internal references resolve.
     spec=json.loads((Path(__file__).resolve().parents[2]/'contracts/hyprn-mvp.openapi.yaml').read_text())
-    validator=Draft202012Validator({**spec,'$ref':'#/components/schemas/RunHistoryItem2'})
+    validator=Draft202012Validator({**spec,'$ref':'#/components/schemas/RunHistoryItem3'})
     validator.validate(listed)
     old=dict(listed);old.pop('configuration_name');validator.validate(old)
     missing=dict(listed,configuration_name=None);validator.validate(missing)
+    with store.connection() as db:
+        saved_at = db.execute('SELECT accepted_at FROM run_associations WHERE run_id=?',
+                              (run['run_id'],)).fetchone()[0]
+    assert listed['submitted_at'] == saved_at
     assert native.launches==0
     with store.connection(write=True) as db:db.execute('DELETE FROM memberships WHERE study_id=? AND actor_id=?',(sid,actor))
     assert c.get(f'/api/1/studies/{sid}/runs').status_code in (403,404)
