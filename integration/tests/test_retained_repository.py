@@ -2,7 +2,7 @@
 
 import io
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -228,3 +228,44 @@ def test_real_repository_bulk_read_reduces_queries_for_identical_bytes(tmp_path,
             before_queries=before_queries, after_queries=after_queries,
             before_seconds=before_seconds, after_seconds=after_seconds,
         )))
+
+
+@pytest.mark.parametrize('retained', ['empty', 'orphan', 'collision', 'partial'])
+def test_native_absence_proof_rejects_real_orphan_requests_and_partial_processes(
+        tmp_path, monkeypatch, retained):
+    from aiida import orm
+    from aiida.manage.configuration.profile import Profile
+    from aiida.storage.sqlite_dos.backend import SqliteDosStorage
+    from hyprn_mvp_integration.calculation import NativeExecution
+    from hyprn_mvp_integration import launcher
+    from execution_fixtures import runtime_fixture
+    root = tmp_path / 'owner'
+    monkeypatch.setattr(launcher, 'ROOT', root)
+    profile = Profile('absence-proof', dict(PROFILE_UUID=str(uuid4()), storage=dict(
+        backend='core.sqlite_dos', config=dict(filepath=str(root / 'native'))),
+        process_control=dict(backend=None, config=None), test_profile=True))
+    SqliteDosStorage.initialise(profile)
+    backend = SqliteDosStorage(profile)
+    try:
+        user = orm.User(email='proof@example.test', backend=backend).store()
+        native = NativeExecution(backend=backend, root=root)
+        monkeypatch.setattr(native, 'bundle_runtime', runtime_fixture)
+        request = dict(run_id=str(uuid4()), scope=str(uuid4()), command_id=str(uuid4()),
+                       payload_digest='a' * 64, bundle_digest='b' * 64)
+        if retained in ('orphan', 'collision'):
+            value = dict(request)
+            if retained == 'collision':
+                value['bundle_digest'] = 'c' * 64
+            orm.Dict(dict=value, backend=backend, user=user).store()
+        elif retained == 'partial':
+            node = orm.CalcJobNode(backend=backend, user=user)
+            node.set_process_type('aiida.calculations:hyprn_mvp.scalar')
+            node.store()
+        proof = native.prove_unstarted(request, runtime_fixture()['runtime'])
+        assert proof['outcome'] == ('not_started' if retained == 'empty' else 'unproven')
+        assert proof['request'] == request
+        assert proof['store_uuid'] == str(UUID(backend.get_repository().uuid))
+        with pytest.raises(ValueError, match='runtime changed'):
+            native.prove_unstarted(request, {})
+    finally:
+        backend.close()

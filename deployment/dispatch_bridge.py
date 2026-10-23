@@ -1,6 +1,7 @@
 """Fixed private dispatcher transport shared by local and cloud execution owners."""
 
 import contextlib
+import errno
 import json
 import queue
 import subprocess
@@ -44,6 +45,8 @@ def native_call(native, method, values, *, read_only=False, exports_only=False, 
         return native.launch_budgeted(decode_files(values[0]), values[1], values[2])
     if method == 'launch':
         return native.launch(decode_files(values[0]), values[1])
+    if method == 'prove_unstarted':
+        return native.prove_unstarted(*values)
     if method == 'matches':
         if native_fault == 'lookup_timeout':
             raise TimeoutError()
@@ -56,6 +59,7 @@ def observed_native_call(native, method, values, **options):
     """Bounded operational timing without inputs, identities or exception text."""
     started = time.monotonic()
     outcome = 'failed'
+    failure = None
     try:
         result = native_call(native, method, values, **options)
         outcome = 'finished'
@@ -63,11 +67,20 @@ def observed_native_call(native, method, values, **options):
     except TimeoutError:
         outcome = 'timeout'
         raise
+    except OSError as error:
+        failure = ('storage_exhausted' if error.errno in (errno.ENOSPC, errno.EDQUOT)
+                   else 'host_io_error')
+        raise
+    except (RuntimeError, ValueError):
+        failure = 'native_operation_refused'
+        raise
     finally:
         if method not in ('require_attestation', 'bundle_runtime', 'matches', 'inspect'):
             print(json.dumps(dict(event='native_operation', operation=method,
                                   duration_ms=round((time.monotonic() - started) * 1000, 3),
-                                  outcome=outcome)), file=sys.stderr, flush=True)
+                                  outcome=outcome,
+                                  **({'failure': failure} if failure else {}))),
+                  file=sys.stderr, flush=True)
 
 
 def bridge_child(
@@ -82,6 +95,7 @@ def bridge_child(
     cwd=None,
     stderr=None,
     on_ready=lambda: None,
+    before_call=lambda method: None,
 ):
     """Owned bounded stdio transport, also used by isolated backend fixtures."""
     from hyprn_mvp_app.dispatcher import MAX_MESSAGE, bridge_operation, bridge_encode, bridge_decode
@@ -175,6 +189,7 @@ def bridge_child(
             )
             method, values = bridge_operation(raw, read_only=read_only, exports_only=archive_mode)
             try:
+                before_call(method)
                 with contextlib.redirect_stdout(sys.stderr):
                     result = observed_native_call(
                         native,

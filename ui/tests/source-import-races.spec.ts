@@ -4,7 +4,8 @@ import { ownerPassword } from './support/served';
 async function apply(page: Page) { const d=page.getByRole('dialog',{name:'Preview changes',exact:true}); await d.getByRole('button',{name:'Apply changes',exact:true}).click(); await expect(d).not.toBeVisible(); }
 async function setup(page: Page) {
   await page.goto('/ui/'); await page.getByLabel('Username').fill('owner'); await page.getByLabel('Password',{exact:true}).fill(ownerPassword()); await page.getByRole('button',{name:'Sign in',exact:true}).click();
-  await page.getByLabel('New study name').fill(`Import race ${crypto.randomUUID()}`);await page.getByRole('button',{name:'Create study',exact:true}).click();
+  await page.getByLabel('Study name').fill(`Import race ${crypto.randomUUID()}`);await page.getByLabel('Study question', { exact: true }).fill('What must this engineering study establish?');
+  await page.getByRole('button',{name:'Create study',exact:true}).click();
   await page.getByLabel('New model name').fill('Import ownership');await page.getByRole('button',{name:'Create model',exact:true}).click();
   await page.getByLabel('New component name').fill('Repeated');await page.getByLabel('Input symbols').fill('x');await page.getByLabel('Output symbols').fill('y');await page.getByRole('button',{name:'Add component',exact:true}).click();await apply(page);
   await page.getByRole('button',{name:'Add another instance',exact:true}).click();await apply(page);

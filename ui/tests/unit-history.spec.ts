@@ -14,7 +14,9 @@ async function model(page: Page) {
   const session=(await(await login).json()).data;
   await page.evaluate(session=>{(window as any).unitsApi.csrf=session.csrf_token;(window as any).unitsApi.actor=session.actor_id;},session);
   await page.getByRole('button', {name:'New study',exact:true}).click();
-  await page.getByLabel('New study name',{exact:true}).fill('Unit authoring');
+  await page.getByLabel('Study name',{exact:true}).fill('Unit authoring');
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', {name:'Create study',exact:true}).click();
   await page.getByRole('button', {name:'Models',exact:true}).click();
   await page.getByRole('button', {name:'New model',exact:true}).click();

@@ -45,3 +45,51 @@ in private logs under the task's performance evidence directory. No staging data
 repair or direct study mutation. Full qualification and human acceptance are not
 claimed. Remaining: frozen build, provider-definition provisioning, normal backup/
 activation/attestation, public Help/progress proof and staging after measurements.
+
+## Staging delivery and measured verification
+
+Remote staging source `efcdb75f3e11f448e78262d322f9db9265bd8596` is the exact
+implementation tree, with the prior staging source as parent. Sequence26 release
+`adb68e331e89cd42882db6a67f147f372b7aeca37f8ec1cfac0762d0fe94743e`, configuration
+`4310b33645b7f6ce011335c85034ebb50a9dbd174a870c632db41f86cab73190`.
+Platform `492eeb2d` and schema15 unchanged. Provider skill, reviewers and main-agent
+definitions were provisioned with the updated tool/playbook instructions.
+
+Fresh application/native build and extraction verification passed. Unchanged
+numerical build inputs were proven equal, so the existing worker/modeling image
+bytes were retained to preserve saved surrogate runtime identities. Host contracts
+changed and therefore fresh containment was required and passed. Numerical-image
+continuity proof is in the private build packet; unused rebuilt images are not deployed.
+
+Normal quiet admission close, coherent database/file backup, installation, owner
+schema check15→15, containment/startup and19 network probes passed. SSH disconnected
+before returning installation output; the exact durable completion, installed
+identity and startup receipts were reconciled read-only. No installation or backup
+was repeated. The protected backup wrote approximately4GB. No study-data repair,
+secret reissue, numerical rerun or budget reset was performed.
+
+Public signed-in Chrome verified Help, its workflow navigation and Assistant recovery
+guidance. Existing answer loaded after cold verification. All four independent
+sliders moved together; real estimates changed to150899.9807227989kg and
+591.9874323746903USD/pax. Exact hashes of138 configurations,138 run associations,
+five analysis versions, one brief, one answer and seven evidence records stayed
+unchanged through deployment and slider verification.
+
+Live alternating reads on the same run (five each, same canonical numerical-result
+hash): full archive median1.160638s; verified projection median0.371487s (3.12×).
+Initial projection after changed code took2.174159s: full cold admission is retained.
+An earlier timing-only equality assertion used noncanonical JSON and falsely
+compared integral floats with integers; canonical comparison passed. This measures
+the changed consumer path, not a new end-to-end20-point analysis or whole-study speedup.
+
+The optional additional Assistant20-point progress benchmark was not submitted:
+Chrome's Cloudflare session expired before the composer was usable. The public
+login page confirms reauthentication is needed; server admission renewal is healthy.
+User asked to sign in. Progress behavior is covered by the211 assistant,331 agent
+and45 navigation checks, but a new live in-progress card remains to be observed.
+Full qualification and human acceptance remain unclaimed. Private evidence:
+`hyprn-progress-help-release`, `hyprn-progress-help-deploy/packet-2`,
+`hyprn-analysis-performance` under the task's temporary evidence root.
+
+Ongoing named-user staging access promotion succeeded (`mode: staging`); the
+existing two-user access policy and cumulative USD20/user budget remain unchanged.

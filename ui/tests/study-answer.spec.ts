@@ -8,8 +8,10 @@ async function openStudy(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'New study', exact: true }).click();
   await page
-    .getByLabel('New study name', { exact: true })
+    .getByLabel('Study name', { exact: true })
     .fill('Response decision ' + crypto.randomUUID().slice(0, 6));
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   const answer = page.getByRole('region', { name: 'Study answer', exact: true });
   await expect(

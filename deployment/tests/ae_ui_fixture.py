@@ -168,7 +168,8 @@ def run(*, group):
                     route == '/api/1/session'
                     or (
                         group == 'ae-ui'
-                        and (route == '/api/1/studies' or route.endswith('/model-imports'))
+                        and (route == '/api/1/studies' or route.endswith('/model-imports')
+                             or route.endswith('/brief/draft'))
                     )
                     or (group == 'ae-ui-evidence' and route == f"/api/1/studies/{data['sid']}/brief/draft")
                     or route.endswith('/evidence')

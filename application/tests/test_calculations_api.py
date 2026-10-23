@@ -966,3 +966,58 @@ def test_public_child_recovery_refuses_actual_failures_prepared_or_claimed_work(
     with store.connection() as db:
         assert db.execute('SELECT count(*) FROM analysis_run_resumptions WHERE run_id=?', (rid,)).fetchone()[0] == 0
         assert db.execute('SELECT preparation_state FROM execution_operations WHERE run_id=?', (rid,)).fetchone()[0] == 'preparation_failed'
+
+
+@pytest.mark.parametrize('proof_outcome', ['not_started', 'unproven', 'timeout'])
+def test_explicit_resume_reconciles_native_absence_once_without_rebuilding(calc, proof_outcome):
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    store, actor, sid = calc['store'], calc['actor'], calc['sid']
+    _, _, vid = agent_analysis(store, actor, sid, calc, 1)
+    runner = AnalysisExecution(store)
+    runner.process_one(Submissions(store, None, None))
+    path = study_path(calc, 'analysis-versions/' + vid + '/execution')
+    rid = runner.read(actor, sid, vid)['runs'][0]['run_id']
+    submissions, native = recovered_submission_owner(store)
+    submissions.dispatch(rid)
+    runner.process_one(submissions)
+    assert native.launches == 1
+    assert runner.read(actor, sid, vid)['state'] == 'needs_review'
+    with store.connection() as db:
+        frozen = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+    calls = []
+    def proof(request, runtime):
+        calls.append(request)
+        if proof_outcome == 'timeout':
+            raise TimeoutError()
+        return dict(schema_version='1', request=request, store_uuid=uid(),
+                    outcome=proof_outcome, reason=None)
+    native.prove_unstarted = proof
+    # Polls alone never request proof or launch again.
+    runner.process_one(submissions)
+    assert not calls and native.launches == 1
+    assert calc['client'].get(path + '/recovery').json()['data']['can_resume']
+    command = dict(command_id=uid())
+    accepted = calc['client'].post(path + '/resume', json=command)
+    assert accepted.status_code == 202, accepted.text
+    assert accepted.json()['data']['state'] == 'calculating'
+    assert accepted.json()['data']['admission_state'] == 'waiting'
+    assert calc['client'].get(path).json()['data'] == accepted.json()['data']
+    replay = calc['client'].post(path + '/resume', json=command)
+    assert replay.json()['data'] == accepted.json()['data']
+    runner.process_one(submissions)
+    assert len(calls) == 1
+    with store.connection() as db:
+        source = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+        assert source == frozen
+        audit = db.execute('SELECT * FROM analysis_reconciliation_results').fetchone()
+        assert audit['outcome'] == ('not_started' if proof_outcome == 'not_started' else 'unproven')
+    state = submissions.read(actor, sid, rid)['state']
+    assert state == ('prepared' if proof_outcome == 'not_started' else 'uncertain')
+    # A successful proof releases the very same bundle/run; this native double times out again.
+    submissions.dispatch(rid)
+    assert native.launches == (2 if proof_outcome == 'not_started' else 1)
+    runner.process_one(submissions)
+    assert len(calls) == 1
+    replay = calc['client'].post(path + '/resume', json=command)
+    assert replay.json()['data'] == accepted.json()['data']

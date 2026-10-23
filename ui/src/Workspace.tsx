@@ -1,5 +1,6 @@
 import { OpenLink } from './design';
-import { DialogActions, FormActions } from './design';
+import { DialogActions } from './design';
+import { StudyCreation } from './StudyCreation';
 import { CollectionStatus } from './design';
 import { CalculationsNavigation } from './CalculationsNavigation';
 import { calculationCatalogue, type CalculationScope } from './calculationScope';
@@ -148,7 +149,6 @@ export function Workspace() {
   const currentLink = useRef('');
   const [models, setModels] = useState<Array<{ model_id: string; name: string }>>([]);
   const [model, setModel] = useState<ModelDraftRead5 | null>(null);
-  const [newStudy, setNewStudy] = useState('');
   const [newModel, setNewModel] = useState('');
   const [template, setTemplate] = useState<'empty' | 'two_component_example'>('empty');
   const [busy, setBusy] = useState(false);
@@ -334,7 +334,6 @@ export function Workspace() {
     setEvidence([]);
     setSubmitted(null);
     setActiveRun(false);
-    setNewStudy('');
     setNewModel('');
     setFilter('');
     setNotice('');
@@ -1530,40 +1529,11 @@ export function Workspace() {
                 <ContentColumn width="form">
                   <Panel className="creation-page">
                     <h1>New study</h1>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void perform(async () => {
-                          const token = generation.current,
-                            actor = api.actor;
-                          const created = await api.createStudy(newStudy);
-                          if (token !== generation.current || actor !== api.actor) return;
-                          setNewStudy('');
-                          await openLink({ study: created.study_id, view: 'overview' });
-                        });
-                      }}
-                    >
-                      <label>
-                        New study name
-                        <TextInput
-                          required
-                          maxLength={4096}
-                          value={newStudy}
-                          onChange={(e) => setNewStudy(e.target.value)}
-                        />
-                      </label>
-                      <FormActions
-                        primary={
-                          <Button type="submit" variant="primary" disabled={busy || !!api.pending}>
-                            Create study
-                          </Button>
-                        }
-                      >
-                        <Button type="button" disabled={busy} onClick={() => void openPage('home')}>
-                          Cancel
-                        </Button>
-                      </FormActions>
-                    </form>
+                    <StudyCreation
+                      api={api}
+                      onOpen={(id) => void openLink({ study: id, view: 'overview' })}
+                      onCancel={() => void openPage('home')}
+                    />
                   </Panel>
                 </ContentColumn>
               )}

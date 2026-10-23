@@ -18,7 +18,9 @@ async function openStudy(page: Page, seed = '/fixture/calculation-seed') {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const csrf = (await (await session).json()).data.csrf_token as string;
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await page.getByLabel('New study name', { exact: true }).fill(name);
+  await page.getByLabel('Study name', { exact: true }).fill(name);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Study brief', exact: true })).toBeVisible();
   const sid = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('study')!;
@@ -684,63 +686,105 @@ test('@calculations simplified dialogs preserve automatic and saved criterion bi
   await expect(bindings).toContainText('Output not assigned');
 });
 
-test('@calculations recoverable interruption offers one resume action and preserves result links', async ({
-  page,
-}) => {
-  const seeded = await openStudy(page);
-  await openCalculations(page);
-  let resumed = false;
-  const resumeCommands: string[] = [];
-  await page.route('**/analysis-versions/*/execution**', async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    const version = path.split('/analysis-versions/')[1].split('/')[0];
-    if (path.endsWith('/recovery')) {
+for (const initialState of ["failed", "needs_review"] as const) {
+  test(`@calculations ${initialState} interruption offers one resume action and preserves result links`, async ({
+    page,
+  }) => {
+    const seeded = await openStudy(page);
+    await openCalculations(page);
+    let resumed = false;
+    let waitingReads = 0;
+    const resumeCommands: string[] = [];
+    await page.route("**/analysis-versions/*/execution**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const version = path.split("/analysis-versions/")[1].split("/")[0];
+      if (path.endsWith("/recovery")) {
+        return route.fulfill({
+          json: {
+            data: { schema_version: "1", can_resume: true, reason: null },
+          },
+        });
+      }
+      if (path.endsWith("/resume")) {
+        expect(route.request().method()).toBe("POST");
+        resumeCommands.push(route.request().postDataJSON().command_id);
+        resumed = true;
+      }
+      const waiting =
+        resumed && initialState === "needs_review" && waitingReads++ < 2;
       return route.fulfill({
-        json: { data: { schema_version: '1', can_resume: true, reason: null } },
-      });
-    }
-    if (path.endsWith('/resume')) {
-      expect(route.request().method()).toBe('POST');
-      resumeCommands.push(route.request().postDataJSON().command_id);
-      resumed = true;
-    }
-    return route.fulfill({
-      json: {
-        data: {
-          schema_version: '2',
-          calculation_version_id: version,
-          state: resumed ? 'complete' : 'failed',
-          admission_state: resumed ? 'ready' : 'revoked',
-          reason: resumed ? null : 'Permission to execute this analysis was lost.',
-          completed_count: 1,
-          total_count: 1,
-          estimate_id: null,
-          runs: [
-            {
-              configuration_revision_id: seeded.configuration,
-              run_id: seeded.run,
-              completed: true,
-              reused: true,
-            },
-          ],
+        json: {
+          data: {
+            schema_version: "2",
+            calculation_version_id: version,
+            state: waiting
+              ? "calculating"
+              : resumed
+                ? "complete"
+                : initialState,
+            admission_state: waiting
+              ? "waiting"
+              : resumed
+                ? "ready"
+                : "revoked",
+            reason: resumed
+              ? null
+              : "Permission to execute this analysis was lost.",
+            completed_count: 1,
+            total_count: 1,
+            estimate_id: null,
+            runs: [
+              {
+                configuration_revision_id: seeded.configuration,
+                run_id: seeded.run,
+                completed: true,
+                reused: true,
+              },
+            ],
+          },
         },
-      },
+      });
     });
+    await page
+      .getByRole("button", { name: "New analysis", exact: true })
+      .click();
+    const editor = page.getByRole("dialog", {
+      name: "New analysis",
+      exact: true,
+    });
+    await editor
+      .getByLabel("Analysis name", { exact: true })
+      .fill("Recoverable investigation");
+    await editor.getByLabel(seeded.configuration_name, { exact: true }).check();
+    await editor
+      .getByRole("button", { name: "Save analysis", exact: true })
+      .click();
+    await expect(editor).toBeHidden();
+    await expect(page.getByText("Paused", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Permission to execute this analysis was lost."),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Launch analysis", exact: true }),
+    ).toHaveCount(0);
+    await page.setViewportSize({ width: 720, height: 900 });
+    await page
+      .getByRole("button", { name: "Resume analysis", exact: true })
+      .click();
+    if (initialState === "needs_review")
+      await expect(
+        page.getByText("Waiting to continue", { exact: true }),
+      ).toBeVisible();
+    await expect(
+      page.getByText("1/1 calculated", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Resume analysis", exact: true }),
+    ).toHaveCount(0);
+    expect(resumeCommands).toHaveLength(1);
+    expect(resumeCommands[0]).toMatch(/^[a-f0-9-]{36}$/);
+    await expect(
+      page.getByRole("button", { name: /^Open run ·/ }).first(),
+    ).toBeVisible();
   });
-  await page.getByRole('button', { name: 'New analysis', exact: true }).click();
-  const editor = page.getByRole('dialog', { name: 'New analysis', exact: true });
-  await editor.getByLabel('Analysis name', { exact: true }).fill('Recoverable investigation');
-  await editor.getByLabel(seeded.configuration_name, { exact: true }).check();
-  await editor.getByRole('button', { name: 'Save analysis', exact: true }).click();
-  await expect(editor).toBeHidden();
-  await expect(page.getByText('Paused', { exact: true })).toBeVisible();
-  await expect(page.getByText('Permission to execute this analysis was lost.')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Launch analysis', exact: true })).toHaveCount(0);
-  await page.setViewportSize({ width: 720, height: 900 });
-  await page.getByRole('button', { name: 'Resume analysis', exact: true }).click();
-  await expect(page.getByText('1/1 calculated', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Resume analysis', exact: true })).toHaveCount(0);
-  expect(resumeCommands).toHaveLength(1);
-  expect(resumeCommands[0]).toMatch(/^[a-f0-9-]{36}$/);
-  await expect(page.getByRole('button', { name: /^Open run ·/ }).first()).toBeVisible();
-});
+}

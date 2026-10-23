@@ -356,7 +356,7 @@ test('approved composition: two complete nodes, contextual details and first-scr
   await shot(page, 'profile');
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await expect(page.getByLabel('New study name')).toBeVisible();
+  await expect(page.getByLabel('Study name')).toBeVisible();
   await shot(page, 'new-study');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Open study Scalar model study', exact: true }).click();
@@ -623,7 +623,7 @@ test('Foundry shell remains legible in both themes and dialogs restore focus wit
     const create=page.getByRole('button',{name:'New study',exact:true});
     await create.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab'); await expect(create).toBeFocused(); expect(await create.evaluate(el=>getComputedStyle(el).outlineWidth)).toBe('2px');
     await page.screenshot({path:process.env.HYPRN_MVP_UI_EVIDENCE_ROOT+'/home-'+theme+'.png'});
-    await create.click(); await expect(page.getByLabel('New study name')).toBeVisible();
+    await create.click(); await expect(page.getByLabel('Study name')).toBeVisible();
     await page.screenshot({path:process.env.HYPRN_MVP_UI_EVIDENCE_ROOT+'/new-study-'+theme+'.png'});
     await page.getByRole('button',{name:'Cancel',exact:true}).click();
     await page.getByRole('button',{name:'Settings',exact:true}).click();

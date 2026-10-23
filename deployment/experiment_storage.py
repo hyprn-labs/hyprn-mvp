@@ -175,6 +175,9 @@ def collect(path, *, apply=False, now=None, inspect_activity=activity):
 
 
 def automatic():
+    # Scoped children may exercise the CLI; never discover a host policy there.
+    if os.environ.get(local_paths.CHECK_SESSION) and not os.environ.get('HYPRN_MVP_EXPERIMENT_STORAGE_CONFIG'):
+        return
     path = configuration()
     if path is None or not path.exists():
         return

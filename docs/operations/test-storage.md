@@ -125,3 +125,54 @@ file is preserved without protecting gigabytes of sibling databases. Empty folde
 scaffolding remains, so enrolled locations remain usable. Source and scientific
 execution/attestation rules are unchanged. Enrollment is an explicit declaration
 that expired data in that folder is disposable; do not enroll durable study stores.
+
+## Staging builds and release exports
+
+Staging has a separate policy because OCI/native exports and labelled build volumes
+are generated artifacts, while source archives remain code. Enroll a **parent**
+folder once; new immediate children with `hyprn-cloud-build-source/v1` or
+`hyprn-hosted-payload/v1` manifests are discovered automatically:
+
+```sh
+./hyprn-mvp dev storage staging-enroll --root "$STAGING_PARENT"
+./hyprn-mvp dev storage staging-status
+./hyprn-mvp dev storage staging-collect
+```
+
+Policy location: `--config`, then `HYPRN_MVP_STAGING_STORAGE_CONFIG`, then
+`staging-storage.json` below the configured data root. Configure `probe_image` in
+this JSON as the immutable SHA-256 ID of a reviewed local image containing Python3
+(or use `HYPRN_MVP_STORAGE_PROBE_IMAGE`). This image runs a bounded, networkless,
+read-only volume inspector; candidate code is never loaded. A missing probe or
+unavailable activity inspection refuses collection rather than guessing.
+
+Defaults: 40 GiB staging files, 20 GiB owned build volumes, 20 GiB attributed build
+cache and 5 GiB free reserve. The JSON fields `volume_budget_bytes` and
+`cache_budget_bytes` can override the Docker budgets; enrollment's budget/reserve
+flags set filesystem limits. Protected excess refuses new managed work.
+
+`deployment/cloud_build.py` collects before and after snapshot, app-build and
+payload commands, including failures. The command enrolls its output parent into
+an existing enabled policy. `dev check` also invokes this policy. There is no idle
+background daemon. Scripts using older checkouts or calling internal Python
+functions directly must use `staging-collect` around their work or move to the
+current command entry point.
+
+Entire recent/active experiments are preserved. Expired inactive folders lose only
+`app.oci.tar`, `modeling.oci.tar`, `worker.oci.tar`, `engine.oci.tar` and `native.tar.gz`
+at the payload root or the explicit artifact destinations. Source, `source.tar`,
+corresponding-source records and other files remain. Historical manifests remain
+as evidence but their expired local exports are no longer deployable payloads.
+
+Only volumes whose exact names match their `org.hyprn.build` commit label are
+eligible. Every discovered build for that commit must be old/inactive, the volume
+must be older than 24 hours, its contents must have no modification/change within
+24 hours, and no container (even stopped) may reference it. Unknown/unassociated
+volumes remain. Activity and identities are rechecked before removal. Docker cache
+pruning is limited to attributed unshared reclaimable IDs with the engine's
+`until=24h` filter, which also protects recently reused records.
+
+These limits are admission/completion controls, not a hard quota on external
+writers. Existing running workloads are never stopped to meet a budget. Host
+allocation can change during cleanup because other work continues and Docker's
+virtual disk can reclaim blocks asynchronously.

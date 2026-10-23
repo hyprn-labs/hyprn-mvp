@@ -8,6 +8,7 @@ from uuid import UUID
 from ..contracts import DomainError, uid
 from ..identity import display_name
 from .provider_sessions import SQLITE_SCHEMA
+from . import activity
 
 
 def ensure(store):
@@ -348,6 +349,7 @@ def public(store, actor, study, *, available, after=None, before=None):
             earlier_cursor=messages[0]['message_id'] if messages else before,
             has_more_messages=extra if after is not None else False,
             analysis_progress=analysis_progress(db, current) if available else None,
+            activity=activity.read(db, current if available else None),
         )
 
 

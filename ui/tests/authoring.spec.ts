@@ -15,7 +15,9 @@ async function login(page: Page) {
 }
 async function createStudy(page: Page) {
   const name = `Authoring ${crypto.randomUUID()}`;
-  await page.getByLabel('New study name').fill(name);
+  await page.getByLabel('Study name').fill(name);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   await page.getByLabel('New model name').fill('Scalar chain');

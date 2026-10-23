@@ -39,6 +39,15 @@ class CloudBuildTests(unittest.TestCase):
     def snapshot(self):
         return cloud_build.snapshot(self.repo, self.commit, self.output)
 
+    def test_command_collects_before_and_after_build_operation(self):
+        import staging_storage
+        with patch('sys.argv', ['cloud_build.py', 'snapshot', '--repository', str(self.repo),
+                                '--commit', self.commit, '--output', str(self.output)]), \
+                patch.object(staging_storage, 'automatic') as retention:
+            cloud_build.main()
+        self.assertEqual(retention.call_count, 2)
+        self.assertEqual(cloud_build.verify_source(self.output)['source_commit'], self.commit)
+
     def test_dirty_and_untracked_bytes_never_enter_build_context(self):
         (self.repo / 'input.txt').write_text('uncommitted')
         (self.repo / 'credential.key').write_text('private fixture')

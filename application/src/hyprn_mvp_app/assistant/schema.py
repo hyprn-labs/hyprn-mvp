@@ -111,6 +111,20 @@ DEFINITIONS['AssistantConversationRead5'] = deepcopy(DEFINITIONS['AssistantConve
 DEFINITIONS['AssistantConversationRead5']['properties']['analysis_progress'] = nullable(
     DEFINITIONS['AssistantAnalysisProgress1'])
 DEFINITIONS['AssistantConversationRead5']['required'].append('analysis_progress')
+DEFINITIONS['AssistantActivityRead1'] = obj({
+    'steps': {'type': 'array', 'maxItems': 40, 'items': obj({
+        'step_id': text(64), 'label': text(128),
+        'state': {'enum': ['running', 'waiting', 'completed', 'failed', 'returned', 'uncertain']},
+        'actor': {'enum': ['assistant', 'reviewer']},
+        'started_at': nullable({'type': 'number'}),
+        'finished_at': nullable({'type': 'number'}),
+    })},
+    'has_earlier_steps': {'type': 'boolean'},
+})
+DEFINITIONS['AssistantConversationRead6'] = deepcopy(DEFINITIONS['AssistantConversationRead5'])
+DEFINITIONS['AssistantConversationRead6']['properties']['activity'] = (
+    DEFINITIONS['AssistantActivityRead1'])
+DEFINITIONS['AssistantConversationRead6']['required'].append('activity')
 DEFINITIONS['AssistantBudgetRead2'] = obj({
     'configured': {'type': 'boolean'}, 'currency': {'const': 'USD'},
     'limit_cents': money, 'spent_cents': nullable(money), 'remaining_cents': nullable(money),

@@ -256,6 +256,24 @@ CREATE TRIGGER IF NOT EXISTS analysis_run_resumptions_fixed BEFORE UPDATE ON ana
  BEGIN SELECT RAISE(ABORT,'analysis child recovery audit is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS analysis_run_resumptions_no_delete BEFORE DELETE ON analysis_run_resumptions
  BEGIN SELECT RAISE(ABORT,'analysis child recovery audit is immutable'); END;
+CREATE TABLE IF NOT EXISTS analysis_reconciliation_intents(
+ study_id TEXT NOT NULL, command_id TEXT NOT NULL, analysis_command TEXT NOT NULL,
+ actor_id TEXT NOT NULL, runs TEXT NOT NULL, previous_result TEXT NOT NULL,
+ PRIMARY KEY(study_id,command_id)
+);
+CREATE TABLE IF NOT EXISTS analysis_reconciliation_results(
+ study_id TEXT NOT NULL, command_id TEXT NOT NULL, outcome TEXT NOT NULL, proof TEXT NOT NULL,
+ PRIMARY KEY(study_id,command_id),
+ FOREIGN KEY(study_id,command_id) REFERENCES analysis_reconciliation_intents(study_id,command_id)
+);
+CREATE TRIGGER IF NOT EXISTS reconciliation_intent_fixed BEFORE UPDATE ON analysis_reconciliation_intents
+ BEGIN SELECT RAISE(ABORT,'reconciliation intent is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS reconciliation_intent_retained BEFORE DELETE ON analysis_reconciliation_intents
+ BEGIN SELECT RAISE(ABORT,'reconciliation intent is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS reconciliation_result_fixed BEFORE UPDATE ON analysis_reconciliation_results
+ BEGIN SELECT RAISE(ABORT,'reconciliation proof is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS reconciliation_result_retained BEFORE DELETE ON analysis_reconciliation_results
+ BEGIN SELECT RAISE(ABORT,'reconciliation proof is immutable'); END;
 CREATE TABLE IF NOT EXISTS agent_actors(
  actor_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='agent'),
  delegator_actor_id TEXT NOT NULL REFERENCES users(actor_id),

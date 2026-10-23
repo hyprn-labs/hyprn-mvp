@@ -6,7 +6,9 @@ import subprocess
 PROJECT = re.compile(r'hyprn|whatsopt|modeling_policy\.rb|modeling_contract\.rb|'
                      r'modeling\.schema\.json|build_engine\.py|origin-instrument\.rb|'
                      r'upstream/engine-packaging|COPY application /app/application|'
-                     r'COPY contracts /app/contracts|COPY ui-dist /app/ui', re.I)
+                     r'COPY contracts /app/contracts|COPY ui-dist /app/ui|'
+                     r'corepack enable && corepack prepare yarn@4\.14\.1 --activate && yarn install --immutable|'
+                     r'COPY --from=build /opt/runtime/venv /opt/runtime/venv', re.I)
 
 
 def size(value):

@@ -190,6 +190,8 @@ function renderModel(ctx: ViewContext) {
                 navigate(() => void openLink({ study: study.study_id, view: 'model' })),
             }}
             title={
+              (revision && 'name' in revision && typeof revision.name === 'string'
+                ? revision.name : undefined) ??
               model?.name ??
               models.find((m) => m.model_id === selectedModel)?.name ??
               'Model name unavailable'

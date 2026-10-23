@@ -371,7 +371,12 @@ class Lifecycle:
         finally:
             os.close(fd)
 
-    def assert_stopped(self):
+    def running_native_workers(self, observe):
+        return observe('ps', '--quiet', '--no-trunc', '--filter',
+                       'label=org.hyprn-mvp.owner=hyprn-mvp-cloud-'
+                       + self.runtime['installation_id']).split()
+
+    def assert_stopped(self, *, allow_retained_images=False):
         """Observe stopped writers while the caller holds deployment/product/native locks.
 
         This does not acquire executor.lock again: the backup owner holds it for
@@ -398,6 +403,9 @@ class Lifecycle:
             return result.stdout
 
         project = self.runtime['installation_id']
+        workers = self.running_native_workers(observe)
+        if workers:
+            raise Refused('native_worker_running', 4)
         identifiers = observe('ps', '--all', '--quiet', '--no-trunc', '--filter',
                               'label=com.docker.compose.project=' + project).split()
         if (len(identifiers) > 512 or len(set(identifiers)) != len(identifiers)
@@ -418,7 +426,7 @@ class Lifecycle:
                 labels = config['Labels']
                 service = labels['com.docker.compose.service']
                 if (labels['com.docker.compose.project'] != project or service not in images
-                        or config['Image'] != images[service]
+                        or not allow_retained_images and config['Image'] != images[service]
                         or item['HostConfig']['RestartPolicy']['Name'] != 'no'):
                     raise Refused('writer_container_identity_mismatch', 6)
                 if (any(state[key] is not False for key in ('Running', 'Paused', 'Restarting'))
@@ -494,7 +502,7 @@ class Lifecycle:
 
     def database(self, operation):
         """One fixed image operation; never pass request/provider keys to migrations."""
-        migration = operation in ('initialize', 'migrate')
+        migration = operation in ('initialize', 'migrate', 'stopped-work')
         alias = 'db-app-migration' if migration else 'db-app-request'
         source = (self.binding.get('migration_secret_file') if migration else next(
             item['file'] for item in self.preview['secret_loads']
@@ -539,6 +547,32 @@ class Lifecycle:
             time.sleep(min(1, max(0, deadline - time.monotonic())))
         raise Refused('drain_timeout', 4)
 
+    def migration_quiescence(self):
+        """Preserve unfinished records only after observing all their writers stopped.
+
+        Retained service images may belong to the previous release. This permits
+        no active container, restart policy or unknown service; ordinary backup
+        and inspection continue to require exact image pins.
+        """
+        try:
+            self.assert_stopped(allow_retained_images=True)
+        except Refused as error:
+            if error.reason not in {'native_owner_running', 'writer_container_not_stopped',
+                                    'native_worker_running'}:
+                raise
+            self.drain()
+            self.native_quiescence()
+            self.compose('stop', '--timeout', str(min(self.timeout, 120)), 'app', 'modeling')
+            self.assert_stopped(allow_retained_images=True)
+        self.native_quiescence()
+        counts = self.database('stopped-work')
+        if (counts.get('requests_quiescent') is not True
+                or type(counts.get('active_assistant_turns')) is not int
+                or counts['active_assistant_turns'] != 0):
+            raise Refused('stopped_work_has_active_requests', 6)
+        self.assert_stopped(allow_retained_images=True)
+        return counts
+
     def application_and_modeling(self, operation):
         """Explicit owner steps; native ownership must already be qualified by the host."""
         self.admission()
@@ -556,11 +590,9 @@ class Lifecycle:
             owner = self.native('initialize')
             write_record(self.root / 'native-owner.json', owner)
         else:
-            self.drain()
-            # A replacement is applied after the host has stopped the previous
-            # release. Never signal an old process using the new release's paths.
-            self.native_quiescence()
-            self.compose('stop', '--timeout', str(min(self.timeout, 120)), 'app', 'modeling')
+            # Closed, stopped owners can carry unresolved records into the new
+            # release without retrying them or representing them as completed.
+            self.migration_quiescence()
             self.rebind_native()
         # Create the fixed networks without starting either service or migrating.
         self.compose('create', '--no-build', '--pull', 'never', 'app', 'modeling')

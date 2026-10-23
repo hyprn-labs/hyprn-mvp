@@ -639,6 +639,40 @@ class NativeExecution:
                 process.close()
             runner.close()
 
+    def prove_unstarted(self, request, runtime):
+        """Conservative absence proof, called only in the exclusive native owner lane.
+
+        Exact-match lookup alone misses orphan requests and partially stored processes.
+        The runner durably stores its process before it can start a worker. Any related
+        request, or any unidentifiable scalar process, therefore prevents this proof.
+        """
+        if set(request) != REQUEST_KEYS or any(not isinstance(v, str) for v in request.values()):
+            raise ValueError('Incomplete native reconciliation request')
+        if self.bundle_runtime()['runtime'] != runtime:
+            raise ValueError('Prepared numerical runtime changed')
+        proof = dict(schema_version='1', request=request, store_uuid=str(UUID(self.store_uuid)),
+                     outcome='unproven', reason='native_identity_collision')
+        queries = orm.QueryBuilder(backend=self.backend).append(orm.Dict, filters={'or': [
+            {'attributes.run_id': request['run_id']},
+            {'attributes.command_id': request['command_id']},
+        ]})
+        if queries.count():
+            return proof
+        processes = orm.QueryBuilder(backend=self.backend).append(orm.CalcJobNode, project='*')
+        for (node,) in processes.all():
+            if node.process_type != 'aiida.calculations:hyprn_mvp.scalar':
+                return dict(proof, reason='unidentified_native_process')
+            try:
+                recorded = node.inputs.request.get_dict()
+            except (AttributeError, KeyError):
+                return dict(proof, reason='unidentified_native_process')
+            if set(recorded) != REQUEST_KEYS:
+                return dict(proof, reason='unidentified_native_process')
+            if (recorded['run_id'] == request['run_id'] or
+                    recorded['command_id'] == request['command_id']):
+                return proof
+        return dict(proof, outcome='not_started', reason=None)
+
     def matches(self, request):
         if set(request) != REQUEST_KEYS:
             raise ValueError('Incomplete native match')

@@ -27,7 +27,7 @@ def router(deps):
         return sid, request.app.state.assistant
 
     def result(request, value, status=200):
-        validate('AssistantConversationRead5', value)
+        validate('AssistantConversationRead6', value)
         return response(request, value, status)
 
     @r.get('/api/1/assistant/budget')

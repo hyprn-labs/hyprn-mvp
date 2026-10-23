@@ -1335,7 +1335,9 @@ test('@ae-integration actual Package2 export import rejects corrupt files and re
     .getByRole('button', { name: 'Home', exact: true })
     .click();
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await page.getByLabel('New study name').fill('Isolated Package2 destination');
+  await page.getByLabel('Study name').fill('Isolated Package2 destination');
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Workspace sections' })

@@ -98,7 +98,7 @@ test('genuine 200 percent browser zoom keeps every Foundry route and dialog reac
       // On Studies, Home is the current-location marker rather than a button.
       if (await button('Home').count()) await button('Home').click();
       await check('home-' + theme, button('New study'));
-      await page.keyboard.press('Enter'); await check('new-study-' + theme, page.getByLabel('New study name'));
+      await page.keyboard.press('Enter'); await check('new-study-' + theme, page.getByLabel('Study name'));
       await button('Cancel').click(); await button('Settings').click();
       await check('profile-' + theme, button('Sign out'));
       await button('Home').click(); await button('Open study Scalar model study').click();

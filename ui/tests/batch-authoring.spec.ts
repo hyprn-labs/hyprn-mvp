@@ -11,7 +11,9 @@ async function fixture(page: Page) {
   const session = page.waitForResponse(r => r.url().endsWith('/api/1/session') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const csrf = (await (await session).json()).data.csrf_token;
-  await page.getByLabel('New study name').fill(`Batch ${crypto.randomUUID()}`);
+  await page.getByLabel('Study name').fill(`Batch ${crypto.randomUUID()}`);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await page.getByLabel('New model name').fill('Batch model');
   await page.getByRole('button', { name: 'Create model', exact: true }).click();

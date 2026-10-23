@@ -89,7 +89,8 @@ class StaticPreparation:
 class Submissions:
     """Durable app receipt/outbox plus one serialized native boundary crossing.
 
-    No lease or retry may turn an uncertain claim back into accepted_run. A
+    No lease or automatic retry releases an uncertain claim. Explicit native-owner
+    proof is audited before unstarted work becomes prepared again. A
     stored process is adopted only by immutable exact inputs, never by age/name.
     The actual runner owns lifecycle; this class stores only its association.
     """
@@ -223,6 +224,93 @@ class Submissions:
         result={**receipt['result'],'state':state,**(json.loads(status) if status else {})}
         db.execute("UPDATE receipts SET state=?,result=? WHERE scope=? AND category='run' AND command_id=?",
                    (state,json.dumps(result),sid,command))
+
+    def analysis_uncertain_runs(self, db, sid, parent):
+        """Return linked, prepared uncertain runs; this is eligibility, never proof."""
+        rows = db.execute('SELECT c.run_id FROM analysis_execution_children c '
+            'JOIN execution_operations x ON x.run_id=c.run_id '
+            "WHERE c.study_id=? AND c.analysis_command=? AND c.child_category='run' "
+            "AND x.state='uncertain' ORDER BY c.run_id", (sid, parent['command_id'])).fetchall()
+        candidates = []
+        for linked in rows:
+            row = run_association(db, linked['run_id'], study_id=sid)
+            receipt = self.store.command_receipt(db, sid, 'run', row['command_id'])
+            payload = json.loads(row['payload'])
+            if (row['store_uuid'] is not None or row['process_uuid'] is not None
+                    or payload.get('actor') != parent['actor_id']):
+                return []
+            try:
+                request = stored_request(row, payload, receipt)
+                bundle = payload['bundle']
+                runtime = bundle['manifest']['runtime']
+                validate_retained_bundle(dict(manifest=bundle['manifest'], files={
+                    path: base64.b64decode(raw, validate=True)
+                    for path, raw in bundle['files'].items()}), request, payload['frozen'])
+            except (ValueError, KeyError, TypeError):
+                return []
+            candidates.append(dict(run_id=row['run_id'], command_id=row['command_id'],
+                source_sha256=raw_hash(db.execute('SELECT payload FROM outbox WHERE run_id=?',
+                    (row['run_id'],)).fetchone()[0].encode()), request=request, runtime=runtime))
+        return candidates
+
+    def reconcile_analysis_intent(self, sid, parent):
+        """Consume one explicit request under the dispatch lock, before new admission.
+
+        All children must be proven unstarted before any is released. Immutable proof
+        and operational transitions commit together; neither polls nor launch replays
+        create this intent. Failed proof consumes the intent without releasing a run.
+        """
+        with self._dispatch_lock():
+            with self.store.connection() as db:
+                intent = db.execute('SELECT i.* FROM analysis_reconciliation_intents i '
+                    'LEFT JOIN analysis_reconciliation_results r ON r.study_id=i.study_id '
+                    'AND r.command_id=i.command_id WHERE i.study_id=? AND i.analysis_command=? '
+                    'AND r.command_id IS NULL ORDER BY i.command_id LIMIT 1',
+                    (sid, parent['command_id'])).fetchone()
+                if intent is None:
+                    return None
+                if not self.store.analysis_authorized(db, parent, sid):
+                    raise DomainError('analysis_authority_revoked', 403)
+                expected = json.loads(intent['runs'])
+                current = self.analysis_uncertain_runs(db, sid, parent)
+            proofs = []
+            if current == expected:
+                for child in expected:
+                    try:
+                        proof = self.native.prove_unstarted(child['request'], child['runtime'])
+                        if (not isinstance(proof, dict) or proof.get('schema_version') != '1'
+                                or proof.get('request') != child['request']
+                                or proof.get('outcome') not in ('not_started', 'unproven')
+                                or not isinstance(proof.get('store_uuid'), str)):
+                            raise ValueError('Invalid native proof')
+                    except (OSError, TimeoutError, RuntimeError, ValueError, AttributeError):
+                        proof = dict(outcome='unproven', reason='native_lookup_unavailable')
+                    proofs.append(dict(child, native=proof))
+            permitted = bool(proofs) and len(proofs) == len(expected) and all(
+                item['native']['outcome'] == 'not_started' for item in proofs)
+            if hasattr(self.store, 'database'):
+                with self.store.database.background_connection(write=True) as db:
+                    row = db.execute('SELECT hyprn_reconcile_native(?,?,?,?) AS released',
+                        (sid, intent['command_id'], 'not_started' if permitted else 'unproven',
+                         json.dumps(proofs))).fetchone()
+                    return row['released']
+            with self.store.connection(write=True) as db:
+                if not self.store.analysis_authorized(db, parent, sid):
+                    raise DomainError('analysis_authority_revoked', 403)
+                current_parent = self.store.command_receipt(db, sid, 'analysis_execution',
+                                                           parent['command_id'])
+                if current_parent['state'] != 'pending_remote':
+                    return False
+                if self.analysis_uncertain_runs(db, sid, parent) != expected:
+                    permitted = False
+                db.execute('INSERT INTO analysis_reconciliation_results '
+                    '(study_id,command_id,outcome,proof) VALUES(?,?,?,?)',
+                    (sid, intent['command_id'], 'not_started' if permitted else 'unproven',
+                     json.dumps(proofs)))
+                if permitted:
+                    for child in expected:
+                        self._state(db, sid, child['command_id'], child['run_id'], 'prepared')
+            return permitted
 
     def analysis_authority_failures(self, db, sid, parent):
         """Return only proven unprepared authorization interruptions of this finite plan.

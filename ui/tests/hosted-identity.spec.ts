@@ -14,7 +14,9 @@ test('verified people have private workspaces and account switching clears priva
     await expect(page.getByRole('button', { name: 'New study', exact: true })).toBeVisible();
     await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'New study', exact: true }).click();
-    await page.getByLabel('New study name').fill('Alice private engineering');
+    await page.getByLabel('Study name').fill('Alice private engineering');
+    await page.getByLabel('Study question', { exact: true })
+      .fill('What must this engineering study establish?');
     await page.getByRole('button', { name: 'Create study', exact: true }).click();
     await expect(page.getByText('Alice private engineering', { exact: true }).first()).toBeVisible();
     const other = await b.newPage();
@@ -45,7 +47,9 @@ test('verified people have private workspaces and account switching clears priva
     await expect(page.getByText('Loading studies…', { exact: true })).toHaveCount(0);
     await a.setExtraHTTPHeaders({ 'Cf-Access-Jwt-Assertion': 'invalid' });
     await page.getByRole('button', { name: 'New study', exact: true }).click();
-    await page.getByLabel('New study name').fill('denied');
+    await page.getByLabel('Study name').fill('denied');
+    await page.getByLabel('Study question', { exact: true })
+      .fill('What must this engineering study establish?');
     await page.getByRole('button', { name: 'Create study', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Sign-in could not be completed' })).toBeVisible();
     await expect(page.getByText('Alice private engineering')).toHaveCount(0);
@@ -112,7 +116,9 @@ test('an Access redirect clears private content without following a cross-origin
     const page = await context.newPage();
     await page.goto('/ui/');
     await page.getByRole('button', { name: 'New study', exact: true }).click();
-    await page.getByLabel('New study name').fill('Redirect private content');
+    await page.getByLabel('Study name').fill('Redirect private content');
+    await page.getByLabel('Study question', { exact: true })
+      .fill('What must this engineering study establish?');
     await page.getByRole('button', { name: 'Create study', exact: true }).click();
     await expect(page.getByText('Redirect private content', { exact: true }).first()).toBeVisible();
     let remoteRequests = 0;

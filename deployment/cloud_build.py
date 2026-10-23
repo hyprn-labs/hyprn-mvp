@@ -196,7 +196,13 @@ def main():
     args = vars(parser.parse_args())
     operation = args.pop('operation')
     function = {'snapshot': snapshot, 'app': build_app, 'payload': freeze_payload}[operation]
-    result = function(**args)
+    import staging_storage
+    current = args.get('output') or args.get('root')
+    staging_storage.automatic(current=current)
+    try:
+        result = function(**args)
+    finally:
+        staging_storage.automatic(current=current)
     print(json.dumps(result, sort_keys=True))
 
 

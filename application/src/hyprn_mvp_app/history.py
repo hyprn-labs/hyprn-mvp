@@ -632,7 +632,8 @@ class History:
             lambda aid: self._read_saved(row, receipt, retained.payload, aid),
         )
         result = RetainedProjection(retained.history, retained.token, run, runtime)
-        raw = canonical(result._asdict())
+        raw = canonical(dict(history=result.history, token=result.token,
+                             run=result.run, runtime=result.runtime))
         if hosted and len(raw) <= 1048576:
             with self.store.connection(write=True) as db:
                 self.recheck(db, actor, sid, [result.token])

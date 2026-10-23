@@ -393,7 +393,7 @@ def run(*, group):
                 return self.respond(200,b'{}','application/json')
             if self.path.startswith('/api/1/'):
                 route=urlsplit(self.path).path
-                writable=route in ('/api/1/session','/api/1/studies') or '/models' in route or '/configurations' in route or (group=='units-ui-history' and '/model-imports' in route) or (group=='units-ui-reading' and '/approach' in route)
+                writable=route in ('/api/1/session','/api/1/studies') or route.endswith('/brief/draft') or '/models' in route or '/configurations' in route or (group=='units-ui-history' and '/model-imports' in route) or (group=='units-ui-reading' and '/approach' in route)
                 if self.command!='GET' and not writable:return self.respond(403,b'Outside unit authoring fixture','text/plain')
                 raw=self.rfile.read(length)
                 with TestClient(app,base_url=scope.url) as client:

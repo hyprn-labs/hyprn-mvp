@@ -26,8 +26,10 @@ test('real simplified authoring and evidence configuration retain exact records 
   await expect(page.locator('.profile-page dd')).toHaveText('owner');
   await page.getByRole('button', { name: 'Home', exact: true }).focus(); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await page.getByLabel('New study name').fill('Simple UI18 ' + crypto.randomUUID());
+  await page.getByLabel('Study name').fill('Simple UI18 ' + crypto.randomUUID());
   const studyResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/1/studies'));
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click(); const study = (await (await studyResponse).json()).data;
   retain('new-study.json', study);
   await page.getByRole('button', { name: 'Models', exact: true }).click();

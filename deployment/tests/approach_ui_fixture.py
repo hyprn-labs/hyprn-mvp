@@ -84,12 +84,13 @@ def run(*, group):
                             reason='Reference design',
                         )
                     ]
+                existing_brief = briefs.state(actor, body['study_id'])['draft']
                 draft = briefs.save_draft(
                     actor,
                     body['study_id'],
                     dict(
                         command_id=uid(),
-                        expected_revision=None,
+                        expected_revision=existing_brief['revision'] if existing_brief else None,
                         content=dict(
                             schema_version='1',
                             question='Which response stays below the limit?',

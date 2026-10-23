@@ -37,7 +37,7 @@ export function AnalysisExecutionPanel({
         async (signal) => {
           const value = await api.analysisExecution(study, version.calculation_version_id, signal);
           const recovery =
-            value?.state === 'failed'
+            value?.state === 'failed' || value?.state === 'needs_review'
               ? await api.analysisRecovery(study, version.calculation_version_id, signal)
               : null;
           return { value, recovery };
@@ -55,7 +55,13 @@ export function AnalysisExecutionPanel({
           ]);
           if (progress.current !== signature) changed.current(value);
           progress.current = signature;
-          if (value && !['complete', 'failed', 'cancelled', 'needs_review'].includes(value.state))
+          if (
+            value &&
+            (!['complete', 'failed', 'cancelled', 'needs_review'].includes(value.state) ||
+              (value.schema_version === '2' &&
+                value.state === 'needs_review' &&
+                value.admission_state === 'waiting'))
+          )
             timer = window.setTimeout(load, 2000);
         },
         (e) => {
@@ -94,18 +100,28 @@ export function AnalysisExecutionPanel({
       </p>
     );
   const reason = recovery?.can_resume
-    ? 'The analysis was interrupted. Resume to continue using its saved calculations.'
+    ? execution?.state === 'needs_review'
+      ? 'Resume to check whether these calculations started before continuing.'
+      : 'The analysis was interrupted. Resume to continue using its saved calculations.'
     : execution?.reason || recovery?.reason;
-  const busy = execution && ['calculating', 'validating'].includes(execution.state);
+  const checking =
+    execution?.schema_version === '2' &&
+    execution.state === 'needs_review' &&
+    execution.admission_state === 'waiting';
+  const busy = execution && (checking || ['calculating', 'validating'].includes(execution.state));
   return (
     <div className="hf-flow">
       {loading && <p role="status">Loading execution…</p>}
       {busy && (
         <Progress
           label={
-            execution.state === 'calculating'
-              ? 'Calculating points'
-              : 'Fitting and validating surrogate'
+            checking
+              ? 'Checking execution records'
+              : execution.schema_version === '2' && execution.admission_state === 'waiting'
+                ? 'Waiting to continue'
+                : execution.state === 'calculating'
+                  ? 'Calculating points'
+                  : 'Fitting and validating surrogate'
           }
           count={
             execution.state === 'calculating'

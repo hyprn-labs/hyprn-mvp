@@ -132,6 +132,9 @@ The rule constrains agent tool design without fixing it: iterative read loops, s
 
 Containers run as fixed non-root users, read-only root, dropped capabilities, no-new-privileges, bounded CPU, memory and processes. No writable directory is shared by all components. The executor's container authority is root-equivalent and trusted as such. All databases, artifacts, logs and scratch live under one data root outside source repositories and cloud-synced folders; a synced data root is refused. The data root is resolved as command-line flag → `HYPRN_MVP_*` environment variable → installation configuration → per-OS default (an application-data folder named `hyprn-mvp`) → otherwise the user is asked.
 
+Cloud execution temporary repositories use the execution data volume, not the operating-system disk. Each serving/launch process holds a private scratch-session lease; normal completion removes its session, and a bounded sweep removes only marked, unlocked sessions abandoned for at least one hour. Active leases, unknown files and durable native repositories are never cleanup candidates. Startup and calculation admission require at least 1 GiB of free operational headroom. These host checks complement the worker's existing bounded scratch/output policy; they are not scientific defaults or a substitute for volume-capacity monitoring. Deployment-transfer archives are a separate platform-owned cache backed by immutable object-storage copies and a retention policy protecting the active and rollback releases.
+
+
 ### 4.2 Execution security
 
 - Candidate code is imported only in the restricted worker, after checking the current attestation of target, image, launcher and policy. Any change to these or to the attested source set invalidates it; execution is refused until containment is re-verified.
@@ -690,6 +693,18 @@ calculations cannot use this path. This narrow recovery exception preserves the 
 request, child commands and run identities. Ordinary launch
 replay never initiates recovery; the resume command itself retains its original
 replay outcome. Saved scientific versions and recorded runs never change.
+
+For a linked uncertain run with an intact prepared bundle, explicit resume may instead
+record an immutable reconciliation intent. Only the existing native dispatcher may
+publish its result. Holding the application dispatch lock and the exclusive native owner
+lane, it checks the pinned store for related request records, collisions and partial
+processes; an empty exact-match lookup alone is insufficient. All affected runs must be
+proven unstarted before any is released. An append-only proof and release of the original
+prepared requests commit together. PostgreSQL restricts proof publication to the dispatcher
+credential; web and Assistant credentials cannot forge it. A refused or failed check keeps
+uncertainty, consumes that intent and requires a further explicit action. No poll, replay,
+lease expiry or changed numerical runtime authorizes another launch. During this check the
+aggregate execution is calculating/waiting; this does not claim that a worker is running.
 
 After all pinned runs finish, the existing Estimates owner fits from those exact pins and
 saved error limits. Completion requires all requested outputs in all groups to pass their

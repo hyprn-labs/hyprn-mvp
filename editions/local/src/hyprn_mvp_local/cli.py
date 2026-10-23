@@ -40,7 +40,7 @@ def parser():
                        dest='exploration_ui_resume', help=argparse.SUPPRESS)
     storage = dev_commands.add_parser('storage', help='retain and budget explicitly enrolled disposable experiments')
     actions = storage.add_subparsers(dest='action', required=True)
-    for name in ('enroll', 'status', 'collect', 'run'):
+    for name in ('enroll', 'status', 'collect', 'run', 'staging-enroll', 'staging-status', 'staging-collect'):
         action = actions.add_parser(name)
         action.add_argument('--config', help='absolute storage policy file')
         action.add_argument('--root', action='append', default=[], help='existing disposable experiment folder to enroll')
@@ -95,6 +95,8 @@ def dev_check(args):
         runner.extend(['--served-grep', args.served_grep])
     if not args.list:
         experiment_module().automatic()
+        import staging_storage
+        staging_storage.automatic()
     toolchain.provision('contract')
     interpreter = str(toolchain.provision('native'))
     paths = toolchain.local_paths()
@@ -117,6 +119,23 @@ def experiment_module():
 
 def dev_storage(args):
     storage = experiment_module()
+    if args.action.startswith('staging-'):
+        import staging_storage
+        path = staging_storage.policy_path(args.config)
+        if path is None:
+            raise ValueError('Set --config or HYPRN_MVP_DATA_ROOT')
+        if args.program:
+            raise ValueError('Staging storage commands do not take a program')
+        if args.action == 'staging-enroll':
+            if not args.root:
+                raise ValueError('staging-enroll requires a parent --root')
+            result = staging_storage.enroll(path, args.root, args.budget_bytes, args.reserve_bytes)
+        else:
+            if args.root or args.budget_bytes is not None or args.reserve_bytes is not None:
+                raise ValueError('Root and budget options require staging-enroll')
+            result = staging_storage.collect(path, apply=args.action == 'staging-collect')
+        print(json.dumps(result, indent=2), flush=True)
+        return 0 if result.get('admitted', True) else 2
     path = storage.configuration(args.config)
     if path is None:
         raise toolchain.ToolchainError('Set --config or HYPRN_MVP_DATA_ROOT for the experiment policy', 2)

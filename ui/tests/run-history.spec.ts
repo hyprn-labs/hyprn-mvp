@@ -13,7 +13,9 @@ async function login(page: Page) {
 }
 async function setup(page: Page) {
   await login(page);
-  await page.getByLabel('New study name').fill(`Run UI ${crypto.randomUUID()}`);
+  await page.getByLabel('Study name').fill(`Run UI ${crypto.randomUUID()}`);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await page.getByLabel('New model name').fill('Chain');
   await page.getByLabel('Starting model').selectOption('two_component_example');

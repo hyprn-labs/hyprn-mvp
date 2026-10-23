@@ -107,6 +107,17 @@ class AnalysisExecution:
                     return saved, 'Current permission to submit calculations is required.'
         except DomainError:
             return saved, 'Current permission to submit calculations is required.'
+        if (saved['state'] == 'pending_remote' and saved['result']['state'] == 'needs_review'
+                and self.store.analysis_authorized(db, saved, sid)):
+            pending = db.execute('SELECT 1 FROM analysis_reconciliation_intents i '
+                'LEFT JOIN analysis_reconciliation_results r ON r.study_id=i.study_id '
+                'AND r.command_id=i.command_id WHERE i.study_id=? AND i.analysis_command=? '
+                'AND r.command_id IS NULL', (sid, identity(version_id))).fetchone()
+            if pending:
+                return saved, 'Native execution reconciliation is already queued.'
+            if Submissions(self.store, None, None).analysis_uncertain_runs(db, sid, saved):
+                return saved, None
+            return saved, 'The uncertain run has no intact prepared request to reconcile safely.'
         if (saved['state'] != 'committed' or saved['result']['state'] != 'failed'
                 or saved['result'].get('admission_state') not in ('revoked', 'stopped')):
             return saved, 'Only an execution interrupted by replaced credentials can be resumed.'
@@ -134,6 +145,17 @@ class AnalysisExecution:
             saved, reason = self._recovery(db, actor, sid, version_id)
             if reason:
                 raise DomainError('analysis_resume_unavailable', 409, fields=[issue([], reason)])
+            if saved['result']['state'] == 'needs_review':
+                runs = Submissions(self.store, None, None).analysis_uncertain_runs(db, sid, saved)
+                db.execute('INSERT INTO analysis_reconciliation_intents VALUES(?,?,?,?,?,?)',
+                    (sid, body['command_id'], identity(version_id), actor,
+                     json.dumps(runs), json.dumps(saved['result'])))
+                result = dict(saved['result'], state='calculating', admission_state='waiting',
+                              reason='Checking whether the uncertain calculations started.')
+                db.execute('UPDATE receipts SET result=? WHERE scope=? AND category=? '
+                           "AND command_id=? AND state='pending_remote'",
+                           (json.dumps(result), sid, CATEGORY, identity(version_id)))
+                return result
             result = dict(saved['result'], state='calculating', admission_state='ready', reason=None)
             # No launch happens here. The dispatcher first reconciles every pinned run,
             # and command replay recovers any accepted child not yet copied to this result.
@@ -251,13 +273,22 @@ class AnalysisExecution:
             return
         result = saved['result']
         original = json.dumps(result, sort_keys=True)
+        previous_reason = result.get('reason')
+        reconciled = None
         result.update(schema_version='2', admission_state='ready', reason=None)
         terminal = False
         try:
             authority = (self.store.analysis_authority(actor, sid, command)
                          if (saved['request'] or {}).get('authority') else nullcontext())
             with authority:
-                terminal = self._advance(actor, sid, command, result, submissions, quota)
+                reconciled = submissions.reconcile_analysis_intent(sid, saved)
+                if reconciled is False:
+                    result.update(state='needs_review', admission_state='needs_review', reason=(
+                        'Execution could not be proven unstarted. No calculation was retried. '
+                        'Ask the administrator to inspect the native execution record '
+                        'before resuming.'))
+                else:
+                    terminal = self._advance(actor, sid, command, result, submissions, quota)
         except DomainError as exc:
             if exc.status == 429:
                 result.update(admission_state='waiting', reason='Waiting for execution capacity.')
@@ -280,6 +311,10 @@ class AnalysisExecution:
                               reason=reason)
                 terminal = True
         finally:
+            if (reconciled is None and result['state'] == 'needs_review'
+                    and (previous_reason or '').startswith(
+                        'Execution could not be proven unstarted.')):
+                result['reason'] = previous_reason
             # Preserve earlier accepted members even if a later admission/read fails.
             with self.store.connection(write=True) as db:
                 self._save(db, sid, command, result, terminal)
@@ -326,7 +361,10 @@ class AnalysisExecution:
         result['completed_count'] = complete
         result['state'] = 'needs_review' if needs_review else 'calculating'
         result['admission_state'] = 'needs_review' if needs_review else 'ready'
-        result['reason'] = 'Resolve the uncertain run before continuing.' if needs_review else None
+        result['reason'] = (
+            'A calculation has an uncertain execution outcome. Resume analysis requests '
+            'a native check before any unstarted work can continue.'
+        ) if needs_review else None
         if needs_review:
             return False
         admitted = 0

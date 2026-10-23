@@ -1,5 +1,19 @@
 # Project State
 
+- **Progress, retained-result latency and Help deployed (2026-10-23):** staging
+  `efcdb75f`, sequence26, release `adb68e33`, configuration `4310b336`; schema15
+  and numerical image bytes unchanged. Assistant reports observed calculation/
+  validation counts; Help covers the complete workflow. Verified retained reads
+  measure0.37s versus1.16s for full archive reads on the same run (3.12×); cold
+  admission remains.1,170 focused checks, fresh build, coherent backup, containment,
+  startup and19 network probes passed. Public Help and all four joint sliders
+  verified; original138 runs/configurations and published answer unchanged.
+  The existing hypersonic study completed and published before this upgrade.
+  Additional live Assistant progress/timing benchmark awaits renewed Chrome
+  Cloudflare sign-in; no request was submitted. Whole-study speedup, full
+  qualification and human acceptance are not claimed.
+  [Checkpoint](phases/06-hosted-staging/audit-remediation/10-PARENT-CHECKPOINT.md).
+
 - **Analysis recovery deployed (2026-10-23):** staging `17f27084`, sequence25,
   release `22dc5479`, configuration `bbec6d47`, additive schema15; ongoing named-user
   access promoted. Credential replacement preserves accepted finite execution;

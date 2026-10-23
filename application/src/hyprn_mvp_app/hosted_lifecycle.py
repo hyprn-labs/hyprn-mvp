@@ -52,3 +52,25 @@ def drain_counts(credentials, installation_id, store_id):
         return {**counts, 'requests_quiescent': quiet}
     finally:
         raw.close()
+
+
+def stopped_work_counts(credentials, installation_id, store_id):
+    """Read-only upgrade admission separates retained work from remote activity.
+
+    Only the short-lived migration role can inspect all Assistant rows. Local
+    owners must already be stopped by the host; unfinished records stay intact.
+    """
+    raw = credentials.connect()
+    try:
+        db = Connection(raw)
+        db.execute('BEGIN READ ONLY')
+        db.execute("SET LOCAL statement_timeout='15s'")
+        store_identity(db, installation_id, store_id)
+        quiet = db.execute('SELECT pg_try_advisory_lock(68272604) AS quiet').fetchone()['quiet']
+        counts = dict(db.execute('SELECT * FROM hyprn_lifecycle_counts()').fetchone())
+        active = db.execute(
+            'SELECT count(*) AS active FROM assistant_conversations WHERE active_turn IS NOT NULL'
+        ).fetchone()['active']
+        return {**counts, 'requests_quiescent': quiet, 'active_assistant_turns': active}
+    finally:
+        raw.close()

@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { StatusTag } from './components';
 import { ConversationProse } from './conversationProse';
 import { OpenLink } from './navigation';
+import { Disclosure } from './primitives';
 
 /** Study conversations share readable prose, author labels and token-based separation. */
 export function ConversationMessage({
@@ -124,6 +125,7 @@ export function AssistantActivity({
   canStop = false,
   progress,
   analysisHref,
+  activity,
 }: {
   state: 'queued' | 'starting' | 'running' | 'waiting' | 'stopping' | 'blocked';
   detail?: string;
@@ -139,6 +141,17 @@ export function AssistantActivity({
     last_progress_at: number;
   } | null;
   analysisHref?: string;
+  activity?: {
+    steps: Array<{
+      step_id: string;
+      label: string;
+      state: 'running' | 'waiting' | 'completed' | 'failed' | 'returned' | 'uncertain';
+      actor: 'assistant' | 'reviewer';
+      started_at: number | null;
+      finished_at: number | null;
+    }>;
+    has_earlier_steps: boolean;
+  };
 }) {
   const stages = {
     queued: ['Queued', 'Your message is saved. Waiting for available Assistant capacity.'],
@@ -157,11 +170,10 @@ export function AssistantActivity({
   return (
     <section
       className="hf-assistant-activity"
-      role={state === 'blocked' ? 'alert' : 'status'}
-      aria-live="polite"
-      aria-atomic="true"
       data-state={state}
     >
+      <div className="hf-assistant-activity__status"
+        role={state === 'blocked' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">
       <StatusTag tone={state === 'blocked' ? 'warning' : 'inert'}>{label}</StatusTag>
       {waiting ? (
         <>
@@ -185,6 +197,42 @@ export function AssistantActivity({
           {analysisHref && <OpenLink href={analysisHref} size="sm">View analysis</OpenLink>}
         </>
       ) : <p>{detail ?? problem?.detail ?? explanation}</p>}
+      </div>
+      {!!activity?.steps.length && (
+        <Disclosure className="hf-assistant-steps">
+          <summary>Activity details</summary>
+          {activity.has_earlier_steps && <p>Showing the latest {activity.steps.length} steps.</p>}
+          <ol aria-label="Observed Assistant activity">
+            {activity.steps.map((step) => {
+              const labels = {
+                running: 'In progress', waiting: 'Waiting', completed: 'Completed',
+                failed: 'Failed', returned: 'Result received', uncertain: 'Unconfirmed',
+              };
+              const elapsed = step.started_at !== null && step.finished_at !== null
+                ? Math.max(0, step.finished_at - step.started_at) : null;
+              return (
+                <li key={step.step_id}>
+                  <div className="hf-assistant-steps__heading">
+                    <strong>{step.label}</strong>
+                    <StatusTag tone={step.state === 'failed' || step.state === 'uncertain'
+                      ? 'warning' : 'inert'}>{labels[step.state]}</StatusTag>
+                  </div>
+                  <div className="hf-assistant-steps__meta">
+                    {step.actor === 'reviewer' && <span>Reviewer</span>}
+                    {step.started_at !== null && <time dateTime={new Date(
+                      step.started_at * 1000,
+                    ).toISOString()}>{new Date(step.started_at * 1000).toLocaleTimeString(
+                      [], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false },
+                    )}</time>}
+                    {elapsed !== null && <span>{elapsed < 1 ? '<1' : Math.round(elapsed)} s</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <p>Tool activity only. Completion does not establish scientific validity.</p>
+        </Disclosure>
+      )}
     </section>
   );
 }

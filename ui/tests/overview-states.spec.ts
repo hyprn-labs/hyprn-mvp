@@ -43,7 +43,9 @@ test('pending records show loading and late completions cannot populate another 
     await login(page);
     await expect(configurations(page).getByRole('status')).toHaveText('Loading recent configurations…');
     await expect(runs(page).getByRole('status')).toHaveText('Loading recent runs…');
-    await page.getByLabel('New study name').fill('Empty Overview ' + crypto.randomUUID());
+    await page.getByLabel('Study name').fill('Empty Overview ' + crypto.randomUUID());
+    await page.getByLabel('Study question', { exact: true })
+      .fill('What must this engineering study establish?');
     await page.getByRole('button', { name: 'Create study', exact: true }).click();
     await expect(configurations(page)).toContainText('No saved configurations in this study.');
     await expect(runs(page)).toContainText('This study has no runs yet.');

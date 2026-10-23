@@ -46,6 +46,8 @@ class HostedCompositionTests(unittest.TestCase):
         host.preview = {'compose': {'services': {'app': {'image': image}}}}
         host.identity_check = lambda: None
         host.native_process = lambda: None
+        # No worker is created by this one-off container fixture.
+        host.running_native_workers = lambda _observe: []
         host.deadline = time.monotonic() + 60
         receipt = dict(schema='hyprn-admission/v1', **host.identity,
                        browser=False, scientific=False)
@@ -63,10 +65,17 @@ class HostedCompositionTests(unittest.TestCase):
         try:
             with patch.object(cloud_lifecycle, 'control_record', return_value=receipt):
                 host.assert_stopped()
+                host.preview['compose']['services']['app']['image'] = 'incoming@sha256:' + 'a' * 64
+                with self.assertRaises(cloud_lifecycle.Refused):
+                    host.assert_stopped()
+                host.assert_stopped(allow_retained_images=True)
+                host.preview['compose']['services']['app']['image'] = image
                 subprocess.run(['docker', 'start', project], check=True, capture_output=True, timeout=10)
                 with self.assertRaises(cloud_lifecycle.Refused) as error:
                     host.assert_stopped()
                 self.assertEqual(error.exception.reason, 'writer_container_not_stopped')
+                with self.assertRaises(cloud_lifecycle.Refused):
+                    host.assert_stopped(allow_retained_images=True)
                 subprocess.run(['docker', 'stop', '--time=1', project], check=True,
                                capture_output=True, timeout=10)
                 host.assert_stopped()
@@ -74,6 +83,45 @@ class HostedCompositionTests(unittest.TestCase):
             removed = subprocess.run(['docker', 'rm', '--force', project],
                                      capture_output=True, text=True, timeout=10)
             self.assertEqual(removed.returncode, 0, removed.stderr)
+
+    def test_stopped_migration_preserves_uncertain_records_without_calling_drain(self):
+        import cloud_lifecycle
+        from unittest.mock import Mock
+        host = cloud_lifecycle.Lifecycle.__new__(cloud_lifecycle.Lifecycle)
+        host.assert_stopped = Mock()
+        host.native_quiescence = Mock()
+        counts = dict(pending=3, uncertain=3, active_assistant_turns=0, requests_quiescent=True)
+        host.database = Mock(return_value=counts)
+        host.drain = Mock(side_effect=AssertionError('Uncertain records must not be drained'))
+        self.assertEqual(host.migration_quiescence(), counts)
+        self.assertEqual(host.assert_stopped.call_count, 2)
+        host.assert_stopped.assert_called_with(allow_retained_images=True)
+        host.database.assert_called_once_with('stopped-work')
+        for changed in ({'active_assistant_turns': 1}, {'requests_quiescent': False}):
+            host.database.return_value = dict(counts, **changed)
+            with self.assertRaises(cloud_lifecycle.Refused) as error:
+                host.migration_quiescence()
+            self.assertEqual(error.exception.reason, 'stopped_work_has_active_requests')
+
+    def test_live_migration_still_uses_normal_drain_and_never_ignores_unknown_writer(self):
+        import cloud_lifecycle
+        from unittest.mock import Mock
+        host = cloud_lifecycle.Lifecycle.__new__(cloud_lifecycle.Lifecycle)
+        host.assert_stopped = Mock(side_effect=cloud_lifecycle.Refused('native_owner_running', 4))
+        host.drain = Mock(side_effect=cloud_lifecycle.Refused(
+            'accepted_operation_requires_reconciliation', 6))
+        host.database = Mock()
+        with self.assertRaises(cloud_lifecycle.Refused) as error:
+            host.migration_quiescence()
+        self.assertEqual(error.exception.reason, 'accepted_operation_requires_reconciliation')
+        host.drain.assert_called_once_with()
+        host.database.assert_not_called()
+        host.drain.reset_mock()
+        host.assert_stopped.side_effect = cloud_lifecycle.Refused(
+            'writer_container_identity_mismatch', 6)
+        with self.assertRaises(cloud_lifecycle.Refused):
+            host.migration_quiescence()
+        host.drain.assert_not_called()
 
     def test_root_owned_shared_controls_are_readable_by_application_uid(self):
         # Exercise actual Linux ownership and umask, then permanently drop privilege.
@@ -257,6 +305,41 @@ class HostedDatabaseTests(unittest.TestCase):
             self.assertEqual(counts(), {'pending': 0, 'uncertain': 0, 'requests_quiescent': False})
         self.assertEqual(counts(), {'pending': 0, 'uncertain': 0, 'requests_quiescent': True})
 
+    def test_stopped_work_observation_distinguishes_active_remote_turns_without_mutating_them(self):
+        actor, study = str(uuid4()), str(uuid4())
+        raw = self.database['admin'].connect()
+        db = Connection(raw)
+        def observe():
+            return hosted_lifecycle.stopped_work_counts(
+                self.database['migration'], 'fixture-installation', 'fixture-store')
+        try:
+            db.execute('INSERT INTO users(actor_id,username) VALUES(?,?)', (actor, actor))
+            db.execute('INSERT INTO studies(study_id,revision,name,description,boundary,'
+                       'owner_actor_id) '
+                       'VALUES(?,?,?,?,?,?)', (study, 'revision', 'private', '', '', actor))
+            db.execute('INSERT INTO assistant_conversations(study_id,conversation_id,provision,'
+                       'reserved_cents,active_turn,state,created_at) VALUES(?,?,?,?,?,?,?)',
+                       (study, str(uuid4()), 'accepted', 0, 'retained-turn', 'blocked', 1.0))
+            raw.commit()
+            before = dict(db.execute('SELECT * FROM assistant_conversations WHERE study_id=?',
+                                     (study,)).fetchone())
+            raw.rollback()
+            counts = observe()
+            self.assertEqual(counts['active_assistant_turns'], 1)
+            self.assertTrue(counts['requests_quiescent'])
+            with request_lease(self.database['request']):
+                self.assertFalse(observe()['requests_quiescent'])
+            after = dict(db.execute('SELECT * FROM assistant_conversations WHERE study_id=?',
+                                    (study,)).fetchone())
+            self.assertEqual(after, before)
+        finally:
+            raw.rollback()
+            db.execute('DELETE FROM assistant_conversations WHERE study_id=?', (study,))
+            db.execute('DELETE FROM studies WHERE study_id=?', (study,))
+            db.execute('DELETE FROM users WHERE actor_id=?', (actor,))
+            raw.commit()
+            raw.close()
+
     def test_maintenance_counts_accepted_work_without_revealing_its_payload(self):
         raw = self.database['migration'].connect()
         command = str(uuid4())
@@ -272,6 +355,12 @@ class HostedDatabaseTests(unittest.TestCase):
             raw.commit()
             value = hosted_lifecycle.drain_counts(self.database['request'], 'fixture-installation', 'fixture-store')
             self.assertEqual(value, {'pending': 1, 'uncertain': 1, 'requests_quiescent': True})
+            preserved = hosted_lifecycle.stopped_work_counts(
+                self.database['migration'], 'fixture-installation', 'fixture-store')
+            self.assertEqual(preserved, dict(value, active_assistant_turns=0))
+            self.assertEqual(db.execute('SELECT state,request FROM receipts WHERE command_id=?',
+                                       (command,)).fetchone(),
+                             {'state': 'uncertain', 'request': '{"private":"payload"}'})
         finally:
             Connection(raw).execute('DELETE FROM receipts WHERE command_id=?', (command,))
             raw.commit()

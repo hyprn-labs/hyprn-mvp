@@ -12,7 +12,9 @@ async function openStudy(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'New study', exact: true }).click();
   await expect(page.locator('.hf-form-actions').getByRole('button')).toHaveText(['Cancel', 'Create study']);
-  await page.getByLabel('New study name', { exact: true }).fill(name);
+  await page.getByLabel('Study name', { exact: true }).fill(name);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   const brief = page.getByRole('region', { name: 'Study brief', exact: true });
   await expect(
@@ -35,7 +37,7 @@ test('@brief an engineer frames the decision on Overview, saves a draft and a ve
   page,
 }) => {
   const { brief, sid } = await openStudy(page);
-  await expect(brief).toContainText('No study brief yet.');
+  await expect(brief).toContainText('What must this engineering study establish?');
   await brief
     .getByRole('button', { name: /^(Edit brief|Create new version|Continue draft)$/ })
     .click();
@@ -64,8 +66,8 @@ test('@brief an engineer frames the decision on Overview, saves a draft and a ve
   await brief.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(brief.getByRole('alert')).toContainText('Criterion 1: the threshold is unassigned');
   expect(
-    (await (await page.request.get(`/api/1/studies/${sid}/brief`)).json()).data.draft,
-  ).toBeNull();
+    (await (await page.request.get(`/api/1/studies/${sid}/brief`)).json()).data.draft.content.question,
+  ).toBe('What must this engineering study establish?');
   await brief.getByLabel('Criterion 1 threshold', { exact: true }).fill('575000');
   // Priority is the order: the objective moves first.
   await brief.getByRole('button', { name: 'Move Criterion 2 up', exact: true }).click();
@@ -232,7 +234,8 @@ test('@brief sourced assumptions, limits and criteria open exact evidence direct
     const source = await other.request.post(`/api/1/studies/${sid}/evidence`,{headers,data:{command_id:crypto.randomUUID(),evidence_schema_version:'3',title:'Design limit',kind:'note',content,source_refs:[],resource_scope:{scope_version:'1',kind:'study',study_id:sid}}});
     expect(source.status()).toBe(201); const record = (await source.json()).data;
     const links = [{evidence_version_id:record.evidence_version_id,relation:'supports'}];
-    const saved = await other.request.post(`/api/1/studies/${sid}/brief/draft`,{headers,data:{command_id:crypto.randomUUID(),expected_revision:null,content:{schema_version:'1',question:'Is the limit met?',original_question:null,elaboration:null,scope:'',alternatives:[],criteria:[{criterion_id:crypto.randomUUID(),kind:'constraint',name:'Rise',statement:'The rise must stay below the limit.',operator:'le',threshold:10,units:'K',evidence_links:links}],assumptions:[{assumption_id:crypto.randomUUID(),statement:'The specified limit applies.',evidence_links:links}],limits:[{limit_id:crypto.randomUUID(),statement:'Only this stated condition.',evidence_links:links}],open_questions:[]}}});
+    const current = (await (await other.request.get(`/api/1/studies/${sid}/brief`)).json()).data.draft;
+    const saved = await other.request.post(`/api/1/studies/${sid}/brief/draft`,{headers,data:{command_id:crypto.randomUUID(),expected_revision:current.revision,content:{schema_version:'1',question:'Is the limit met?',original_question:null,elaboration:null,scope:'',alternatives:[],criteria:[{criterion_id:crypto.randomUUID(),kind:'constraint',name:'Rise',statement:'The rise must stay below the limit.',operator:'le',threshold:10,units:'K',evidence_links:links}],assumptions:[{assumption_id:crypto.randomUUID(),statement:'The specified limit applies.',evidence_links:links}],limits:[{limit_id:crypto.randomUUID(),statement:'Only this stated condition.',evidence_links:links}],open_questions:[]}}});
     expect(saved.status()).toBe(200);
     const published = await other.request.post(`/api/1/studies/${sid}/brief/versions`,{headers,data:{command_id:crypto.randomUUID(),expected_revision:(await saved.json()).data.revision}});
     expect(published.ok()).toBe(true);

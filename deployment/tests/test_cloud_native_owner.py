@@ -22,6 +22,129 @@ class HostPrerequisiteTests(unittest.TestCase):
         import cloud_native
         return cloud_native
 
+    def test_scratch_sessions_clean_success_failure_and_preserve_active_leases(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            config = {'execution_root': str(Path(folder).resolve())}
+            root = native.execution_temporary(config, create=True)
+            retained = root / 'unknown-record'
+            retained.write_text('preserved')
+            previous = tempfile.tempdir
+            with self.assertRaisesRegex(RuntimeError, 'test failure'):
+                with native.execution_scratch_session(config) as session:
+                    (session / 'temporary').write_text('discardable')
+                    self.assertEqual(Path(tempfile.gettempdir()), session)
+                    os.utime(session, (0, 0))
+                    self.assertEqual(native.collect_execution_scratch(config, now=10000),
+                                     {'removed_sessions': 0})
+                    self.assertTrue(session.exists())
+                    raise RuntimeError('test failure')
+            self.assertFalse(session.exists())
+            self.assertEqual(tempfile.tempdir, previous)
+            self.assertEqual(retained.read_text(), 'preserved')
+
+    def test_scratch_collection_removes_only_expired_unlocked_marked_sessions(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            config = {'execution_root': str(Path(folder).resolve())}
+            root = native.execution_temporary(config, create=True)
+            retired = root / ('session-' + 'a' * 32)
+            retired.mkdir(mode=0o700)
+            lease = retired / '.lease'
+            lease.write_bytes(b'hyprn-native-scratch/v1\n')
+            lease.chmod(0o600)
+            durable = Path(folder) / 'scientific-record'
+            durable.write_text('never remove')
+            (retired / 'external-link').symlink_to(durable)
+            os.utime(retired, (0, 0))
+            unknown = root / ('session-' + 'b' * 32)
+            unknown.mkdir(mode=0o700)
+            (unknown / '.lease').write_text('not owned scratch')
+            os.utime(unknown, (0, 0))
+            recent = root / ('session-' + 'c' * 32)
+            recent.mkdir(mode=0o700)
+            self.assertEqual(native.collect_execution_scratch(config, now=10000),
+                             {'removed_sessions': 1})
+            self.assertFalse(retired.exists())
+            self.assertTrue(unknown.exists())
+            self.assertTrue(recent.exists())
+            self.assertEqual(durable.read_text(), 'never remove')
+
+    def test_scratch_admission_refuses_low_capacity_before_launch_only(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            config = {'execution_root': str(Path(folder).resolve())}
+            native.execution_temporary(config, create=True)
+            with patch.object(native.shutil, 'disk_usage', return_value=SimpleNamespace(free=0)):
+                native.scratch_admission(config, 'inspect')
+                with self.assertRaisesRegex(RuntimeError, 'insufficient free space'):
+                    native.scratch_admission(config, 'launch_budgeted')
+
+    def test_execution_temporary_files_use_owned_data_root_despite_cached_host_default(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            configuration = {'execution_root': str(root)}
+            with patch.dict(os.environ), patch.object(tempfile, 'tempdir', '/unusable-host-tmp'):
+                scratch = native.execution_temporary(configuration, create=True)
+                native.select_execution_temporary(configuration)
+                self.assertEqual(scratch, root / 'tmp')
+                self.assertEqual(os.environ['TMPDIR'], str(scratch))
+                with tempfile.TemporaryFile() as stream:
+                    stream.write(b'owner scratch')
+                    stream.flush()
+                    self.assertEqual(os.fstat(stream.fileno()).st_dev, root.stat().st_dev)
+                self.assertEqual(tempfile.gettempdir(), str(scratch))
+                self.assertEqual(list(scratch.iterdir()), [])
+                retained = scratch / 'retained'
+                retained.write_text('keep')
+                native.execution_temporary(configuration, create=True)
+                self.assertEqual(retained.read_text(), 'keep')
+
+    def test_missing_or_unsafe_execution_scratch_is_not_repaired_on_read(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            configuration = {'execution_root': str(root)}
+            with self.assertRaisesRegex(ValueError, 'Execution temporary directory is missing'):
+                native.execution_temporary(configuration)
+            self.assertEqual(list(root.iterdir()), [])
+            scratch = root / 'tmp'
+            scratch.mkdir(mode=0o755)
+            scratch.chmod(0o755)
+            with self.assertRaisesRegex(ValueError, 'private and owned'):
+                native.execution_temporary(configuration, create=True)
+            scratch.rmdir()
+            scratch.symlink_to(root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'Unsafe execution temporary directory'):
+                native.execution_temporary(configuration, create=True)
+
+    def test_low_scratch_headroom_refuses_attested_start_before_native_profile_reads(self):
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            configuration = {'execution_root': str(root), 'host_home': str(root / 'home')}
+            native.execution_home(configuration, create=True)
+            scratch = native.execution_temporary(configuration, create=True)
+            with patch.object(native.shutil, 'disk_usage', return_value=SimpleNamespace(free=0)) as usage:
+                with self.assertRaisesRegex(RuntimeError, 'temporary storage has insufficient free space'):
+                    native.inspect(configuration, None, attested=True)
+                usage.assert_called_once_with(scratch)
+            self.assertEqual(list(scratch.iterdir()), [])
+
+    def test_unwritable_scratch_refuses_start_without_falling_back_to_host_tmp(self):
+        import errno
+        native = self.module()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            configuration = {'execution_root': str(root), 'host_home': str(root / 'home')}
+            native.execution_home(configuration, create=True)
+            scratch = native.execution_temporary(configuration, create=True)
+            with patch.object(tempfile, 'TemporaryFile', side_effect=OSError(errno.ENOSPC, 'full')) as probe:
+                with self.assertRaisesRegex(RuntimeError, 'temporary storage cannot accept writes'):
+                    native.inspect(configuration, None, attested=True)
+                probe.assert_called_once_with(dir=scratch)
+
     def test_real_owner_commands_pass_without_listing_other_processes(self):
         native = self.module()
         native.host_prerequisites()
@@ -64,8 +187,9 @@ class HostPrerequisiteTests(unittest.TestCase):
         native = self.module()
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp).resolve() / 'home'
-            configuration = {'host_home': str(home)}
+            configuration = {'host_home': str(home), 'execution_root': str(Path(tmp).resolve())}
             native.execution_home(configuration, create=True)
+            native.execution_temporary(configuration, create=True)
             retained = home / 'retained'
             retained.write_text('keep')
             native.execution_home(configuration, create=True)

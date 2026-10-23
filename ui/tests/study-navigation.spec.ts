@@ -106,6 +106,7 @@ async function harness(page: Page) {
     messages: [] as Array<Record<string, unknown>>,
     assistantStage: 'idle',
     analysisProgress: null as Record<string, unknown> | null,
+    activity: { steps: [] as Array<Record<string, unknown>>, has_earlier_steps: false },
     assistantFailure: 'budget' as 'budget' | 'unknown' | 'none',
     assistantSends: [] as Array<{command_id: string; text: string}>,
   };
@@ -164,7 +165,7 @@ async function harness(page: Page) {
     }
     if (/^\/studies\/[^/]+\/assistant$/.test(path) && method === 'GET')
       return ok({
-        state: state.assistantStage, error: null, analysis_progress: state.analysisProgress,
+        state: state.assistantStage, error: null, analysis_progress: state.analysisProgress, activity: state.activity,
         can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
         messages: state.messages, has_earlier_messages: false,
         next_cursor: 'newest', earlier_cursor: null, has_more_messages: false,
@@ -433,7 +434,7 @@ test('Home, separate study creation, three study sections and minimal Profile', 
   const state = await harness(page);
   await login(page);
   await expect(page.getByRole('heading', { name: 'Studies', exact: true })).toBeVisible();
-  await expect(page.getByLabel('New study name')).toHaveCount(0);
+  await expect(page.getByLabel('Study name')).toHaveCount(0);
   // Active | Archived switch, a bordered Archive per row and one notices link.
   await expect(
     page.getByRole('tablist', { name: 'Study list', exact: true }).getByRole('tab'),
@@ -445,7 +446,9 @@ test('Home, separate study creation, three study sections and minimal Profile', 
   await page.getByLabel('Filter studies').fill('missing');
   await expect(page.getByText('No studies match these filters.')).toBeVisible();
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await page.getByLabel('New study name').fill('New investigation');
+  await page.getByLabel('Study name').fill('New investigation');
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'New investigation', exact: true })).toBeVisible();
   await expect(
@@ -633,7 +636,9 @@ test('Uncertain creation remains recoverable from Home and Profile without dupli
   await login(page);
   state.uncertainCreate = true;
   await page.getByRole('button', { name: 'New study', exact: true }).click();
-  await page.getByLabel('New study name').fill('Unknown outcome');
+  await page.getByLabel('Study name').fill('Unknown outcome');
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Check original command', exact: true }),
@@ -1833,7 +1838,7 @@ test('Earlier Assistant pages do not overwrite a newer running turn', async ({ p
   });
   await page.route('**/api/1/studies/*/assistant', async (route) => {
     await route.fulfill({ json: { schema_version: '1', data: {
-      state: state.assistantStage, error: null, analysis_progress: state.analysisProgress,
+      state: state.assistantStage, error: null, analysis_progress: state.analysisProgress, activity: state.activity,
       can_send: state.assistantStage === 'idle', can_stop: state.assistantStage !== 'idle',
       messages: [{ message_id: 'recent', role: 'assistant', text: 'Retained recent reply.',
         actor_id: null, author_display_name: null, created_at: 2 }],
@@ -2355,5 +2360,74 @@ test('Help center topics remain readable in both themes and narrow windows', asy
     }
   }
   expect(state.writes).toEqual([]);
+  expect(state.unknown).toEqual([]);
+});
+
+for (const autonomous of [false, true]) {
+  test(`Canvas study creation saves the question before ${autonomous ? 'autonomous' : 'manual'} work`, async ({ page }) => {
+    const state = await harness(page);
+    state.assistantFailure = 'none';
+    await login(page);
+    await page.getByRole('button', { name: 'New study', exact: true }).click();
+    const form = page.locator('.creation-page');
+    await expect(form.locator('.hf-form-actions').getByRole('button')).toHaveText(['Cancel', 'Create study']);
+    await form.getByLabel('Study name', { exact: true }).fill('A new engineering decision');
+    const submit = form.getByRole('button', { name: 'Create study', exact: true });
+    await expect(submit).toBeDisabled();
+    await form.getByLabel('Study question', { exact: true }).fill('Can this system meet the stated requirement?');
+    const toggle = form.getByRole('switch', { name: 'Autonomous agent', exact: true });
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    if (autonomous) await toggle.click();
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(submit).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const actions = await form.locator('.hf-form-actions').getByRole('button').evaluateAll(elements =>
+      elements.map(element => element.getBoundingClientRect().left));
+    expect(actions[0]).toBeLessThan(actions[1]);
+    await page.screenshot({
+      path: `${process.env.HYPRN_MVP_UI_EVIDENCE_ROOT}/creation-${autonomous ? 'autonomous' : 'manual'}-390-light.png`,
+      fullPage: true,
+    });
+    await submit.click();
+    await expect(page.getByRole('region', { name: 'Study brief', exact: true }))
+      .toContainText('Can this system meet the stated requirement?');
+    expect(state.writes.map(row => row.path)).toEqual(['/studies', `/studies/${sid2}/brief/draft`]);
+    expect(state.brief.content.original_question.text).toBe(state.brief.content.question);
+    expect(state.assistantSends).toHaveLength(autonomous ? 1 : 0);
+    if (autonomous)
+      expect(state.assistantSends[0].text).toContain(state.brief.content.question);
+    expect(state.studies.filter(study => study.name === 'A new engineering decision')).toHaveLength(1);
+    expect(state.unknown).toEqual([]);
+  });
+}
+
+
+test('Assistant activity details disclose safe steps without replacing the live status', async ({ page }) => {
+  const state = await harness(page);
+  state.assistantStage = 'running';
+  state.activity.steps = [
+    { step_id: 'step-one', label: 'Read source', state: 'completed', actor: 'reviewer',
+      started_at: 1792490000, finished_at: 1792490003 },
+    { step_id: 'step-two', label: 'Read analysis execution', state: 'waiting', actor: 'assistant',
+      started_at: 1792490004, finished_at: null },
+  ];
+  await login(page);
+  await openStudy(page);
+  await page.getByRole('button', { name: 'Open assistant', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+  const steps = panel.getByRole('list', { name: 'Observed Assistant activity' });
+  await expect(steps).toBeHidden();
+  await panel.getByText('Activity details', { exact: true }).click();
+  await expect(steps).toBeVisible();
+  await expect(steps).toContainText('Read source');
+  await expect(steps).toContainText('Reviewer');
+  await expect(steps).toContainText('3 s');
+  await expect(panel.getByRole('status')).toContainText('Working');
+  await expect(panel.getByRole('status')).not.toContainText('Read source');
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await steps.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
+  expect(state.assistantSends).toEqual([]);
   expect(state.unknown).toEqual([]);
 });

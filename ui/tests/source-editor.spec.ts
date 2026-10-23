@@ -9,7 +9,9 @@ async function setup(page: Page) {
   await page.getByLabel('Username').fill('owner');
   await page.getByLabel('Password', { exact: true }).fill(ownerPassword());
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByLabel('New study name').fill(`Source ${crypto.randomUUID()}`);
+  await page.getByLabel('Study name').fill(`Source ${crypto.randomUUID()}`);
+  await page.getByLabel('Study question', { exact: true })
+    .fill('What must this engineering study establish?');
   await page.getByRole('button', { name: 'Create study', exact: true }).click();
   await page.getByLabel('New model name').fill('Source workspace');
   await page.getByRole('button', { name: 'Create model', exact: true }).click();

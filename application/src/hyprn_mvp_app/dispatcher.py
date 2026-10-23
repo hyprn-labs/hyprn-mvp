@@ -107,6 +107,7 @@ BRIDGE_ARITIES = {
     'launch_budgeted': 3,
     'launch_batch': 1,
     'matches': 1,
+    'prove_unstarted': 2,
     'inspect': 1,
     'read_record': 2,
     'resolve_results': 1,
@@ -420,6 +421,9 @@ class NativeBridge:
         return self.call('launch_batch', [
             dict(item, bundle=encode_files(item['bundle'])) for item in items
         ])
+
+    def prove_unstarted(self, request, runtime):
+        return self.call('prove_unstarted', request, runtime)
 
     def matches(self, request):
         return self.call('matches', request)

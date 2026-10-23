@@ -1380,3 +1380,67 @@ def test_analysis_completion_reuses_verified_history_after_reader_restart(hosted
         assert result.json()['data']['completed_count'] == 1
         with actor_scope(owner):
             assert History(store).retained_projection(owner, sid, rid) == expected
+
+
+def test_native_reconciliation_proof_is_dispatcher_only_and_preserves_source(recovery_hosted):
+    from calculation_fixture import seed
+    from test_calculations_api import agent_analysis, recovered_submission_owner
+    from hyprn_mvp_app.analysis_execution import AnalysisExecution
+    from hyprn_mvp_app.execution import Submissions
+    fixture, store = recovery_hosted
+    account = isolated_analysis_account(fixture)
+    actor, sid = account['actor'], study(store, account['actor'])
+    with actor_scope(actor):
+        create_app(store, Auth(store, 'http://test'), None)
+        sample = dict(store=store, actor=actor, sid=sid)
+        sample.update(seed(sample))
+    _, _, vid = agent_analysis(store, actor, sid, sample, 1)
+    worker = Store.postgres(fixture['request'], fixture['auth'], artifact_root=store.artifact_root,
+                            background=fixture['dispatcher'])
+    create_app(worker, Auth(worker, 'http://test'), None)
+    try:
+        runner = AnalysisExecution(worker)
+        runner.process_one(Submissions(worker, None, None))
+        with actor_scope(actor):
+            rid = AnalysisExecution(store).read(actor, sid, vid)['runs'][0]['run_id']
+        submissions, native = recovered_submission_owner(worker)
+        submissions.dispatch(rid)
+        runner.process_one(submissions)
+        command = uid()
+        with live_api(store) as origin:
+            path = origin + '/api/1/studies/' + sid + '/analysis-versions/' + vid + '/execution'
+            response = httpx.post(path + '/resume', headers=headers(account, origin),
+                                  json=dict(command_id=command))
+            assert response.status_code == 202, response.text
+        with actor_scope(actor), store.connection() as db:
+            frozen = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+        # Request and Assistant background connections may read intent, never forge proof.
+        with actor_scope(actor), pytest.raises(DatabasePermissionDenied):
+            with store.connection(write=True) as db:
+                db.execute('INSERT INTO analysis_reconciliation_results '
+                    '(study_id,command_id,outcome,proof) VALUES(?,?,?,?)',
+                    (sid, command, 'not_started', '[]'))
+        with actor_scope(actor), pytest.raises(DatabaseConflict):
+            with store.connection(write=True) as db:
+                db.execute("UPDATE execution_operations SET state='accepted_run',"
+                           "preparation_state='prepared' WHERE run_id=?", (rid,))
+        with pytest.raises(DatabasePermissionDenied):
+            with store.database.background_connection(write=True) as db:
+                db.execute('SELECT hyprn_reconcile_native(?,?,?,?)',
+                           (sid, command, 'not_started', '[]'))
+        native.prove_unstarted = lambda request, runtime: dict(
+            schema_version='1', request=request, store_uuid=uid(),
+            outcome='not_started', reason=None)
+        runner.process_one(submissions)
+        with actor_scope(actor), store.connection() as db:
+            proof = db.execute('SELECT outcome FROM analysis_reconciliation_results '
+                               'WHERE study_id=? AND command_id=?', (sid, command)).fetchone()
+            assert proof['outcome'] == 'not_started'
+            source = db.execute('SELECT payload FROM outbox WHERE run_id=?', (rid,)).fetchone()[0]
+            assert source == frozen
+            assert db.execute('SELECT state FROM execution_operations WHERE run_id=?',
+                              (rid,)).fetchone()[0] == 'accepted_run'
+        submissions.dispatch(rid)
+        assert native.launches == 2
+    finally:
+        worker.database.close()

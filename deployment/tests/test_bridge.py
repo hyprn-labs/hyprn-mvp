@@ -6,6 +6,7 @@ if str(_FencePath(__file__).resolve().parent) not in _fence_sys.path:
     _fence_sys.path.append(str(_FencePath(__file__).resolve().parent))
 import live_fence  # noqa: E402
 live_runtime_fence = live_fence.pytest_fixture('unit')
+import errno
 import io
 import json
 import sys
@@ -19,6 +20,26 @@ from test_result_dependencies import source, native
 class Native:
     def resolve_results(self, sources):
         return sources
+
+
+@pytest.mark.parametrize('number,category', [(errno.ENOSPC, 'storage_exhausted'),
+                                           (errno.EDQUOT, 'storage_exhausted'),
+                                           (errno.EACCES, 'host_io_error')])
+def test_native_failure_logs_category_without_private_exception_text(number, category, capsys):
+    import dispatch_bridge
+
+    class Unavailable:
+        def resolve_results(self, sources):
+            raise OSError(number, 'private path and candidate material must not be logged')
+
+    with pytest.raises(OSError):
+        dispatch_bridge.observed_native_call(Unavailable(), 'resolve_results', [[]])
+    output = capsys.readouterr()
+    assert output.out == ''
+    event = json.loads(output.err)
+    assert event['operation'] == 'resolve_results'
+    assert event['outcome'] == 'failed' and event['failure'] == category
+    assert 'private' not in output.err and 'candidate' not in output.err
 
 
 def test_resolve_results_has_exact_one_argument_on_both_ends(monkeypatch, capsys):

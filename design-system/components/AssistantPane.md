@@ -68,3 +68,21 @@ Resume action. An unchanged timestamp alone never produces a stalled warning.
 Progress disappears when the turn settles or changes. The card shares the existing
 activity surface, wrapping prose and numeric type role in Light, Dark and narrow
 layouts; it remains separated from the composer by the conversation layout.
+
+## Observable activity details
+
+Below the concise processing card, Activity details expands a chronological list
+of the latest 40 observed tool steps for the current request. Each row has the
+platform tool's catalogue title, redundant state label and observed start time;
+finished steps may show elapsed observation time. Reviewer steps are labelled.
+Arguments, source content, provider identities, private reasoning and raw results
+never cross this public projection. Unknown tools have a neutral generic label.
+A completed tool is not a scientifically valid result. Unconfirmed outcomes and
+failed calls remain explicit; receiving a result without a success flag is only
+Result received. No guessed percentages, finish estimates or stall alarms.
+
+The disclosure sits outside the polite status live region so an expanded history
+is not repeatedly announced. Rows wrap in narrow layouts, share token spacing,
+and use the same surface in both themes. Updates come from existing conversation
+polling, require study access and stop at the current turn boundary. This is an
+observed activity log, not a transcript of internal reasoning or a new scheduler.

@@ -18,6 +18,15 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
+import time
+from uuid import UUID, uuid4
+
+
+# Operational headroom for transient repositories, independent of model resource limits.
+MIN_EXECUTION_SCRATCH_FREE_BYTES = 1024 * 1024 * 1024
+SCRATCH_ABANDONED_SECONDS = 3600
+SCRATCH_SCAN_LIMIT = 128
 
 
 def canonical(value):
@@ -39,6 +48,117 @@ def execution_home(configuration, *, create=False):
             or stat.S_IMODE(info.st_mode) != 0o700):
         raise ValueError('Execution home must be private and owned by execution user')
     return home
+
+
+def execution_temporary(configuration, *, create=False):
+    """Private transient AiiDA repositories belong on the execution data volume."""
+    scratch = Path(configuration['execution_root']) / 'tmp'
+    if not scratch.is_absolute() or any(p.is_symlink() for p in (scratch, *scratch.parents)):
+        raise ValueError('Unsafe execution temporary directory')
+    if create:
+        scratch.mkdir(mode=0o700, exist_ok=True)
+    try:
+        info = scratch.stat()
+    except FileNotFoundError as error:
+        raise ValueError('Execution temporary directory is missing') from error
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700):
+        raise ValueError('Execution temporary directory must be private and owned by execution user')
+    return scratch
+
+
+
+def collect_execution_scratch(configuration, *, now=None):
+    """Collect only expired, unlocked owner sessions; unknown files are never selected."""
+    root = execution_temporary(configuration)
+    now = time.time() if now is None else now
+    removed = 0
+    # A bounded scan keeps maintenance off the critical path as stores grow.
+    with os.scandir(root) as entries:
+        for index, entry in enumerate(entries):
+            if index >= SCRATCH_SCAN_LIMIT:
+                break
+            name = entry.name
+            if not name.startswith('session-') or len(name) != 40:
+                continue
+            try:
+                if UUID(name[8:]).hex != name[8:]:
+                    continue
+                info = entry.stat(follow_symlinks=False)
+                if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) != 0o700
+                        or now - info.st_mtime < SCRATCH_ABANDONED_SECONDS):
+                    continue
+                folder = root / name
+                fd = os.open(folder / '.lease', os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+                try:
+                    lease = os.fstat(fd)
+                    if (not stat.S_ISREG(lease.st_mode) or lease.st_uid != os.getuid()
+                            or lease.st_nlink != 1 or stat.S_IMODE(lease.st_mode) != 0o600
+                            or os.read(fd, 64) != b'hyprn-native-scratch/v1\n'):
+                        continue
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        continue
+                    # fd-based rmtree never follows a symlink into a scientific store.
+                    if not shutil.rmtree.avoids_symlink_attacks:
+                        raise RuntimeError('Safe scratch cleanup unavailable')
+                    shutil.rmtree(folder)
+                    removed += 1
+                finally:
+                    os.close(fd)
+            except (FileNotFoundError, ValueError):
+                continue
+    return {'removed_sessions': removed}
+
+
+@contextlib.contextmanager
+def execution_scratch_session(configuration):
+    """One disposable lease per native process, independent of durable execution records."""
+    root = execution_temporary(configuration)
+    collect_execution_scratch(configuration)
+    if shutil.disk_usage(root).free < MIN_EXECUTION_SCRATCH_FREE_BYTES:
+        raise RuntimeError('Execution temporary storage has insufficient free space')
+    folder = root / ('session-' + uuid4().hex)
+    folder.mkdir(mode=0o700)
+    fd = os.open(folder / '.lease', os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    previous_env, previous_cache = os.environ.get('TMPDIR'), tempfile.tempdir
+    try:
+        os.write(fd, b'hyprn-native-scratch/v1\n')
+        os.fsync(fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.environ['TMPDIR'] = str(folder)
+        tempfile.tempdir = str(folder)
+        yield folder
+    finally:
+        tempfile.tempdir = previous_cache
+        if previous_env is None:
+            os.environ.pop('TMPDIR', None)
+        else:
+            os.environ['TMPDIR'] = previous_env
+        try:
+            shutil.rmtree(folder)
+        finally:
+            os.close(fd)
+
+
+def scratch_admission(configuration, method):
+    if method not in ('launch', 'launch_batch', 'launch_budgeted'):
+        return
+    root = execution_temporary(configuration)
+    collect_execution_scratch(configuration)
+    if shutil.disk_usage(root).free < MIN_EXECUTION_SCRATCH_FREE_BYTES:
+        raise RuntimeError('Execution temporary storage has insufficient free space')
+
+
+def select_execution_temporary(configuration):
+    # tempfile caches its first selection; setting TMPDIR alone cannot dislodge
+    # a host /tmp selected during imports. An explicit path also forbids fallback
+    # to another filesystem when the execution volume cannot accept writes.
+    scratch = str(Path(configuration['execution_root']) / 'tmp')
+    os.environ['TMPDIR'] = scratch
+    tempfile.tempdir = scratch
 
 
 def host_prerequisites(configuration=None):
@@ -71,6 +191,16 @@ def host_prerequisites(configuration=None):
                                 text=True, timeout=10)
         if result.returncode or result.stdout.strip() != pwd.getpwuid(os.getuid()).pw_name:
             raise RuntimeError('Execution home failed scheduler preflight')
+        scratch = execution_temporary(configuration)
+        if shutil.disk_usage(scratch).free < MIN_EXECUTION_SCRATCH_FREE_BYTES:
+            raise RuntimeError('Execution temporary storage has insufficient free space')
+        try:
+            with tempfile.TemporaryFile(dir=scratch) as probe:
+                probe.write(b'owner storage ready')
+                probe.flush()
+                os.fsync(probe.fileno())
+        except OSError as error:
+            raise RuntimeError('Execution temporary storage cannot accept writes') from error
 
 
 def bootstrap(path):
@@ -92,6 +222,7 @@ def bootstrap(path):
         raise ValueError('Execution root must be private and owned by execution user')
     os.environ['AIIDA_PATH'] = str(root / 'aiida')
     os.environ['HOME'] = value['host_home']
+    select_execution_temporary(value)
     return value
 
 
@@ -156,6 +287,8 @@ def initialize(configuration, config_path):
         raise ValueError('Refusing nonempty execution store')
     runtime, selected, files = packaged_inventory(configuration)
     execution_home(configuration, create=True)
+    execution_temporary(configuration, create=True)
+    select_execution_temporary(configuration)
     # Source/image checks use the original built identities; nothing is rebuilt here.
     for name in ('locks', 'licenses', 'evidence'):
         (root / name).mkdir(mode=0o700)
@@ -257,6 +390,8 @@ def rebind(configuration, config_path, authorization):
         pending = root / 'rebind-pending.json'
         if pending.exists():
             raise ValueError('Native rebind requires reconciliation')
+        execution_temporary(configuration, create=True)
+        select_execution_temporary(configuration)
         NativeExecution.from_environment()
         from aiida import orm
         if any(not node.is_terminated for node, in orm.QueryBuilder().append(orm.ProcessNode).iterall()):
@@ -340,7 +475,8 @@ def serve(configuration, config_path, command):
         return bridge_child(native, command, env={'PATH': os.environ['PATH'],
                             'DOCKER_HOST': configuration['docker']['endpoint']},
                             cwd=configuration['source'], stderr=sys.stderr, on_ready=ready,
-                            allow_exports=True)
+                            allow_exports=True,
+                            before_call=lambda method: scratch_admission(configuration, method))
     finally:
         os.close(fd)
 
@@ -357,7 +493,8 @@ def main(argv=None):
         host_prerequisites(configuration)
         from hyprn_mvp_integration import launcher
         sys.argv = [sys.argv[0], *arguments]
-        launcher.main()
+        with execution_scratch_session(configuration):
+            launcher.main()
         return 0
     if args.operation == 'serve':
         # Fixed container invocation is assembled by trusted lifecycle code.
@@ -365,8 +502,9 @@ def main(argv=None):
         import re
         if len(arguments) != 1 or not re.fullmatch(r'[0-9a-f]{64}', arguments[0]):
             raise ValueError('Fixed owned dispatcher invocation required')
-        return serve(configuration, args.config,
-                     ['docker', 'start', '--attach', '--interactive', arguments[0]])
+        with execution_scratch_session(configuration):
+            return serve(configuration, args.config,
+                         ['docker', 'start', '--attach', '--interactive', arguments[0]])
     if args.operation == 'rebind':
         if len(arguments) != 1:
             raise ValueError('Protected rebind authorization required')

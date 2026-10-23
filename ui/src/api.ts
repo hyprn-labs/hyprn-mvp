@@ -1,7 +1,7 @@
 import type { AnalysisExecution2, AnalysisExecutionRead2, AnalysisExecutionRecovery1 } from './contract';
 import type {
   AssistantBudgetRead2,
-  AssistantConversationRead5,
+  AssistantConversationRead6,
   AssistantMessageRequest1,
 } from './contract';
 import type { ConfigurationSummary1 } from './contract';
@@ -282,7 +282,7 @@ export class HyprnMvpApi {
     ).data;
   assistant = async (sid: string, signal?: AbortSignal, page: { after?: string; before?: string } = {}) =>
     (
-      await this.request<AssistantConversationRead5>(
+      await this.request<AssistantConversationRead6>(
         `/studies/${sid}/assistant${Object.keys(page).length ? `?${new URLSearchParams(page)}` : ''}`,
         undefined,
         'GET',
@@ -291,17 +291,17 @@ export class HyprnMvpApi {
     ).data;
   assistantSend = async (sid: string, body: AssistantMessageRequest1) =>
     (
-      await this.request<AssistantConversationRead5>(
+      await this.request<AssistantConversationRead6>(
         `/studies/${sid}/assistant/messages`,
         body,
         'POST',
       )
     ).data;
   assistantResume = async (sid: string) =>
-    (await this.request<AssistantConversationRead5>(`/studies/${sid}/assistant/resume`, {}, 'POST'))
+    (await this.request<AssistantConversationRead6>(`/studies/${sid}/assistant/resume`, {}, 'POST'))
       .data;
   assistantStop = async (sid: string) =>
-    (await this.request<AssistantConversationRead5>(`/studies/${sid}/assistant/stop`, {}, 'POST'))
+    (await this.request<AssistantConversationRead6>(`/studies/${sid}/assistant/stop`, {}, 'POST'))
       .data;
   /** The study brief: its draft and latest saved version, the saved versions (newest first,
    * paged by version number), and the draft and version commands on the shared receipt path. */

@@ -247,7 +247,7 @@ async def launch_analysis(a, ctx):
 
 async def execution_recovery(value, ctx):
     result = execution_projection(value)
-    if value is not None and value['state'] == 'failed':
+    if value is not None and value['state'] in ('failed', 'needs_review'):
         recovery = (await read(ctx, study_path(
             ctx, 'analysis-versions', value['calculation_version_id'],
             'execution', 'recovery')))['data']
@@ -617,7 +617,8 @@ TOOLS = (
         'Resume analysis',
         'Resumes the same accepted plan only when get_analysis_execution reports can_resume. '
         'Reuses accepted runs and unchanged accuracy targets; never creates new versions or '
-        'reruns completed work. A refusal is not permission to submit member runs manually. '
+        'reruns completed work. For uncertain runs it requests a native-owner absence check; '
+        'only proven unstarted work can continue. A refusal never permits manual member submission. '
         'After uncertain delivery, reconcile the original command and read analysis progress.',
         obj(dict(calculation_version_id=uuid_schema('Recoverable saved analysis version.')),
             ('calculation_version_id',)),

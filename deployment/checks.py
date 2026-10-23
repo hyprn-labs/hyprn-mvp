@@ -1195,7 +1195,7 @@ PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | UPSTREAM_PYTEST_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | UPSTREAM_PYTEST_GROUPS
 
 STORAGE_GROUPS = frozenset({'check-storage', 'check-storage-native'})
-GROUPS['check-storage'] = ('deployment/tests/test_check_storage.py', 'deployment/tests/test_experiment_storage.py')
+GROUPS['check-storage'] = ('deployment/tests/test_check_storage.py', 'deployment/tests/test_experiment_storage.py', 'deployment/tests/test_staging_storage.py')
 GROUPS['check-storage-native'] = ('deployment/tests/test_check_storage_native.py',)
 PROJECT_PYTEST_GROUPS = PROJECT_PYTEST_GROUPS | STORAGE_GROUPS
 CHILD_GROUPS = CHILD_GROUPS | STORAGE_GROUPS

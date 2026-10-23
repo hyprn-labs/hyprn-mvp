@@ -1587,3 +1587,14 @@ fieldset:is(.hf-form-stack,.form-stack) > legend { font-weight:var(--type-body-s
 .hf-assistant-activity p { margin:0; color:var(--ink-2); font-size:var(--type-small-size); line-height:var(--type-prose-line); }
 .hf-assistant-activity__count { font-size:var(--type-body-size); line-height:var(--type-prose-line); font-variant-numeric:tabular-nums; }
 .hf-assistant-activity[data-state="blocked"] { border-color:var(--warning); }
+
+/* Observable activity is separate from the concise live status announcement. */
+.hf-assistant-activity__status { display:grid; justify-items:start; gap:var(--space-2); }
+.hf-assistant-steps { width:100%; min-width:0; border-top:1px solid var(--line); padding-top:var(--space-2); }
+.hf-assistant-steps > summary { font-weight:var(--type-body-strong-weight); }
+.hf-assistant-steps ol { list-style:none; margin:var(--space-3) 0; padding:0; display:grid; gap:var(--space-3); }
+.hf-assistant-steps li { display:grid; gap:var(--space-1); padding-bottom:var(--space-3); border-bottom:1px solid var(--line); }
+.hf-assistant-steps li:last-child { border-bottom:0; padding-bottom:0; }
+.hf-assistant-steps__heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-2); }
+.hf-assistant-steps__heading strong { font-size:var(--type-small-size); overflow-wrap:anywhere; }
+.hf-assistant-steps__meta { display:flex; flex-wrap:wrap; gap:var(--space-3); color:var(--ink-muted); font-size:var(--type-small-size); font-variant-numeric:tabular-nums; }

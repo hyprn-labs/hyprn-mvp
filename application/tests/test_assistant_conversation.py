@@ -1509,3 +1509,85 @@ def test_old_interruption_does_not_wake_a_successfully_continued_turn_again(syst
         assert not provider.sent
         await owner.close()
     asyncio.run(exercise())
+
+
+def test_activity_projection_is_bounded_turn_scoped_and_excludes_provider_content(system):
+    app, owner, provider, store, actor, sid = system
+    command = uid()
+    records.accept(store, actor, sid, command, 'Read the current study.', owner.settings)
+    with store.connection(write=True) as db:
+        records.save_event(db, sid, dict(id='current-message', type='user.message',
+            _received_at=1, content=[]))
+        db.execute('UPDATE assistant_turns SET provider_event=? WHERE turn_id=?',
+                   ('current-message', command))
+        for index in range(43):
+            records.save_event(db, sid, dict(id=f'tool-{index}', type='agent.custom_tool_use',
+                name='get_study_overview', input={'secret': 'private argument'},
+                _received_at=2 + index))
+            db.execute('INSERT INTO assistant_tool_results VALUES(?,?,?,?,?,?)',
+                (sid, f'tool-{index}', command, 'private result', index == 40,
+                 'waiting' if index == 42 else 'accepted'))
+            if index != 42:
+                records.save_event(db, sid, dict(id=f'result-{index}',
+                    type='user.custom_tool_result', custom_tool_use_id=f'tool-{index}',
+                    content='private provider result', _received_at=2.5 + index))
+        records.save_event(db, sid, dict(id='thinking', type='agent.thinking',
+            thinking='private thought', _received_at=45))
+        records.save_event(db, sid, dict(id='fetch', type='agent.tool_use', name='web_fetch',
+            input={'url': 'https://private.invalid'}, session_thread_id='private-thread',
+            _received_at=46))
+        records.save_event(db, sid, dict(id='fetch-result', type='agent.tool_result',
+            tool_use_id='fetch', is_error=True, content='private document', _received_at=47))
+        records.save_event(db, sid, dict(id='unknown', type='agent.tool_use',
+            name='secret provider name', _received_at=48))
+
+    async def exercise():
+        client = await client_for(app)
+        reply = await client.get(f'/api/1/studies/{sid}/assistant')
+        assert reply.status_code == 200
+        activity = reply.json()['data']['activity']
+        assert activity['has_earlier_steps'] is True
+        assert len(activity['steps']) == 40
+        assert [s['state'] for s in activity['steps'][-5:]] == [
+            'failed', 'completed', 'waiting', 'failed', 'running']
+        assert activity['steps'][-2]['label'] == 'Read source'
+        assert activity['steps'][-2]['actor'] == 'reviewer'
+        assert activity['steps'][-2]['finished_at'] == 47
+        assert activity['steps'][-1]['label'] == 'Research tool'
+        assert activity['steps'][-1]['finished_at'] is None
+        assert 'private' not in json.dumps(activity)
+        assert 'secret' not in json.dumps(activity)
+        assert 'thinking' not in json.dumps(activity)
+        with store.connection(write=True) as db:
+            records.update(db, sid, active_turn=None, state='idle')
+        reply = await client.get(f'/api/1/studies/{sid}/assistant')
+        assert reply.json()['data']['activity'] == {'steps': [], 'has_earlier_steps': False}
+        records.accept(store, actor, sid, uid(), 'A different request.', owner.settings)
+        reply = await client.get(f'/api/1/studies/{sid}/assistant')
+        assert reply.json()['data']['activity']['steps'] == []
+        await client.aclose()
+        await owner.close()
+
+    asyncio.run(exercise())
+
+
+def test_activity_never_treats_an_unconfirmed_tool_result_as_success(system):
+    app, owner, provider, store, actor, sid = system
+    command = uid()
+    records.accept(store, actor, sid, command, 'Read sources.', owner.settings)
+    with store.connection(write=True) as db:
+        records.save_event(db, sid, dict(id='message', type='user.message',
+            _received_at=1, content=[]))
+        db.execute('UPDATE assistant_turns SET provider_event=? WHERE turn_id=?', ('message', command))
+        for index, flag in enumerate((False, None)):
+            records.save_event(db, sid, dict(id=f'fetch-{index}', type='agent.tool_use',
+                name='web_fetch', _received_at=2))
+            records.save_event(db, sid, dict(id=f'result-{index}', type='agent.tool_result',
+                tool_use_id=f'fetch-{index}', is_error=flag, _received_at=3))
+        records.save_event(db, sid, dict(id='uncertain', type='agent.custom_tool_use',
+            name='submit_runs', _received_at=4))
+        db.execute('INSERT INTO assistant_tool_results VALUES(?,?,?,?,?,?)',
+                   (sid, 'uncertain', command, None, 0, 'uncertain'))
+    activity = owner.read(actor, sid)['activity']
+    assert [s['state'] for s in activity['steps']] == ['completed', 'returned', 'uncertain']
+    assert activity['steps'][-1]['finished_at'] is None

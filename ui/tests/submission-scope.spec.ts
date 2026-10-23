@@ -17,7 +17,8 @@ async function fixture(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const names = ['Destination ', 'Origin '].map(x => x + crypto.randomUUID()), ids: string[] = [];
   for (const name of names) {
-    await page.getByLabel('New study name').fill(name); await page.getByRole('button', { name: 'Create study', exact: true }).click();
+    await page.getByLabel('Study name').fill(name); await page.getByLabel('Study question', { exact: true }).fill('What must this engineering study establish?');
+  await page.getByRole('button', { name: 'Create study', exact: true }).click();
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
     ids.push(await page.getByRole('combobox', { name: 'Study', exact: true }).inputValue());
   }
